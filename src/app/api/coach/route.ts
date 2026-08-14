@@ -50,6 +50,11 @@ preamble, no restating the question back.`;
 const LANGUAGE: Record<string, string> = {
   en: "Answer in English.",
   zh: "用简体中文回答。习惯和目标的名称按用户记录时的原文引用，不要翻译。语气自然、直接，不要书面公文腔。",
+  // Two people may be reading the same screen, so the answer carries both.
+  both: `Answer twice: first the full answer in English, then a blank line, then
+the same answer in Simplified Chinese. Do not summarise the second one — it is
+for a different reader, not a translation note. Quote habit and goal names
+exactly as they are stored in both versions; do not translate them.`,
 };
 
 export async function POST(request: Request) {

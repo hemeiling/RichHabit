@@ -1,3 +1,5 @@
+import { prettyDate, shortDate } from "@/lib/dates";
+import { both, joinPair } from "./both";
 import { en, type Dict } from "./en";
 import { zh } from "./zh";
 
@@ -7,39 +9,53 @@ import { zh } from "./zh";
  * can all use it.
  */
 
-export const LOCALES = ["en", "zh"] as const;
+export const LOCALES = ["both", "en", "zh"] as const;
 export type Locale = (typeof LOCALES)[number];
 
-export const DEFAULT_LOCALE: Locale = "en";
+/**
+ * Bilingual is the default, and the point of the app for a household that reads
+ * two languages: nobody has to find a setting before the other person can use
+ * it. `en` and `zh` remain available for anyone who wants one language only.
+ */
+export const DEFAULT_LOCALE: Locale = "both";
 export const LOCALE_COOKIE = "rh_locale";
 
-export const dictionaries: Record<Locale, Dict> = { en, zh };
+export const dictionaries: Record<Locale, Dict> = { both, en, zh };
 
 export const isLocale = (v: unknown): v is Locale =>
   typeof v === "string" && (LOCALES as readonly string[]).includes(v);
 
-export const dict = (locale: Locale): Dict => dictionaries[locale] ?? en;
+export const dict = (locale: Locale): Dict => dictionaries[locale] ?? both;
 
 /** BCP-47 tags for Intl, which needs a region to format dates sensibly. */
-const INTL_TAG: Record<Locale, string> = { en: "en-US", zh: "zh-CN" };
+const INTL_TAG: Record<Locale, string> = { both: "en-US", en: "en-US", zh: "zh-CN" };
 export const intlTag = (locale: Locale) => INTL_TAG[locale] ?? "en-US";
 
 /**
- * The locale for a request: an explicit cookie wins, otherwise the browser's
- * Accept-Language. A Chinese-speaking relative opening the link for the first
- * time should land in Chinese without being told to change a setting.
+ * Dates carry both calendars in bilingual mode — "Thursday, August 13" means
+ * nothing to a Chinese reader and 8月13日星期四 means nothing to an English one.
  */
-export function resolveLocale(cookieValue?: string | null, acceptLanguage?: string | null): Locale {
-  if (isLocale(cookieValue)) return cookieValue;
+export function prettyDateFor(iso: string, locale: Locale): string {
+  return locale === "both"
+    ? joinPair(prettyDate(iso, "en-US"), prettyDate(iso, "zh-CN"))
+    : prettyDate(iso, intlTag(locale));
+}
 
-  for (const part of (acceptLanguage ?? "").split(",")) {
-    const tag = part.split(";")[0].trim().toLowerCase();
-    if (!tag) continue;
-    if (tag === "zh" || tag.startsWith("zh-")) return "zh";
-    if (tag === "en" || tag.startsWith("en-")) return "en";
-  }
-  return DEFAULT_LOCALE;
+export function shortDateFor(iso: string, locale: Locale): string {
+  return locale === "both"
+    ? joinPair(shortDate(iso, "en-US"), shortDate(iso, "zh-CN"))
+    : shortDate(iso, intlTag(locale));
+}
+
+/**
+ * The locale for a request: an explicit cookie wins, otherwise everyone gets
+ * both languages. Accept-Language is deliberately *not* used to narrow to one —
+ * the browser language says what the device owner reads, not what everyone
+ * sharing the screen reads.
+ */
+export function resolveLocale(cookieValue?: string | null): Locale {
+  return isLocale(cookieValue) ? cookieValue : DEFAULT_LOCALE;
 }
 
 export type { Dict };
-export { en, zh };
+export { en, zh, both };

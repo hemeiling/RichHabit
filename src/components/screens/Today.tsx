@@ -8,7 +8,7 @@ import {
   CATEGORIES, dayScore, dayStreak, encouragement, habitStreak, isDone, scheduledOn,
 } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
-import { intlTag } from "@/lib/i18n";
+import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import type { AppState, Habit } from "@/lib/types";
 
 function HabitRow({
@@ -40,7 +40,7 @@ function HabitRow({
         onClick={() => onOpen(habit)}
       >
         <div style={{ fontSize: 15.5, fontWeight: 500, opacity: done ? 0.55 : 1, letterSpacing: "-0.01em" }}>
-          {habit.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoidPrefix}</span>}
+          {habit.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoid} · </span>}
           {habit.name}
         </div>
         <div className="faint flex items-center gap-2 mt-0.5" style={{ fontSize: 12 }}>
@@ -75,7 +75,7 @@ export default function Today() {
         <div className="flex items-center justify-between">
           <div>
             <div className="eyebrow">{isToday ? t.today.todayLabel : t.days.short[dow(date)]}</div>
-            <h1 className="display" style={{ fontSize: 27, lineHeight: 1.15, marginTop: 2 }}>{prettyDate(date, intlTag(locale))}</h1>
+            <h1 className="display" style={{ fontSize: 27, lineHeight: 1.15, marginTop: 2 }}>{prettyDateFor(date, locale)}</h1>
           </div>
           <div className="flex gap-1">
             <button className="btn btn-quiet" style={{ padding: "8px 12px" }}

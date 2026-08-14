@@ -5,7 +5,7 @@ import { Field } from "@/components/ui";
 import { addDays, daysBetween, shortDate, todayISO, weekStart } from "@/lib/dates";
 import { rangeScore, uid, weekSummary } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
-import { intlTag } from "@/lib/i18n";
+import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import type { WeeklyReview } from "@/lib/types";
 
 const QUESTIONS = ["wentWell", "gotInWay", "focus", "modify", "add"] as const satisfies
@@ -52,7 +52,7 @@ export default function Review() {
           <div>
             <div className="eyebrow">{t.review.weekOf}</div>
             <h1 className="display" style={{ fontSize: 22, marginTop: 2 }}>
-              {shortDate(weekOf, intlTag(locale))} – {shortDate(addDays(weekOf, 6), intlTag(locale))}
+              {shortDateFor(weekOf, locale)} – {shortDateFor(addDays(weekOf, 6), locale)}
             </h1>
           </div>
           <div className="flex gap-1">
@@ -111,7 +111,7 @@ export default function Review() {
                 style={{ background: "none", border: "none", cursor: "pointer" }}
                 onClick={() => setWeekOf(r.weekStart)}>
                 <div className="flex justify-between items-baseline">
-                  <span style={{ fontSize: 14.5 }}>{shortDate(r.weekStart, intlTag(locale))}</span>
+                  <span style={{ fontSize: 14.5 }}>{shortDateFor(r.weekStart, locale)}</span>
                   <span className="num muted" style={{ fontSize: 13 }}>
                     {r.stats?.pct == null ? "—" : `${r.stats.pct}%`}
                   </span>

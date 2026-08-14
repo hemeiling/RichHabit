@@ -166,7 +166,7 @@ export default function Habits() {
                     style={{ background: "none", border: "none", cursor: "pointer", opacity: h.active ? 1 : 0.5 }}>
                     <div className="flex items-baseline justify-between gap-3">
                       <span style={{ fontSize: 15.5, fontWeight: 500 }}>
-                        {h.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoidPrefix}</span>}
+                        {h.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoid} · </span>}
                         {h.name}
                       </span>
                       <span className="num muted" style={{ fontSize: 13, flex: "none" }}>

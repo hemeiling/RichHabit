@@ -1,3 +1,4 @@
+import { joinPair } from "@/lib/i18n/both";
 import type { Category, HabitKind, Locale } from "@/lib/types";
 
 /**
@@ -84,9 +85,23 @@ const ZH: SeedSet = {
   ],
 };
 
-const SETS: Record<Locale, SeedSet> = { en: EN, zh: ZH };
+/**
+ * Bilingual accounts get bilingual starter habits — "Read for learning ·
+ * 阅读学习" — joined by the same rule the dictionary uses. They are ordinary
+ * habit names after that: editable, and never re-translated on render.
+ */
+const BOTH: SeedSet = {
+  goals: EN.goals.map((g, i) => ({ ...g, name: joinPair(g.name, ZH.goals[i].name) })),
+  habits: EN.habits.map((h, i) => ({
+    ...h,
+    name: joinPair(h.name, ZH.habits[i].name),
+    unit: h.unit && ZH.habits[i].unit ? joinPair(h.unit, ZH.habits[i].unit) : h.unit,
+  })),
+};
 
-export const seedSet = (locale: Locale): SeedSet => SETS[locale] ?? EN;
+const SETS: Record<Locale, SeedSet> = { both: BOTH, en: EN, zh: ZH };
+
+export const seedSet = (locale: Locale): SeedSet => SETS[locale] ?? BOTH;
 
 type Q = <T = any>(text: string, params?: unknown[]) => Promise<T[]>;
 

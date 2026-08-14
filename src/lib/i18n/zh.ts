@@ -99,12 +99,12 @@ export const zh: Dict = {
 
   today: {
     todayLabel: "今天",
-    avoidPrefix: "戒除 · ",
+    avoid: "戒除",
     daysRunning: (n: number) => `已连续 ${n} 天`,
     highPriority: "高优先级",
     note: "备注",
     currentStreak: "当前连续",
-    streakDays: (n: number) => `${n} 天`,
+    streakDays: (n: number) => `${n}d`,
     done: "完成",
     nothingScheduled: "今天没有安排",
     nothingScheduledBody: "添加一个习惯，或调整安排，它就会出现在这里。",

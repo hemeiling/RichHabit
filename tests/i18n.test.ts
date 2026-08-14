@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LOCALES, dict, intlTag, isLocale, resolveLocale } from "../src/lib/i18n";
 import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
+import { both, joinPair } from "../src/lib/i18n/both";
 import { seedSet } from "../src/lib/seed";
 
 /**
@@ -96,24 +97,22 @@ describe("interpolating functions keep their values", () => {
 });
 
 describe("resolveLocale", () => {
-  it("prefers an explicit cookie", () => {
-    expect(resolveLocale("zh", "en-US,en;q=0.9")).toBe("zh");
-    expect(resolveLocale("en", "zh-CN")).toBe("en");
+  it("honours an explicit cookie", () => {
+    expect(resolveLocale("zh")).toBe("zh");
+    expect(resolveLocale("en")).toBe("en");
+    expect(resolveLocale("both")).toBe("both");
   });
 
-  it("falls back to Accept-Language", () => {
-    expect(resolveLocale(null, "zh-CN,zh;q=0.9,en;q=0.8")).toBe("zh");
-    expect(resolveLocale(null, "zh-Hant")).toBe("zh");
-    expect(resolveLocale(null, "en-GB,en;q=0.9")).toBe("en");
-  });
-
-  it("defaults to English when it recognises nothing", () => {
-    expect(resolveLocale(null, "fr-FR,de;q=0.8")).toBe("en");
-    expect(resolveLocale(null, null)).toBe("en");
-    expect(resolveLocale("klingon", null)).toBe("en");
+  it("defaults to bilingual, not to one language", () => {
+    // The browser language says what the device owner reads, not what everyone
+    // sharing the screen reads.
+    expect(resolveLocale(null)).toBe("both");
+    expect(resolveLocale(undefined)).toBe("both");
+    expect(resolveLocale("klingon")).toBe("both");
   });
 
   it("knows its own locales", () => {
+    expect(isLocale("both")).toBe(true);
     expect(isLocale("zh")).toBe(true);
     expect(isLocale("de")).toBe(false);
     expect(intlTag("zh")).toBe("zh-CN");
@@ -143,5 +142,70 @@ describe("seeded starter set", () => {
     const avoid = seedSet("zh").habits.filter((h) => h.kind === "avoid");
     expect(avoid.length).toBe(seedSet("en").habits.filter((h) => h.kind === "avoid").length);
     expect(avoid.length).toBeGreaterThan(0);
+  });
+});
+
+describe("bilingual dictionary", () => {
+  it("carries both languages in every label", () => {
+    expect(both.nav.today).toBe("Today · 今天");
+    expect(both.login.signIn).toBe("Sign in · 登录");
+    expect(both.common.save).toBe("Save · 保存");
+  });
+
+  it("keeps interpolated values once, not twice over", () => {
+    expect(both.today.daysRunning(7)).toContain("7");
+    expect(both.suggestions.worst("Exercise", 41)).toContain("Exercise");
+    expect(both.suggestions.worst("Exercise", 41)).toContain("41");
+  });
+
+  it("joins day initials tightly enough for a 34px column", () => {
+    expect(both.days.initial[1]).toBe("M/一");
+    expect(both.days.initial[1].length).toBeLessThanOrEqual(3);
+  });
+
+  it("separates sentences with a space, not a middot", () => {
+    // A middot mid-paragraph reads as punctuation rather than as a divider.
+    expect(both.encouragement.allDone).not.toContain("·");
+    expect(both.encouragement.allDone).toContain("全部完成");
+  });
+
+  it("shows a value once when both languages agree", () => {
+    expect(both.common.none).toBe("—");
+    // A ratio of numerals is the same in both languages; printing it twice
+    // ("0 of 5 · 0 / 5") is noise.
+    expect(both.common.of(0, 5)).toBe("0 / 5");
+    expect(both.today.streakDays(3)).toBe("3d");
+  });
+
+  it("does not double a separator that is already in the string", () => {
+    expect(both.today.avoid).toBe("Avoid · 戒除");
+    expect(both.today.avoid).not.toContain("· ·");
+  });
+
+  it("never falls behind en/zh, because it is derived", () => {
+    const keys = (o: object): string[] =>
+      Object.entries(o).flatMap(([k, v]) =>
+        v && typeof v === "object" && !Array.isArray(v) ? keys(v).map((s) => `${k}.${s}`) : [k]);
+    expect(keys(both)).toEqual(keys(en));
+  });
+});
+
+describe("joinPair", () => {
+  it("collapses identical values", () => expect(joinPair("—", "—")).toBe("—"));
+  it("uses a slash for very short pairs", () => expect(joinPair("S", "日")).toBe("S/日"));
+  it("uses a space after a sentence", () => expect(joinPair("Done.", "完成。")).toBe("Done. 完成。"));
+  it("uses a middot for labels", () => expect(joinPair("Save", "保存")).toBe("Save · 保存"));
+});
+
+describe("bilingual seed", () => {
+  it("names starter habits in both languages", () => {
+    const first = seedSet("both").habits[0];
+    expect(first.name).toBe("Read for learning · 阅读学习");
+    expect(first.unit).toBe("min · 分钟");
+  });
+
+  it("still produces 16 habits and 3 goals", () => {
+    expect(seedSet("both").habits).toHaveLength(16);
+    expect(seedSet("both").goals).toHaveLength(3);
   });
 });

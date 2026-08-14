@@ -47,7 +47,9 @@ export const en = {
     loading: "Loading your habits…",
     optional: "Optional",
     none: "—",
-    of: (done: number, total: number) => `${done} of ${total}`,
+    // Numerals read the same in both languages, so this collapses to one
+    // copy in bilingual mode instead of "0 of 5 · 0 / 5".
+    of: (done: number, total: number) => `${done} / ${total}`,
     previousDay: "Previous day",
     nextDay: "Next day",
     previousWeek: "Previous week",
@@ -98,7 +100,7 @@ export const en = {
 
   today: {
     todayLabel: "Today",
-    avoidPrefix: "Avoid · ",
+    avoid: "Avoid",
     daysRunning: (n: number) => (n === 1 ? "1 day running" : `${n} days running`),
     highPriority: "High priority",
     note: "Note",

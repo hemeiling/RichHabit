@@ -4,7 +4,7 @@ import { useHabits } from "@/components/store";
 import { Field, Segmented, Spark } from "@/components/ui";
 import { rangeBack, shortDate, todayISO } from "@/lib/dates";
 import { useLocale, useT } from "@/lib/i18n/context";
-import { intlTag } from "@/lib/i18n";
+import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import type { DayMetrics } from "@/lib/types";
 
 const FIELDS = [
@@ -63,7 +63,7 @@ export default function Metrics() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="eyebrow">{t.metrics.logFor}</div>
-            <h1 className="display" style={{ fontSize: 21, marginTop: 2 }}>{shortDate(date, intlTag(locale))}</h1>
+            <h1 className="display" style={{ fontSize: 21, marginTop: 2 }}>{shortDateFor(date, locale)}</h1>
           </div>
           <input className="input num" type="date" value={date} max={todayISO()} style={{ width: 160 }}
             onChange={(e) => e.target.value && setDate(e.target.value)} />

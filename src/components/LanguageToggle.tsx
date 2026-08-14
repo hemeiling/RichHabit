@@ -20,7 +20,7 @@ export default function LanguageToggle({ small }: { small?: boolean }) {
           style={small ? { padding: "5px 11px", fontSize: 12.5 } : undefined}
           onClick={() => current !== l && setLocale(l)}
         >
-          {dict(l).localeName}
+          {l === "both" ? "EN+中文" : dict(l).localeName}
         </button>
       ))}
     </div>

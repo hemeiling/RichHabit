@@ -3,7 +3,8 @@
 A habit system rather than a checkbox list: notice the day you actually have, grade it,
 pick a few habits to change, track them in phases, and review what the data says.
 
-Bilingual — English and 简体中文.
+Bilingual by default — every label carries English and 简体中文 at once, so a household that
+reads both can share a screen without anyone changing a setting.
 
 Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, behind the app's own API layer.
 
@@ -45,7 +46,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 67 tests: habit engine, validation, throttle, TLS, i18n parity, coach contract |
+| `npm test` | Vitest — 79 tests: habit engine, validation, throttle, TLS, i18n, coach contract |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to `DATABASE_URL`. Idempotent |
 
@@ -101,30 +102,39 @@ from daily to three-times-a-week doesn't silently rewrite what last month was su
 
 ### Languages
 
-Every string lives in `src/lib/i18n/en.ts`, and `zh.ts` is typed as `Dict` — a missing or misspelled
-key fails the build rather than leaving a blank on someone's screen. A test also checks that no
-Chinese value is still English, and that interpolated numbers and habit names survive translation.
+**Both languages show at once.** `Today · 今天`, `Save · 保存`. That is the default and needs no
+setting — the point is that two people reading different languages can use the same screen. `English`
+and `中文` on their own are available in More for anyone who wants one only.
 
-Anything with a value in it is a function, not string concatenation at the call site: word order
-differs, and `"3 days running"` cannot be assembled from parts that work in both languages.
+The bilingual dictionary is **derived, not written**: `src/lib/i18n/both.ts` walks `en.ts` and
+`zh.ts` together, so it cannot fall behind them. A new key appears in all three automatically, and
+`zh.ts` is typed as `Dict`, so a missing key fails the build rather than leaving a blank on
+someone's screen.
 
-A few things follow from that:
+How the two halves are joined depends on what they are, because one rule looks wrong somewhere:
 
-- **The locale is resolved on the server**, from the `rh_locale` cookie and then `Accept-Language`,
-  and passed into the tree — so the first paint is already correct and there's no flash of English.
-  Someone opening the link from a Chinese browser lands in Chinese without being told to change
-  anything.
-- **New accounts are seeded in the language they signed up in.** That's why the starter habits moved
-  out of SQL into `src/lib/seed.ts` — and why `kind` is now stated outright instead of inferred from
-  an English name prefix (`Avoid…`/`Limit…`/`Skip…`), which silently stopped working once the names
-  could be Chinese.
-- **Habit names are user data and are never translated.** Rename a habit in English, switch to
-  Chinese, and it still reads as you wrote it. Goal *areas* are the exception: the English key is
-  stored and translated on render, so old rows keep matching.
-- **The coach answers in the user's language**, and is told to quote habit names as written rather
-  than translating them.
-- Dates go through `Intl` with an explicit tag (`en-US` / `zh-CN`), not the system locale — the
-  browser's language and the one chosen in the app are often not the same.
+| Case | Joined with | Example |
+|---|---|---|
+| Identical in both | shown once | `0 / 5`, `—` |
+| Both very short | `/` | `S/日` — a middot will not fit a 34px column header |
+| A finished sentence | a space | `Rest counts too. 休息也算数。` |
+| Everything else | ` · ` | `Save · 保存` |
+
+Other consequences worth knowing:
+
+- **Values are interpolated once, not twice.** Anything with a number or a name in it is a function,
+  not concatenation at the call site — `"3 days running"` cannot be assembled from parts that work
+  in both languages.
+- **New accounts are seeded bilingually** (`Read for learning · 阅读学习`), which is why the starter
+  habits moved out of SQL into `src/lib/seed.ts`. It is also why `kind` is now stated outright
+  instead of inferred from an English name prefix (`Avoid…`/`Limit…`/`Skip…`) — that silently
+  stopped working the moment a name could be Chinese.
+- **Habit names are user data and are never translated.** Rename one and it stays as you wrote it.
+  Goal *areas* are the exception: the English key is stored and translated on render, so old rows
+  keep matching.
+- **The coach answers in English and then Chinese**, quoting habit names exactly as stored.
+- **Dates carry both calendars** — `Thursday, August 13 · 8月13日星期四`. "Thursday" means nothing to
+  a Chinese reader and 星期四 means nothing to an English one.
 
 ### How access control works
 
@@ -221,10 +231,11 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 - Malformed bodies return 400 with a readable message (`category must be one of morning, daytime,
   nighttime`), and a server-side failure returns a fixed string rather than the Postgres error.
 - `/api/health` returns `{ok: true, db: "up"}` and 503 when the database is unreachable.
-- In a Chinese browser with no cookie: `/login` renders in Chinese, sign-up seeds the 16 starter
-  habits with Chinese names, `<html lang>` is `zh-Hans`, dates read `8月13日星期四`, and the coach
-  answers in Chinese — correctly hedging that one day of data establishes no trend. Switching to
-  English from 更多 changes the interface and leaves habit names as written.
+- Bilingual rendering in a real browser: every label carries both languages, nothing overflows its
+  container and the page does not scroll sideways at 420px. Sign-up seeds the 16 starter habits with
+  bilingual names, and the coach answers in English and then Chinese while quoting habit names as
+  stored — correctly noting that one day of data establishes no pattern. Switching to `中文` or
+  `English` in More narrows the interface and leaves habit names as written.
 - The deploy path, rehearsed end to end: `npm ci` is in sync with the lockfile; `npm run build`
   succeeds with `DATABASE_URL` unset; `npm run db:setup` creates 14 tables on an empty database
   and is a no-op on the next two runs; and a production-mode boot on a non-default `PORT` serves
