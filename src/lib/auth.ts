@@ -1,6 +1,8 @@
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { cookies } from "next/headers";
+import { SESSION_COOKIE } from "@/lib/cookies";
+import { auth as authEnv, isProduction } from "@/lib/env";
 import { query } from "@/lib/db/pool";
 
 /**
@@ -14,16 +16,17 @@ import { query } from "@/lib/db/pool";
 
 const scrypt = promisify(scryptCb) as (p: string, s: Buffer, k: number) => Promise<Buffer>;
 
-export const SESSION_COOKIE = "rh_session";
-const SESSION_DAYS = 30;
+// Re-exported so callers keep one import for "the session".
+export { SESSION_COOKIE };
+
 const KEY_LEN = 64;
 
-export const MIN_PASSWORD = 8;
+export const MIN_PASSWORD = authEnv.minPassword;
 /**
  * scrypt cost is linear in input length, so an unbounded password is a cheap
- * way to burn server CPU. 200 is far past any real passphrase.
+ * way to burn server CPU. The default is far past any real passphrase.
  */
-export const MAX_PASSWORD = 200;
+export const MAX_PASSWORD = authEnv.maxPassword;
 
 export async function hashPassword(password: string): Promise<string> {
   if (password.length > MAX_PASSWORD) throw new Error("Password is too long.");
@@ -43,7 +46,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 }
 
 function expiry() {
-  return new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  return new Date(Date.now() + authEnv.sessionTtlDays * 24 * 60 * 60 * 1000);
 }
 
 export async function createSession(userId: string): Promise<void> {
@@ -54,7 +57,7 @@ export async function createSession(userId: string): Promise<void> {
   cookies().set(SESSION_COOKIE, rows[0].id, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction,
     path: "/",
     expires: expiry(),
   });

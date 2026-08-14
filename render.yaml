@@ -27,6 +27,10 @@ services:
           property: connectionString
       - key: NODE_VERSION
         value: "20"
+      # Stamped onto analytics events. npm_package_version is unset in most
+      # production runtimes, so set it explicitly.
+      - key: APP_VERSION
+        value: "0.1.0"
       # Optional — the AI coach at /api/coach. Set the value in the dashboard;
       # `sync: false` keeps the secret out of this file and out of git.
       - key: OPENAI_API_KEY

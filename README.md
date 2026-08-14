@@ -22,6 +22,11 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
    # Render: paste the External Connection String
    ```
 
+   Every variable is documented in `.env.example`, which is the only env file in git.
+   All of them are server-only — there is not a single `NEXT_PUBLIC_*` in this project,
+   because the browser needs no configuration; it only calls same-origin `/api` routes.
+   `src/lib/env.ts` is the one module that reads `process.env`.
+
 3. **Apply the schema** — only needed if you didn't use `docker compose` or `npm run db:dev`:
    ```bash
    npm run db:setup          # no psql required

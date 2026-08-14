@@ -5,6 +5,7 @@ import { loadState } from "@/lib/db/queries";
 import { coach } from "@/lib/coach";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { trackEvent } from "@/lib/analytics/track";
+import { coach as coachEnv } from "@/lib/env";
 
 /**
  * The AI coach. The client sends a question and nothing else; this route reads
@@ -18,9 +19,9 @@ import { trackEvent } from "@/lib/analytics/track";
  */
 
 // Reasoning models are slow enough to outlast the default serverless timeout.
-export const maxDuration = 60;
+export const maxDuration = coachEnv.timeoutSeconds;
 
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-5.6-terra";
+const MODEL = coachEnv.model;
 
 const INSTRUCTIONS = `You are the coach inside a habit-tracking app called Rich Habits.
 
@@ -68,11 +69,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const question = typeof body?.question === "string" ? body.question.trim() : "";
   if (!question) return NextResponse.json({ error: "No question" }, { status: 400 });
-  if (question.length > 500) {
+  if (question.length > coachEnv.maxQuestionLength) {
     return NextResponse.json({ error: msg.questionTooLong }, { status: 400 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = coachEnv.apiKey;
   if (!apiKey) {
     return NextResponse.json(
       { error: msg.coachUnavailable },

@@ -1,4 +1,5 @@
 import { Pool, types } from "pg";
+import { database, databaseUrl, isProduction } from "@/lib/env";
 
 /**
  * The one connection pool. Server-only — nothing under `components/` may import
@@ -33,12 +34,14 @@ declare global {
  * which is what the default keys off. `DATABASE_SSL` or an `sslmode` in the URL
  * overrides it when the guess is wrong.
  */
-export function resolveSsl(connectionString: string): false | { rejectUnauthorized: boolean } {
+export function resolveSsl(
+  connectionString: string,
+  override: string | null = database.ssl,
+): false | { rejectUnauthorized: boolean } {
   const on = { rejectUnauthorized: false };
 
-  const override = process.env.DATABASE_SSL?.toLowerCase();
   if (override) {
-    return ["0", "false", "disable", "off", "no"].includes(override) ? false : on;
+    return ["0", "false", "disable", "off", "no"].includes(override.toLowerCase()) ? false : on;
   }
 
   let host = "";
@@ -58,18 +61,13 @@ export function resolveSsl(connectionString: string): false | { rejectUnauthoriz
 }
 
 function create() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not set. Point it at your Render Postgres instance.");
-  }
+  const connectionString = databaseUrl();
   return new Pool({
     connectionString,
     ssl: resolveSsl(connectionString),
-    max: Number(process.env.PG_POOL_MAX ?? 10),
-    // Lowering this frees the connection sooner, which matters only against a
-    // single-connection dev database (PGlite); production leaves it at 30s.
-    idleTimeoutMillis: Number(process.env.PG_IDLE_MS ?? 30_000),
-    connectionTimeoutMillis: 10_000,
+    max: database.poolMax,
+    idleTimeoutMillis: database.idleMs,
+    connectionTimeoutMillis: database.connectionTimeoutMs,
   });
 }
 
@@ -85,7 +83,7 @@ function getPool(): Pool {
   // The global survives hot reloads; `cached` covers production, where module
   // scope is stable and the global is deliberately left unset.
   cached ??= globalThis.__richHabitsPool ?? create();
-  if (process.env.NODE_ENV !== "production") globalThis.__richHabitsPool = cached;
+  if (!isProduction) globalThis.__richHabitsPool = cached;
   return cached;
 }
 

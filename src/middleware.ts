@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE } from "@/lib/cookies";
 
 // API routes do their own auth check so fetch() callers get JSON, not an HTML redirect.
 const PUBLIC_PATHS = ["/login", "/api"];
-const SESSION_COOKIE = "rh_session";
 
 /**
  * A cookie-presence check, nothing more. /admin is not listed as public, so a

@@ -4,7 +4,9 @@
  * must not mean touching a query or a component.
  */
 
-export const SESSION_IDLE_MINUTES = 30;
+import { analytics, appVersion } from "@/lib/env";
+
+export const SESSION_IDLE_MINUTES = analytics.sessionIdleMinutes;
 
 /** Engagement bands, evaluated top-down; the first match wins. */
 export const ENGAGEMENT = {
@@ -61,4 +63,4 @@ export const FEATURE_OF_EVENT: Record<string, FeatureKey> = Object.fromEntries(
   ),
 );
 
-export const APP_VERSION = process.env.npm_package_version ?? "0.1.0";
+export const APP_VERSION = appVersion;

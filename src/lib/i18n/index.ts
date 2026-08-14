@@ -18,7 +18,8 @@ export type Locale = (typeof LOCALES)[number];
  * shared screen where two people read different ones.
  */
 export const DEFAULT_LOCALE: Locale = "en";
-export const LOCALE_COOKIE = "rh_locale";
+// Re-exported from the shared cookie module so there is one definition.
+export { LOCALE_COOKIE } from "@/lib/cookies";
 
 export const dictionaries: Record<Locale, Dict> = { both, en, zh };
 

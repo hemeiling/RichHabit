@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { resolveSsl } from "../src/lib/db/pool";
 
 /**
@@ -10,7 +10,8 @@ const RENDER_INTERNAL = "postgresql://richhabits:pw@dpg-abc123def456-a/richhabit
 const RENDER_EXTERNAL =
   "postgresql://richhabits:pw@dpg-abc123def456-a.oregon-postgres.render.com/richhabits";
 
-afterEach(() => { delete process.env.DATABASE_SSL; });
+// The override is passed in rather than read from process.env: env is captured
+// once at startup, so a test that mutated it would prove nothing.
 
 describe("resolveSsl", () => {
   it("is off for local Postgres", () => {
@@ -32,11 +33,12 @@ describe("resolveSsl", () => {
   });
 
   it("lets DATABASE_SSL override everything", () => {
-    process.env.DATABASE_SSL = "false";
-    expect(resolveSsl(RENDER_EXTERNAL)).toBe(false);
-    process.env.DATABASE_SSL = "require";
-    expect(resolveSsl("postgres://postgres@localhost:5432/postgres"))
+    expect(resolveSsl(RENDER_EXTERNAL, "false")).toBe(false);
+    expect(resolveSsl(RENDER_EXTERNAL, "disable")).toBe(false);
+    expect(resolveSsl("postgres://postgres@localhost:5432/postgres", "require"))
       .toEqual({ rejectUnauthorized: false });
+    // Case should not matter.
+    expect(resolveSsl(RENDER_EXTERNAL, "DISABLE")).toBe(false);
   });
 
   it("does not throw on an unparseable connection string", () => {

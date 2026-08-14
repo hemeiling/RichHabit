@@ -1,8 +1,11 @@
 node_modules
 .next
 out
+# Every env file except the documented template. .env.example is the only one
+# that is committed, and it never contains a real value.
 .env
-.env.local
+.env.*
+!.env.example
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store

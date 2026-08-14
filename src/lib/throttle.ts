@@ -5,10 +5,12 @@
  * Redis — noted rather than pretended otherwise.
  */
 
+import { auth } from "@/lib/env";
+
 const attempts = new Map<string, { count: number; first: number }>();
 
-export const WINDOW_MS = 15 * 60 * 1000;
-export const MAX_ATTEMPTS = 10;
+export const WINDOW_MS = auth.attemptWindowMinutes * 60 * 1000;
+export const MAX_ATTEMPTS = auth.maxAttempts;
 
 /** True while the key is still under its limit. */
 export function throttle(key: string, now = Date.now()): boolean {
