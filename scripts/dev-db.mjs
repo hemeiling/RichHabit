@@ -13,11 +13,12 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
+import { ROOT, loadEnv } from "./lib.mjs";
 
-const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+loadEnv();
+const root = ROOT;
 const dataDir = path.join(root, ".pgdata");
 const PORT = Number(process.env.DEV_DB_PORT ?? 5433);
 

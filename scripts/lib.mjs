@@ -1,0 +1,78 @@
+/**
+ * Shared by the command-line scripts.
+ *
+ * These run under plain Node, not Next, so two things they used to assume are
+ * false: nothing loads `.env.local` for them, and they cannot import
+ * `src/lib/env.ts`. Both are handled here, once, rather than in four files.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import pg from "pg";
+
+export const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+/**
+ * Loads env files the way Next does: `.env.local` wins over `.env`, and a
+ * variable already in the environment beats both — so `DATABASE_URL=… npm run …`
+ * still overrides the file.
+ *
+ * Deliberately minimal: `KEY=value`, optional quotes, `#` comments, no
+ * interpolation. Anything more belongs in a dependency, and this needs none.
+ */
+export function loadEnv() {
+  for (const name of [".env.local", ".env"]) {
+    const file = path.join(ROOT, name);
+    if (!fs.existsSync(file)) continue;
+    for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+      if (!match) continue;
+      const [, key, rawValue] = match;
+      if (process.env[key] !== undefined) continue;   // already set: leave it
+      process.env[key] = rawValue.trim().replace(/^(['"])(.*)\1$/, "$2");
+    }
+  }
+}
+
+/**
+ * The same rule as `resolveSsl` in src/lib/db/pool.ts: TLS off for localhost and
+ * for undotted private hostnames (Render's internal host), on for a public FQDN,
+ * overridable by DATABASE_SSL or an `sslmode` in the URL.
+ *
+ * It is duplicated from the TypeScript rather than shared because these scripts
+ * cannot import TS — but it is now duplicated *once*, not once per script, and
+ * `tests/pool.test.ts` pins the behaviour both copies must have.
+ */
+export function resolveSsl(url) {
+  const on = { rejectUnauthorized: false };
+  const override = process.env.DATABASE_SSL?.toLowerCase();
+  if (override) return ["0", "false", "disable", "off", "no"].includes(override) ? false : on;
+
+  let host = "", sslmode = "";
+  try {
+    const parsed = new URL(url);
+    host = parsed.hostname;
+    sslmode = parsed.searchParams.get("sslmode") ?? "";
+  } catch { /* not a parseable URL; fall through */ }
+
+  if (sslmode) return sslmode === "disable" ? false : on;
+  if (!host || host === "localhost" || host === "127.0.0.1" || host === "::1") return false;
+  return host.includes(".") ? on : false;
+}
+
+/** A connected client, or a clear message about what is missing. */
+export async function connect() {
+  loadEnv();
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error(
+      "DATABASE_URL is not set.\n" +
+      "Add it to .env.local (see .env.example), or pass it inline:\n" +
+      "  DATABASE_URL=postgres://… npm run <script>",
+    );
+    process.exit(1);
+  }
+  const client = new pg.Client({ connectionString, ssl: resolveSsl(connectionString) });
+  await client.connect();
+  return client;
+}

@@ -9,31 +9,16 @@
  *   npm run admin:grant  -- someone@example.com --revoke
  *   npm run admin:grant  -- --list
  */
-import pg from "pg";
+import { connect, loadEnv } from "./lib.mjs";
+
+loadEnv();
 
 const args = process.argv.slice(2);
 const revoke = args.includes("--revoke");
 const list = args.includes("--list");
 const email = (args.find((a) => !a.startsWith("--")) ?? process.env.ADMIN_EMAIL ?? "").toLowerCase() || undefined;
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.error("DATABASE_URL is not set.");
-  process.exit(1);
-}
-
-function resolveSsl(url) {
-  const o = process.env.DATABASE_SSL?.toLowerCase();
-  if (o) return ["0", "false", "disable", "off", "no"].includes(o) ? false : { rejectUnauthorized: false };
-  let host = "", sslmode = "";
-  try { const u = new URL(url); host = u.hostname; sslmode = u.searchParams.get("sslmode") ?? ""; } catch {}
-  if (sslmode) return sslmode === "disable" ? false : { rejectUnauthorized: false };
-  if (!host || host === "localhost" || host === "127.0.0.1" || host === "::1") return false;
-  return host.includes(".") ? { rejectUnauthorized: false } : false;
-}
-
-const client = new pg.Client({ connectionString, ssl: resolveSsl(connectionString) });
-await client.connect();
+const client = await connect();
 
 try {
   if (list) {

@@ -14,7 +14,9 @@
 import { randomBytes, scrypt as scryptCb } from "node:crypto";
 import { promisify } from "node:util";
 import { createInterface } from "node:readline";
-import pg from "pg";
+import { connect, loadEnv } from "./lib.mjs";
+
+loadEnv();
 
 const scrypt = promisify(scryptCb);
 const KEY_LEN = 64;
@@ -63,28 +65,11 @@ if (password.length < MIN || password.length > MAX) {
   process.exit(1);
 }
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.error("DATABASE_URL is not set.");
-  process.exit(1);
-}
-
-function resolveSsl(url) {
-  const o = process.env.DATABASE_SSL?.toLowerCase();
-  if (o) return ["0", "false", "disable", "off", "no"].includes(o) ? false : { rejectUnauthorized: false };
-  let host = "", sslmode = "";
-  try { const u = new URL(url); host = u.hostname; sslmode = u.searchParams.get("sslmode") ?? ""; } catch {}
-  if (sslmode) return sslmode === "disable" ? false : { rejectUnauthorized: false };
-  if (!host || host === "localhost" || host === "127.0.0.1" || host === "::1") return false;
-  return host.includes(".") ? { rejectUnauthorized: false } : false;
-}
-
 const salt = randomBytes(16);
 const key = await scrypt(password, salt, KEY_LEN);
 const hash = `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
 
-const client = new pg.Client({ connectionString, ssl: resolveSsl(connectionString) });
-await client.connect();
+const client = await connect();
 try {
   const { rows } = await client.query(
     "update users set password_hash = $1 where lower(email) = $2 returning email",
