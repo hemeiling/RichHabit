@@ -346,6 +346,36 @@ export const en = {
     suggested: (n: number) => (n === 1 ? "1 suggestion added below" : `${n} suggestions added below`),
     replacesLabel: (behaviour: string) => `Instead of: ${behaviour}`,
     whySuggested: "Why this",
+
+    // §12 — the four groups the workspace keeps apart.
+    groupBehaviours: "Behaviours I want to change",
+    groupBehavioursNote: "In your words. Not tracked.",
+    groupRecommended: "Recommended",
+    groupRecommendedNote: "Suggestions waiting for your decision.",
+    groupLibrary: "From the library",
+    groupLibraryNote: "Templates you've picked out but not started.",
+    groupFocus: "My focus habits",
+    groupFocusNote: "What you're actually tracking right now.",
+    groupEmpty: "Nothing here yet.",
+
+    // §13 — pacing, not a rule.
+    focusCount: (n: number) => `${n} active`,
+    tooManyTitle: "That's a lot at once",
+    tooMany: (n: number) => `You're tracking ${n} habits. Changes tend to hold better a few at a time — the rest keep just as well in the backlog.`,
+
+    libraryTitle: "Habit library",
+    libraryNote: "Optional templates. Adding one puts it in your backlog, not on your sheet.",
+    libraryBrowse: "Browse the library",
+    libraryHide: "Hide the library",
+    libraryAdd: "Add",
+    libraryAdded: "In your backlog",
+    libraryOnSheet: "Already on your sheet",
+    libraryMinTarget: (min: string, target: string) => `Start at ${min}, aim for ${target}`,
+    libraryTargetOnly: (target: string) => `Aim for ${target}`,
+    domains: {
+      health: "Health", career: "Career", learning: "Learning",
+      money: "Money", relationships: "Relationships", home: "Home",
+    } as Record<string, string>,
   },
 
   more: {

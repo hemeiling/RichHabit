@@ -215,6 +215,22 @@ things make a proposal something you can actually judge:
 without the rest of the app knowing. No API key means no suggestions and nothing
 else changes — tracking never depends on a model being reachable.
 
+The screen is the selection workspace from §12, and it keeps four things apart
+because they mean different things:
+
+| Group | What it holds | Status |
+|---|---|---|
+| Behaviours I want to change | your own words, untracked | `candidate` |
+| Recommended | the coach's proposals | `recommended` |
+| From the library | templates you picked but haven't started | `planned` |
+| My focus habits | what you actually track | `active` |
+
+Adding from the library copies the template into your own row — keyed, so it
+reads in either language — and lands it as `planned`. Anything already taken is
+shown as such rather than offered twice. Above nine active habits the workspace
+mentions pacing (§13); it is a sentence, not a limit, and the backlog keeps
+whatever you leave there.
+
 ### How access control works
 
 There is no row-level security any more — it keyed off `auth.uid()`, which only exists inside

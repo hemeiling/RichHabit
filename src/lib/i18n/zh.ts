@@ -334,6 +334,34 @@ export const zh: Dict = {
     suggested: (n: number) => `已在下方添加 ${n} 条建议`,
     replacesLabel: (behaviour: string) => `用来替代：${behaviour}`,
     whySuggested: "为什么建议这个",
+
+    groupBehaviours: "我想改变的行为",
+    groupBehavioursNote: "你的原话，不会被追踪。",
+    groupRecommended: "推荐",
+    groupRecommendedNote: "等你决定是否采纳的建议。",
+    groupLibrary: "来自习惯库",
+    groupLibraryNote: "你挑出来但还没开始的模板。",
+    groupFocus: "我的重点习惯",
+    groupFocusNote: "你现在真正在追踪的。",
+    groupEmpty: "这里还是空的。",
+
+    focusCount: (n: number) => `进行中 ${n} 个`,
+    tooManyTitle: "一次做的有点多",
+    tooMany: (n: number) => `你正在追踪 ${n} 个习惯。一次专注少数几个，改变往往更容易坚持 —— 其余的放在待办清单里同样不会丢。`,
+
+    libraryTitle: "习惯库",
+    libraryNote: "可选的模板。添加后会进入待办清单，而不是直接上你的清单。",
+    libraryBrowse: "浏览习惯库",
+    libraryHide: "收起习惯库",
+    libraryAdd: "添加",
+    libraryAdded: "已在待办清单",
+    libraryOnSheet: "已在你的清单上",
+    libraryMinTarget: (min: string, target: string) => `从 ${min} 开始，目标 ${target}`,
+    libraryTargetOnly: (target: string) => `目标 ${target}`,
+    domains: {
+      health: "健康", career: "事业", learning: "学习",
+      money: "财务", relationships: "人际", home: "生活",
+    },
   },
 
   more: {
