@@ -143,7 +143,7 @@ export default function Today() {
         <div className="flex flex-col sm:flex-row items-center gap-5 mt-4">
           <ScoreDial score={score.pct} segments={segments.length ? segments : [{ weight: 1, done: false }]} />
           <div className="flex-1 w-full">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-2">
               {CATEGORIES.map((c) => {
                 const hs = list.filter((h) => h.category === c.id);
                 const done = hs.filter((h) => isDone(state, date, h.id)).length;

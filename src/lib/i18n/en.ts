@@ -415,6 +415,21 @@ export const en = {
     genericError: "Something went wrong. Try again.",
   },
 
+  errors: {
+    notSignedIn: "You're not signed in.",
+    saveFailed: "Something went wrong saving that.",
+    invalidEmail: "Enter a valid email address.",
+    emailTooLong: "That email address is too long.",
+    emailTaken: "That email is already registered.",
+    passwordTooShort: (n: number) => `Password must be at least ${n} characters.`,
+    passwordTooLong: (n: number) => `Password must be under ${n} characters.`,
+    wrongCredentials: "That email and password don't match.",
+    tooManyAttempts: "Too many attempts. Wait a few minutes and try again.",
+    coachUnavailable: "The AI coach isn't switched on for this app yet.",
+    coachEmpty: "The coach didn't return anything. Try asking again.",
+    questionTooLong: "That question is too long.",
+  },
+
   ui: {
     habitScore: "Habit score",
     less: "Less",

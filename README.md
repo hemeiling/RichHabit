@@ -3,8 +3,8 @@
 A habit system rather than a checkbox list: notice the day you actually have, grade it,
 pick a few habits to change, track them in phases, and review what the data says.
 
-Bilingual by default — every label carries English and 简体中文 at once, so a household that
-reads both can share a screen without anyone changing a setting.
+Bilingual — English and 简体中文, switched from **EN | 中文** in the header. A third option, 双语,
+renders every label in both at once for a screen two people share.
 
 Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, behind the app's own API layer.
 
@@ -46,7 +46,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 83 tests: habit engine, validation, throttle, TLS, i18n, coach contract |
+| `npm test` | Vitest — 85 tests: habit engine, validation, throttle, TLS, i18n, coach contract |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to `DATABASE_URL`. Idempotent |
 
@@ -102,39 +102,44 @@ from daily to three-times-a-week doesn't silently rewrite what last month was su
 
 ### Languages
 
-**Both languages show at once.** `Today · 今天`, `Save · 保存`. That is the default and needs no
-setting — the point is that two people reading different languages can use the same screen. `English`
-and `中文` on their own are available in More for anyone who wants one only.
+**EN | 中文 sits in the header on every screen.** Switching is instant — the dictionary is swapped in
+React state, so nothing reloads, no scroll position is lost and no half-typed input is thrown away.
+A third option, 双语, shows both languages on every label at once.
 
-The bilingual dictionary is **derived, not written**: `src/lib/i18n/both.ts` walks `en.ts` and
-`zh.ts` together, so it cannot fall behind them. A new key appears in all three automatically, and
-`zh.ts` is typed as `Dict`, so a missing key fails the build rather than leaving a blank on
-someone's screen.
+Where the choice lives, and why in three places:
 
-How the two halves are joined depends on what they are, because one rule looks wrong somewhere:
-
-| Case | Joined with | Example |
+| Layer | Holds | Why |
 |---|---|---|
-| Identical in both | shown once | `0 / 5`, `—` |
-| Both very short | `/` | `S/日` — a middot will not fit a 34px column header |
-| A finished sentence | a space | `Rest counts too. 休息也算数。` |
-| Everything else | ` · ` | `Save · 保存` |
+| React state | what you see now | instant switching, no reload |
+| `rh_locale` cookie | next request | the server can read it before any query, so the first paint is right |
+| `user_preferences.locale` | the account | follows you to another device |
 
-Other consequences worth knowing:
+The cookie decides the first paint; the stored preference wins once state loads. A visitor with no
+cookie gets their browser's `Accept-Language`, and an explicit choice always beats browser detection.
+Language is one column — no user, habit, completion or analytics row is duplicated per language.
+
+Every string lives in `src/lib/i18n/en.ts` under semantic keys (`nav.today`, `common.save`), and
+`zh.ts` is typed as `Dict` — a missing key fails the build. `both.ts` is *derived* by walking the two
+together, so it cannot fall behind them. Adding Japanese means adding one file and one entry in
+`LOCALES`; no component changes.
+
+Consequences worth knowing:
 
 - **Values are interpolated once, not twice.** Anything with a number or a name in it is a function,
-  not concatenation at the call site — `"3 days running"` cannot be assembled from parts that work
-  in both languages.
-- **New accounts are seeded bilingually** (`Read for learning · 阅读学习`), which is why the starter
-  habits moved out of SQL into `src/lib/seed.ts`. It is also why `kind` is now stated outright
-  instead of inferred from an English name prefix (`Avoid…`/`Limit…`/`Skip…`) — that silently
-  stopped working the moment a name could be Chinese.
-- **Habit names are user data and are never translated.** Rename one and it stays as you wrote it.
-  Goal *areas* are the exception: the English key is stored and translated on render, so old rows
-  keep matching.
-- **The coach answers in English and then Chinese**, quoting habit names exactly as stored.
-- **Dates carry both calendars** — `Thursday, August 13 · 8月13日星期四`. "Thursday" means nothing to
-  a Chinese reader and 星期四 means nothing to an English one.
+  not concatenation at the call site — `"3 days running"` cannot be assembled from parts that work in
+  both languages. Functions that mention a category or a unit take a *key* and resolve their own
+  language's word, or the bilingual mode renders it twice over.
+- **User text is never translated.** Rename a habit in English, switch to Chinese, and it stays as
+  you wrote it. Goal *areas* are the exception: the English key is stored and translated on render,
+  so existing rows keep matching.
+- **New accounts are seeded in the language they signed up in** — which is why the starter habits
+  live in `src/lib/seed.ts` rather than SQL, and why `kind` is stated outright instead of inferred
+  from an English name prefix.
+- **The AI coach is told the locale** and answers in it; the analysis and the numbers are identical
+  either way, because `habits.ts` and `correlate.ts` contain no language at all.
+- **Server-side messages are localised too** — sign-in failures, sign-up validation, the generic save
+  failure and the coach's own errors all come from the dictionary.
+- **Dates go through `Intl`** with an explicit tag (`en-US` / `zh-CN`), never the system locale.
 
 ### How access control works
 

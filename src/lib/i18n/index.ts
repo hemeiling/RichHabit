@@ -13,11 +13,11 @@ export const LOCALES = ["both", "en", "zh"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 /**
- * Bilingual is the default, and the point of the app for a household that reads
- * two languages: nobody has to find a setting before the other person can use
- * it. `en` and `zh` remain available for anyone who wants one language only.
+ * `both` renders every label in both languages at once. It is not the default —
+ * a new visitor gets their browser's language — but it stays available for a
+ * shared screen where two people read different ones.
  */
-export const DEFAULT_LOCALE: Locale = "both";
+export const DEFAULT_LOCALE: Locale = "en";
 export const LOCALE_COOKIE = "rh_locale";
 
 export const dictionaries: Record<Locale, Dict> = { both, en, zh };
@@ -48,13 +48,23 @@ export function shortDateFor(iso: string, locale: Locale): string {
 }
 
 /**
- * The locale for a request: an explicit cookie wins, otherwise everyone gets
- * both languages. Accept-Language is deliberately *not* used to narrow to one —
- * the browser language says what the device owner reads, not what everyone
- * sharing the screen reads.
+ * The locale for a request: an explicit choice first, then the browser's
+ * language, then English.
  */
-export function resolveLocale(cookieValue?: string | null): Locale {
-  return isLocale(cookieValue) ? cookieValue : DEFAULT_LOCALE;
+export function resolveLocale(
+  cookieValue?: string | null,
+  acceptLanguage?: string | null,
+): Locale {
+  // An explicit choice always wins over what the device happens to be set to.
+  if (isLocale(cookieValue)) return cookieValue;
+
+  for (const part of (acceptLanguage ?? "").split(",")) {
+    const tag = part.split(";")[0].trim().toLowerCase();
+    if (!tag) continue;
+    if (tag === "zh" || tag.startsWith("zh-")) return "zh";
+    if (tag === "en" || tag.startsWith("en-")) return "en";
+  }
+  return DEFAULT_LOCALE;
 }
 
 export type { Dict };

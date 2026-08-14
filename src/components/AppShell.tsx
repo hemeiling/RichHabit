@@ -1,7 +1,9 @@
 "use client";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { HabitsProvider, useHabits } from "@/components/store";
-import { LocaleProvider, useT } from "@/lib/i18n/context";
+import LanguageToggle from "@/components/LanguageToggle";
+import { LocaleProvider, useAdoptLocale, useLocale, useT } from "@/lib/i18n/context";
 import type { Locale } from "@/lib/i18n";
 
 const TABS = [
@@ -11,6 +13,37 @@ const TABS = [
   { href: "/insights", key: "insights", path: "M5 19V10 M10 19V5 M15 19v-6 M20 19v-9" },
   { href: "/more", key: "more", path: "M5 12h.01 M12 12h.01 M19 12h.01" },
 ] as const;
+
+/**
+ * Keeps the language in three places agreed: React state (what you see), the
+ * cookie (what the server reads on the next request) and the account (what
+ * follows you to another device).
+ *
+ * The cookie is the fast path — the server can read it before any query — so it
+ * decides the first paint. The stored preference is the durable one and wins
+ * once state has loaded. Renders nothing.
+ */
+function LocaleSync() {
+  const { state, actions, loading } = useHabits();
+  const locale = useLocale();
+  const adopt = useAdoptLocale();
+  const synced = useRef(false);
+
+  useEffect(() => {
+    if (loading || synced.current) return;
+    synced.current = true;
+    adopt(state.prefs.locale);
+  }, [loading, state.prefs.locale, adopt]);
+
+  useEffect(() => {
+    if (!synced.current || loading) return;
+    if (state.prefs.locale !== locale) actions.setPrefs({ locale });
+    // `actions` is rebuilt every render; depending on it would write in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale, state.prefs.locale, loading]);
+
+  return null;
+}
 
 function Chrome({ children }: { children: React.ReactNode }) {
   const { state, actions, loading, saving, error, dismissError } = useHabits();
@@ -22,21 +55,25 @@ function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <div data-theme={state.prefs.theme} style={{ minHeight: "100vh" }}>
+      <LocaleSync />
       <header style={{
         position: "sticky", top: 0, zIndex: 20, background: "var(--bg)",
         borderBottom: "1px solid var(--line)",
       }}>
         <div className="mx-auto px-4 sm:px-6 flex items-center justify-between"
           style={{ maxWidth: 780, height: 56 }}>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
             {isSubPage && (
               <button className="btn btn-quiet" style={{ padding: "5px 10px" }}
                 onClick={() => router.back()} aria-label={t.common.back}>‹</button>
             )}
-            <span className="display" style={{ fontSize: 21 }}>{t.titles[pathname] ?? t.appName}</span>
+            <span className="display" style={{
+              fontSize: 21, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{t.titles[pathname] ?? t.appName}</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2" style={{ flex: "none" }}>
             <span className="eyebrow" style={{ opacity: saving ? 1 : 0, transition: "opacity .2s" }}>{t.common.saving}</span>
+            <LanguageToggle />
             <button className="btn btn-quiet" style={{ padding: "6px 10px" }} aria-label={t.common.toggleDarkMode}
               onClick={() => actions.setPrefs({ theme: state.prefs.theme === "dark" ? "light" : "dark" })}>
               {state.prefs.theme === "dark" ? "☾" : "☀"}
@@ -89,7 +126,7 @@ export default function AppShell({
   userId, locale, children,
 }: { userId: string; locale: Locale; children: React.ReactNode }) {
   return (
-    <LocaleProvider locale={locale}>
+    <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
         <Chrome>{children}</Chrome>
       </HabitsProvider>

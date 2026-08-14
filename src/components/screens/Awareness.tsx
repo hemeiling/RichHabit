@@ -52,7 +52,7 @@ export default function Awareness() {
 
       <section className="card p-5">
         <div className="eyebrow mb-2.5">{t.awareness.addActivity}</div>
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-2.5">
           <input className="input num" type="time" value={draft.time}
             onChange={(e) => setDraft({ ...draft, time: e.target.value })} />
           <input className="input col-span-2" placeholder={t.awareness.activityPlaceholder} value={draft.activity}

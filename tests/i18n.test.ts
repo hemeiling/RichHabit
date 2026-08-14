@@ -103,12 +103,22 @@ describe("resolveLocale", () => {
     expect(resolveLocale("both")).toBe("both");
   });
 
-  it("defaults to bilingual, not to one language", () => {
-    // The browser language says what the device owner reads, not what everyone
-    // sharing the screen reads.
-    expect(resolveLocale(null)).toBe("both");
-    expect(resolveLocale(undefined)).toBe("both");
-    expect(resolveLocale("klingon")).toBe("both");
+  it("falls back to the browser's language for a new visitor", () => {
+    expect(resolveLocale(null, "zh-CN,zh;q=0.9,en;q=0.8")).toBe("zh");
+    expect(resolveLocale(null, "zh-Hant")).toBe("zh");
+    expect(resolveLocale(null, "en-GB,en;q=0.9")).toBe("en");
+  });
+
+  it("defaults to English when it recognises neither", () => {
+    expect(resolveLocale(null, "fr-FR,de;q=0.8")).toBe("en");
+    expect(resolveLocale(null, null)).toBe("en");
+    expect(resolveLocale("klingon", null)).toBe("en");
+  });
+
+  it("lets an explicit choice beat the browser", () => {
+    expect(resolveLocale("en", "zh-CN")).toBe("en");
+    expect(resolveLocale("zh", "en-US")).toBe("zh");
+    expect(resolveLocale("both", "en-US")).toBe("both");
   });
 
   it("knows its own locales", () => {
@@ -147,7 +157,7 @@ describe("seeded starter set", () => {
 
 describe("bilingual dictionary", () => {
   it("carries both languages in every label", () => {
-    expect(both.nav.today).toBe("Today · 今天");
+    expect(both.nav.today).toBe("Today · 今日");
     expect(both.login.signIn).toBe("Sign in · 登录");
     expect(both.common.save).toBe("Save · 保存");
   });
@@ -230,12 +240,12 @@ describe("no value is rendered twice in bilingual mode", () => {
   it("does the same inside a sentence", () => {
     const s = both.week.holdingAt("daytime", 82);
     expect(countOccurrences(s, "Daytime")).toBe(1);
-    expect(countOccurrences(s, "白天")).toBe(1);
+    expect(countOccurrences(s, "日间")).toBe(1);
     expect(countOccurrences(s, "82")).toBe(2); // once per language, as intended
 
     const w = both.suggestions.weakestWindow("nighttime", 41);
     expect(countOccurrences(w, "Nighttime")).toBe(1);
-    expect(countOccurrences(w, "夜晚")).toBe(1);
+    expect(countOccurrences(w, "晚间")).toBe(1);
   });
 
   it("names a unit once per language", () => {

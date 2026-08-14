@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { getSessionUser } from "@/lib/auth";
 import { loadState } from "@/lib/db/queries";
 import { coach } from "@/lib/coach";
-import { getLocale } from "@/lib/i18n/server";
+import { getDict, getLocale } from "@/lib/i18n/server";
 
 /**
  * The AI coach. The client sends a question and nothing else; this route reads
@@ -58,8 +58,9 @@ exactly as they are stored in both versions; do not translate them.`,
 };
 
 export async function POST(request: Request) {
+  const msg = getDict().errors;
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: msg.notSignedIn }, { status: 401 });
 
   const locale = getLocale();
 
@@ -67,13 +68,13 @@ export async function POST(request: Request) {
   const question = typeof body?.question === "string" ? body.question.trim() : "";
   if (!question) return NextResponse.json({ error: "No question" }, { status: 400 });
   if (question.length > 500) {
-    return NextResponse.json({ error: "That question is too long." }, { status: 400 });
+    return NextResponse.json({ error: msg.questionTooLong }, { status: 400 });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "No coach model connected. Add OPENAI_API_KEY to .env.local." },
+      { error: msg.coachUnavailable },
       { status: 501 },
     );
   }
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
 
     const answer = response.output_text?.trim();
     if (!answer) {
-      return NextResponse.json({ error: "The model returned nothing." }, { status: 502 });
+      return NextResponse.json({ error: msg.coachEmpty }, { status: 502 });
     }
     return NextResponse.json({ answer });
   } catch (error) {

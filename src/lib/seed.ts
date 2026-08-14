@@ -114,7 +114,7 @@ export async function seedAccount(q: Q, userId: string, locale: Locale) {
   const set = seedSet(locale);
 
   await q("insert into profiles (id) values ($1)", [userId]);
-  await q("insert into user_preferences (user_id) values ($1)", [userId]);
+  await q("insert into user_preferences (user_id, locale) values ($1,$2)", [userId, locale]);
 
   const goalIds = new Map<SeedGoal["key"], string>();
   for (const g of set.goals) {

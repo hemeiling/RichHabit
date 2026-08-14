@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createSession, verifyPassword } from "@/lib/auth";
 import { clearThrottle, throttle } from "@/lib/throttle";
 import { query } from "@/lib/db/pool";
+import { getDict } from "@/lib/i18n/server";
 
 export async function POST(request: Request) {
+  const msg = getDict().errors;
   const parsed = await request.json().catch(() => null);
   const email = typeof parsed?.email === "string" ? parsed.email.trim().toLowerCase() : "";
   const password = typeof parsed?.password === "string" ? parsed.password : "";
@@ -11,7 +13,7 @@ export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "local";
   if (!throttle(`${ip}:${email}`)) {
     return NextResponse.json(
-      { error: "Too many attempts. Wait a few minutes and try again." },
+      { error: msg.tooManyAttempts },
       { status: 429 },
     );
   }
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
   const user = rows[0];
   const ok = user ? await verifyPassword(password, user.password_hash) : false;
   if (!ok) {
-    return NextResponse.json({ error: "That email and password don't match." }, { status: 401 });
+    return NextResponse.json({ error: msg.wrongCredentials }, { status: 401 });
   }
 
   clearThrottle(`${ip}:${email}`);

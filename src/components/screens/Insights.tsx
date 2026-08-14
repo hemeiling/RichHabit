@@ -44,7 +44,7 @@ export default function Insights() {
           </span>
           <span className="muted mb-1.5" style={{ fontSize: 14 }}>{t.insights.todaySuffix}</span>
         </div>
-        <div className="grid grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-3 mt-4">
           {([[t.insights.sevenDays, week.pct], [t.insights.thirtyDays, month.pct], [t.insights.ninetyDays, quarter.pct]] as const).map(([label, v]) => (
             <div key={label} className="flat p-3">
               <div className="eyebrow" style={{ fontSize: 10 }}>{label}</div>
@@ -52,7 +52,7 @@ export default function Insights() {
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-3 mt-3">
+        <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-3 mt-3">
           {([[t.insights.currentStreak, `${dayStreak(state)}d`], [t.insights.perfectDays, month.perfect], [t.insights.habitsCompleted, totalCompleted]] as const).map(([label, v]) => (
             <div key={label} className="flat p-3">
               <div className="eyebrow" style={{ fontSize: 10 }}>{label}</div>

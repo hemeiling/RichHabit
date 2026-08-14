@@ -1,6 +1,6 @@
 import type { CategoryKey, Dict, UnitKey } from "./en";
 
-const CAT: Record<CategoryKey, string> = { morning: "早晨", daytime: "白天", nighttime: "夜晚" };
+const CAT: Record<CategoryKey, string> = { morning: "早晨", daytime: "日间", nighttime: "晚间" };
 const UNIT: Record<UnitKey, string> = {
   kcal: "千卡", hours: "小时", glasses: "杯", minutes: "分钟", none: "",
 };
@@ -18,24 +18,24 @@ export const zh: Dict = {
   localeName: "中文",
 
   nav: {
-    today: "今天",
+    today: "今日",
     habits: "习惯",
     week: "本周",
-    insights: "分析",
+    insights: "洞察",
     more: "更多",
   },
 
   titles: {
-    "/today": "今天",
+    "/today": "今日",
     "/habits": "我的习惯",
     "/week": "七天清单",
-    "/insights": "数据分析",
+    "/insights": "洞察",
     "/more": "更多",
     "/more/awareness": "习惯觉察",
     "/more/goals": "目标",
     "/more/metrics": "健康指标",
     "/more/stacks": "习惯叠加",
-    "/more/review": "每周回顾",
+    "/more/review": "每周复盘",
   },
 
   common: {
@@ -103,12 +103,12 @@ export const zh: Dict = {
   },
 
   today: {
-    todayLabel: "今天",
+    todayLabel: "今日",
     avoid: "戒除",
     daysRunning: (n: number) => `已连续 ${n} 天`,
     highPriority: "高优先级",
     note: "备注",
-    currentStreak: "当前连续",
+    currentStreak: "连续坚持",
     streakDays: (n: number) => `${n}d`,
     done: "完成",
     nothingScheduled: "今天没有安排",
@@ -119,7 +119,7 @@ export const zh: Dict = {
     logNoteHint: "只属于今天这一条 —— 一整天的记录在页面底部。",
     logOpen: "添加备注或数量",
     logSave: "保存记录",
-    notesTitle: "今天的记录",
+    notesTitle: "今日记录",
     notesPlaceholder: "今天是什么塑造了这一天？有什么值得记下来的？",
     check: (name: string) => `完成「${name}」`,
     uncheck: (name: string) => `取消「${name}」`,
@@ -171,7 +171,7 @@ export const zh: Dict = {
     phaseResult: (c: CategoryKey) => `${CAT[c]} · 七天结果`,
     completion: "完成率",
     scheduledOf: (done: number, scheduled: number) => `已完成 ${done} / 安排 ${scheduled}`,
-    longestStreak: "最长连续",
+    longestStreak: "最长连续坚持",
     daysInARow: "天连续",
     strongest: "最稳的习惯",
     weakest: "最弱的习惯",
@@ -190,7 +190,7 @@ export const zh: Dict = {
     sevenDays: "7 天",
     thirtyDays: "30 天",
     ninetyDays: "90 天",
-    currentStreak: "当前连续",
+    currentStreak: "连续坚持",
     perfectDays: "满分天数",
     habitsCompleted: "累计完成",
     lastWeeks: (n: number) => `最近 ${n} 周`,
@@ -232,7 +232,7 @@ export const zh: Dict = {
   },
 
   coach: {
-    title: "问问富习惯",
+    title: "问问 AI 教练",
     subtitle: "答案来自这个页面上的数据 —— 你的习惯、目标和指标。",
     placeholder: "问问你的习惯、进展，或者接下来该改进什么…",
     ask: "提问",
@@ -256,7 +256,7 @@ export const zh: Dict = {
       goals: { label: "目标", note: "每个习惯究竟是为了什么" },
       metrics: { label: "健康指标", note: "体重、睡眠、有氧、饮水" },
       stacks: { label: "习惯叠加", note: "把新习惯接在旧习惯后面" },
-      review: { label: "每周回顾", note: "收尾这一周，定下下周的重点" },
+      review: { label: "每周复盘", note: "收尾这一周，定下下周的重点" },
     },
     preferences: "偏好设置",
     appearance: "外观",
@@ -363,11 +363,11 @@ export const zh: Dict = {
 
   review: {
     weekOf: "本周",
-    consistency: "坚持度",
+    consistency: "完成率",
     completed: "已完成",
     bestHabit: "最好的习惯",
     mostMissed: "漏得最多",
-    longestStreak: "最长连续",
+    longestStreak: "最长连续坚持",
     perfectDays: "满分天数",
     questions: {
       wentWell: { label: "哪些做得好？", hint: "哪些习惯坚持住了，为什么。" },
@@ -398,6 +398,21 @@ export const zh: Dict = {
     signInInstead: "改为登录",
     createInstead: "创建账户",
     genericError: "出了点问题，请再试一次。",
+  },
+
+  errors: {
+    notSignedIn: "你尚未登录。",
+    saveFailed: "保存时出了点问题。",
+    invalidEmail: "请输入有效的邮箱地址。",
+    emailTooLong: "邮箱地址过长。",
+    emailTaken: "该邮箱已被注册。",
+    passwordTooShort: (n: number) => `密码至少需要 ${n} 个字符。`,
+    passwordTooLong: (n: number) => `密码不能超过 ${n} 个字符。`,
+    wrongCredentials: "邮箱和密码不匹配。",
+    tooManyAttempts: "尝试次数过多，请几分钟后再试。",
+    coachUnavailable: "这个应用还没有启用 AI 教练。",
+    coachEmpty: "教练没有返回内容，请再试一次。",
+    questionTooLong: "问题太长了。",
   },
 
   ui: {

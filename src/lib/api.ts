@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { getDict } from "@/lib/i18n/server";
 import { ApiError, isUuid } from "@/lib/http";
 
 export { ApiError, check, isUuid } from "@/lib/http";
@@ -16,7 +17,7 @@ export async function withUser(
   fn: (userId: string) => Promise<unknown>,
 ): Promise<NextResponse> {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: getDict().errors.notSignedIn }, { status: 401 });
 
   try {
     const data = await fn(user.id);
@@ -29,7 +30,7 @@ export async function withUser(
     // caller nothing — raw Postgres errors name columns, constraints and
     // sometimes values, and the store puts `error.message` on screen.
     console.error("[api]", e);
-    return NextResponse.json({ error: "Something went wrong saving that." }, { status: 500 });
+    return NextResponse.json({ error: getDict().errors.saveFailed }, { status: 500 });
   }
 }
 

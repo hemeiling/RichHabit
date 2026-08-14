@@ -4,7 +4,7 @@ import { getLocale } from "@/lib/i18n/server";
 
 export default function LoginPage() {
   return (
-    <LocaleProvider locale={getLocale()}>
+    <LocaleProvider initial={getLocale()}>
       <LoginForm />
     </LocaleProvider>
   );

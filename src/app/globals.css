@@ -30,7 +30,12 @@ body {
 
 .display { font-family: var(--display); font-weight: 400; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
-.eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); font-weight: 500; }
+.eyebrow {
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--faint); font-weight: 500;
+  /* A long English label in a narrow column wraps instead of spilling out. */
+  overflow-wrap: break-word;
+}
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
 

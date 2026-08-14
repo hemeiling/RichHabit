@@ -95,6 +95,7 @@ export interface Prefs {
   theme: "light" | "dark";
   weighted: boolean;
   goalWeight: number | null;
+  locale: Locale;
 }
 
 export interface AppState {
@@ -112,5 +113,5 @@ export interface AppState {
 export const emptyState = (): AppState => ({
   habits: [], goals: [], completions: {}, dayNotes: {},
   awareness: [], stacks: [], metrics: {}, reviews: [],
-  prefs: { theme: "light", weighted: true, goalWeight: null },
+  prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en" },
 });

@@ -16,6 +16,7 @@ const KINDS = ["good", "avoid"] as const;
 const MODES = ["daily", "days", "times"] as const;
 const GRADES = ["good", "bad", "neutral"] as const;
 const THEMES = ["light", "dark"] as const;
+const LOCALES = ["en", "zh", "both"] as const;
 
 const optionalUuid = (v: unknown, field: string): string =>
   v === "" || v == null ? "" : check.uuid(v, field);
@@ -148,5 +149,6 @@ export function parsePrefs(b: any): Prefs {
     theme: check.oneOf(b?.theme, THEMES, "theme"),
     weighted: b?.weighted !== false,
     goalWeight: check.numberOrNull(b?.goalWeight, "goalWeight"),
+    locale: check.oneOf(b?.locale ?? "en", LOCALES, "locale"),
   };
 }

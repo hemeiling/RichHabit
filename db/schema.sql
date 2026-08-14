@@ -62,6 +62,9 @@ create table user_preferences (
   theme         text not null default 'light' check (theme in ('light','dark')),
   weighted_score boolean not null default true,
   goal_weight   numeric(6,2),
+  -- Language is a presentation preference, so it is one column here rather than
+  -- a duplicated set of rows anywhere. 'both' renders every label twice over.
+  locale        text not null default 'en' check (locale in ('en','zh','both')),
   week_starts_on smallint not null default 0 check (week_starts_on between 0 and 6),
   updated_at    timestamptz not null default now()
 );

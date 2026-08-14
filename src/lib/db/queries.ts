@@ -142,6 +142,7 @@ export async function loadState(userId: string): Promise<AppState> {
       theme: prefs[0].theme,
       weighted: prefs[0].weighted_score,
       goalWeight: prefs[0].goal_weight == null ? null : Number(prefs[0].goal_weight),
+      locale: prefs[0].locale ?? "en",
     };
   }
   return state;
@@ -312,11 +313,11 @@ export async function saveReview(userId: string, r: WeeklyReview) {
 
 export async function savePrefs(userId: string, p: Prefs) {
   await query(
-    `insert into user_preferences (user_id, theme, weighted_score, goal_weight)
-     values ($1,$2,$3,$4)
+    `insert into user_preferences (user_id, theme, weighted_score, goal_weight, locale)
+     values ($1,$2,$3,$4,$5)
      on conflict (user_id) do update set
        theme = excluded.theme, weighted_score = excluded.weighted_score,
-       goal_weight = excluded.goal_weight`,
-    [userId, p.theme, p.weighted, p.goalWeight],
+       goal_weight = excluded.goal_weight, locale = excluded.locale`,
+    [userId, p.theme, p.weighted, p.goalWeight, p.locale],
   );
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { MAX_PASSWORD, MIN_PASSWORD, createSession, hashPassword } from "@/lib/auth";
 import { transaction } from "@/lib/db/pool";
-import { getLocale } from "@/lib/i18n/server";
+import { getDict, getLocale } from "@/lib/i18n/server";
 import { seedAccount } from "@/lib/seed";
 
 /**
@@ -16,20 +16,21 @@ export async function POST(request: Request) {
   const email = typeof parsed?.email === "string" ? parsed.email.trim().toLowerCase() : "";
   const password = typeof parsed?.password === "string" ? parsed.password : "";
   const locale = getLocale();
+  const msg = getDict().errors;
 
   if (!email.includes("@")) {
-    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+    return NextResponse.json({ error: msg.invalidEmail }, { status: 400 });
   }
   if (email.length > 254) {
-    return NextResponse.json({ error: "That email address is too long." }, { status: 400 });
+    return NextResponse.json({ error: msg.emailTooLong }, { status: 400 });
   }
   if (password.length < MIN_PASSWORD) {
     return NextResponse.json(
-      { error: `Password must be at least ${MIN_PASSWORD} characters.` }, { status: 400 });
+      { error: msg.passwordTooShort(MIN_PASSWORD) }, { status: 400 });
   }
   if (password.length > MAX_PASSWORD) {
     return NextResponse.json(
-      { error: `Password must be under ${MAX_PASSWORD} characters.` }, { status: 400 });
+      { error: msg.passwordTooLong(MAX_PASSWORD) }, { status: 400 });
   }
 
   const passwordHash = await hashPassword(password);
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
   } catch (e) {
     // users_email_idx is what makes this race-safe; checking first would not be.
     if (e instanceof Error && /users_email_idx|duplicate key/.test(e.message)) {
-      return NextResponse.json({ error: "That email is already registered." }, { status: 409 });
+      return NextResponse.json({ error: msg.emailTaken }, { status: 409 });
     }
     throw e;
   }

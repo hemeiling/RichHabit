@@ -48,7 +48,7 @@ export default function LoginForm() {
       <div className="card p-7 w-full" style={{ maxWidth: 400 }}>
         <div className="flex items-start justify-between gap-3">
           <div className="eyebrow">{t.appName}</div>
-          <LanguageToggle small />
+          <LanguageToggle />
         </div>
         <h1 className="display mt-1" style={{ fontSize: 30, lineHeight: 1.1 }}>
           {mode === "signup" ? t.login.createAccount : t.login.welcomeBack}

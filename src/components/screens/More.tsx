@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { Segmented } from "@/components/ui";
-import LanguageToggle from "@/components/LanguageToggle";
 import { useT } from "@/lib/i18n/context";
 import { todayISO } from "@/lib/dates";
 
@@ -66,13 +65,6 @@ export default function More({ email }: { email: string }) {
           </div>
           <Segmented value={state.prefs.theme} onChange={(v) => actions.setPrefs({ theme: v })} small
             options={[{ value: "light" as const, label: t.more.light }, { value: "dark" as const, label: t.more.dark }]} />
-        </div>
-        <div className="flex items-center justify-between py-2 gap-3">
-          <div>
-            <div style={{ fontSize: 15 }}>{t.common.language}</div>
-            <div className="faint" style={{ fontSize: 12.5 }}>{t.more.languageHint}</div>
-          </div>
-          <LanguageToggle small />
         </div>
         <div className="flex items-center justify-between py-2 gap-3">
           <div>
