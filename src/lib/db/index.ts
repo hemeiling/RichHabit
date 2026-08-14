@@ -61,3 +61,10 @@ export const saveMetrics = (date: string, metrics: DayMetrics) =>
 export const saveReview = (r: WeeklyReview) => post("/api/reviews", r);
 
 export const savePrefs = (p: Prefs) => post("/api/prefs", p);
+
+/**
+ * Asks for a replacement habit per named behaviour. Writes only `recommended`
+ * rows, so the caller must reload state to see them.
+ */
+export const requestRecommendations = (): Promise<{ proposals: number; reason?: string }> =>
+  post("/api/recommendations", {});

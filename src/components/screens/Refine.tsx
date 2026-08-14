@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useHabits } from "@/components/store";
+import { requestRecommendations } from "@/lib/db";
 import { Empty, Field, Segmented } from "@/components/ui";
 import { useT } from "@/lib/i18n/context";
 import { blankHabit } from "@/lib/habits";
@@ -25,9 +26,11 @@ import type { Category, Habit, HabitKind } from "@/lib/types";
 const BACKLOG_STATUSES = ["candidate", "recommended", "planned"] as const;
 
 export default function Refine() {
-  const { state, actions } = useHabits();
+  const { state, actions, reload } = useHabits();
   const t = useT();
 
+  const [suggesting, setSuggesting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [kind, setKind] = useState<HabitKind>("avoid");
   const [weight, setWeight] = useState<1 | 2 | 3>(2);
@@ -57,6 +60,34 @@ export default function Refine() {
 
   const activate = (h: Habit) =>
     actions.saveHabit({ ...h, status: "active", active: true });
+
+  /**
+   * The server writes the proposals, so the store has to re-read rather than
+   * apply them optimistically — these rows did not come from this client.
+   */
+  const suggest = async () => {
+    setSuggesting(true);
+    setNotice(null);
+    try {
+      const { proposals, reason } = await requestRecommendations();
+      await reload();
+      setNotice(reason === "nothing_to_propose" || proposals === 0
+        ? t.refine.suggestNone
+        : t.refine.suggested(proposals));
+    } catch {
+      // A failed suggestion must leave the backlog exactly as it was.
+      setNotice(t.refine.suggestFailed);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const behaviourName = (id: string | null) => {
+    const source = id ? state.habits.find((h) => h.id === id) : null;
+    return source ? habitName(source, t) : null;
+  };
+
+  const canSuggest = backlog.some((h) => h.status === "candidate");
 
   return (
     <div className="flex flex-col gap-4">
@@ -115,6 +146,19 @@ export default function Refine() {
         </div>
         <p className="faint mt-1" style={{ fontSize: 12, lineHeight: 1.45 }}>{t.refine.backlogNote}</p>
 
+        {/* §18. A proposal, never a change: these arrive as suggestions and sit
+            here until the user puts one on their sheet. */}
+        <div className="flat p-3.5 mt-3">
+          <p className="muted" style={{ fontSize: 13, lineHeight: 1.45 }}>{t.refine.suggestNote}</p>
+          <div className="flex items-center justify-between gap-3 mt-2.5">
+            <span className="faint" style={{ fontSize: 12, lineHeight: 1.4 }}>{notice}</span>
+            <button className="btn" style={{ flex: "none" }}
+              disabled={suggesting || !canSuggest} onClick={suggest}>
+              {suggesting ? t.refine.suggesting : t.refine.suggest}
+            </button>
+          </div>
+        </div>
+
         {backlog.length === 0 ? (
           <div className="mt-3">
             <Empty title={t.refine.emptyTitle} body={t.refine.emptyBody} />
@@ -129,6 +173,21 @@ export default function Refine() {
                   )}
                   {habitName(h, t)}
                 </div>
+
+                {/* §10. The behaviour it replaces is shown, not discarded — the
+                    pair is what makes the suggestion legible. */}
+                {behaviourName(h.replacesHabitId) && (
+                  <div className="faint mt-1" style={{ fontSize: 12.5, lineHeight: 1.4 }}>
+                    {t.refine.replacesLabel(behaviourName(h.replacesHabitId)!)}
+                  </div>
+                )}
+                {h.rationale && (
+                  <div className="flat p-3 mt-2" style={{ fontSize: 13, lineHeight: 1.5 }}>
+                    <span className="eyebrow" style={{ fontSize: 10 }}>{t.refine.whySuggested}</span>
+                    <p className="mt-1">{h.rationale}</p>
+                  </div>
+                )}
+
                 <div className="faint flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5" style={{ fontSize: 12 }}>
                   <span>{t.categories[h.category].label}</span>
                   <span>{[t.priority.low, t.priority.medium, t.priority.high][h.weight - 1]}</span>

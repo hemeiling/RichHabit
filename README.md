@@ -197,7 +197,23 @@ because breaking any one of them makes the feature dishonest:
   step, not an automatic one.
 
 My Habits shows the sheet; the backlog lives here. That separation is what lets
-the coach propose things later without imposing them.
+the coach propose things without imposing them.
+
+**Suggest replacements** asks for one habit per named behaviour (§8–10). Three
+things make a proposal something you can actually judge:
+
+- **It is a proposal, never a change.** Every suggestion arrives as
+  `recommended` and sits in the backlog. Nothing it produces can alter a habit
+  you already have.
+- **The original behaviour is kept.** `replaces_habit_id` links the new habit to
+  what it replaces rather than deleting it. The pair — what you do now, and what
+  you mean to do instead — is the thing worth coaching against later.
+- **It explains itself.** Each carries a rationale in your language. A
+  suggestion you cannot interrogate is not one you can meaningfully approve.
+
+`src/lib/recommend.ts` is the whole provider boundary, so the model can change
+without the rest of the app knowing. No API key means no suggestions and nothing
+else changes — tracking never depends on a model being reachable.
 
 ### How access control works
 

@@ -37,6 +37,10 @@ export interface Habit {
   status: HabitStatus;
   /** Convenience for the engine and the screens: status === "active". */
   active: boolean;
+  /** §10. The behaviour this is meant to replace, kept rather than deleted. */
+  replacesHabitId: string | null;
+  /** §18. Why the coach proposed it. Null on anything the user made. */
+  rationale: string | null;
   weight: 1 | 2 | 3;
   goalId: string | null;
   createdAt: number;

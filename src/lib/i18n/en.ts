@@ -338,6 +338,14 @@ export const en = {
     onSheet: (n: number) => `${n} on your sheet`,
     inBacklog: (n: number) => `${n} waiting`,
     capturedAs: "Your words, kept as written",
+    suggest: "Suggest replacements",
+    suggesting: "Thinking…",
+    suggestNote: "For each behaviour above, one habit you could track instead. Nothing is added to your sheet — you decide.",
+    suggestNone: "Nothing new to suggest. Add a behaviour first.",
+    suggestFailed: "Couldn't get suggestions just now. Your backlog is unchanged.",
+    suggested: (n: number) => (n === 1 ? "1 suggestion added below" : `${n} suggestions added below`),
+    replacesLabel: (behaviour: string) => `Instead of: ${behaviour}`,
+    whySuggested: "Why this",
   },
 
   more: {

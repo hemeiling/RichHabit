@@ -86,6 +86,12 @@ try {
     ["users", "role", null],   // needs the enum first; handled below
     ["habits", "template_key", "alter table habits add column template_key text"],
     ["habits", "status", null],   // needs the enum first; handled below
+    // §10/§18. A replacement points at the behaviour it replaces; the original
+    // is kept. `on delete set null` so removing a behaviour later orphans the
+    // link rather than deleting the habit built to replace it.
+    ["habits", "replaces_habit_id",
+     "alter table habits add column replaces_habit_id uuid references habits on delete set null"],
+    ["habits", "rationale", "alter table habits add column rationale text"],
     ["goals", "template_key", "alter table goals add column template_key text"],
   ]) {
     if (await columnExists(table, column)) continue;

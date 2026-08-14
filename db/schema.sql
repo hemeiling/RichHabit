@@ -124,11 +124,21 @@ create table habits (
   -- statuses are what let the survey propose without imposing: nothing reaches
   -- the sheet unless the user puts it there.
   status      habit_status not null default 'active',
+  -- §10. When a habit is proposed to replace a behaviour the user named, the
+  -- link is kept rather than the old behaviour being deleted. The pair —
+  -- what they do now, and what they mean to do instead — is the thing worth
+  -- coaching against later.
+  replaces_habit_id uuid references habits on delete set null,
+  -- §18. Why this was suggested, in the user's own language. Only ever set on
+  -- habits the coach proposed; a recommendation the user cannot interrogate is
+  -- not one they can meaningfully approve.
+  rationale   text,
   sort_order  int not null default 0,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
 create index habits_user_active_idx on habits (user_id, category) where status = 'active';
+create index habits_replaces_idx on habits (replaces_habit_id) where replaces_habit_id is not null;
 
 -- Schedules are versioned rather than overwritten: changing a habit from daily
 -- to three-times-a-week must not rewrite last month's history.

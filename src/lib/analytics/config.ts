@@ -48,7 +48,8 @@ export const FEATURES = {
   },
   refine: {
     label: "Refine my habits",
-    events: ["behaviour_captured", "candidate_activated", "habit_status_changed"],
+    events: ["behaviour_captured", "candidate_activated", "habit_status_changed",
+      "recommendations_generated"],
   },
   goals: { label: "Goals", events: ["goal_created", "goal_updated", "goal_deleted"] },
   review: { label: "Weekly review", events: ["weekly_review_completed"] },

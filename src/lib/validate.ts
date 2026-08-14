@@ -68,6 +68,11 @@ export function parseHabit(b: any): Habit {
     startDate: check.date(b?.startDate, "startDate"),
     status: check.oneOf(b?.status ?? (b?.active === false ? "paused" : "active"), STATUSES, "status"),
     active: (b?.status ?? (b?.active === false ? "paused" : "active")) === "active",
+    // §10. Ownership of the referenced habit is checked in the query layer;
+    // this only guarantees the shape.
+    replacesHabitId: isUuid(b?.replacesHabitId) ? b.replacesHabitId : null,
+    // Generated prose, not something the client should be able to make long.
+    rationale: check.text(b?.rationale, "rationale", 600) || null,
     weight: weight as 1 | 2 | 3,
     goalId: isUuid(b?.goalId) ? b.goalId : null,
     createdAt: Number(b?.createdAt) || Date.now(),

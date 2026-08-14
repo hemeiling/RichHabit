@@ -32,6 +32,8 @@ interface Ctx {
   saving: boolean;
   error: string | null;
   dismissError: () => void;
+  /** Re-read the account, for rows the server created rather than the client. */
+  reload: () => Promise<void>;
 }
 
 const HabitsContext = createContext<Ctx | null>(null);
@@ -57,6 +59,20 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [userId]);
+
+  /**
+   * Re-reads the account. Needed when the server writes rows the client did not
+   * originate — recommendations, for instance, arrive from the model rather
+   * than from an optimistic local edit.
+   */
+  const reload = useCallback(async () => {
+    try {
+      setState(await db.loadAll());
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
 
   /** Update the screen immediately, write in the background, roll back if the write fails. */
   const run = useCallback((next: (s: AppState) => AppState, write: () => Promise<unknown>) => {
@@ -220,7 +236,8 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
 
   return (
     <HabitsContext.Provider
-      value={{ state, actions, loading, saving: pending > 0, error, dismissError: () => setError(null) }}
+      value={{ state, actions, loading, saving: pending > 0, error, reload,
+        dismissError: () => setError(null) }}
     >
       {children}
     </HabitsContext.Provider>

@@ -326,6 +326,14 @@ export const zh: Dict = {
     onSheet: (n: number) => `清单上 ${n} 个`,
     inBacklog: (n: number) => `${n} 个待定`,
     capturedAs: "你的原话，原样保留",
+    suggest: "给我一些替代建议",
+    suggesting: "思考中…",
+    suggestNote: "针对上面每一条，给出一个可以改为追踪的习惯。不会自动加入你的清单 —— 由你决定。",
+    suggestNone: "暂时没有新的建议。先写下一条想改变的行为。",
+    suggestFailed: "这次没能拿到建议，你的待办清单没有变化。",
+    suggested: (n: number) => `已在下方添加 ${n} 条建议`,
+    replacesLabel: (behaviour: string) => `用来替代：${behaviour}`,
+    whySuggested: "为什么建议这个",
   },
 
   more: {
