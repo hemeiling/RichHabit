@@ -97,7 +97,8 @@ export async function loadState(userId: string): Promise<AppState> {
       target: h.target == null ? null : Number(h.target),
       unit: h.unit ?? "",
       startDate: h.start_date,
-      active: h.active,
+      status: h.status,
+      active: h.status === "active",
       weight: h.weight,
       goalId: goalOf.get(h.id) ?? null,
       createdAt: new Date(h.created_at).getTime(),
@@ -161,16 +162,16 @@ export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
 
     await q(
       `insert into habits (id, user_id, name, template_key, description, category, kind,
-                           target, unit, weight, start_date, active)
-       values ($1,$2,$3,$4,$5,$6::habit_category,$7::habit_kind,$8,$9,$10,$11,$12)
+                           target, unit, weight, start_date, status)
+       values ($1,$2,$3,$4,$5,$6::habit_category,$7::habit_kind,$8,$9,$10,$11,$12::habit_status)
        on conflict (id) do update set
          name = excluded.name, template_key = excluded.template_key,
          description = excluded.description, category = excluded.category,
          kind = excluded.kind, target = excluded.target, unit = excluded.unit,
-         weight = excluded.weight, start_date = excluded.start_date, active = excluded.active
+         weight = excluded.weight, start_date = excluded.start_date, status = excluded.status
        where habits.user_id = $2`,
       [h.id, userId, h.name, h.templateKey, h.description || null, h.category, h.type,
-        h.target, h.unit || null, h.weight, h.startDate, h.active],
+        h.target, h.unit || null, h.weight, h.startDate, h.status],
     );
 
     // A schedule change opens a new version from today, so history keeps its own rules.

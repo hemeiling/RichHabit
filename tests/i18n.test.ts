@@ -4,6 +4,7 @@ import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
 import { both, joinPair } from "../src/lib/i18n/both";
 import { SEED_GOALS, SEED_HABITS } from "../src/lib/seed";
+import { LIBRARY } from "../src/lib/library";
 import { canonical, habitName, isTemplateWording } from "../src/lib/templates";
 
 /**
@@ -132,7 +133,8 @@ describe("resolveLocale", () => {
 
 describe("seeded starter set", () => {
   it("is structure plus a key, with no display text in it", () => {
-    expect(SEED_HABITS).toHaveLength(16);
+    // §3: ten, small enough to read on the first morning.
+    expect(SEED_HABITS).toHaveLength(10);
     expect(SEED_GOALS).toHaveLength(3);
     for (const h of SEED_HABITS) {
       expect(h.key).toMatch(/^[a-z0-9_]+$/);
@@ -157,25 +159,25 @@ describe("seeded starter set", () => {
     }
   });
 
-  it("translates the eight names the report called out", () => {
+  it("translates every starter habit into Chinese", () => {
     const t = dict("zh");
-    const expected: Record<string, string> = {
-      read_for_learning: "阅读学习",
-      exercise: "锻炼",
-      plan_priorities: "规划今日优先事项",
-      personal_goal: "推进个人目标",
-      skip_early_email: "避免一早查看邮件",
-      goal_related_work: "完成重要的目标相关工作",
-      drink_water: "喝足够的水",
-      avoid_junk_food: "避免垃圾食品",
-    };
-    for (const [key, zhName] of Object.entries(expected)) {
-      expect(t.templates.habits[key]).toBe(zhName);
+    for (const h of SEED_HABITS) {
+      expect(t.templates.habits[h.key], h.key).toMatch(/[\u4E00-\u9FFF]/);
     }
   });
 
-  it("marks the avoid habits explicitly rather than by name prefix", () => {
-    expect(SEED_HABITS.filter((h) => h.kind === "avoid").length).toBeGreaterThan(0);
+  it("keeps naming habits retired from the starter sheet", () => {
+    // An account seeded by an earlier release still holds these; dropping the
+    // translation would leave them showing a bare key.
+    for (const key of ["avoid_junk_food", "limit_tv", "meaningful_goal_hour", "bed_on_time"]) {
+      expect(dict("zh").templates.habits[key], key).toBeTruthy();
+      expect(dict("en").templates.habits[key], key).toBeTruthy();
+    }
+  });
+
+  it("starts with only habits to build; the avoid ones live in the library", () => {
+    expect(SEED_HABITS.every((h) => h.kind === "good")).toBe(true);
+    expect(LIBRARY.filter((h) => h.kind === "avoid").length).toBeGreaterThan(0);
   });
 });
 
@@ -184,9 +186,9 @@ describe("template resolution", () => {
   const mine = { templateKey: null, name: "Practice violin", unit: "minutes" };
 
   it("renders a seeded habit in the reader's language", () => {
-    expect(habitName(seeded, dict("en"))).toBe("Exercise");
-    expect(habitName(seeded, dict("zh"))).toBe("锻炼");
-    expect(habitName(seeded, dict("both"))).toBe("Exercise · 锻炼");
+    expect(habitName(seeded, dict("en"))).toBe("Exercise / move");
+    expect(habitName(seeded, dict("zh"))).toBe("运动 / 活动身体");
+    expect(habitName(seeded, dict("both"))).toBe("Exercise / move · 运动 / 活动身体");
   });
 
   it("never translates a habit the user wrote", () => {
@@ -200,8 +202,8 @@ describe("template resolution", () => {
   });
 
   it("recognises template wording in any language, so renaming can be detected", () => {
-    expect(isTemplateWording("habits", "exercise", "Exercise")).toBe(true);
-    expect(isTemplateWording("habits", "exercise", "锻炼")).toBe(true);
+    expect(isTemplateWording("habits", "exercise", "Exercise / move")).toBe(true);
+    expect(isTemplateWording("habits", "exercise", "运动 / 活动身体")).toBe(true);
     expect(isTemplateWording("habits", "exercise", "Morning run")).toBe(false);
   });
 });
@@ -293,5 +295,35 @@ describe("no value is rendered twice in bilingual mode", () => {
   it("uses whole labels for priority rather than interpolating a word", () => {
     expect(both.habits.priorityFull.high).toBe("High priority · 高优先级");
     expect(countOccurrences(both.habits.priorityFull.high, "High")).toBe(1);
+  });
+});
+
+describe("habit library", () => {
+  it("names every library habit in every language", () => {
+    for (const locale of LOCALES) {
+      const t = dict(locale);
+      for (const h of LIBRARY) {
+        expect(t.templates.habits[h.key], `${locale}/${h.key}`).toBeTruthy();
+      }
+      for (const unit of new Set(LIBRARY.map((h) => h.unit).filter(Boolean))) {
+        expect(t.templates.units[unit!], `${locale}/unit/${unit}`).toBeTruthy();
+      }
+    }
+  });
+
+  it("keeps the minimum at or below the target", () => {
+    // §20: the minimum is the version that still counts on a bad day.
+    for (const h of LIBRARY) {
+      if (h.minimum != null && h.target != null) {
+        expect(h.minimum, h.key).toBeLessThanOrEqual(h.target);
+      }
+    }
+  });
+
+  it("covers every time of day and more than one life domain", () => {
+    for (const c of ["morning", "daytime", "nighttime"]) {
+      expect(LIBRARY.filter((h) => h.category === c).length, c).toBeGreaterThan(2);
+    }
+    expect(new Set(LIBRARY.map((h) => h.lifeDomain)).size).toBeGreaterThan(3);
   });
 });

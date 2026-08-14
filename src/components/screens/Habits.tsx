@@ -7,7 +7,7 @@ import { todayISO } from "@/lib/dates";
 import { CATEGORIES, blankHabit, habitStats } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
 import { goalName, habitName, habitUnit } from "@/lib/templates";
-import type { Category, Goal, Habit } from "@/lib/types";
+import type { Category, Goal, Habit, HabitStatus } from "@/lib/types";
 
 function HabitEditor({
   habit, goals, onSave, onDelete, onClose,
@@ -112,9 +112,17 @@ function HabitEditor({
           <input className="input num" type="date" value={h.startDate} max={todayISO()}
             onChange={(e) => e.target.value && set("startDate", e.target.value)} />
         </Field>
-        <Field label={t.habits.fieldStatus}>
-          <Segmented<boolean> value={h.active} onChange={(v) => set("active", v)}
-            options={[{ value: true, label: t.habits.active }, { value: false, label: t.habits.paused }]} />
+        <Field label={t.habits.fieldStatus} hint={t.habits.statusHint}>
+          {/* §14. Only "active" reaches Today and the score; the rest keep the
+              habit and its history without it being on the sheet. */}
+          <Segmented<HabitStatus> value={h.status}
+            onChange={(v) => setH((p) => ({ ...p, status: v, active: v === "active" }))}
+            options={[
+              { value: "active", label: t.habits.statusActive },
+              { value: "paused", label: t.habits.statusPaused },
+              { value: "established", label: t.habits.statusEstablished },
+              { value: "retired", label: t.habits.statusRetired },
+            ]} />
         </Field>
       </div>
     </Sheet>
@@ -186,7 +194,7 @@ export default function Habits() {
                       {h.target != null && <span className="num">{h.target} {habitUnit(h, t)}</span>}
                       <span>{[t.habits.priorityFull.low, t.habits.priorityFull.medium, t.habits.priorityFull.high][h.weight - 1]}</span>
                       {goal && <span>→ {goalName(goal, t)}</span>}
-                      {!h.active && <span>{t.habits.paused}</span>}
+                      {h.status !== "active" && <span>{t.habits[`status${h.status[0].toUpperCase()}${h.status.slice(1)}` as "statusPaused"]}</span>}
                     </div>
                   </button>
                 );

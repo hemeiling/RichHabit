@@ -51,7 +51,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 88 tests: habit engine, validation, throttle, TLS, i18n, analytics, coach |
+| `npm test` | Vitest — 92 tests: engine, validation, throttle, TLS, i18n, library, analytics, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
@@ -155,6 +155,29 @@ Consequences worth knowing:
 - **Server-side messages are localised too** — sign-in failures, sign-up validation, the generic save
   failure and the coach's own errors all come from the dictionary.
 - **Dates go through `Intl`** with an explicit tag (`en-US` / `zh-CN`), never the system locale.
+
+### The habit lifecycle
+
+`docs/RICH_HABITS_REFERENCE.md` is the canonical product reference. Two pieces of
+it shape the schema:
+
+**A starter sheet of ten** (§3), not sixteen. It has to be readable on the first
+morning; the personalisation survey is what grows it. All ten are habits to
+build — the "avoid" ones live in the library until someone chooses them.
+
+**A status, not a boolean** (§14). `habits.status` is one of `candidate`,
+`recommended`, `planned`, `active`, `paused`, `established`, `retired`. Only
+`active` reaches Today and the score. This is what a boolean could not express:
+the survey needs somewhere to put a habit it is *proposing*, so that nothing
+lands on the sheet without the user putting it there (§12), and retiring a habit
+you have outgrown should not look like pausing one you are struggling with.
+Every status keeps the habit and its full history.
+
+`habit_library` (§10–11) is the catalogue: shared, owned by nobody, and carrying
+suggested defaults — tracking type, minimum, target, unit, life domain. Adopting
+one copies it into your own habits, after which the copy is yours and the
+catalogue no longer touches it. Like starter habits, library entries are keyed,
+so the catalogue reads in whichever language you are using.
 
 ### How access control works
 
@@ -327,7 +350,11 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   grid and the weekly summary → **a brand-new browser context signs back in and everything survived**
   (habit, completion, value, note) → no shame-based wording anywhere on Today.
 - No screen scrolls sideways at 320, 390, 768 or 1440px — all ten screens checked with data present.
-- Switching EN → 中文 → EN in a browser, 25 checks: the eight starter habits named in the report
+- The starter sheet and lifecycle in a browser, 13 checks: a new account gets exactly ten habits,
+  four/three/three across the day, all active; moving one to *established* removes it from Today
+  and from the score while keeping the habit and its history; reactivating puts it back; and the
+  whole sheet reads in Chinese.
+- Switching EN → 中文 → EN in a browser, 24 checks: the eight starter habits named in the report
   render as 阅读学习 / 锻炼 / 规划今日优先事项 / 推进个人目标 / 避免一早查看邮件 /
   完成重要的目标相关工作 / 喝足够的水 / 避免垃圾食品 and back again; seeded units and goals switch
   too; a habit called "Practice violin" is untouched throughout; and renaming a seeded habit stops

@@ -18,6 +18,8 @@ const MODES = ["daily", "days", "times"] as const;
 const GRADES = ["good", "bad", "neutral"] as const;
 const THEMES = ["light", "dark"] as const;
 const LOCALES = ["en", "zh", "both"] as const;
+const STATUSES = ["candidate", "recommended", "planned", "active", "paused",
+  "established", "retired"] as const;
 
 /** Keeps a template key only while the stored name still matches the template. */
 function templateKeyFor(kind: "habits" | "goals", raw: unknown, name: string): string | null {
@@ -64,7 +66,8 @@ export function parseHabit(b: any): Habit {
     target: check.numberOrNull(b?.target, "target"),
     unit: check.text(b?.unit, "unit", 40),
     startDate: check.date(b?.startDate, "startDate"),
-    active: b?.active !== false,
+    status: check.oneOf(b?.status ?? (b?.active === false ? "paused" : "active"), STATUSES, "status"),
+    active: (b?.status ?? (b?.active === false ? "paused" : "active")) === "active",
     weight: weight as 1 | 2 | 3,
     goalId: isUuid(b?.goalId) ? b.goalId : null,
     createdAt: Number(b?.createdAt) || Date.now(),

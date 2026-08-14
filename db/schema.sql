@@ -28,6 +28,18 @@ create type habit_kind     as enum ('good', 'avoid');
 create type freq_mode      as enum ('daily', 'days', 'times');
 create type grade          as enum ('good', 'bad', 'neutral');
 create type user_role      as enum ('user', 'admin');
+-- §14. A habit's life, which a boolean could not hold: the survey needs
+-- somewhere to put a suggestion the user has not accepted yet, and retiring an
+-- established habit must not look the same as pausing a struggling one.
+create type habit_status   as enum (
+  'candidate',    -- a behaviour the user named, not yet a habit
+  'recommended',  -- proposed by the coach, awaiting the user's decision
+  'planned',      -- accepted, not started
+  'active',       -- on the sheet and being tracked
+  'paused',       -- temporarily off the sheet, history kept
+  'established',  -- holding on its own; no longer needs daily attention
+  'retired'       -- deliberately stopped
+);
 
 -- ------------------------------ identity -----------------------------------
 create table users (
@@ -108,12 +120,15 @@ create table habits (
   unit        text,
   weight      smallint not null default 2 check (weight between 1 and 3),
   start_date  date not null default current_date,
-  active      boolean not null default true,
+  -- Only 'active' habits appear on Today and count towards the score. The other
+  -- statuses are what let the survey propose without imposing: nothing reaches
+  -- the sheet unless the user puts it there.
+  status      habit_status not null default 'active',
   sort_order  int not null default 0,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
-create index habits_user_active_idx on habits (user_id, category) where active;
+create index habits_user_active_idx on habits (user_id, category) where status = 'active';
 
 -- Schedules are versioned rather than overwritten: changing a habit from daily
 -- to three-times-a-week must not rewrite last month's history.
@@ -274,6 +289,31 @@ create index events_feature_idx on analytics_events (feature, occurred_at desc);
 -- rather than IMMUTABLE — it depends on the session TimeZone — so Postgres
 -- refuses it in an index expression. The two indexes above already serve the
 -- per-day counts, which are all range scans over occurred_at.
+
+
+-- ------------------------------ habit library ------------------------------
+-- §10–11. Curated habits a user can browse and adopt. Rows are the *catalogue*,
+-- shared by everyone and owned by no one; adopting one copies it into `habits`
+-- with its template_key, after which the user's copy is theirs to edit.
+--
+-- No display text here either: `key` resolves through the dictionaries, so the
+-- library reads in whichever language the browser is using.
+create table habit_library (
+  key            text primary key,
+  category       habit_category not null,
+  kind           habit_kind not null default 'good',
+  life_domain    text,             -- §18: health, career, learning, money, …
+  tracking_type  text not null default 'boolean',  -- §19
+  suggested_weight   smallint not null default 2 check (suggested_weight between 1 and 3),
+  -- §20. The minimum is the version that still counts on a bad day; the target
+  -- is what a good day looks like. Kept apart on purpose.
+  suggested_minimum  numeric(8,2),
+  suggested_target   numeric(8,2),
+  suggested_unit     text,
+  suggested_frequency freq_mode not null default 'daily',
+  sort_order     int not null default 0
+);
+create index habit_library_category_idx on habit_library (category, sort_order);
 
 -- --------------------------- updated_at trigger ----------------------------
 create or replace function touch_updated_at() returns trigger

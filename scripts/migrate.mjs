@@ -85,11 +85,31 @@ try {
      "check (locale in ('en','zh','both'))"],
     ["users", "role", null],   // needs the enum first; handled below
     ["habits", "template_key", "alter table habits add column template_key text"],
+    ["habits", "status", null],   // needs the enum first; handled below
     ["goals", "template_key", "alter table goals add column template_key text"],
   ]) {
     if (await columnExists(table, column)) continue;
 
-    if (table === "users" && column === "role") {
+    if (table === "habits" && column === "status") {
+      // §14. Everything that exists today was either on the sheet or paused;
+      // the richer statuses only arrive with the personalisation survey.
+      await client.query(`do $$ begin
+        if not exists (select 1 from pg_type where typname = 'habit_status') then
+          create type habit_status as enum ('candidate','recommended','planned',
+            'active','paused','established','retired');
+        end if;
+      end $$;`);
+      await client.query("alter table habits add column status habit_status not null default 'active'");
+      const hasActive = await columnExists("habits", "active");
+      if (hasActive) {
+        await client.query(
+          "update habits set status = (case when active then 'active' else 'paused' end)::habit_status",
+        );
+        // `active` stays for now: dropping a column is the one migration step
+        // that cannot be undone, and nothing reads it any more.
+        console.log("  habits.status backfilled from habits.active (which is now unused)");
+      }
+    } else if (table === "users" && column === "role") {
       await client.query(`do $$ begin
         if not exists (select 1 from pg_type where typname = 'user_role') then
           create type user_role as enum ('user', 'admin');
@@ -113,7 +133,34 @@ try {
     console.log("  or copy the 'Product usage analytics' section from it into this database.");
   }
 
-  // ---- 3. backfill template keys on rows seeded before keys existed ---------
+  // ---- 3. habit library catalogue ------------------------------------------
+  const { rows: lib } = await client.query(
+    `select 1 from information_schema.tables
+      where table_schema = 'public' and table_name = 'habit_library'`,
+  );
+  if (lib.length === 0) {
+    // The catalogue is shared and owned by nobody, so creating it loses nothing.
+    await client.query(`
+      create table habit_library (
+        key            text primary key,
+        category       habit_category not null,
+        kind           habit_kind not null default 'good',
+        life_domain    text,
+        tracking_type  text not null default 'boolean',
+        suggested_weight   smallint not null default 2 check (suggested_weight between 1 and 3),
+        suggested_minimum  numeric(8,2),
+        suggested_target   numeric(8,2),
+        suggested_unit     text,
+        suggested_frequency freq_mode not null default 'daily',
+        sort_order     int not null default 0
+      )`);
+    await client.query(
+      "create index habit_library_category_idx on habit_library (category, sort_order)");
+    console.log("  created habit_library");
+    changed++;
+  }
+
+  // ---- 4. backfill template keys on rows seeded before keys existed ---------
   if (await columnExists("habits", "template_key")) {
     for (const [key, aliases] of Object.entries(HABIT_ALIASES)) {
       const { rowCount } = await client.query(

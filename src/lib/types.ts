@@ -3,6 +3,16 @@ export type Category = "morning" | "daytime" | "nighttime";
 export type HabitKind = "good" | "avoid";
 export type FreqMode = "daily" | "days" | "times";
 export type Grade = "good" | "bad" | "neutral";
+/** §19. How a habit is measured. Only `boolean` is wired into tracking today;
+ *  the rest are carried by the library so habit design can use them next. */
+export type TrackingType =
+  | "boolean" | "count" | "duration" | "quantity"
+  | "frequency" | "interval" | "time" | "maximum" | "avoidance";
+
+/** §14. `active` is the only status that reaches Today and the score. */
+export type HabitStatus =
+  | "candidate" | "recommended" | "planned"
+  | "active" | "paused" | "established" | "retired";
 
 export interface Frequency {
   mode: FreqMode;
@@ -24,6 +34,8 @@ export interface Habit {
   target: number | null;
   unit: string;
   startDate: string;     // YYYY-MM-DD
+  status: HabitStatus;
+  /** Convenience for the engine and the screens: status === "active". */
   active: boolean;
   weight: 1 | 2 | 3;
   goalId: string | null;

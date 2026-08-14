@@ -109,21 +109,34 @@ export const en = {
    */
   templates: {
     habits: {
-      read_for_learning: "Read for learning",
-      exercise: "Exercise",
       plan_priorities: "Plan today's priorities",
+      exercise: "Exercise / move",
+      read_for_learning: "Read / learn",
+      begin_intentionally: "Begin the day intentionally",
+      // Library-only (§10), not on the starter sheet.
+      brush_morning_night: "Brush morning and night",
+      top_three_priorities: "Choose your top three priorities",
+      stand_every_hour: "Stand or move every hour",
+      record_spending: "Record what you spent",
+      review_spending: "Review spending by category",
+      reach_out_to_someone: "Reach out to someone you care about",
+      important_goals: "Work on important goals",
+      drink_water: "Drink enough water",
+      movement_breaks: "Take movement breaks",
+      read_for_learning_night: "Read / learn",
+      prepare_tomorrow: "Prepare for tomorrow",
+      bedtime_routine: "Follow an intentional bedtime routine",
+      // Retired from the starter sheet but still named, so an account that has
+      // one from an earlier release keeps a readable label.
       personal_goal: "Work on a personal goal",
       skip_early_email: "Skip the early email check",
       goal_related_work: "Do important goal-related work",
-      drink_water: "Drink enough water",
       avoid_junk_food: "Avoid junk food",
       avoid_gossip: "Avoid gossip",
       downtime_learning: "Use downtime for learning",
       limit_tv: "Limit recreational TV",
       limit_internet: "Limit recreational internet",
       meaningful_goal_hour: "Spend an hour on a meaningful goal",
-      read_for_learning_night: "Read for learning",
-      prepare_tomorrow: "Prepare for tomorrow",
       bed_on_time: "Go to bed on time",
     } as Record<string, string>,
     goals: {
@@ -136,16 +149,15 @@ export const en = {
       glasses: "glasses",
       tasks: "tasks",
       hr: "hr",
+      times: "times",
     } as Record<string, string>,
   },
-
   trends: {
     up: "Improving",
     down: "Slipping",
     flat: "Steady",
     new: "Too early",
   },
-
   encouragement: {
     nothingScheduled: "Nothing scheduled today. Rest counts too.",
     startAgain: "Start again today. One habit is enough to turn it around.",
@@ -154,7 +166,6 @@ export const en = {
     strongDay: "Strong day. A couple left if you want them.",
     underway: "Underway. Consistency beats a perfect record.",
   },
-
   today: {
     todayLabel: "Today",
     avoid: "Avoid",
@@ -177,7 +188,6 @@ export const en = {
     check: (name: string) => `Check ${name}`,
     uncheck: (name: string) => `Uncheck ${name}`,
   },
-
   habits: {
     all: "All",
     newHabit: "New habit",
@@ -211,11 +221,18 @@ export const en = {
     fieldGoal: "Goal it supports",
     noGoal: "Not linked to a goal",
     fieldStartDate: "Start date",
+    statusHint: "Only active habits appear on Today and count towards your score.",
+    statusActive: "Active",
+    statusPaused: "Paused",
+    statusEstablished: "Established",
+    statusRetired: "Retired",
+    statusCandidate: "Candidate",
+    statusRecommended: "Recommended",
+    statusPlanned: "Planned",
     fieldStatus: "Status",
     active: "Active",
     paused: "Paused",
   },
-
   week: {
     checklist: "Seven-day checklist",
     intro: "Work one phase at a time. Give a phase seven days before adding the next, and keep the earlier ones running.",
@@ -236,7 +253,6 @@ export const en = {
       `Keep this phase steady and put "${name}" first — it's the one slipping.`,
     cellLabel: (name: string, date: string) => `${name} on ${date}`,
   },
-
   insights: {
     score: "Rich habit score",
     todaySuffix: "today",
@@ -271,7 +287,6 @@ export const en = {
     patterns: "Patterns",
     noCorrelation: "Log sleep in Metrics for a couple of weeks and the relationship between sleep and the next day's completion will show up here.",
   },
-
   suggestions: {
     needData: "Give it a few days of tracking — patterns need data before they mean anything.",
     worst: (name: string, pct: number) =>
@@ -283,7 +298,6 @@ export const en = {
     tooMany: "You're tracking a lot at once. The phased approach works better: pick one window and let it settle.",
     allGood: "Nothing looks off. Keep the current set steady for another week.",
   },
-
   coach: {
     title: "Ask Rich Habits",
     subtitle: "Answered from the data on this screen — your habits, goals and metrics.",
@@ -302,7 +316,6 @@ export const en = {
       "What should I change this week?",
     ],
   },
-
   more: {
     links: {
       awareness: { label: "Habit awareness", note: "Log a normal day, then grade it" },
