@@ -3,11 +3,20 @@ export type Category = "morning" | "daytime" | "nighttime";
 export type HabitKind = "good" | "avoid";
 export type FreqMode = "daily" | "days" | "times";
 export type Grade = "good" | "bad" | "neutral";
-/** §19. How a habit is measured. Only `boolean` is wired into tracking today;
- *  the rest are carried by the library so habit design can use them next. */
+/**
+ * §12. How a habit is measured.
+ *
+ * `boolean` and `avoidance` are a yes/no. The rest carry a number, which Today
+ * collects inline: `maximum` succeeds by staying *under* its target, the others
+ * by reaching theirs.
+ */
 export type TrackingType =
   | "boolean" | "count" | "duration" | "quantity"
-  | "frequency" | "interval" | "time" | "maximum" | "avoidance";
+  | "interval" | "maximum" | "avoidance";
+
+/** True when the type is measured by a number rather than a yes/no. */
+export const isNumericTracking = (t: TrackingType): boolean =>
+  t === "count" || t === "duration" || t === "quantity" || t === "interval" || t === "maximum";
 
 /** §14. `active` is the only status that reaches Today and the score. */
 export type HabitStatus =
@@ -31,8 +40,15 @@ export interface Habit {
   category: Category;
   type: HabitKind;
   frequency: Frequency;
+  tracking: TrackingType;
+  /** §20. What still counts on a bad day. Null means the target is the only bar. */
+  minimum: number | null;
   target: number | null;
   unit: string;
+  /** §11. "After I [anchor], I will…" */
+  anchor: string;
+  environment: string;
+  friction: string;
   startDate: string;     // YYYY-MM-DD
   status: HabitStatus;
   /** Convenience for the engine and the screens: status === "active". */

@@ -20,6 +20,8 @@ const THEMES = ["light", "dark"] as const;
 const LOCALES = ["en", "zh", "both"] as const;
 const STATUSES = ["candidate", "recommended", "planned", "active", "paused",
   "established", "retired"] as const;
+const TRACKING = ["boolean", "count", "duration", "quantity",
+  "interval", "maximum", "avoidance"] as const;
 
 /** Keeps a template key only while the stored name still matches the template. */
 function templateKeyFor(kind: "habits" | "goals", raw: unknown, name: string): string | null {
@@ -63,8 +65,13 @@ export function parseHabit(b: any): Habit {
     category: check.oneOf(b?.category, CATEGORIES, "category"),
     type: check.oneOf(b?.type, KINDS, "type"),
     frequency: { mode, days: chosen, timesPerWeek },
+    tracking: check.oneOf(b?.tracking ?? "boolean", TRACKING, "tracking"),
+    minimum: check.numberOrNull(b?.minimum, "minimum"),
     target: check.numberOrNull(b?.target, "target"),
     unit: check.text(b?.unit, "unit", 40),
+    anchor: check.text(b?.anchor, "anchor", 200),
+    environment: check.text(b?.environment, "environment", 300),
+    friction: check.text(b?.friction, "friction", 300),
     startDate: check.date(b?.startDate, "startDate"),
     status: check.oneOf(b?.status ?? (b?.active === false ? "paused" : "active"), STATUSES, "status"),
     active: (b?.status ?? (b?.active === false ? "paused" : "active")) === "active",

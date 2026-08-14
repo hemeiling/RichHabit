@@ -92,11 +92,27 @@ try {
     ["habits", "replaces_habit_id",
      "alter table habits add column replaces_habit_id uuid references habits on delete set null"],
     ["habits", "rationale", "alter table habits add column rationale text"],
+    // §12/§20. Existing habits are all boolean with a target and no minimum,
+    // which is exactly what the defaults give them — no backfill needed.
+    ["habits", "tracking_type", null],   // needs the enum first; handled below
+    ["habits", "minimum", "alter table habits add column minimum numeric(8,2)"],
+    ["habits", "anchor", "alter table habits add column anchor text"],
+    ["habits", "environment", "alter table habits add column environment text"],
+    ["habits", "friction", "alter table habits add column friction text"],
     ["goals", "template_key", "alter table goals add column template_key text"],
   ]) {
     if (await columnExists(table, column)) continue;
 
-    if (table === "habits" && column === "status") {
+    if (table === "habits" && column === "tracking_type") {
+      await client.query(`do $$ begin
+        if not exists (select 1 from pg_type where typname = 'tracking_type') then
+          create type tracking_type as enum ('boolean','count','duration','quantity',
+            'interval','maximum','avoidance');
+        end if;
+      end $$;`);
+      await client.query(
+        "alter table habits add column tracking_type tracking_type not null default 'boolean'");
+    } else if (table === "habits" && column === "status") {
       // §14. Everything that exists today was either on the sheet or paused;
       // the richer statuses only arrive with the personalisation survey.
       await client.query(`do $$ begin

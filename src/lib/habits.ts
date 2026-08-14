@@ -21,7 +21,9 @@ export const uid = () =>
 export const blankHabit = (): Habit => ({
   id: uid(), name: "", templateKey: null, description: "", category: "morning", type: "good",
   frequency: { mode: "daily", days: [0, 1, 2, 3, 4, 5, 6], timesPerWeek: 3 },
-  target: null, unit: "", startDate: todayISO(), status: "active", active: true, weight: 2,
+  tracking: "boolean", minimum: null, target: null, unit: "",
+  anchor: "", environment: "", friction: "",
+  startDate: todayISO(), status: "active", active: true, weight: 2,
   replacesHabitId: null, rationale: null,
   goalId: null, createdAt: Date.now(),
 });

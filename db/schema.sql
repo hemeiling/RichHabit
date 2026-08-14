@@ -31,6 +31,19 @@ create type user_role      as enum ('user', 'admin');
 -- §14. A habit's life, which a boolean could not hold: the survey needs
 -- somewhere to put a suggestion the user has not accepted yet, and retiring an
 -- established habit must not look the same as pausing a struggling one.
+-- §12. How a habit is measured. A tracker that assumes every habit is a
+-- checkbox cannot express "six of eight glasses" or "under an hour", and
+-- pretending it can is what makes tracking feel dishonest.
+create type tracking_type  as enum (
+  'boolean',    -- did it / didn't
+  'count',      -- 2 of 2
+  'duration',   -- 20 of 30 minutes
+  'quantity',   -- 6 of 8 glasses
+  'interval',   -- moved 5 times today
+  'maximum',    -- stayed under the limit
+  'avoidance'   -- successfully didn't
+);
+
 create type habit_status   as enum (
   'candidate',    -- a behaviour the user named, not yet a habit
   'recommended',  -- proposed by the coach, awaiting the user's decision
@@ -116,8 +129,18 @@ create table habits (
   description text,
   category    habit_category not null,
   kind        habit_kind not null default 'good',
+  tracking_type tracking_type not null default 'boolean',
+  -- §20. Two versions of the same habit. The minimum is what still counts on a
+  -- bad day; the target is what a good day looks like. Kept apart so a small
+  -- win can count without pretending the full target was reached.
+  minimum     numeric(8,2),
   target      numeric(8,2),
   unit        text,
+  -- §11/§22. How the habit is set up to actually happen. Free text on purpose:
+  -- these are the user's own arrangements, not something to enumerate.
+  anchor      text,   -- "after I pour my morning coffee"
+  environment text,   -- what they changed to make it easier
+  friction    text,   -- what they put in the way of the old behaviour
   weight      smallint not null default 2 check (weight between 1 and 3),
   start_date  date not null default current_date,
   -- Only 'active' habits appear on Today and count towards the score. The other

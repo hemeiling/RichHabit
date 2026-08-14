@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { Empty, Field, ScoreDial, Sheet } from "@/components/ui";
+import { isNumericTracking } from "@/lib/types";
 import { addDays, dow, prettyDate, todayISO } from "@/lib/dates";
 import {
   CATEGORIES, dayScore, dayStreak, encouragement, habitStreak, isDone, scheduledOn,
@@ -60,15 +61,44 @@ function LogSheet({
 }
 
 function HabitRow({
-  state, habit, date, onToggle, onOpen, onLog,
+  state, habit, date, onToggle, onOpen, onLog, onStep,
 }: {
   state: AppState; habit: Habit; date: string;
   onToggle: (id: string) => void; onOpen: (h: Habit) => void; onLog: (h: Habit) => void;
+  onStep: (h: Habit, delta: number) => void;
 }) {
   const t = useT();
   const done = isDone(state, date, habit.id);
   const streak = habitStreak(state, habit);
   const entry = state.completions[date]?.[habit.id];
+
+  const numeric = isNumericTracking(habit.tracking);
+  const unit = habitUnit(habit, t);
+  const value = entry?.value ?? null;
+
+  /** What the row shows about its own measurement. */
+  const measure = !numeric || habit.target == null
+    ? null
+    : habit.tracking === "maximum"
+      ? value == null ? t.today.underLimit(habit.target, unit)
+        : t.today.overLimit(value, habit.target, unit)
+      : t.today.progress(value ?? 0, habit.target, unit);
+
+  /**
+   * §20. Which bar was cleared. Derived rather than stored: the same completion
+   * row answers both questions, and the definition can change without a
+   * migration.
+   */
+  const reached = (() => {
+    if (!numeric || value == null) return null;
+    if (habit.tracking === "maximum") {
+      return habit.target != null && value <= habit.target ? "target" : null;
+    }
+    if (habit.target != null && value >= habit.target) return "target";
+    if (habit.minimum != null && value >= habit.minimum) return "minimum";
+    return null;
+  })();
+
   return (
     <div className="flex items-center gap-3 py-3">
       <button
@@ -91,14 +121,36 @@ function HabitRow({
           {habit.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoid} · </span>}
           {habitName(habit, t)}
         </div>
-        <div className="faint flex items-center gap-2 mt-0.5" style={{ fontSize: 12 }}>
-          {habit.target != null && <span className="num">{habit.target} {habitUnit(habit, t)}</span>}
+        {/* §11. The anchor is what makes the habit happen, so it belongs on the
+            row rather than buried in the editor. */}
+        {habit.anchor && (
+          <div className="faint mt-0.5" style={{ fontSize: 12 }}>
+            {t.today.anchorPrefix(habit.anchor)}
+          </div>
+        )}
+        <div className="faint flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-0.5" style={{ fontSize: 12 }}>
+          {/* §12/§20. What the row says about itself depends on how it is
+              measured: a limit reads differently from a target, and a number
+              reads differently from a tick. */}
+          {measure && <span className="num">{measure}</span>}
+          {reached === "target" && <span style={{ color: "var(--accent)" }}>{t.today.targetMet}</span>}
+          {reached === "minimum" && <span>{t.today.minimumMet}</span>}
           {streak > 0 && <span className="num">{t.today.daysRunning(streak)}</span>}
           {habit.weight === 3 && <span>{t.today.highPriority}</span>}
-          {entry?.value != null && <span className="num">{entry.value}{habit.unit ? ` ${habit.unit}` : ""}</span>}
           {entry?.note && <span>{t.today.note}</span>}
         </div>
       </button>
+
+      {/* A number is entered where it is read. The tick stays the fast path. */}
+      {numeric && (
+        <div className="flex items-center gap-1" style={{ flex: "none" }}>
+          <button className="btn btn-quiet" style={{ padding: "2px 8px", fontSize: 15 }}
+            aria-label={t.today.removeOne} disabled={(entry?.value ?? 0) <= 0}
+            onClick={() => onStep(habit, -1)}>−</button>
+          <button className="btn btn-quiet" style={{ padding: "2px 8px", fontSize: 15 }}
+            aria-label={t.today.addOne} onClick={() => onStep(habit, 1)}>+</button>
+        </div>
+      )}
       <button
         className="btn btn-quiet" style={{ padding: "4px 9px", flex: "none", fontSize: 15 }}
         onClick={() => onLog(habit)} aria-label={t.today.logOpen} title={t.today.logOpen}
@@ -117,6 +169,30 @@ export default function Today() {
   const [date, setDate] = useState(todayISO());
   const [logging, setLogging] = useState<Habit | null>(null);
   const isToday = date === todayISO();
+
+  /**
+   * §12/§20. Stepping a numeric habit records the amount and, with it, whether
+   * the day counts: reaching the minimum is enough to be done, so a partial day
+   * still counts without claiming the target was met. A `maximum` habit is the
+   * other way round — it counts while it stays under the limit.
+   */
+  const step = (habit: Habit, delta: number) => {
+    const current = state.completions[date]?.[habit.id]?.value ?? 0;
+    const next = Math.max(0, current + delta);
+    const bar = habit.tracking === "maximum"
+      ? null                                     // handled by the comparison below
+      : habit.minimum ?? habit.target;
+    const done = habit.tracking === "maximum"
+      ? habit.target == null || next <= habit.target
+      : bar == null ? next > 0 : next >= bar;
+
+    if (!done && next === 0) {
+      actions.toggle(date, habit.id);            // clears the row entirely
+      return;
+    }
+    actions.logCompletion(date, habit.id, next,
+      state.completions[date]?.[habit.id]?.note ?? "");
+  };
 
   const score = dayScore(state, date);
   const list = scheduledOn(state, date);
@@ -188,7 +264,8 @@ export default function Today() {
                   <HabitRow key={h.id} state={state} habit={h} date={date}
                     onToggle={(id) => actions.toggle(date, id)}
                     onOpen={(habit) => router.push(`/habits?edit=${habit.id}`)}
-                    onLog={setLogging} />
+                    onLog={setLogging}
+                    onStep={step} />
                 ))}
               </div>
               <div className="h-2" />

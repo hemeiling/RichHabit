@@ -145,6 +145,10 @@ export default function Refine() {
       category: item.category,
       type: item.kind,
       weight: item.weight,
+      // §11. The template's suggested defaults come across with it — dropping
+      // the tracking type would turn "stay under an hour" into a checkbox.
+      tracking: item.tracking,
+      minimum: item.minimum,
       target: item.target,
       unit: item.unit ?? "",
       status: "planned",

@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/http";
 import { query, transaction } from "@/lib/db/pool";
-import { emptyState } from "@/lib/types";
+import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
 } from "@/lib/types";
@@ -94,8 +94,13 @@ export async function loadState(userId: string): Promise<AppState> {
         days: s?.days_of_week ?? [0, 1, 2, 3, 4, 5, 6],
         timesPerWeek: s?.times_per_week ?? 3,
       },
+      tracking: h.tracking_type ?? "boolean",
+      minimum: h.minimum == null ? null : Number(h.minimum),
       target: h.target == null ? null : Number(h.target),
       unit: h.unit ?? "",
+      anchor: h.anchor ?? "",
+      environment: h.environment ?? "",
+      friction: h.friction ?? "",
       startDate: h.start_date,
       status: h.status,
       active: h.status === "active",
@@ -112,9 +117,35 @@ export async function loadState(userId: string): Promise<AppState> {
     area: g.area ?? "Health", why: g.why ?? "",
   }));
 
+  /**
+   * §20/§39. Whether a day counts is *derived* from the value against the
+   * habit's bar, not from the row merely existing.
+   *
+   * A row records what happened — three glasses of eight. Whether three is
+   * enough is a separate question, and answering it here means the definition
+   * can change without a migration, and that "minimum met" and "target met"
+   * stay distinct concepts rather than being collapsed into one flag.
+   *
+   * A habit with no bar, or one measured by a yes/no, counts by having a row —
+   * which is the behaviour every existing completion already relies on.
+   */
+  const barFor = new Map(state.habits.map((h) => [h.id, h]));
   completions.forEach((c: any) => {
+    const habit = barFor.get(c.habit_id);
+    const value = c.value == null ? null : Number(c.value);
+    let done = true;
+
+    if (habit && value != null && isNumericTracking(habit.tracking)) {
+      if (habit.tracking === "maximum") {
+        done = habit.target == null || value <= habit.target;
+      } else {
+        const bar = habit.minimum ?? habit.target;
+        done = bar == null ? value > 0 : value >= bar;
+      }
+    }
+
     state.completions[c.done_on] ??= {};
-    state.completions[c.done_on][c.habit_id] = { done: true, value: c.value, note: c.note ?? "" };
+    state.completions[c.done_on][c.habit_id] = { done, value, note: c.note ?? "" };
   });
 
   notes.forEach((n: any) => { state.dayNotes[n.note_date] = n.body ?? ""; });
@@ -164,18 +195,24 @@ export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
 
     await q(
       `insert into habits (id, user_id, name, template_key, description, category, kind,
-                           target, unit, weight, start_date, status, replaces_habit_id, rationale)
-       values ($1,$2,$3,$4,$5,$6::habit_category,$7::habit_kind,$8,$9,$10,$11,$12::habit_status,$13,$14)
+                           tracking_type, minimum, target, unit, anchor, environment, friction,
+                           weight, start_date, status, replaces_habit_id, rationale)
+       values ($1,$2,$3,$4,$5,$6::habit_category,$7::habit_kind,$8::tracking_type,$9,$10,$11,
+               $12,$13,$14,$15,$16,$17::habit_status,$18,$19)
        on conflict (id) do update set
          name = excluded.name, template_key = excluded.template_key,
          description = excluded.description, category = excluded.category,
-         kind = excluded.kind, target = excluded.target, unit = excluded.unit,
+         kind = excluded.kind, tracking_type = excluded.tracking_type,
+         minimum = excluded.minimum, target = excluded.target, unit = excluded.unit,
+         anchor = excluded.anchor, environment = excluded.environment,
+         friction = excluded.friction,
          weight = excluded.weight, start_date = excluded.start_date, status = excluded.status,
          replaces_habit_id = excluded.replaces_habit_id, rationale = excluded.rationale
        where habits.user_id = $2`,
       [h.id, userId, h.name, h.templateKey, h.description || null, h.category, h.type,
-        h.target, h.unit || null, h.weight, h.startDate, h.status,
-        h.replacesHabitId, h.rationale],
+        h.tracking, h.minimum, h.target, h.unit || null,
+        h.anchor || null, h.environment || null, h.friction || null,
+        h.weight, h.startDate, h.status, h.replacesHabitId, h.rationale],
     );
 
     // A schedule change opens a new version from today, so history keeps its own rules.

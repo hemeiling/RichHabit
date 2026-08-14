@@ -4,7 +4,7 @@ import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
 import { both, joinPair } from "../src/lib/i18n/both";
 import { SEED_GOALS, SEED_HABITS } from "../src/lib/seed";
-import { LIBRARY } from "../src/lib/library";
+import { LIBRARY, libraryByKey } from "../src/lib/library";
 import { canonical, habitName, isTemplateWording } from "../src/lib/templates";
 
 /**
@@ -153,8 +153,10 @@ describe("seeded starter set", () => {
       for (const g of SEED_GOALS) {
         expect(t.templates.goals[g.key], `${locale}/${g.key}`).toBeTruthy();
       }
-      for (const unit of new Set(SEED_HABITS.map((h) => h.unit).filter(Boolean))) {
-        expect(t.templates.units[unit!], `${locale}/unit/${unit}`).toBeTruthy();
+      // Units now come from the library entry the starter key points at.
+      for (const h of SEED_HABITS) {
+        const unit = libraryByKey.get(h.key)?.unit;
+        if (unit) expect(t.templates.units[unit], `${locale}/unit/${unit}`).toBeTruthy();
       }
     }
   });
@@ -176,8 +178,16 @@ describe("seeded starter set", () => {
   });
 
   it("starts with only habits to build; the avoid ones live in the library", () => {
-    expect(SEED_HABITS.every((h) => h.kind === "good")).toBe(true);
+    expect(SEED_HABITS.every((h) => libraryByKey.get(h.key)?.kind === "good")).toBe(true);
     expect(LIBRARY.filter((h) => h.kind === "avoid").length).toBeGreaterThan(0);
+  });
+
+  it("every starter key exists in the library, which supplies its defaults", () => {
+    // The seed carries only a key and a goal; tracking type, minimum, target
+    // and unit come from the catalogue, so a missing entry would seed nothing.
+    for (const h of SEED_HABITS) {
+      expect(libraryByKey.get(h.key), h.key).toBeDefined();
+    }
   });
 });
 

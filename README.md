@@ -180,6 +180,30 @@ one copies it into your own habits, after which the copy is yours and the
 catalogue no longer touches it. Like starter habits, library entries are keyed,
 so the catalogue reads in whichever language you are using.
 
+### How a habit is measured
+
+Not every habit is a checkbox (§12). `habits.tracking_type` is one of `boolean`,
+`count`, `duration`, `quantity`, `interval`, `maximum` or `avoidance`, and Today
+renders accordingly: a yes/no habit keeps its tick, a numeric one gets a stepper
+and reads `4 / 8 glasses`, and a `maximum` habit reads `under 1 hr` because it
+succeeds by staying below its target rather than reaching it.
+
+**A minimum and a target are different bars** (§20). The minimum is what still
+counts on a bad day; the target is what a good day looks like. Four glasses of
+eight is *done*, labelled `Minimum` — the day counts without pretending the
+target was reached.
+
+Crucially, **whether a day counts is derived, not stored**. The completion row
+records what happened; comparing it to the habit's bar answers whether that was
+enough. That keeps "minimum met" and "target met" as separate questions (§39),
+and means the definition can change without a migration. `db/queries.ts` is
+authoritative; the store mirrors it so an optimistic tap doesn't flash as
+complete before the next load disagrees.
+
+`anchor`, `environment` and `friction` (§11, §22) are free text — the user's own
+arrangements, not something to enumerate. The anchor appears on the Today row,
+where it does its work, rather than only in the editor.
+
 ### Behaviours, candidates, and the sheet
 
 `More → Refine my habits` is where someone names what they'd like to change

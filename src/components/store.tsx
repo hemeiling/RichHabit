@@ -2,7 +2,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as db from "@/lib/db";
 import { isDone } from "@/lib/habits";
-import { emptyState } from "@/lib/types";
+import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
 } from "@/lib/types";
@@ -37,6 +37,18 @@ interface Ctx {
 }
 
 const HabitsContext = createContext<Ctx | null>(null);
+
+/**
+ * §20. Whether a recorded amount clears the habit's bar. Mirrors the derivation
+ * in `db/queries.ts`, which is authoritative — this only keeps the optimistic
+ * update honest between the tap and the next load.
+ */
+function countsAsDone(habit: Habit | undefined, value: number | null): boolean {
+  if (!habit || value == null || !isNumericTracking(habit.tracking)) return true;
+  if (habit.tracking === "maximum") return habit.target == null || value <= habit.target;
+  const bar = habit.minimum ?? habit.target;
+  return bar == null ? value > 0 : value >= bar;
+}
 
 export function useHabits() {
   const ctx = useContext(HabitsContext);
@@ -125,7 +137,12 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
         ...s,
         completions: {
           ...s.completions,
-          [date]: { ...(s.completions[date] ?? {}), [habitId]: { done: true, value, note } },
+          [date]: {
+            ...(s.completions[date] ?? {}),
+            // Derived the same way the server does, so the row does not flash
+            // as complete before the next load corrects it.
+            [habitId]: { done: countsAsDone(s.habits.find((h) => h.id === habitId), value), value, note },
+          },
         },
       }),
       () => db.setCompletion(habitId, date, true, value, note),
