@@ -1,0 +1,92 @@
+import { NextResponse } from "next/server";
+import OpenAI from "openai";
+import { getSessionUser } from "@/lib/auth";
+import { loadState } from "@/lib/db/queries";
+import { coach } from "@/lib/coach";
+
+/**
+ * The AI coach. The client sends a question and nothing else; this route reads
+ * the account, builds the JSON picture with `coach.buildContext`, and answers
+ * from it. Returns { answer }.
+ *
+ * Needs OPENAI_API_KEY — server-side only, never shipped to the browser.
+ * Without it the route refuses with a 501 rather than pretending, so nothing in
+ * the app quietly comes to depend on a model being reachable:
+ * `coach.suggestions` is still what the Insights screen renders on its own.
+ */
+
+// Reasoning models are slow enough to outlast the default serverless timeout.
+export const maxDuration = 60;
+
+const MODEL = process.env.OPENAI_MODEL ?? "gpt-5.6-terra";
+
+const INSTRUCTIONS = `You are the coach inside a habit-tracking app called Rich Habits.
+
+You are given a JSON snapshot of one person's habit data: per-habit completion
+stats over a window, averages by category, goals and the habits supporting them,
+health metrics, and recent weekly reviews. Categories are windows of the day.
+
+Ground every claim in that snapshot:
+- Quote the actual numbers — completion percentages, counts, streaks, the score.
+- Say what the numbers have in common across habits, not one habit at a time.
+- Tie what you recommend back to the goal the habit supports, where there is one.
+- Separate what the data supports from what it only hints at. Say which you mean.
+- Never call something a trend on a handful of observations. If there are two
+  days of sleep data, say two days is not enough to establish a trend, and stop
+  there rather than reaching for the pattern anyway.
+- If the snapshot cannot answer the question, say so instead of inventing.
+
+Recommend one small change the person can act on tomorrow, not a new routine.
+Be brief: a few sentences, or a short list when the answer really has parts. No
+preamble, no restating the question back.`;
+
+export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  const body = await request.json().catch(() => null);
+  const question = typeof body?.question === "string" ? body.question.trim() : "";
+  if (!question) return NextResponse.json({ error: "No question" }, { status: 400 });
+  if (question.length > 500) {
+    return NextResponse.json({ error: "That question is too long." }, { status: 400 });
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "No coach model connected. Add OPENAI_API_KEY to .env.local." },
+      { status: 501 },
+    );
+  }
+
+  const client = new OpenAI({ apiKey });
+
+  try {
+    // Read the account here rather than trusting a context from the browser —
+    // row-level security scopes this to the signed-in user either way.
+    const state = await loadState(user.id);
+    const context = coach.buildContext(state);
+
+    const response = await client.responses.create({
+      model: MODEL,
+      reasoning: { effort: "medium" },
+      instructions: INSTRUCTIONS,
+      input: [
+        `Their data:\n${JSON.stringify(context)}`,
+        `Their question:\n${question}`,
+      ].join("\n\n"),
+    });
+
+    const answer = response.output_text?.trim();
+    if (!answer) {
+      return NextResponse.json({ error: "The model returned nothing." }, { status: 502 });
+    }
+    return NextResponse.json({ answer });
+  } catch (error) {
+    // Surface the model's own status where there is one — a bad key and a rate
+    // limit are different problems and the caller should be able to tell.
+    const status = error instanceof OpenAI.APIError ? error.status ?? 502 : 502;
+    const message = error instanceof Error ? error.message : "Coach request failed.";
+    return NextResponse.json({ error: message }, { status });
+  }
+}

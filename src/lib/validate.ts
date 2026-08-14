@@ -1,0 +1,152 @@
+import { ApiError, check, isUuid } from "@/lib/http";
+import type {
+  AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
+} from "@/lib/types";
+
+/**
+ * Every request body is parsed into the shape SQL expects, or rejected as a 400.
+ * Route handlers get a real `Habit`, not a cast — the cast was a lie whenever a
+ * client sent something else, and the lie surfaced as a Postgres error.
+ *
+ * Only fields the write actually uses are read. Anything extra is dropped.
+ */
+
+const CATEGORIES = ["morning", "daytime", "nighttime"] as const;
+const KINDS = ["good", "avoid"] as const;
+const MODES = ["daily", "days", "times"] as const;
+const GRADES = ["good", "bad", "neutral"] as const;
+const THEMES = ["light", "dark"] as const;
+
+const optionalUuid = (v: unknown, field: string): string =>
+  v === "" || v == null ? "" : check.uuid(v, field);
+
+function days(v: unknown): number[] {
+  if (!Array.isArray(v)) return [0, 1, 2, 3, 4, 5, 6];
+  const out = v.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+  return [...new Set(out)].sort();
+}
+
+export function parseHabit(b: any): Habit {
+  const mode = check.oneOf(b?.frequency?.mode, MODES, "frequency.mode");
+  const weight = Number(b?.weight);
+  if (![1, 2, 3].includes(weight)) throw new ApiError("weight must be 1, 2 or 3");
+
+  const timesPerWeek = Number(b?.frequency?.timesPerWeek ?? 3);
+  if (mode === "times" && !(timesPerWeek >= 1 && timesPerWeek <= 7)) {
+    throw new ApiError("frequency.timesPerWeek must be between 1 and 7");
+  }
+  const chosen = days(b?.frequency?.days);
+  if (mode === "days" && chosen.length === 0) {
+    throw new ApiError("Pick at least one day of the week");
+  }
+
+  return {
+    id: check.uuid(b?.id, "id"),
+    name: check.text(b?.name, "name", 200).trim() || "Untitled",
+    description: check.text(b?.description, "description"),
+    category: check.oneOf(b?.category, CATEGORIES, "category"),
+    type: check.oneOf(b?.type, KINDS, "type"),
+    frequency: { mode, days: chosen, timesPerWeek },
+    target: check.numberOrNull(b?.target, "target"),
+    unit: check.text(b?.unit, "unit", 40),
+    startDate: check.date(b?.startDate, "startDate"),
+    active: b?.active !== false,
+    weight: weight as 1 | 2 | 3,
+    goalId: isUuid(b?.goalId) ? b.goalId : null,
+    createdAt: Number(b?.createdAt) || Date.now(),
+  };
+}
+
+export function parseGoal(b: any): Goal {
+  return {
+    id: check.uuid(b?.id, "id"),
+    name: check.text(b?.name, "name", 200).trim() || "Untitled",
+    area: check.text(b?.area, "area", 80) || "Health",
+    why: check.text(b?.why, "why"),
+  };
+}
+
+export function parseCompletion(b: any) {
+  return {
+    habitId: check.uuid(b?.habitId, "habitId"),
+    date: check.date(b?.date, "date"),
+    done: b?.done === true,
+    value: check.numberOrNull(b?.value, "value"),
+    note: check.text(b?.note, "note"),
+  };
+}
+
+export function parseNote(b: any) {
+  return { date: check.date(b?.date, "date"), body: check.text(b?.body, "body", 10_000) };
+}
+
+export function parseAwareness(b: any): AwarenessEntry {
+  const time = check.text(b?.time, "time", 5);
+  if (time && !/^\d{2}:\d{2}$/.test(time)) throw new ApiError("time must be HH:MM");
+  return {
+    id: check.uuid(b?.id, "id"),
+    time,
+    activity: check.text(b?.activity, "activity", 200).trim() || "Untitled",
+    duration: check.text(b?.duration, "duration", 40),
+    context: check.text(b?.context, "context", 200),
+    notes: check.text(b?.notes, "notes"),
+    grade: check.oneOf(b?.grade, GRADES, "grade"),
+  };
+}
+
+export function parseStack(b: any): Stack {
+  const time = check.text(b?.time, "time", 5);
+  if (time && !/^\d{2}:\d{2}$/.test(time)) throw new ApiError("time must be HH:MM");
+  const stack: Stack = {
+    id: check.uuid(b?.id, "id"),
+    triggerHabitId: optionalUuid(b?.triggerHabitId, "triggerHabitId"),
+    triggerText: check.text(b?.triggerText, "triggerText", 200),
+    newHabitId: optionalUuid(b?.newHabitId, "newHabitId"),
+    newText: check.text(b?.newText, "newText", 200),
+    time,
+    location: check.text(b?.location, "location", 200),
+  };
+  // Mirrors the stack_has_trigger / stack_has_target check constraints, so a
+  // half-filled form is a message rather than a constraint violation.
+  if (!stack.triggerHabitId && !stack.triggerText) throw new ApiError("A stack needs a trigger");
+  if (!stack.newHabitId && !stack.newText) throw new ApiError("A stack needs something to attach");
+  return stack;
+}
+
+export function parseMetrics(b: any): { date: string; metrics: DayMetrics } {
+  const m = b?.metrics ?? {};
+  return {
+    date: check.date(b?.date, "date"),
+    metrics: {
+      weight: check.numberOrNull(m.weight, "weight"),
+      calories: check.numberOrNull(m.calories, "calories"),
+      sleep: check.numberOrNull(m.sleep, "sleep"),
+      water: check.numberOrNull(m.water, "water"),
+      cardioMin: check.numberOrNull(m.cardioMin, "cardioMin"),
+      cardio: m.cardio === true,
+      gym: m.gym === true,
+    },
+  };
+}
+
+export function parseReview(b: any): WeeklyReview {
+  return {
+    id: check.uuid(b?.id, "id"),
+    weekStart: check.date(b?.weekStart, "weekStart"),
+    wentWell: check.text(b?.wentWell, "wentWell", 10_000),
+    gotInWay: check.text(b?.gotInWay, "gotInWay", 10_000),
+    focus: check.text(b?.focus, "focus", 10_000),
+    modify: check.text(b?.modify, "modify", 10_000),
+    add: check.text(b?.add, "add", 10_000),
+    // Written as jsonb; the shape is the app's own snapshot, not user input.
+    stats: b?.stats && typeof b.stats === "object" ? b.stats : undefined,
+  };
+}
+
+export function parsePrefs(b: any): Prefs {
+  return {
+    theme: check.oneOf(b?.theme, THEMES, "theme"),
+    weighted: b?.weighted !== false,
+    goalWeight: check.numberOrNull(b?.goalWeight, "goalWeight"),
+  };
+}

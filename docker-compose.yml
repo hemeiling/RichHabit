@@ -1,0 +1,27 @@
+# Local Postgres for development. Render owns the real one.
+#   docker compose up -d
+#   psql "postgresql://richhabits:richhabits@localhost:5432/richhabits" -f db/schema.sql
+# Then put this in .env.local:
+#   DATABASE_URL=postgresql://richhabits:richhabits@localhost:5432/richhabits
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: richhabits
+      POSTGRES_PASSWORD: richhabits
+      POSTGRES_DB: richhabits
+    ports:
+      - "5432:5432"
+    volumes:
+      - richhabits-pgdata:/var/lib/postgresql/data
+      # Applied automatically the first time the volume is created.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U richhabits -d richhabits"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  richhabits-pgdata:
