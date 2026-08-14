@@ -14,7 +14,7 @@ import pg from "pg";
 const args = process.argv.slice(2);
 const revoke = args.includes("--revoke");
 const list = args.includes("--list");
-const email = args.find((a) => !a.startsWith("--"))?.toLowerCase();
+const email = (args.find((a) => !a.startsWith("--")) ?? process.env.ADMIN_EMAIL ?? "").toLowerCase() || undefined;
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -42,6 +42,7 @@ try {
     console.log(`\n${rows.filter((r) => r.role === "admin").length} admin(s) of ${rows.length} user(s).`);
   } else if (!email) {
     console.error("Usage: npm run admin:grant -- <email> [--revoke] | --list");
+    console.error("       (or set ADMIN_EMAIL in .env.local and omit the email)");
     process.exitCode = 1;
   } else {
     const role = revoke ? "user" : "admin";
