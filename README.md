@@ -46,7 +46,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 79 tests: habit engine, validation, throttle, TLS, i18n, coach contract |
+| `npm test` | Vitest — 83 tests: habit engine, validation, throttle, TLS, i18n, coach contract |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to `DATABASE_URL`. Idempotent |
 
@@ -231,6 +231,13 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 - Malformed bodies return 400 with a readable message (`category must be one of morning, daytime,
   nighttime`), and a server-side failure returns a fixed string rather than the Postgres error.
 - `/api/health` returns `{ok: true, db: "up"}` and 503 when the database is unreachable.
+- **The acceptance journey, end to end in a browser at 390px**, twenty checks: signed-out visitor
+  redirected → account created and seeded with 16 habits and 3 goals → new habit created, scheduled
+  daily, given a target, priority and goal → appears on Today → one tap checks it off and the score
+  moves 0% → 8% → an amount and a note logged against it → the completion shows in the seven-day
+  grid and the weekly summary → **a brand-new browser context signs back in and everything survived**
+  (habit, completion, value, note) → no shame-based wording anywhere on Today.
+- No screen scrolls sideways at 320, 390, 768 or 1440px — all ten screens checked with data present.
 - Bilingual rendering in a real browser: every label carries both languages, nothing overflows its
   container and the page does not scroll sideways at 420px. Sign-up seeds the 16 starter habits with
   bilingual names, and the coach answers in English and then Chinese while quoting habit names as

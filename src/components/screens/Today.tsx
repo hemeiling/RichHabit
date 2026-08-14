@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
-import { Empty, ScoreDial } from "@/components/ui";
+import { Empty, Field, ScoreDial, Sheet } from "@/components/ui";
 import { addDays, dow, prettyDate, todayISO } from "@/lib/dates";
 import {
   CATEGORIES, dayScore, dayStreak, encouragement, habitStreak, isDone, scheduledOn,
@@ -11,11 +11,58 @@ import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import type { AppState, Habit } from "@/lib/types";
 
+/**
+ * Logging how much, and how it went. The "Note" marker on a row used to have no
+ * way of ever being set — this is what sets it. A completion row exists only
+ * when the habit was done, so saving an entry marks it done.
+ */
+function LogSheet({
+  habit, date, entry, onSave, onClose,
+}: {
+  habit: Habit; date: string;
+  entry: { value?: number | null; note?: string } | undefined;
+  onSave: (value: number | null, note: string) => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const [value, setValue] = useState(entry?.value == null ? "" : String(entry.value));
+  const [note, setNote] = useState(entry?.note ?? "");
+
+  return (
+    <Sheet
+      open onClose={onClose} title={t.today.logTitle}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>{t.common.cancel}</button>
+          <button className="btn btn-primary"
+            onClick={() => { onSave(value === "" ? null : Number(value), note.trim()); onClose(); }}>
+            {t.today.logSave}
+          </button>
+        </>
+      }
+    >
+      <p className="muted mb-3" style={{ fontSize: 14 }}>{habit.name}</p>
+      {habit.target != null && (
+        <Field label={`${t.today.logValue}${habit.unit ? ` (${habit.unit})` : ""}`}>
+          <input className="input num" type="number" inputMode="decimal" autoFocus
+            placeholder={String(habit.target)} value={value}
+            onChange={(e) => setValue(e.target.value)} />
+        </Field>
+      )}
+      <Field label={t.today.logNote} hint={t.today.logNoteHint}>
+        <textarea className="textarea" rows={3} value={note}
+          autoFocus={habit.target == null}
+          onChange={(e) => setNote(e.target.value)} />
+      </Field>
+    </Sheet>
+  );
+}
+
 function HabitRow({
-  state, habit, date, onToggle, onOpen,
+  state, habit, date, onToggle, onOpen, onLog,
 }: {
   state: AppState; habit: Habit; date: string;
-  onToggle: (id: string) => void; onOpen: (h: Habit) => void;
+  onToggle: (id: string) => void; onOpen: (h: Habit) => void; onLog: (h: Habit) => void;
 }) {
   const t = useT();
   const done = isDone(state, date, habit.id);
@@ -47,8 +94,15 @@ function HabitRow({
           {habit.target != null && <span className="num">{habit.target} {habit.unit}</span>}
           {streak > 0 && <span className="num">{t.today.daysRunning(streak)}</span>}
           {habit.weight === 3 && <span>{t.today.highPriority}</span>}
+          {entry?.value != null && <span className="num">{entry.value}{habit.unit ? ` ${habit.unit}` : ""}</span>}
           {entry?.note && <span>{t.today.note}</span>}
         </div>
+      </button>
+      <button
+        className="btn btn-quiet" style={{ padding: "4px 9px", flex: "none", fontSize: 15 }}
+        onClick={() => onLog(habit)} aria-label={t.today.logOpen} title={t.today.logOpen}
+      >
+        ⋯
       </button>
     </div>
   );
@@ -60,6 +114,7 @@ export default function Today() {
   const locale = useLocale();
   const router = useRouter();
   const [date, setDate] = useState(todayISO());
+  const [logging, setLogging] = useState<Habit | null>(null);
   const isToday = date === todayISO();
 
   const score = dayScore(state, date);
@@ -131,13 +186,22 @@ export default function Today() {
                 {hs.map((h) => (
                   <HabitRow key={h.id} state={state} habit={h} date={date}
                     onToggle={(id) => actions.toggle(date, id)}
-                    onOpen={(habit) => router.push(`/habits?edit=${habit.id}`)} />
+                    onOpen={(habit) => router.push(`/habits?edit=${habit.id}`)}
+                    onLog={setLogging} />
                 ))}
               </div>
               <div className="h-2" />
             </section>
           );
         })
+      )}
+
+      {logging && (
+        <LogSheet
+          habit={logging} date={date} entry={state.completions[date]?.[logging.id]}
+          onSave={(value, note) => actions.logCompletion(date, logging.id, value, note)}
+          onClose={() => setLogging(null)}
+        />
       )}
 
       <section className="card p-5">

@@ -9,6 +9,8 @@ import type {
 
 interface Actions {
   toggle: (date: string, habitId: string) => void;
+  /** Logs how much / how it went. A row exists only when done, so this marks it done. */
+  logCompletion: (date: string, habitId: string, value: number | null, note: string) => void;
   saveHabit: (h: Habit) => void;
   deleteHabit: (id: string) => void;
   saveGoal: (g: Goal) => void;
@@ -101,6 +103,17 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
         () => db.setCompletion(habitId, date, done),
       );
     },
+
+    logCompletion: (date, habitId, value, note) => run(
+      (s) => ({
+        ...s,
+        completions: {
+          ...s.completions,
+          [date]: { ...(s.completions[date] ?? {}), [habitId]: { done: true, value, note } },
+        },
+      }),
+      () => db.setCompletion(habitId, date, true, value, note),
+    ),
 
     saveHabit: (h) => run(
       (s) => ({

@@ -5,6 +5,7 @@ import { Bars, Heatmap } from "@/components/ui";
 import { addDays, rangeBack, todayISO } from "@/lib/dates";
 import { CATEGORIES, dayScore, dayStreak, habitStats, rangeScore } from "@/lib/habits";
 import { coach } from "@/lib/coach";
+import { correlations, strength } from "@/lib/correlate";
 import { useT } from "@/lib/i18n/context";
 import type { Trend } from "@/lib/habits";
 
@@ -31,24 +32,7 @@ export default function Insights() {
     };
   });
 
-  // Sleep against the next day's completion — the first correlation worth having.
-  const pairs = Object.entries(state.metrics)
-    .filter(([, v]) => v.sleep != null && v.sleep !== "")
-    .map(([d, v]) => ({ sleep: Number(v.sleep), next: dayScore(state, addDays(d, 1)).pct }))
-    .filter((p): p is { sleep: number; next: number } => p.next != null && !Number.isNaN(p.sleep));
-
-  const corr = (() => {
-    if (pairs.length < 5) return null;
-    const n = pairs.length;
-    const mx = pairs.reduce((a, p) => a + p.sleep, 0) / n;
-    const my = pairs.reduce((a, p) => a + p.next, 0) / n;
-    const num = pairs.reduce((a, p) => a + (p.sleep - mx) * (p.next - my), 0);
-    const den = Math.sqrt(
-      pairs.reduce((a, p) => a + (p.sleep - mx) ** 2, 0) *
-      pairs.reduce((a, p) => a + (p.next - my) ** 2, 0),
-    );
-    return den ? num / den : null;
-  })();
+  const corrs = correlations(state);
 
   return (
     <div className="flex flex-col gap-4">
@@ -118,19 +102,41 @@ export default function Insights() {
 
       <section className="card p-5">
         <div className="eyebrow mb-2">{t.insights.patterns}</div>
-        {corr == null ? (
+        {corrs.length === 0 ? (
           <p className="muted" style={{ fontSize: 14, lineHeight: 1.5 }}>
             {t.insights.noCorrelation}
           </p>
         ) : (
-          <p style={{ fontSize: 14, lineHeight: 1.5 }}>
-            {t.insights.correlation(pairs.length, corr.toFixed(2))}{" "}
-            {corr > 0.3
-              ? t.insights.corrPositive
-              : corr < -0.3
-                ? t.insights.corrNegative
-                : t.insights.corrNone}
-          </p>
+          <>
+            <div className="eyebrow mb-2" style={{ fontSize: 10 }}>{t.insights.correlationsTitle}</div>
+            <div className="divide">
+              {corrs.map((c) => (
+                <div key={c.key} className="py-2.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span style={{ fontSize: 14 }}>{t.insights.correlationLabels[c.key]}</span>
+                    <span className="num" style={{
+                      fontSize: 14, flex: "none",
+                      color: strength(c.r) === "positive" ? "var(--accent)"
+                        : strength(c.r) === "negative" ? "var(--warn)" : undefined,
+                    }}>
+                      {c.r > 0 ? "+" : ""}{c.r.toFixed(2)}
+                    </span>
+                  </div>
+                  {/* Its own line: bilingual readings are far too long to sit
+                      beside the label without forcing the page sideways. */}
+                  <div className="faint mt-0.5" style={{ fontSize: 11.5, lineHeight: 1.4 }}>
+                    {t.insights[
+                      strength(c.r) === "positive" ? "readingPositive"
+                        : strength(c.r) === "negative" ? "readingNegative" : "readingNone"
+                    ]} · {t.insights.basedOn(c.n)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="faint mt-2.5" style={{ fontSize: 11.5, lineHeight: 1.45 }}>
+              {t.insights.correlationFootnote}
+            </p>
+          </>
         )}
         <div className="mt-3 flex flex-col gap-2">
           {coach.suggestions(state).map((s, i) => (
