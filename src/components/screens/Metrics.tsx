@@ -19,7 +19,7 @@ const LABEL_KEY = {
   weight: "weight", calories: "calories", sleep: "sleep", water: "water", cardioMin: "cardio",
 } as const;
 const UNIT_KEY = {
-  weight: null, calories: "unitKcal", sleep: "unitHours", water: "unitGlasses", cardioMin: "unitMinutes",
+  weight: "none", calories: "kcal", sleep: "hours", water: "glasses", cardioMin: "minutes",
 } as const;
 
 export default function Metrics() {
@@ -42,9 +42,11 @@ export default function Metrics() {
     return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
   };
 
+  // The unit *key* goes to the dictionary, which resolves its own wording —
+  // passing a rendered unit in would print it twice in bilingual mode.
   const unit = (key: (typeof FIELDS)[number]["key"]) => {
     const k = UNIT_KEY[key];
-    return k ? t.metrics[k] : "";
+    return k === "none" ? "" : t.metrics[({ kcal: "unitKcal", hours: "unitHours", glasses: "unitGlasses", minutes: "unitMinutes" } as const)[k]];
   };
   const label = (key: (typeof FIELDS)[number]["key"]) => {
     const u = unit(key);
@@ -101,7 +103,7 @@ export default function Metrics() {
                   <span className="muted num" style={{ fontSize: 13 }}>
                     {avg == null
                       ? t.metrics.noEntries
-                      : t.metrics.avg(avg.toFixed(f.key === "calories" ? 0 : 1), unit(f.key))}
+                      : t.metrics.avg(avg.toFixed(f.key === "calories" ? 0 : 1), UNIT_KEY[f.key])}
                   </span>
                 </div>
                 <div className="mt-1.5"><Spark points={series(f.key)} /></div>

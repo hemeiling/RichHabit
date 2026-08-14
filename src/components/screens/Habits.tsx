@@ -177,7 +177,7 @@ export default function Habits() {
                     <div className="faint flex flex-wrap gap-x-3 mt-1" style={{ fontSize: 12 }}>
                       <span>{freq}</span>
                       {h.target != null && <span className="num">{h.target} {h.unit}</span>}
-                      <span>{t.habits.priorityLabel([t.priority.low, t.priority.medium, t.priority.high][h.weight - 1])}</span>
+                      <span>{[t.habits.priorityFull.low, t.habits.priorityFull.medium, t.habits.priorityFull.high][h.weight - 1]}</span>
                       {goal && <span>→ {goal.name}</span>}
                       {!h.active && <span>{t.habits.paused}</span>}
                     </div>

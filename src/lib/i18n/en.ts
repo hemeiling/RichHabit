@@ -7,6 +7,25 @@
  * concatenation at the call site — word order differs between languages, and
  * "3 days running" cannot be assembled from parts that work in both.
  */
+/**
+ * Category and unit words are declared once and reused by the labels *and* by
+ * the sentences that mention them. That matters for the bilingual dictionary:
+ * a function must resolve its own language's noun, because passing an
+ * already-bilingual string in would render it twice ("High · 高 priority ·
+ * High · 高优先级").
+ */
+export type CategoryKey = "morning" | "daytime" | "nighttime";
+export type UnitKey = "kcal" | "hours" | "glasses" | "minutes" | "none";
+
+// Values are widened to `string` so the dictionary type is about shape, not
+// about which words English happens to use.
+const CAT: Record<CategoryKey, string> = {
+  morning: "Morning", daytime: "Daytime", nighttime: "Nighttime",
+};
+const UNIT: Record<UnitKey, string> = {
+  kcal: "kcal", hours: "hrs", glasses: "glasses", minutes: "min", none: "",
+};
+
 export const en = {
   appName: "Rich Habits",
   localeName: "English",
@@ -59,9 +78,9 @@ export const en = {
   },
 
   categories: {
-    morning: { label: "Morning", note: "Phase one" },
-    daytime: { label: "Daytime", note: "Phase two" },
-    nighttime: { label: "Nighttime", note: "Phase three" },
+    morning: { label: CAT.morning, note: "Phase one" },
+    daytime: { label: CAT.daytime, note: "Phase two" },
+    nighttime: { label: CAT.nighttime, note: "Phase three" },
   },
 
   days: {
@@ -144,7 +163,7 @@ export const en = {
     unitPlaceholder: "min",
     fieldPriority: "Priority",
     priorityHint: "Higher priority habits count for more in your score.",
-    priorityLabel: (level: string) => `${level} priority`,
+    priorityFull: { low: "Low priority", medium: "Medium priority", high: "High priority" },
     fieldGoal: "Goal it supports",
     noGoal: "Not linked to a goal",
     fieldStartDate: "Start date",
@@ -158,7 +177,7 @@ export const en = {
     intro: "Work one phase at a time. Give a phase seven days before adding the next, and keep the earlier ones running.",
     noHabitsInPhase: "No habits in this phase yet.",
     habitColumn: "Habit",
-    phaseResult: (phase: string) => `${phase} · seven-day result`,
+    phaseResult: (c: CategoryKey) => `${CAT[c]} · seven-day result`,
     completion: "Completion",
     scheduledOf: (done: number, scheduled: number) => `${done} of ${scheduled} scheduled`,
     longestStreak: "Longest streak",
@@ -167,8 +186,8 @@ export const en = {
     weakest: "Weakest habit",
     allPhases: "All phases this week",
     focusNext: "Focus for next week",
-    holdingAt: (phase: string, pct: number) =>
-      `${phase} is holding at ${pct}%. Ready to add the next phase.`,
+    holdingAt: (c: CategoryKey, pct: number) =>
+      `${CAT[c]} is holding at ${pct}%. Ready to add the next phase.`,
     keepSteady: (name: string) =>
       `Keep this phase steady and put "${name}" first — it's the one slipping.`,
     cellLabel: (name: string, date: string) => `${name} on ${date}`,
@@ -207,8 +226,8 @@ export const en = {
       `"${name}" is landing ${pct}% of the time. Consider shrinking it or moving it earlier in the day.`,
     best: (name: string, pct: number) =>
       `"${name}" is solid at ${pct}%. It's a good anchor to stack a newer habit onto.`,
-    weakestWindow: (label: string, pct: number) =>
-      `${label} is your weakest window (${pct}%). One habit there will move the score more than three anywhere else.`,
+    weakestWindow: (c: CategoryKey, pct: number) =>
+      `${CAT[c]} is your weakest window (${pct}%). One habit there will move the score more than three anywhere else.`,
     tooMany: "You're tracking a lot at once. The phased approach works better: pick one window and let it settle.",
     allGood: "Nothing looks off. Keep the current set steady for another week.",
   },
@@ -284,10 +303,10 @@ export const en = {
     sleep: "Sleep",
     water: "Water",
     cardio: "Cardio",
-    unitKcal: "kcal",
-    unitHours: "hrs",
-    unitGlasses: "glasses",
-    unitMinutes: "min",
+    unitKcal: UNIT.kcal,
+    unitHours: UNIT.hours,
+    unitGlasses: UNIT.glasses,
+    unitMinutes: UNIT.minutes,
     gymDay: "Gym day",
     cardioDay: "Cardio day",
     trends: "Trends",
@@ -295,7 +314,7 @@ export const en = {
     spanMonth: "Month",
     spanYear: "Year",
     noEntries: "no entries",
-    avg: (value: string, unit: string) => `avg ${value} ${unit}`.trim(),
+    avg: (value: string, unit: UnitKey) => `avg ${value} ${UNIT[unit]}`.trim(),
     gymDays: "Gym days",
     cardioDays: "Cardio days",
     goalWeight: "Goal weight",

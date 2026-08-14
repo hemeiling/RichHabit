@@ -138,7 +138,7 @@ export default function Insights() {
               {s.kind === "worst" ? t.suggestions.worst(s.name, s.pct)
                 : s.kind === "best" ? t.suggestions.best(s.name, s.pct)
                   : s.kind === "weakestWindow"
-                    ? t.suggestions.weakestWindow(t.categories[s.category].label, s.pct)
+                    ? t.suggestions.weakestWindow(s.category, s.pct)
                     : t.suggestions[s.kind]}
             </div>
           ))}

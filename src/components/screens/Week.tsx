@@ -118,7 +118,7 @@ export default function Week() {
       </section>
 
       <section className="card p-5">
-        <div className="eyebrow mb-3">{t.week.phaseResult(t.categories[phase].label)}</div>
+        <div className="eyebrow mb-3">{t.week.phaseResult(phase)}</div>
         <div className="grid grid-cols-2 gap-3">
           <div className="flat p-3.5">
             <div className="eyebrow" style={{ fontSize: 10 }}>{t.week.completion}</div>
@@ -152,7 +152,7 @@ export default function Week() {
             <div className="eyebrow" style={{ fontSize: 10 }}>{t.week.focusNext}</div>
             <p className="mt-1" style={{ fontSize: 14, lineHeight: 1.45 }}>
               {(summary.pct ?? 0) >= 80
-                ? t.week.holdingAt(t.categories[phase].label, summary.pct ?? 0)
+                ? t.week.holdingAt(phase, summary.pct ?? 0)
                 : t.week.keepSteady(summary.worst.habit.name)}
             </p>
           </div>

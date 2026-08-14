@@ -1,4 +1,9 @@
-import type { Dict } from "./en";
+import type { CategoryKey, Dict, UnitKey } from "./en";
+
+const CAT: Record<CategoryKey, string> = { morning: "早晨", daytime: "白天", nighttime: "夜晚" };
+const UNIT: Record<UnitKey, string> = {
+  kcal: "千卡", hours: "小时", glasses: "杯", minutes: "分钟", none: "",
+};
 
 /**
  * 简体中文. Typed as `Dict`, so this file cannot drift out of sync with `en.ts`
@@ -58,9 +63,9 @@ export const zh: Dict = {
   },
 
   categories: {
-    morning: { label: "早晨", note: "第一阶段" },
-    daytime: { label: "白天", note: "第二阶段" },
-    nighttime: { label: "夜晚", note: "第三阶段" },
+    morning: { label: CAT.morning, note: "第一阶段" },
+    daytime: { label: CAT.daytime, note: "第二阶段" },
+    nighttime: { label: CAT.nighttime, note: "第三阶段" },
   },
 
   days: {
@@ -143,7 +148,7 @@ export const zh: Dict = {
     unitPlaceholder: "分钟",
     fieldPriority: "优先级",
     priorityHint: "优先级越高的习惯，在得分中占的比重越大。",
-    priorityLabel: (level: string) => `${level}优先级`,
+    priorityFull: { low: "低优先级", medium: "中优先级", high: "高优先级" },
     fieldGoal: "支持的目标",
     noGoal: "未关联目标",
     fieldStartDate: "开始日期",
@@ -157,7 +162,7 @@ export const zh: Dict = {
     intro: "一次只推进一个阶段。给它整整七天，再加下一个，同时保持前面的继续运行。",
     noHabitsInPhase: "这个阶段还没有习惯。",
     habitColumn: "习惯",
-    phaseResult: (phase: string) => `${phase} · 七天结果`,
+    phaseResult: (c: CategoryKey) => `${CAT[c]} · 七天结果`,
     completion: "完成率",
     scheduledOf: (done: number, scheduled: number) => `已完成 ${done} / 安排 ${scheduled}`,
     longestStreak: "最长连续",
@@ -166,8 +171,8 @@ export const zh: Dict = {
     weakest: "最弱的习惯",
     allPhases: "本周全部阶段",
     focusNext: "下周的重点",
-    holdingAt: (phase: string, pct: number) =>
-      `${phase}稳定在 ${pct}%，可以加入下一个阶段了。`,
+    holdingAt: (c: CategoryKey, pct: number) =>
+      `${CAT[c]}稳定在 ${pct}%，可以加入下一个阶段了。`,
     keepSteady: (name: string) =>
       `先稳住这个阶段，把「${name}」放在最前面 —— 它是掉得最厉害的那个。`,
     cellLabel: (name: string, date: string) => `${date} 的「${name}」`,
@@ -206,8 +211,8 @@ export const zh: Dict = {
       `「${name}」的完成率只有 ${pct}%。可以把它拆小一点，或者挪到一天更早的时候。`,
     best: (name: string, pct: number) =>
       `「${name}」稳定在 ${pct}%，很扎实。适合把新习惯叠加在它后面。`,
-    weakestWindow: (label: string, pct: number) =>
-      `${label}是你最弱的时间段（${pct}%）。在这里加一个习惯，比在别处加三个都更能提高得分。`,
+    weakestWindow: (c: CategoryKey, pct: number) =>
+      `${CAT[c]}是你最弱的时间段（${pct}%）。在这里加一个习惯，比在别处加三个都更能提高得分。`,
     tooMany: "你同时追踪的东西有点多。分阶段推进更有效：先专注一个时间段，让它稳下来。",
     allGood: "目前看起来没什么问题。保持现在这套，再稳一周。",
   },
@@ -283,10 +288,10 @@ export const zh: Dict = {
     sleep: "睡眠",
     water: "饮水",
     cardio: "有氧",
-    unitKcal: "千卡",
-    unitHours: "小时",
-    unitGlasses: "杯",
-    unitMinutes: "分钟",
+    unitKcal: UNIT.kcal,
+    unitHours: UNIT.hours,
+    unitGlasses: UNIT.glasses,
+    unitMinutes: UNIT.minutes,
     gymDay: "力量训练日",
     cardioDay: "有氧日",
     trends: "趋势",
@@ -294,7 +299,7 @@ export const zh: Dict = {
     spanMonth: "月",
     spanYear: "年",
     noEntries: "暂无记录",
-    avg: (value: string, unit: string) => `平均 ${value} ${unit}`.trim(),
+    avg: (value: string, unit: UnitKey) => `平均 ${value} ${UNIT[unit]}`.trim(),
     gymDays: "力量训练天数",
     cardioDays: "有氧天数",
     goalWeight: "目标体重",

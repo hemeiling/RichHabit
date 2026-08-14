@@ -1,5 +1,6 @@
 "use client";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useT } from "@/lib/i18n/context";
 import { addDays, dow, rangeBack, shortDate, todayISO } from "@/lib/dates";
 import { dayScore } from "@/lib/habits";
@@ -12,6 +13,9 @@ export function Sheet({
   children: React.ReactNode; footer?: React.ReactNode;
 }) {
   const t = useT();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -19,8 +23,20 @@ export function Sheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || !mounted) return null;
+
+  /**
+   * Rendered into <body>, not in place.
+   *
+   * `.sheet-wrap` is `position: fixed`, which is only relative to the viewport
+   * while no ancestor has a transform. `<main>` carries `.fade-in`, and an
+   * animation with `fill-mode: both` leaves a computed identity matrix rather
+   * than `none` — enough to make main the containing block. The sheet was then
+   * laid out against the whole scrolling page, which put its footer buttons
+   * below the fold: on the habits screen the Save button could not be reached
+   * at all. A portal puts it out of reach of any ancestor's transform.
+   */
+  return createPortal((
     <div className="sheet-wrap" role="dialog" aria-modal="true" aria-label={title}>
       <div className="scrim" onClick={onClose} />
       <div className="sheet fade-in">
@@ -32,7 +48,7 @@ export function Sheet({
         {footer && <div className="mt-5 flex gap-2 justify-end">{footer}</div>}
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 export function Field({

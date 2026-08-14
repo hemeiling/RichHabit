@@ -209,3 +209,43 @@ describe("bilingual seed", () => {
     expect(seedSet("both").goals).toHaveLength(3);
   });
 });
+
+describe("no value is rendered twice in bilingual mode", () => {
+  /**
+   * The hazard of a derived bilingual dictionary: pass an already-bilingual
+   * string into a bilingual function and it comes back doubled —
+   * "High · 高 priority · High · 高优先级". Functions that mention a category or
+   * a unit therefore take a key and resolve their own language's word.
+   */
+  const countOccurrences = (haystack: string, needle: string) =>
+    haystack.split(needle).length - 1;
+
+  it("names a category once per language", () => {
+    const s = both.week.phaseResult("morning");
+    expect(countOccurrences(s, "Morning")).toBe(1);
+    expect(countOccurrences(s, "早晨")).toBe(1);
+    expect(s).toBe("Morning · seven-day result · 早晨 · 七天结果");
+  });
+
+  it("does the same inside a sentence", () => {
+    const s = both.week.holdingAt("daytime", 82);
+    expect(countOccurrences(s, "Daytime")).toBe(1);
+    expect(countOccurrences(s, "白天")).toBe(1);
+    expect(countOccurrences(s, "82")).toBe(2); // once per language, as intended
+
+    const w = both.suggestions.weakestWindow("nighttime", 41);
+    expect(countOccurrences(w, "Nighttime")).toBe(1);
+    expect(countOccurrences(w, "夜晚")).toBe(1);
+  });
+
+  it("names a unit once per language", () => {
+    const s = both.metrics.avg("6.1", "hours");
+    expect(countOccurrences(s, "hrs")).toBe(1);
+    expect(countOccurrences(s, "小时")).toBe(1);
+  });
+
+  it("uses whole labels for priority rather than interpolating a word", () => {
+    expect(both.habits.priorityFull.high).toBe("High priority · 高优先级");
+    expect(countOccurrences(both.habits.priorityFull.high, "High")).toBe(1);
+  });
+});
