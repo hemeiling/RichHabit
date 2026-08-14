@@ -46,6 +46,10 @@ export const FEATURES = {
     label: "Daily habit tracking",
     events: ["habit_completed", "habit_uncompleted", "habit_created", "habit_edited", "habit_archived"],
   },
+  refine: {
+    label: "Refine my habits",
+    events: ["behaviour_captured", "candidate_activated", "habit_status_changed"],
+  },
   goals: { label: "Goals", events: ["goal_created", "goal_updated", "goal_deleted"] },
   review: { label: "Weekly review", events: ["weekly_review_completed"] },
   metrics: { label: "Metrics", events: ["metric_logged"] },

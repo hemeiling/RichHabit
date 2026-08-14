@@ -1,4 +1,35 @@
 # Rich Habits --- Claude Engineering Instructions
+
+## Minimize Tool Permission Interruptions
+
+When multiple implementation approaches are equally appropriate, prefer
+approaches that can use already-approved, narrowly scoped development tools
+rather than repeatedly generating novel shell commands that trigger permission
+prompts.
+
+Do not use arbitrary Python or shell scripts merely to perform simple source
+file edits when the normal editing tools available to you can perform the
+change safely.
+
+Batch related safe operations when practical instead of requesting many
+separate shell executions.
+
+Use shell execution when it is genuinely the appropriate engineering tool,
+such as:
+
+- dependency installation
+- typecheck
+- lint
+- tests
+- builds
+- database tooling
+- Git inspection
+- project scripts
+- necessary code generation
+
+Do not weaken security or bypass safeguards simply to avoid a permission
+prompt.
+
 ## Autonomous Execution / Minimize Permission Prompts
 
 Operate with a high degree of engineering autonomy.

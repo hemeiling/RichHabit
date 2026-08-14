@@ -91,6 +91,7 @@ src/
     api/state/      The whole account in one read
     api/*/          One route per resource: habits, completions, goals, notes,
                     awareness, stacks, metrics, reviews, prefs
+    (app)/more/refine  Behaviours to change, and the backlog they wait in
     api/coach/      The AI coach, against the OpenAI Responses API
   middleware.ts     Cookie presence only; validity is decided against the database
 db/schema.sql
@@ -178,6 +179,25 @@ suggested defaults — tracking type, minimum, target, unit, life domain. Adopti
 one copies it into your own habits, after which the copy is yours and the
 catalogue no longer touches it. Like starter habits, library entries are keyed,
 so the catalogue reads in whichever language you are using.
+
+### Behaviours, candidates, and the sheet
+
+`More → Refine my habits` is where someone names what they'd like to change
+(§5). Three rules from `CLAUDE.md` §8 shape it, and they are worth stating
+because breaking any one of them makes the feature dishonest:
+
+- **Their wording is stored verbatim**, with no template key, so it is never
+  translated or rephrased. "I sit for hours without moving" stays exactly that
+  in both languages.
+- **Nothing reaches the sheet without being put there.** Everything captured is
+  a `candidate`: absent from Today, absent from the score, absent from My
+  Habits. Activating is a separate, deliberate tap.
+- **A behaviour is not yet a habit.** "I sit for hours" is an observation, not
+  something with a schedule. Turning it into something trackable is the next
+  step, not an automatic one.
+
+My Habits shows the sheet; the backlog lives here. That separation is what lets
+the coach propose things later without imposing them.
 
 ### How access control works
 
@@ -350,6 +370,11 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   grid and the weekly summary → **a brand-new browser context signs back in and everything survived**
   (habit, completion, value, note) → no shame-based wording anywhere on Today.
 - No screen scrolls sideways at 320, 390, 768 or 1440px — all ten screens checked with data present.
+- Behaviours to change, 16 checks in a browser: a captured behaviour is stored and shown verbatim,
+  held as a candidate, and reaches neither Today nor My Habits; its wording survives a switch to
+  Chinese while the screen around it translates; only an explicit "Put on my sheet" activates it;
+  it persists across a new session; and the screen fits 320, 390 and 1440px. Analytics recorded
+  `behaviour_captured` with none of the user's text.
 - The starter sheet and lifecycle in a browser, 13 checks: a new account gets exactly ten habits,
   four/three/three across the day, all active; moving one to *established* removes it from Today
   and from the score while keeping the habit and its history; reactivating puts it back; and the

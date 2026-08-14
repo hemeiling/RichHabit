@@ -8,6 +8,7 @@ import { useT } from "@/lib/i18n/context";
 import { todayISO } from "@/lib/dates";
 
 const LINKS = [
+  { href: "/more/refine", key: "refine" },
   { href: "/more/awareness", key: "awareness" },
   { href: "/more/goals", key: "goals" },
   { href: "/more/metrics", key: "metrics" },

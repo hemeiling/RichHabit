@@ -144,7 +144,11 @@ export default function Habits() {
     return null;
   });
 
-  const shown = state.habits.filter((h) => filter === "all" || h.category === filter);
+  // The backlog lives in "Refine my habits". This screen is the sheet: habits
+  // the user has actually chosen, in whatever state they are now.
+  const onSheet = state.habits.filter(
+    (h) => !["candidate", "recommended", "planned"].includes(h.status));
+  const shown = onSheet.filter((h) => filter === "all" || h.category === filter);
 
   return (
     <div className="flex flex-col gap-4">
