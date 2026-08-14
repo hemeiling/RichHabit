@@ -12,10 +12,15 @@ import type {
  * Signatures no longer take a user id. The server will not accept one.
  */
 
+/** IANA zone name, so the server can report activity in the user's local time. */
+const timezone = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; }
+};
+
 async function send(path: string, init: RequestInit): Promise<any> {
   const res = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init.headers },
+    headers: { "Content-Type": "application/json", "x-rh-timezone": timezone(), ...init.headers },
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);

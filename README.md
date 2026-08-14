@@ -46,7 +46,8 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 85 tests: habit engine, validation, throttle, TLS, i18n, coach contract |
+| `npm test` | Vitest — 86 tests: habit engine, validation, throttle, TLS, i18n, analytics, coach |
+| `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to `DATABASE_URL`. Idempotent |
 
@@ -60,6 +61,8 @@ src/
     habits.ts       The engine: scheduling, scoring, streaks, stats. Pure functions, no I/O.
     coach.ts        Context builder for the AI coach + data-only suggestions.
     i18n/           en.ts, zh.ts, locale resolution, the LocaleProvider.
+    analytics/      config.ts (every threshold), track.ts, queries.ts.
+    admin.ts        The role check. 404s, so /admin is not discoverable.
     seed.ts         The starter habits, per language.
     auth.ts         Password hashing, session rows, the session cookie.
     throttle.ts     Failed sign-in limiter, in memory.
@@ -164,6 +167,51 @@ getting it subtly wrong is easy:
 Every request body goes through `validate.ts` first. That is not decoration: without it a
 malformed field reached Postgres and came back as a 500 carrying a constraint name.
 
+### Admin analytics
+
+`/admin` is a product-analytics tool for whoever owns the deployment. It is
+deliberately outside the `(app)` group — no habit store, no tab bar, no language
+switcher — because it answers a different question. The product tells the user
+"how am I doing"; this tells the owner "is anyone using it, and do they come back".
+
+**Access.** `users.role` is read from the database on every admin request, never
+carried in the cookie or trusted from the client, so revoking someone takes effect
+on their next request. A non-admin gets **404, not 403** — a signed-in user should
+not learn that `/admin` exists. Every page and route re-checks; the layout guard is
+convenience, not the boundary. There is **no API that can write a role**: granting
+admin is `npm run admin:grant -- you@example.com`, run against the database.
+
+> The brief asked for Supabase row-level security here. Supabase was removed
+> earlier, so the equivalent is: the role check above, plus the per-request user
+> scoping every other query already uses. No service-role credential exists to
+> leak, because there is no service role — the app has one database user and the
+> browser never sees `DATABASE_URL`.
+
+**Privacy is a design constraint, not a policy.** The events table has no column
+that can hold a habit name, a note, a metric value or goal text. `entity_id` is a
+bare uuid; `properties` passes through a sanitiser that keeps numbers, booleans and
+short enum-like strings and **drops everything else** — a truncated note is still a
+note. The admin user profile shows counts and dates only. Seeing someone's actual
+content would need a separate, explicitly authorised and audited tool.
+
+**How events get recorded.** One layer, `trackEvent`, called from the API routes —
+not scattered through React components. Every meaningful action already crosses the
+API, so that is where the instrumentation lives. It is wrapped in a try/catch and
+tested: if the events table is unreachable, checking off a habit still succeeds.
+
+**Sessions** are derived, not polled. A run of activity with no gap longer than 30
+minutes is one session; nothing writes on a timer, so a long reading session costs
+one row rather than one per few seconds.
+
+**Timestamps** are stored in UTC. Hour-of-day and day-of-week reporting converts
+per row using the timezone the event itself carried (`occurred_at at time zone …`),
+falling back to UTC rather than dropping the row.
+
+**Nothing is flattered.** A cohort week that has not happened yet renders as `—`,
+never 0%. Retention counts only users old enough to have had the chance to return.
+Activation counts only accounts past the window. All thresholds live in
+`src/lib/analytics/config.ts`.
+
 ### The AI coach seam
 
 **Ask Rich Habits** on the Insights screen sends only the question. `/api/coach` re-reads the
@@ -229,6 +277,13 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   a second account sees only its own rows, and its attempts to complete or delete the first
   account's habit change nothing; sign-out makes `/api/state` and `/api/coach` return 401.
 - `DATABASE_URL`, the session cookie name and `pg` itself are absent from every client chunk.
+- **The admin flow end to end, 35 checks**: a user signs up, creates and completes a habit and
+  returns in a new session; `habit_created`, `habit_completed` and `app_opened` are recorded against
+  one session whose event count accumulates; the habit's *name* appears nowhere in the events table;
+  events carry a local timezone. That user then gets 404 on `/admin`, `/admin/users`,
+  `/admin/retention` and `/admin/system`, sees no admin link, and cannot change their own role by
+  posting one. A granted admin loads every admin page, sees the user listed with real counts, and
+  sees no habit names on the users list, the feature table or the usage profile.
 - Cross-account writes, exercised over HTTP against a running server: an account posting another
   account's habit id is refused 404 and the victim's name, schedule and completions are unchanged;
   attaching a habit to someone else's goal is refused; a habit stack pointing at someone else's

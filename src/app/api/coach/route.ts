@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { loadState } from "@/lib/db/queries";
 import { coach } from "@/lib/coach";
 import { getDict, getLocale } from "@/lib/i18n/server";
+import { trackEvent } from "@/lib/analytics/track";
 
 /**
  * The AI coach. The client sends a question and nothing else; this route reads
@@ -95,6 +96,12 @@ export async function POST(request: Request) {
         `Their data:\n${JSON.stringify(context)}`,
         `Their question:\n${question}`,
       ].join("\n\n"),
+    });
+
+    await trackEvent({
+      userId: user.id, event: "coach_question_asked", page: "/insights",
+      // Length and language help judge usage; the question itself is not stored.
+      properties: { locale, questionLength: question.length },
     });
 
     const answer = response.output_text?.trim();

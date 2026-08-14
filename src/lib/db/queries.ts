@@ -150,9 +150,10 @@ export async function loadState(userId: string): Promise<AppState> {
 
 // ------------------------------ mutations ----------------------------------
 
-export async function saveHabit(userId: string, h: Habit) {
-  await transaction(async (q) => {
-    await assertOwns(q, "habits", h.id, userId);
+/** Returns true when the row did not exist before — i.e. this was a create. */
+export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
+  return transaction(async (q) => {
+    const existed = await assertOwns(q, "habits", h.id, userId);
     // A habit may only point at a goal the same account owns.
     if (h.goalId) await assertRef(q, "goals", h.goalId, userId);
 
@@ -188,6 +189,7 @@ export async function saveHabit(userId: string, h: Habit) {
         [h.goalId, h.id, userId],
       );
     }
+    return !existed;
   });
 }
 
@@ -215,14 +217,15 @@ export async function setCompletion(
   }
 }
 
-export async function saveGoal(userId: string, g: Goal) {
-  await assertOwns(query, "goals", g.id, userId);
+export async function saveGoal(userId: string, g: Goal): Promise<boolean> {
+  const existed = await assertOwns(query, "goals", g.id, userId);
   await query(
     `insert into goals (id, user_id, name, area, why) values ($1,$2,$3,$4,$5)
      on conflict (id) do update set name = excluded.name, area = excluded.area, why = excluded.why
      where goals.user_id = $2`,
     [g.id, userId, g.name, g.area, g.why || null],
   );
+  return !existed;
 }
 
 export async function deleteGoal(userId: string, id: string) {
@@ -237,8 +240,8 @@ export async function saveDayNote(userId: string, date: string, body: string) {
   );
 }
 
-export async function saveAwareness(userId: string, e: AwarenessEntry) {
-  await assertOwns(query, "habit_awareness_entries", e.id, userId);
+export async function saveAwareness(userId: string, e: AwarenessEntry): Promise<boolean> {
+  const existed = await assertOwns(query, "habit_awareness_entries", e.id, userId);
   await query(
     `insert into habit_awareness_entries (id, user_id, activity, at_time, duration, context, notes, grade)
      values ($1,$2,$3,$4,$5,$6,$7,$8::grade)
@@ -248,19 +251,21 @@ export async function saveAwareness(userId: string, e: AwarenessEntry) {
      where habit_awareness_entries.user_id = $2`,
     [e.id, userId, e.activity, e.time || null, e.duration || null, e.context || null, e.notes || null, e.grade],
   );
+  return !existed;
 }
 
 export async function deleteAwareness(userId: string, id: string) {
   await query("delete from habit_awareness_entries where id = $1 and user_id = $2", [id, userId]);
 }
 
-export async function saveStack(userId: string, k: Stack) {
-  await transaction(async (q) => {
-    await assertOwns(q, "habit_stacks", k.id, userId);
+export async function saveStack(userId: string, k: Stack): Promise<boolean> {
+  return transaction(async (q) => {
+    const existed = await assertOwns(q, "habit_stacks", k.id, userId);
     // Both ends of a stack point at habits; neither may be someone else's.
     if (k.triggerHabitId) await assertRef(q, "habits", k.triggerHabitId, userId);
     if (k.newHabitId) await assertRef(q, "habits", k.newHabitId, userId);
     await saveStackRow(q, userId, k);
+    return !existed;
   });
 }
 

@@ -66,7 +66,9 @@ function create() {
     connectionString,
     ssl: resolveSsl(connectionString),
     max: Number(process.env.PG_POOL_MAX ?? 10),
-    idleTimeoutMillis: 30_000,
+    // Lowering this frees the connection sooner, which matters only against a
+    // single-connection dev database (PGlite); production leaves it at 30s.
+    idleTimeoutMillis: Number(process.env.PG_IDLE_MS ?? 30_000),
     connectionTimeoutMillis: 10_000,
   });
 }

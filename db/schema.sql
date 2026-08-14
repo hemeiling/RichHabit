@@ -27,12 +27,16 @@ create type habit_category as enum ('morning', 'daytime', 'nighttime');
 create type habit_kind     as enum ('good', 'avoid');
 create type freq_mode      as enum ('daily', 'days', 'times');
 create type grade          as enum ('good', 'bad', 'neutral');
+create type user_role      as enum ('user', 'admin');
 
 -- ------------------------------ identity -----------------------------------
 create table users (
   id            uuid primary key default gen_random_uuid(),
   email         text not null,
   password_hash text not null,
+  -- Deliberately has no API that can set it. Granting admin is a deployment
+  -- action (`npm run admin:grant`), never something a request can do.
+  role          user_role not null default 'user',
   created_at    timestamptz not null default now()
 );
 -- Email is compared case-insensitively; the index is what enforces uniqueness.
@@ -208,6 +212,59 @@ create table weekly_reviews (
   updated_at  timestamptz not null default now(),
   unique (user_id, week_start)
 );
+
+
+-- ===========================================================================
+-- Product usage analytics
+--
+-- Kept conceptually apart from habit data. These tables answer "is anyone
+-- using this, how, and do they come back" — never "what is this person's
+-- life like". Nothing here stores a habit name, a note, a metric value or a
+-- goal description; entity_id is a bare uuid so a row can be counted and
+-- joined but not read for its content.
+-- ===========================================================================
+
+create table user_sessions (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references users on delete cascade,
+  started_at       timestamptz not null default now(),
+  last_activity_at timestamptz not null default now(),
+  ended_at         timestamptz,
+  event_count      int not null default 0,
+  device_type      text,          -- 'mobile' | 'tablet' | 'desktop' | null
+  timezone         text,          -- IANA name, for local-time reporting
+  created_at       timestamptz not null default now()
+);
+-- Finding the caller's open session is the hottest query in the tracker.
+create index sessions_open_idx on user_sessions (user_id, last_activity_at desc);
+create index user_sessions_started_idx on user_sessions (started_at);
+
+create table analytics_events (
+  id            bigserial primary key,
+  user_id       uuid references users on delete cascade,
+  anonymous_id  text,            -- pre-signup, when there is no user yet
+  session_id    uuid references user_sessions on delete set null,
+  event_name    text not null,
+  event_category text,
+  feature       text,            -- the adoption bucket this rolls up into
+  page          text,
+  entity_type   text,
+  entity_id     uuid,            -- an id only; never a name or a note
+  properties    jsonb not null default '{}'::jsonb,
+  occurred_at   timestamptz not null default now(),
+  user_timezone text,
+  app_version   text,
+  created_at    timestamptz not null default now()
+);
+create index events_user_time_idx on analytics_events (user_id, occurred_at desc);
+create index events_time_idx on analytics_events (occurred_at desc);
+create index events_name_idx on analytics_events (event_name, occurred_at desc);
+create index events_session_idx on analytics_events (session_id);
+create index events_feature_idx on analytics_events (feature, occurred_at desc);
+-- Note: no index on occurred_at::date. Casting timestamptz to date is STABLE
+-- rather than IMMUTABLE — it depends on the session TimeZone — so Postgres
+-- refuses it in an index expression. The two indexes above already serve the
+-- per-day counts, which are all range scans over occurred_at.
 
 -- --------------------------- updated_at trigger ----------------------------
 create or replace function touch_updated_at() returns trigger

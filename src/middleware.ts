@@ -5,7 +5,10 @@ const PUBLIC_PATHS = ["/login", "/api"];
 const SESSION_COOKIE = "rh_session";
 
 /**
- * A cookie-presence check, nothing more. Middleware runs on the edge runtime,
+ * A cookie-presence check, nothing more. /admin is not listed as public, so a
+ * signed-out visitor is redirected to /login like anywhere else; whether they
+ * are actually an admin is decided server-side, per page, against the database.
+ * Middleware runs on the edge runtime,
  * which cannot open a Postgres connection, so the session is not validated
  * here — it is validated in the app layout and in every /api route, both of
  * which do reach the database. This only saves a redirect round-trip.
