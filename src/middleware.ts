@@ -23,11 +23,12 @@ export function middleware(request: NextRequest) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
-  if (hasCookie && path === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/today";
-    return NextResponse.redirect(url);
-  }
+  // Deliberately no "has a cookie, so bounce them off /login" rule here.
+  // Middleware can only see that a cookie exists, while the app layout checks
+  // whether the session behind it is still valid. When those two disagree —
+  // an expired session, a revoked one, a rebuilt database — /today redirects
+  // to /login and /login redirects back, forever. Whether someone is really
+  // signed in is decided in one place: the login page, against the database.
   return NextResponse.next();
 }
 

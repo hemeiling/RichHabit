@@ -91,7 +91,7 @@ src/
     api/*/          One route per resource: habits, completions, goals, notes,
                     awareness, stacks, metrics, reviews, prefs
     api/coach/      The AI coach, against the OpenAI Responses API
-  middleware.ts     Cookie check, redirects signed-out visitors to /login
+  middleware.ts     Cookie presence only; validity is decided against the database
 db/schema.sql
 docker-compose.yml   Local Postgres, schema applied on first boot
 render.yaml          Blueprint: web service + database
@@ -217,6 +217,20 @@ never 0%. Retention counts only users old enough to have had the chance to retur
 Activation counts only accounts past the window. All thresholds live in
 `src/lib/analytics/config.ts`.
 
+### One thing worth not re-breaking
+
+Middleware runs on the edge runtime, so it cannot open a database connection: it
+can only see that a session cookie *exists*. The app layout checks whether the
+session behind it is *valid*. If both act on their own answer, a cookie that
+exists but no longer resolves — an expired session, a revoked one, a rebuilt
+database — makes `/today` redirect to `/login` and `/login` redirect back,
+forever. That is `ERR_TOO_MANY_REDIRECTS`, and it would reach every user
+eventually, because sessions expire after 30 days.
+
+So there is exactly one place that decides whether someone is signed in: the
+login page, against the database. Middleware only redirects signed-*out* traffic
+away from private paths, which it can do safely from cookie presence alone.
+
 ### The AI coach seam
 
 **Ask Rich Habits** on the Insights screen sends only the question. `/api/coach` re-reads the
@@ -296,6 +310,9 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 - Malformed bodies return 400 with a readable message (`category must be one of morning, daytime,
   nighttime`), and a server-side failure returns a fixed string rather than the Postgres error.
 - `/api/health` returns `{ok: true, db: "up"}` and 503 when the database is unreachable.
+- Every session-cookie state resolves in a single redirect: a session that no longer exists, a
+  malformed cookie and an empty cookie all land on the login form, while a valid session still
+  reaches `/today` and a signed-in visitor to `/login` is sent on.
 - **The acceptance journey, end to end in a browser at 390px**, twenty checks: signed-out visitor
   redirected → account created and seeded with 16 habits and 3 goals → new habit created, scheduled
   daily, given a target, priority and goal → appears on Today → one tap checks it off and the score
