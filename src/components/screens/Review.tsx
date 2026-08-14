@@ -5,6 +5,7 @@ import { Field } from "@/components/ui";
 import { addDays, daysBetween, shortDate, todayISO, weekStart } from "@/lib/dates";
 import { rangeScore, uid, weekSummary } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
+import { habitName } from "@/lib/templates";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import type { WeeklyReview } from "@/lib/types";
 
@@ -39,7 +40,9 @@ export default function Review() {
       ...draft,
       stats: {
         pct: summary.pct, done: summary.done, scheduled: summary.scheduled, perfect: scores.perfect,
-        best: summary.best?.habit.name ?? null, worst: summary.worst?.habit.name ?? null,
+        // The wording as it appeared to them that week, not the stored English.
+        best: summary.best ? habitName(summary.best.habit, t) : null,
+        worst: summary.worst ? habitName(summary.worst.habit, t) : null,
         longest: summary.longest,
       },
     });
@@ -78,8 +81,8 @@ export default function Review() {
           </div>
         </div>
         <div className="flex flex-col gap-2 mt-3" style={{ fontSize: 14 }}>
-          <div className="flex justify-between"><span className="muted">{t.review.bestHabit}</span><span>{summary.best?.habit.name ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="muted">{t.review.mostMissed}</span><span>{summary.worst?.habit.name ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="muted">{t.review.bestHabit}</span><span>{summary.best ? habitName(summary.best.habit, t) : "—"}</span></div>
+          <div className="flex justify-between"><span className="muted">{t.review.mostMissed}</span><span>{summary.worst ? habitName(summary.worst.habit, t) : "—"}</span></div>
           <div className="flex justify-between"><span className="muted">{t.review.longestStreak}</span><span className="num">{summary.longest}d</span></div>
           <div className="flex justify-between"><span className="muted">{t.review.perfectDays}</span><span className="num">{scores.perfect}</span></div>
         </div>

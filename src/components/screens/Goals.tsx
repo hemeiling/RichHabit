@@ -5,6 +5,7 @@ import { useHabits } from "@/components/store";
 import { Empty, Field, Sheet } from "@/components/ui";
 import { GOAL_AREAS, habitStats, uid } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
+import { goalName, habitName } from "@/lib/templates";
 import type { Goal } from "@/lib/types";
 
 export default function Goals() {
@@ -23,7 +24,7 @@ export default function Goals() {
           {t.goals.intro}
         </p>
         <button className="btn btn-primary" style={{ flex: "none" }}
-          onClick={() => setDraft({ id: uid(), name: "", area: GOAL_AREAS[0], why: "" })}>{t.common.new}</button>
+          onClick={() => setDraft({ id: uid(), name: "", templateKey: null, area: GOAL_AREAS[0], why: "" })}>{t.common.new}</button>
       </div>
 
       {state.goals.length === 0 && (
@@ -41,7 +42,7 @@ export default function Goals() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="eyebrow">{t.goalAreas[g.area] ?? g.area}</div>
-                <h2 className="display" style={{ fontSize: 23, lineHeight: 1.15, marginTop: 2 }}>{g.name}</h2>
+                <h2 className="display" style={{ fontSize: 23, lineHeight: 1.15, marginTop: 2 }}>{goalName(g, t)}</h2>
               </div>
               <div className="text-right" style={{ flex: "none" }}>
                 <div className="display num" style={{ fontSize: 27 }}>{progress == null ? "—" : `${progress}%`}</div>
@@ -61,7 +62,7 @@ export default function Goals() {
                       <button key={h.id} className="flat p-3 w-full text-left" style={{ cursor: "pointer" }}
                         onClick={() => router.push(`/habits?edit=${h.id}`)}>
                         <div className="flex justify-between items-baseline gap-3">
-                          <span style={{ fontSize: 14.5 }}>{h.name}</span>
+                          <span style={{ fontSize: 14.5 }}>{habitName(h, t)}</span>
                           <span className="num muted" style={{ fontSize: 13, flex: "none" }}>
                             {s.pct == null ? "—" : `${s.pct}%`}
                           </span>
@@ -77,7 +78,7 @@ export default function Goals() {
             </div>
 
             <div className="flex gap-2 mt-3.5">
-              <button className="btn" onClick={() => setDraft(g)}>{t.goals.editGoal}</button>
+              <button className="btn" onClick={() => setDraft({ ...g, name: goalName(g, t) })}>{t.goals.editGoal}</button>
               <button className="btn" onClick={() => router.push("/habits")}>{t.goals.addAHabit}</button>
             </div>
           </section>
@@ -89,7 +90,7 @@ export default function Goals() {
           <div className="eyebrow mb-2">{t.goals.notLinked}</div>
           <div className="flex flex-wrap gap-2">
             {unlinked.map((h) => (
-              <button key={h.id} className="chip" onClick={() => router.push(`/habits?edit=${h.id}`)}>{h.name}</button>
+              <button key={h.id} className="chip" onClick={() => router.push(`/habits?edit=${h.id}`)}>{habitName(h, t)}</button>
             ))}
           </div>
         </section>
@@ -113,8 +114,11 @@ export default function Goals() {
           }
         >
           <Field label={t.goals.fieldGoal}>
+            {/* Shows the translated name for a seeded goal. Typing over it makes
+                the text the user's own — the key goes, and it stops translating. */}
             <input className="input" autoFocus value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t.goals.goalPlaceholder} />
+              onChange={(e) => setDraft({ ...draft, name: e.target.value, templateKey: null })}
+              placeholder={t.goals.goalPlaceholder} />
           </Field>
           <Field label={t.goals.fieldArea}>
             <select className="select" value={draft.area} onChange={(e) => setDraft({ ...draft, area: e.target.value })}>

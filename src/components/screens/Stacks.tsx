@@ -4,6 +4,7 @@ import { useHabits } from "@/components/store";
 import { Empty, Field, Sheet } from "@/components/ui";
 import { uid } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
+import { habitName } from "@/lib/templates";
 import type { Stack } from "@/lib/types";
 
 const emptyStack = (): Stack => ({
@@ -15,8 +16,10 @@ export default function Stacks() {
   const t = useT();
   const [draft, setDraft] = useState<Stack | null>(null);
 
-  const label = (id: string, fallback: string) =>
-    state.habits.find((h) => h.id === id)?.name ?? fallback ?? "…";
+  const label = (id: string, fallback: string) => {
+    const habit = state.habits.find((h) => h.id === id);
+    return habit ? habitName(habit, t) : fallback || "…";
+  };
   const isExisting = (k: Stack) => state.stacks.some((x) => x.id === k.id);
   const complete = (k: Stack) =>
     (k.triggerHabitId || k.triggerText.trim()) && (k.newHabitId || k.newText.trim());
@@ -72,7 +75,7 @@ export default function Stacks() {
             <select className="select mb-2" value={draft.triggerHabitId}
               onChange={(e) => setDraft({ ...draft, triggerHabitId: e.target.value })}>
               <option value="">{t.stacks.writeInstead}</option>
-              {state.habits.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+              {state.habits.map((h) => <option key={h.id} value={h.id}>{habitName(h, t)}</option>)}
             </select>
             {!draft.triggerHabitId && (
               <input className="input" placeholder={t.stacks.triggerPlaceholder} value={draft.triggerText}
@@ -83,7 +86,7 @@ export default function Stacks() {
             <select className="select mb-2" value={draft.newHabitId}
               onChange={(e) => setDraft({ ...draft, newHabitId: e.target.value })}>
               <option value="">{t.stacks.writeInstead}</option>
-              {state.habits.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+              {state.habits.map((h) => <option key={h.id} value={h.id}>{habitName(h, t)}</option>)}
             </select>
             {!draft.newHabitId && (
               <input className="input" placeholder={t.stacks.newPlaceholder} value={draft.newText}

@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     // Read the account here rather than trusting a context from the browser —
     // row-level security scopes this to the signed-in user either way.
     const state = await loadState(user.id);
-    const context = coach.buildContext(state);
+    const context = coach.buildContext(state, getDict());
 
     const response = await client.responses.create({
       model: MODEL,

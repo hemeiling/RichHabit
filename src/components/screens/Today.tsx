@@ -9,6 +9,7 @@ import {
 } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
+import { habitName, habitUnit } from "@/lib/templates";
 import type { AppState, Habit } from "@/lib/types";
 
 /**
@@ -41,9 +42,9 @@ function LogSheet({
         </>
       }
     >
-      <p className="muted mb-3" style={{ fontSize: 14 }}>{habit.name}</p>
+      <p className="muted mb-3" style={{ fontSize: 14 }}>{habitName(habit, t)}</p>
       {habit.target != null && (
-        <Field label={`${t.today.logValue}${habit.unit ? ` (${habit.unit})` : ""}`}>
+        <Field label={`${t.today.logValue}${habit.unit ? ` (${habitUnit(habit, t)})` : ""}`}>
           <input className="input num" type="number" inputMode="decimal" autoFocus
             placeholder={String(habit.target)} value={value}
             onChange={(e) => setValue(e.target.value)} />
@@ -72,7 +73,7 @@ function HabitRow({
     <div className="flex items-center gap-3 py-3">
       <button
         className="tick" data-on={done} onClick={() => onToggle(habit.id)} aria-pressed={done}
-        aria-label={done ? t.today.uncheck(habit.name) : t.today.check(habit.name)}
+        aria-label={done ? t.today.uncheck(habitName(habit, t)) : t.today.check(habitName(habit, t))}
       >
         {done && (
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -88,10 +89,10 @@ function HabitRow({
       >
         <div style={{ fontSize: 15.5, fontWeight: 500, opacity: done ? 0.55 : 1, letterSpacing: "-0.01em" }}>
           {habit.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoid} · </span>}
-          {habit.name}
+          {habitName(habit, t)}
         </div>
         <div className="faint flex items-center gap-2 mt-0.5" style={{ fontSize: 12 }}>
-          {habit.target != null && <span className="num">{habit.target} {habit.unit}</span>}
+          {habit.target != null && <span className="num">{habit.target} {habitUnit(habit, t)}</span>}
           {streak > 0 && <span className="num">{t.today.daysRunning(streak)}</span>}
           {habit.weight === 3 && <span>{t.today.highPriority}</span>}
           {entry?.value != null && <span className="num">{entry.value}{habit.unit ? ` ${habit.unit}` : ""}</span>}

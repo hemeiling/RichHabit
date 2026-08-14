@@ -19,7 +19,7 @@ export const uid = () =>
     Math.random().toString(36).slice(2) + Date.now().toString(36));
 
 export const blankHabit = (): Habit => ({
-  id: uid(), name: "", description: "", category: "morning", type: "good",
+  id: uid(), name: "", templateKey: null, description: "", category: "morning", type: "good",
   frequency: { mode: "daily", days: [0, 1, 2, 3, 4, 5, 6], timesPerWeek: 3 },
   target: null, unit: "", startDate: todayISO(), active: true, weight: 2,
   goalId: null, createdAt: Date.now(),

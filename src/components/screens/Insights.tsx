@@ -7,6 +7,7 @@ import { CATEGORIES, dayScore, dayStreak, habitStats, rangeScore } from "@/lib/h
 import { coach } from "@/lib/coach";
 import { correlations, strength } from "@/lib/correlate";
 import { useT } from "@/lib/i18n/context";
+import { habitName } from "@/lib/templates";
 import type { Trend } from "@/lib/habits";
 
 export default function Insights() {
@@ -81,7 +82,7 @@ export default function Insights() {
             {[...rows].sort((a, b) => (b.s.pct ?? -1) - (a.s.pct ?? -1)).map(({ h, s }) => (
               <div key={h.id} className="py-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span style={{ fontSize: 15 }}>{h.name}</span>
+                  <span style={{ fontSize: 15 }}>{habitName(h, t)}</span>
                   <span className="num" style={{ fontSize: 15, flex: "none" }}>{s.pct == null ? "—" : `${s.pct}%`}</span>
                 </div>
                 <div className="faint flex flex-wrap gap-x-3 mt-1 num" style={{ fontSize: 12 }}>
@@ -139,7 +140,7 @@ export default function Insights() {
           </>
         )}
         <div className="mt-3 flex flex-col gap-2">
-          {coach.suggestions(state).map((s, i) => (
+          {coach.suggestions(state, t).map((s, i) => (
             <div key={i} className="flat p-3.5" style={{ fontSize: 14, lineHeight: 1.45 }}>
               {s.kind === "worst" ? t.suggestions.worst(s.name, s.pct)
                 : s.kind === "best" ? t.suggestions.best(s.name, s.pct)

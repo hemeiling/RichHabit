@@ -12,7 +12,11 @@ export interface Frequency {
 
 export interface Habit {
   id: string;
+  /** Stored text. For a seeded habit this is the English wording; the display
+   *  name comes from `templateKey` via src/lib/templates.ts. */
   name: string;
+  /** Set only on habits this app seeded. Null once the user renames it. */
+  templateKey: string | null;
   description: string;
   category: Category;
   type: HabitKind;
@@ -29,6 +33,7 @@ export interface Habit {
 export interface Goal {
   id: string;
   name: string;
+  templateKey: string | null;
   area: string;
   why: string;
 }

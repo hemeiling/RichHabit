@@ -85,6 +85,7 @@ export async function loadState(userId: string): Promise<AppState> {
     return {
       id: h.id,
       name: h.name,
+      templateKey: h.template_key ?? null,
       description: h.description ?? "",
       category: h.category,
       type: h.kind,
@@ -104,7 +105,8 @@ export async function loadState(userId: string): Promise<AppState> {
   });
 
   state.goals = goals.map((g: any): Goal => ({
-    id: g.id, name: g.name, area: g.area ?? "Health", why: g.why ?? "",
+    id: g.id, name: g.name, templateKey: g.template_key ?? null,
+    area: g.area ?? "Health", why: g.why ?? "",
   }));
 
   completions.forEach((c: any) => {
@@ -158,16 +160,17 @@ export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
     if (h.goalId) await assertRef(q, "goals", h.goalId, userId);
 
     await q(
-      `insert into habits (id, user_id, name, description, category, kind, target, unit,
-                           weight, start_date, active)
-       values ($1,$2,$3,$4,$5::habit_category,$6::habit_kind,$7,$8,$9,$10,$11)
+      `insert into habits (id, user_id, name, template_key, description, category, kind,
+                           target, unit, weight, start_date, active)
+       values ($1,$2,$3,$4,$5,$6::habit_category,$7::habit_kind,$8,$9,$10,$11,$12)
        on conflict (id) do update set
-         name = excluded.name, description = excluded.description, category = excluded.category,
+         name = excluded.name, template_key = excluded.template_key,
+         description = excluded.description, category = excluded.category,
          kind = excluded.kind, target = excluded.target, unit = excluded.unit,
          weight = excluded.weight, start_date = excluded.start_date, active = excluded.active
        where habits.user_id = $2`,
-      [h.id, userId, h.name, h.description || null, h.category, h.type, h.target, h.unit || null,
-        h.weight, h.startDate, h.active],
+      [h.id, userId, h.name, h.templateKey, h.description || null, h.category, h.type,
+        h.target, h.unit || null, h.weight, h.startDate, h.active],
     );
 
     // A schedule change opens a new version from today, so history keeps its own rules.
@@ -220,10 +223,11 @@ export async function setCompletion(
 export async function saveGoal(userId: string, g: Goal): Promise<boolean> {
   const existed = await assertOwns(query, "goals", g.id, userId);
   await query(
-    `insert into goals (id, user_id, name, area, why) values ($1,$2,$3,$4,$5)
-     on conflict (id) do update set name = excluded.name, area = excluded.area, why = excluded.why
+    `insert into goals (id, user_id, name, template_key, area, why) values ($1,$2,$3,$4,$5,$6)
+     on conflict (id) do update set name = excluded.name, template_key = excluded.template_key,
+       area = excluded.area, why = excluded.why
      where goals.user_id = $2`,
-    [g.id, userId, g.name, g.area, g.why || null],
+    [g.id, userId, g.name, g.templateKey, g.area, g.why || null],
   );
   return !existed;
 }

@@ -51,10 +51,11 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 86 tests: habit engine, validation, throttle, TLS, i18n, analytics, coach |
+| `npm test` | Vitest — 88 tests: habit engine, validation, throttle, TLS, i18n, analytics, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
-| `npm run db:setup` | Apply `db/schema.sql` to `DATABASE_URL`. Idempotent |
+| `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
+| `npm run db:migrate` | Bring an existing database up to date. Idempotent |
 
 ## How it's organised
 
@@ -140,9 +141,15 @@ Consequences worth knowing:
 - **User text is never translated.** Rename a habit in English, switch to Chinese, and it stays as
   you wrote it. Goal *areas* are the exception: the English key is stored and translated on render,
   so existing rows keep matching.
-- **New accounts are seeded in the language they signed up in** — which is why the starter habits
-  live in `src/lib/seed.ts` rather than SQL, and why `kind` is stated outright instead of inferred
-  from an English name prefix.
+- **Seeded habits are keyed, not stored as text.** `habits.template_key` holds `read_for_learning`;
+  the display name is resolved from the dictionaries at render time, so starter habits follow the
+  reader's language instead of being frozen into whichever one the account signed up in. `name`
+  keeps the English wording so a row is still readable in `psql` and so anything bypassing the
+  resolver degrades to English rather than to a bare key.
+- **A key means ours, no key means theirs.** Rename a seeded habit and its key is dropped — from
+  then on it is your text and is never translated, even if you type the original wording back.
+  `src/lib/templates.ts` is the whole rule. Units and goal names work the same way; goal *areas*
+  store an English key and are translated on render.
 - **The AI coach is told the locale** and answers in it; the analysis and the numbers are identical
   either way, because `habits.ts` and `correlate.ts` contain no language at all.
 - **Server-side messages are localised too** — sign-in failures, sign-up validation, the generic save
@@ -320,6 +327,13 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   grid and the weekly summary → **a brand-new browser context signs back in and everything survived**
   (habit, completion, value, note) → no shame-based wording anywhere on Today.
 - No screen scrolls sideways at 320, 390, 768 or 1440px — all ten screens checked with data present.
+- Switching EN → 中文 → EN in a browser, 25 checks: the eight starter habits named in the report
+  render as 阅读学习 / 锻炼 / 规划今日优先事项 / 推进个人目标 / 避免一早查看邮件 /
+  完成重要的目标相关工作 / 喝足够的水 / 避免垃圾食品 and back again; seeded units and goals switch
+  too; a habit called "Practice violin" is untouched throughout; and renaming a seeded habit stops
+  it translating while the others carry on.
+- `npm run db:migrate` backfilled 42 template keys on the existing database — ids, completions,
+  schedules and goal links untouched — and is a no-op on the second run.
 - Bilingual rendering in a real browser: every label carries both languages, nothing overflows its
   container and the page does not scroll sideways at 420px. Sign-up seeds the 16 starter habits with
   bilingual names, and the coach answers in English and then Chinese while quoting habit names as

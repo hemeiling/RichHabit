@@ -1,107 +1,63 @@
-import { joinPair } from "@/lib/i18n/both";
+import { canonical } from "@/lib/templates";
 import type { Category, HabitKind, Locale } from "@/lib/types";
 
 /**
- * The starter set every new account gets, in the language they signed up in.
+ * The starter set every new account gets.
  *
- * This used to be `seed_new_user()` in SQL. It moved here because the habit
- * names have to be translated, and because deriving `kind` from an English name
- * prefix ("Avoid…", "Limit…", "Skip…") stopped working the moment the names
- * were Chinese. Kind is now stated outright.
+ * Only structure lives here — category, kind, weight, target, which goal it
+ * serves. The words live in the dictionaries under `templates`, reached by key,
+ * so a starter habit is not frozen into the language its owner signed up in.
  *
- * All of it is editable and deletable — none of these are special to the app.
+ * All of it is editable and deletable; none of it is special to the app.
  */
 
 export interface SeedGoal {
-  key: "career" | "health" | "learning";
-  name: string;
-  area: string;
+  key: "career_growth" | "health_energy" | "learning";
 }
 
 export interface SeedHabit {
-  name: string;
+  /** Stable identity. The display name lives in the dictionaries. */
+  key: string;
   category: Category;
   kind: HabitKind;
   weight: 1 | 2 | 3;
   target: number | null;
+  /** A key into `templates.units`, not a rendered unit. */
   unit: string | null;
   goal: SeedGoal["key"] | null;
 }
 
-interface SeedSet {
-  goals: SeedGoal[];
-  habits: SeedHabit[];
-}
+export const SEED_GOALS: SeedGoal[] = [
+  { key: "career_growth" },
+  { key: "health_energy" },
+  { key: "learning" },
+];
 
-const EN: SeedSet = {
-  goals: [
-    { key: "career", name: "Career growth", area: "Career" },
-    { key: "health", name: "Health & energy", area: "Health" },
-    { key: "learning", name: "Learning", area: "Learning" },
-  ],
-  habits: [
-    { name: "Read for learning", category: "morning", kind: "good", weight: 3, target: 30, unit: "min", goal: "learning" },
-    { name: "Exercise", category: "morning", kind: "good", weight: 3, target: 30, unit: "min", goal: "health" },
-    { name: "Plan today's priorities", category: "morning", kind: "good", weight: 2, target: null, unit: null, goal: "career" },
-    { name: "Work on a personal goal", category: "morning", kind: "good", weight: 2, target: null, unit: null, goal: "career" },
-    { name: "Skip the early email check", category: "morning", kind: "avoid", weight: 1, target: null, unit: null, goal: null },
-    { name: "Do important goal-related work", category: "daytime", kind: "good", weight: 3, target: 3, unit: "tasks", goal: "career" },
-    { name: "Drink enough water", category: "daytime", kind: "good", weight: 1, target: 8, unit: "glasses", goal: "health" },
-    { name: "Avoid junk food", category: "daytime", kind: "avoid", weight: 2, target: null, unit: null, goal: "health" },
-    { name: "Avoid gossip", category: "daytime", kind: "avoid", weight: 1, target: null, unit: null, goal: null },
-    { name: "Use downtime for learning", category: "daytime", kind: "good", weight: 1, target: null, unit: null, goal: "learning" },
-    { name: "Limit recreational TV", category: "nighttime", kind: "avoid", weight: 2, target: 1, unit: "hr", goal: null },
-    { name: "Limit recreational internet", category: "nighttime", kind: "avoid", weight: 2, target: 1, unit: "hr", goal: null },
-    { name: "Spend an hour on a meaningful goal", category: "nighttime", kind: "good", weight: 3, target: 60, unit: "min", goal: "career" },
-    { name: "Read for learning", category: "nighttime", kind: "good", weight: 2, target: 30, unit: "min", goal: "learning" },
-    { name: "Prepare for tomorrow", category: "nighttime", kind: "good", weight: 2, target: null, unit: null, goal: null },
-    { name: "Go to bed on time", category: "nighttime", kind: "good", weight: 3, target: null, unit: null, goal: "health" },
-  ],
+export const SEED_HABITS: SeedHabit[] = [
+  { key: "read_for_learning", category: "morning", kind: "good", weight: 3, target: 30, unit: "min", goal: "learning" },
+  { key: "exercise", category: "morning", kind: "good", weight: 3, target: 30, unit: "min", goal: "health_energy" },
+  { key: "plan_priorities", category: "morning", kind: "good", weight: 2, target: null, unit: null, goal: "career_growth" },
+  { key: "personal_goal", category: "morning", kind: "good", weight: 2, target: null, unit: null, goal: "career_growth" },
+  { key: "skip_early_email", category: "morning", kind: "avoid", weight: 1, target: null, unit: null, goal: null },
+  { key: "goal_related_work", category: "daytime", kind: "good", weight: 3, target: 3, unit: "tasks", goal: "career_growth" },
+  { key: "drink_water", category: "daytime", kind: "good", weight: 1, target: 8, unit: "glasses", goal: "health_energy" },
+  { key: "avoid_junk_food", category: "daytime", kind: "avoid", weight: 2, target: null, unit: null, goal: "health_energy" },
+  { key: "avoid_gossip", category: "daytime", kind: "avoid", weight: 1, target: null, unit: null, goal: null },
+  { key: "downtime_learning", category: "daytime", kind: "good", weight: 1, target: null, unit: null, goal: "learning" },
+  { key: "limit_tv", category: "nighttime", kind: "avoid", weight: 2, target: 1, unit: "hr", goal: null },
+  { key: "limit_internet", category: "nighttime", kind: "avoid", weight: 2, target: 1, unit: "hr", goal: null },
+  { key: "meaningful_goal_hour", category: "nighttime", kind: "good", weight: 3, target: 60, unit: "min", goal: "career_growth" },
+  { key: "read_for_learning_night", category: "nighttime", kind: "good", weight: 2, target: 30, unit: "min", goal: "learning" },
+  { key: "prepare_tomorrow", category: "nighttime", kind: "good", weight: 2, target: null, unit: null, goal: null },
+  { key: "bed_on_time", category: "nighttime", kind: "good", weight: 3, target: null, unit: null, goal: "health_energy" },
+];
+
+/** Areas stay English keys; the UI translates them on render. */
+const GOAL_AREA: Record<SeedGoal["key"], string> = {
+  career_growth: "Career",
+  health_energy: "Health",
+  learning: "Learning",
 };
-
-const ZH: SeedSet = {
-  goals: [
-    { key: "career", name: "事业成长", area: "Career" },
-    { key: "health", name: "健康与精力", area: "Health" },
-    { key: "learning", name: "学习成长", area: "Learning" },
-  ],
-  habits: [
-    { name: "阅读学习", category: "morning", kind: "good", weight: 3, target: 30, unit: "分钟", goal: "learning" },
-    { name: "锻炼身体", category: "morning", kind: "good", weight: 3, target: 30, unit: "分钟", goal: "health" },
-    { name: "规划今天的优先事项", category: "morning", kind: "good", weight: 2, target: null, unit: null, goal: "career" },
-    { name: "推进一个个人目标", category: "morning", kind: "good", weight: 2, target: null, unit: null, goal: "career" },
-    { name: "早上不先看邮件", category: "morning", kind: "avoid", weight: 1, target: null, unit: null, goal: null },
-    { name: "做与目标相关的重要工作", category: "daytime", kind: "good", weight: 3, target: 3, unit: "项", goal: "career" },
-    { name: "喝足够的水", category: "daytime", kind: "good", weight: 1, target: 8, unit: "杯", goal: "health" },
-    { name: "不吃垃圾食品", category: "daytime", kind: "avoid", weight: 2, target: null, unit: null, goal: "health" },
-    { name: "不说闲话", category: "daytime", kind: "avoid", weight: 1, target: null, unit: null, goal: null },
-    { name: "用碎片时间学习", category: "daytime", kind: "good", weight: 1, target: null, unit: null, goal: "learning" },
-    { name: "少看娱乐电视", category: "nighttime", kind: "avoid", weight: 2, target: 1, unit: "小时", goal: null },
-    { name: "少刷娱乐网络", category: "nighttime", kind: "avoid", weight: 2, target: 1, unit: "小时", goal: null },
-    { name: "花一小时投入有意义的目标", category: "nighttime", kind: "good", weight: 3, target: 60, unit: "分钟", goal: "career" },
-    { name: "阅读学习", category: "nighttime", kind: "good", weight: 2, target: 30, unit: "分钟", goal: "learning" },
-    { name: "为明天做准备", category: "nighttime", kind: "good", weight: 2, target: null, unit: null, goal: null },
-    { name: "按时上床睡觉", category: "nighttime", kind: "good", weight: 3, target: null, unit: null, goal: "health" },
-  ],
-};
-
-/**
- * Bilingual accounts get bilingual starter habits — "Read for learning ·
- * 阅读学习" — joined by the same rule the dictionary uses. They are ordinary
- * habit names after that: editable, and never re-translated on render.
- */
-const BOTH: SeedSet = {
-  goals: EN.goals.map((g, i) => ({ ...g, name: joinPair(g.name, ZH.goals[i].name) })),
-  habits: EN.habits.map((h, i) => ({
-    ...h,
-    name: joinPair(h.name, ZH.habits[i].name),
-    unit: h.unit && ZH.habits[i].unit ? joinPair(h.unit, ZH.habits[i].unit) : h.unit,
-  })),
-};
-
-const SETS: Record<Locale, SeedSet> = { both: BOTH, en: EN, zh: ZH };
-
-export const seedSet = (locale: Locale): SeedSet => SETS[locale] ?? BOTH;
 
 type Q = <T = any>(text: string, params?: unknown[]) => Promise<T[]>;
 
@@ -110,26 +66,32 @@ type Q = <T = any>(text: string, params?: unknown[]) => Promise<T[]>;
  * a new account. Runs inside the sign-up transaction, so an account never
  * exists half-seeded — the same guarantee the old database trigger gave.
  */
+/**
+ * Creates the profile, preferences, goals, habits, schedules and goal links for
+ * a new account, inside the sign-up transaction so nothing exists half-seeded.
+ *
+ * The rows are identical whatever language the account signed up in: each
+ * carries a `template_key`, and the interface renders the translation for it.
+ * That is the whole fix for starter habits being stuck in one language.
+ */
 export async function seedAccount(q: Q, userId: string, locale: Locale) {
-  const set = seedSet(locale);
-
   await q("insert into profiles (id) values ($1)", [userId]);
   await q("insert into user_preferences (user_id, locale) values ($1,$2)", [userId, locale]);
 
   const goalIds = new Map<SeedGoal["key"], string>();
-  for (const g of set.goals) {
+  for (const g of SEED_GOALS) {
     const rows = await q<{ id: string }>(
-      "insert into goals (user_id, name, area) values ($1,$2,$3) returning id",
-      [userId, g.name, g.area],
+      "insert into goals (user_id, name, area, template_key) values ($1,$2,$3,$4) returning id",
+      [userId, canonical("goals", g.key), GOAL_AREA[g.key], g.key],
     );
     goalIds.set(g.key, rows[0].id);
   }
 
-  for (const h of set.habits) {
+  for (const h of SEED_HABITS) {
     const rows = await q<{ id: string }>(
-      `insert into habits (user_id, name, category, kind, weight, target, unit, sort_order)
-       values ($1,$2,$3::habit_category,$4::habit_kind,$5,$6,$7,0) returning id`,
-      [userId, h.name, h.category, h.kind, h.weight, h.target, h.unit],
+      `insert into habits (user_id, name, template_key, category, kind, weight, target, unit, sort_order)
+       values ($1,$2,$3,$4::habit_category,$5::habit_kind,$6,$7,$8,0) returning id`,
+      [userId, canonical("habits", h.key), h.key, h.category, h.kind, h.weight, h.target, h.unit],
     );
     const habitId = rows[0].id;
 

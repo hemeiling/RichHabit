@@ -5,6 +5,7 @@ import { Check, Segmented } from "@/components/ui";
 import { addDays, daysBetween, dow, shortDate, todayISO, weekStart } from "@/lib/dates";
 import { CATEGORIES, isDone, isScheduled, weekSummary } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
+import { habitName } from "@/lib/templates";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import type { AppState, Category } from "@/lib/types";
 
@@ -44,7 +45,7 @@ function WeekGrid({
           {habits.map((h) => (
             <tr key={h.id}>
               <td style={{ padding: "7px 8px 7px 0", fontSize: 14, borderTop: "1px solid var(--line-soft)" }}>
-                {h.name}
+                {habitName(h, t)}
               </td>
               {days.map((d) => {
                 const future = daysBetween(d, today) < 0;
@@ -54,7 +55,7 @@ function WeekGrid({
                   <td key={d} style={{ textAlign: "center", borderTop: "1px solid var(--line-soft)", padding: "5px 0" }}>
                     <button
                       onClick={() => onToggle(h.id, d)} disabled={future}
-                      aria-label={t.week.cellLabel(h.name, shortDateFor(d, locale))} aria-pressed={done}
+                      aria-label={t.week.cellLabel(habitName(h, t), shortDateFor(d, locale))} aria-pressed={done}
                       style={{
                         width: 24, height: 24, borderRadius: 7, cursor: future ? "default" : "pointer",
                         border: `1.5px solid ${done ? "var(--accent)" : "var(--line)"}`,
@@ -136,11 +137,11 @@ export default function Week() {
         <div className="mt-3 flex flex-col gap-2" style={{ fontSize: 14 }}>
           <div className="flex justify-between">
             <span className="muted">{t.week.strongest}</span>
-            <span>{summary.best ? `${summary.best.habit.name} · ${summary.best.pct}%` : "—"}</span>
+            <span>{summary.best ? `${habitName(summary.best.habit, t)} · ${summary.best.pct}%` : "—"}</span>
           </div>
           <div className="flex justify-between">
             <span className="muted">{t.week.weakest}</span>
-            <span>{summary.worst ? `${summary.worst.habit.name} · ${summary.worst.pct}%` : "—"}</span>
+            <span>{summary.worst ? `${habitName(summary.worst.habit, t)} · ${summary.worst.pct}%` : "—"}</span>
           </div>
           <div className="flex justify-between">
             <span className="muted">{t.week.allPhases}</span>

@@ -78,6 +78,8 @@ create table goals (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references users on delete cascade,
   name       text not null,
+  -- As for habits: set on seeded goals, cleared when the user renames one.
+  template_key text,
   area       text,
   why        text,
   target_date date,
@@ -91,7 +93,14 @@ create index goals_user_idx on goals (user_id) where not archived;
 create table habits (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references users on delete cascade,
+  -- The English wording, kept readable for psql and as a fallback. It is NOT
+  -- the display value for a seeded habit: see template_key.
   name        text not null,
+  -- Set only on habits this app seeded. The interface renders the translation
+  -- for this key instead of `name`, so starter habits follow the reader's
+  -- language. Cleared the moment the user renames the habit, after which their
+  -- text is canonical and is never translated.
+  template_key text,
   description text,
   category    habit_category not null,
   kind        habit_kind not null default 'good',

@@ -1,4 +1,5 @@
 import { ApiError, check, isUuid } from "@/lib/http";
+import { isTemplateWording } from "@/lib/templates";
 import type {
   AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
 } from "@/lib/types";
@@ -17,6 +18,13 @@ const MODES = ["daily", "days", "times"] as const;
 const GRADES = ["good", "bad", "neutral"] as const;
 const THEMES = ["light", "dark"] as const;
 const LOCALES = ["en", "zh", "both"] as const;
+
+/** Keeps a template key only while the stored name still matches the template. */
+function templateKeyFor(kind: "habits" | "goals", raw: unknown, name: string): string | null {
+  if (typeof raw !== "string" || !raw) return null;
+  if (!/^[a-z0-9_]{1,40}$/.test(raw)) return null;
+  return isTemplateWording(kind, raw, name) ? raw : null;
+}
 
 const optionalUuid = (v: unknown, field: string): string =>
   v === "" || v == null ? "" : check.uuid(v, field);
@@ -41,9 +49,14 @@ export function parseHabit(b: any): Habit {
     throw new ApiError("Pick at least one day of the week");
   }
 
+  const name = check.text(b?.name, "name", 200).trim() || "Untitled";
   return {
     id: check.uuid(b?.id, "id"),
-    name: check.text(b?.name, "name", 200).trim() || "Untitled",
+    name,
+    // A template key survives only while the name is still the template's own
+    // wording in some language. Rename it and it becomes the user's text,
+    // permanently — checked here rather than trusting the client to clear it.
+    templateKey: templateKeyFor("habits", b?.templateKey, name),
     description: check.text(b?.description, "description"),
     category: check.oneOf(b?.category, CATEGORIES, "category"),
     type: check.oneOf(b?.type, KINDS, "type"),
@@ -59,9 +72,11 @@ export function parseHabit(b: any): Habit {
 }
 
 export function parseGoal(b: any): Goal {
+  const name = check.text(b?.name, "name", 200).trim() || "Untitled";
   return {
     id: check.uuid(b?.id, "id"),
-    name: check.text(b?.name, "name", 200).trim() || "Untitled",
+    name,
+    templateKey: templateKeyFor("goals", b?.templateKey, name),
     area: check.text(b?.area, "area", 80) || "Health",
     why: check.text(b?.why, "why"),
   };

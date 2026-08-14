@@ -6,6 +6,7 @@ import { Empty, Field, Segmented, Sheet } from "@/components/ui";
 import { todayISO } from "@/lib/dates";
 import { CATEGORIES, blankHabit, habitStats } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
+import { goalName, habitName, habitUnit } from "@/lib/templates";
 import type { Category, Goal, Habit } from "@/lib/types";
 
 function HabitEditor({
@@ -36,8 +37,12 @@ function HabitEditor({
       }
     >
       <Field label={t.habits.fieldHabit}>
+        {/* A seeded habit opens showing its translated name. Editing it makes the
+            text the user's own: the template key is dropped and it stops
+            following the language. */}
         <input className="input" autoFocus value={h.name}
-          onChange={(e) => set("name", e.target.value)} placeholder={t.habits.habitPlaceholder} />
+          onChange={(e) => setH((p) => ({ ...p, name: e.target.value, templateKey: null }))}
+          placeholder={t.habits.habitPlaceholder} />
       </Field>
       <Field label={t.habits.fieldDescription} hint={t.habits.descriptionHint}>
         <input className="input" value={h.description}
@@ -86,7 +91,9 @@ function HabitEditor({
             onChange={(e) => set("target", e.target.value === "" ? null : Number(e.target.value))} placeholder="30" />
         </Field>
         <Field label={t.habits.fieldUnit}>
-          <input className="input" value={h.unit} onChange={(e) => set("unit", e.target.value)} placeholder={t.habits.unitPlaceholder} />
+          <input className="input" value={h.unit}
+            onChange={(e) => setH((p) => ({ ...p, unit: e.target.value, templateKey: null }))}
+            placeholder={t.habits.unitPlaceholder} />
         </Field>
       </div>
       <Field label={t.habits.fieldPriority} hint={t.habits.priorityHint}>
@@ -97,7 +104,7 @@ function HabitEditor({
         <select className="select" value={h.goalId ?? ""}
           onChange={(e) => set("goalId", e.target.value || null)}>
           <option value="">{t.habits.noGoal}</option>
-          {goals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          {goals.map((g) => <option key={g.id} value={g.id}>{goalName(g, t)}</option>)}
         </select>
       </Field>
       <div className="grid grid-cols-2 gap-3">
@@ -162,12 +169,12 @@ export default function Habits() {
                     ? h.frequency.days.map((d) => t.days.initial[d]).join(" ")
                     : t.habits.timesAWeek(h.frequency.timesPerWeek);
                 return (
-                  <button key={h.id} onClick={() => setEditing(h)} className="w-full text-left py-3.5"
+                  <button key={h.id} onClick={() => setEditing({ ...h, name: habitName(h, t), unit: habitUnit(h, t) })} className="w-full text-left py-3.5"
                     style={{ background: "none", border: "none", cursor: "pointer", opacity: h.active ? 1 : 0.5 }}>
                     <div className="flex items-baseline justify-between gap-3">
                       <span style={{ fontSize: 15.5, fontWeight: 500 }}>
                         {h.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoid} · </span>}
-                        {h.name}
+                        {habitName(h, t)}
                       </span>
                       <span className="num muted" style={{ fontSize: 13, flex: "none" }}>
                         {st.pct == null ? "—" : `${st.pct}%`}
@@ -176,9 +183,9 @@ export default function Habits() {
                     {h.description && <div className="muted mt-0.5" style={{ fontSize: 13 }}>{h.description}</div>}
                     <div className="faint flex flex-wrap gap-x-3 mt-1" style={{ fontSize: 12 }}>
                       <span>{freq}</span>
-                      {h.target != null && <span className="num">{h.target} {h.unit}</span>}
+                      {h.target != null && <span className="num">{h.target} {habitUnit(h, t)}</span>}
                       <span>{[t.habits.priorityFull.low, t.habits.priorityFull.medium, t.habits.priorityFull.high][h.weight - 1]}</span>
-                      {goal && <span>→ {goal.name}</span>}
+                      {goal && <span>→ {goalName(goal, t)}</span>}
                       {!h.active && <span>{t.habits.paused}</span>}
                     </div>
                   </button>

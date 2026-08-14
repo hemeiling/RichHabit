@@ -15,7 +15,8 @@
     "db:dev": "node scripts/dev-db.mjs",
     "db:setup": "node scripts/db-setup.mjs",
     "admin:grant": "node scripts/grant-admin.mjs",
-    "admin:password": "node scripts/set-password.mjs"
+    "admin:password": "node scripts/set-password.mjs",
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "next": "14.2.15",

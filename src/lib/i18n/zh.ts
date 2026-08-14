@@ -86,6 +86,38 @@ export const zh: Dict = {
     Sleep: "睡眠",
   },
 
+  templates: {
+    habits: {
+      read_for_learning: "阅读学习",
+      exercise: "锻炼",
+      plan_priorities: "规划今日优先事项",
+      personal_goal: "推进个人目标",
+      skip_early_email: "避免一早查看邮件",
+      goal_related_work: "完成重要的目标相关工作",
+      drink_water: "喝足够的水",
+      avoid_junk_food: "避免垃圾食品",
+      avoid_gossip: "避免闲聊八卦",
+      downtime_learning: "利用碎片时间学习",
+      limit_tv: "减少娱乐性看电视",
+      limit_internet: "减少娱乐性上网",
+      meaningful_goal_hour: "花一小时投入有意义的目标",
+      read_for_learning_night: "阅读学习",
+      prepare_tomorrow: "为明天做准备",
+      bed_on_time: "按时上床睡觉",
+    },
+    goals: {
+      career_growth: "事业成长",
+      health_energy: "健康与精力",
+      learning: "学习成长",
+    },
+    units: {
+      min: "分钟",
+      glasses: "杯",
+      tasks: "项",
+      hr: "小时",
+    },
+  },
+
   trends: {
     up: "在进步",
     down: "在退步",

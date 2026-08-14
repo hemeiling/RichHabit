@@ -1,5 +1,7 @@
 import { rangeBack, todayISO } from "./dates";
 import { CATEGORIES, habitStats, rangeScore } from "./habits";
+import { goalName, habitName } from "@/lib/templates";
+import type { Dict } from "@/lib/i18n";
 import type { AppState, Category } from "./types";
 
 /**
@@ -16,7 +18,12 @@ export type Suggestion =
   | { kind: "weakestWindow"; category: Category; pct: number };
 
 export const coach = {
-  buildContext(state: AppState, days = 90) {
+  /**
+   * `t` resolves seeded habits to the language the reader is using, so the
+   * model quotes names exactly as they appear on screen. User-written names
+   * pass through untouched either way.
+   */
+  buildContext(state: AppState, t: Dict, days = 90) {
     const end = todayISO();
     const dates = rangeBack(end, days);
     return {
@@ -25,7 +32,7 @@ export const coach = {
       score: rangeScore(state, dates),
       byCategory: CATEGORIES.map((c) => {
         const habits = state.habits.filter((h) => h.category === c.id && h.active);
-        const stats = habits.map((h) => ({ name: h.name, ...habitStats(state, h, days) }));
+        const stats = habits.map((h) => ({ name: habitName(h, t), ...habitStats(state, h, days) }));
         const withPct = stats.filter((s) => s.pct != null);
         return {
           category: c.id,
@@ -36,8 +43,8 @@ export const coach = {
         };
       }),
       goals: state.goals.map((g) => ({
-        name: g.name,
-        habits: state.habits.filter((h) => h.goalId === g.id).map((h) => h.name),
+        name: goalName(g, t),
+        habits: state.habits.filter((h) => h.goalId === g.id).map((h) => habitName(h, t)),
       })),
       metrics: Object.entries(state.metrics).slice(-days),
       recentReviews: state.reviews.slice(-4),
@@ -49,7 +56,7 @@ export const coach = {
    * structured values rather than sentences so the screen can render them in
    * whichever language the account is using.
    */
-  suggestions(state: AppState): Suggestion[] {
+  suggestions(state: AppState, t: Dict): Suggestion[] {
     const out: Suggestion[] = [];
     const active = state.habits.filter((h) => h.active);
     const stats = active
@@ -60,9 +67,9 @@ export const coach = {
     const sorted = [...stats].sort((a, b) => (a.s.pct ?? 100) - (b.s.pct ?? 100));
     const worst = sorted[0], best = sorted[sorted.length - 1];
     if ((worst.s.pct ?? 100) < 60)
-      out.push({ kind: "worst", name: worst.h.name, pct: worst.s.pct ?? 0 });
+      out.push({ kind: "worst", name: habitName(worst.h, t), pct: worst.s.pct ?? 0 });
     if ((best.s.pct ?? 0) >= 85)
-      out.push({ kind: "best", name: best.h.name, pct: best.s.pct ?? 0 });
+      out.push({ kind: "best", name: habitName(best.h, t), pct: best.s.pct ?? 0 });
 
     const catAvg = CATEGORIES.map((c) => {
       const xs = stats.filter((x) => x.h.category === c.id);

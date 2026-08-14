@@ -3,7 +3,8 @@ import { LOCALES, dict, intlTag, isLocale, resolveLocale } from "../src/lib/i18n
 import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
 import { both, joinPair } from "../src/lib/i18n/both";
-import { seedSet } from "../src/lib/seed";
+import { SEED_GOALS, SEED_HABITS } from "../src/lib/seed";
+import { canonical, habitName, isTemplateWording } from "../src/lib/templates";
 
 /**
  * TypeScript already forces `zh` to have the same keys as `en`. What it cannot
@@ -130,30 +131,81 @@ describe("resolveLocale", () => {
 });
 
 describe("seeded starter set", () => {
-  it("gives every language the same 16 habits and 3 goals", () => {
-    for (const locale of LOCALES) {
-      expect(seedSet(locale).habits).toHaveLength(16);
-      expect(seedSet(locale).goals).toHaveLength(3);
+  it("is structure plus a key, with no display text in it", () => {
+    expect(SEED_HABITS).toHaveLength(16);
+    expect(SEED_GOALS).toHaveLength(3);
+    for (const h of SEED_HABITS) {
+      expect(h.key).toMatch(/^[a-z0-9_]+$/);
+      // A seed entry must not carry a name: that is what froze starter habits
+      // into one language before.
+      expect(h).not.toHaveProperty("name");
     }
   });
 
-  it("names them in Chinese for zh", () => {
-    seedSet("zh").habits.forEach((h) => expect(h.name).toMatch(HAS_CJK));
-    seedSet("zh").goals.forEach((g) => expect(g.name).toMatch(HAS_CJK));
+  it("has a translation for every key in every language", () => {
+    for (const locale of LOCALES) {
+      const t = dict(locale);
+      for (const h of SEED_HABITS) {
+        expect(t.templates.habits[h.key], `${locale}/${h.key}`).toBeTruthy();
+      }
+      for (const g of SEED_GOALS) {
+        expect(t.templates.goals[g.key], `${locale}/${g.key}`).toBeTruthy();
+      }
+      for (const unit of new Set(SEED_HABITS.map((h) => h.unit).filter(Boolean))) {
+        expect(t.templates.units[unit!], `${locale}/unit/${unit}`).toBeTruthy();
+      }
+    }
   });
 
-  it("keeps goal areas as the English keys the dictionary looks up", () => {
-    // `area` is a stored value the UI translates on render; translating it at
-    // write time would leave old rows unmatchable.
-    seedSet("zh").goals.forEach((g) => expect(en.goalAreas[g.area]).toBeDefined());
+  it("translates the eight names the report called out", () => {
+    const t = dict("zh");
+    const expected: Record<string, string> = {
+      read_for_learning: "阅读学习",
+      exercise: "锻炼",
+      plan_priorities: "规划今日优先事项",
+      personal_goal: "推进个人目标",
+      skip_early_email: "避免一早查看邮件",
+      goal_related_work: "完成重要的目标相关工作",
+      drink_water: "喝足够的水",
+      avoid_junk_food: "避免垃圾食品",
+    };
+    for (const [key, zhName] of Object.entries(expected)) {
+      expect(t.templates.habits[key]).toBe(zhName);
+    }
   });
 
   it("marks the avoid habits explicitly rather than by name prefix", () => {
-    const avoid = seedSet("zh").habits.filter((h) => h.kind === "avoid");
-    expect(avoid.length).toBe(seedSet("en").habits.filter((h) => h.kind === "avoid").length);
-    expect(avoid.length).toBeGreaterThan(0);
+    expect(SEED_HABITS.filter((h) => h.kind === "avoid").length).toBeGreaterThan(0);
   });
 });
+
+describe("template resolution", () => {
+  const seeded = { templateKey: "exercise", name: canonical("habits", "exercise"), unit: "min" };
+  const mine = { templateKey: null, name: "Practice violin", unit: "minutes" };
+
+  it("renders a seeded habit in the reader's language", () => {
+    expect(habitName(seeded, dict("en"))).toBe("Exercise");
+    expect(habitName(seeded, dict("zh"))).toBe("锻炼");
+    expect(habitName(seeded, dict("both"))).toBe("Exercise · 锻炼");
+  });
+
+  it("never translates a habit the user wrote", () => {
+    for (const locale of LOCALES) {
+      expect(habitName(mine, dict(locale))).toBe("Practice violin");
+    }
+  });
+
+  it("falls back to the stored name if a key is somehow unknown", () => {
+    expect(habitName({ templateKey: "no_such_key", name: "Fallback" }, dict("zh"))).toBe("Fallback");
+  });
+
+  it("recognises template wording in any language, so renaming can be detected", () => {
+    expect(isTemplateWording("habits", "exercise", "Exercise")).toBe(true);
+    expect(isTemplateWording("habits", "exercise", "锻炼")).toBe(true);
+    expect(isTemplateWording("habits", "exercise", "Morning run")).toBe(false);
+  });
+});
+
 
 describe("bilingual dictionary", () => {
   it("carries both languages in every label", () => {
@@ -174,15 +226,12 @@ describe("bilingual dictionary", () => {
   });
 
   it("separates sentences with a space, not a middot", () => {
-    // A middot mid-paragraph reads as punctuation rather than as a divider.
     expect(both.encouragement.allDone).not.toContain("·");
     expect(both.encouragement.allDone).toContain("全部完成");
   });
 
   it("shows a value once when both languages agree", () => {
     expect(both.common.none).toBe("—");
-    // A ratio of numerals is the same in both languages; printing it twice
-    // ("0 of 5 · 0 / 5") is noise.
     expect(both.common.of(0, 5)).toBe("0 / 5");
     expect(both.today.streakDays(3)).toBe("3d");
   });
@@ -205,19 +254,6 @@ describe("joinPair", () => {
   it("uses a slash for very short pairs", () => expect(joinPair("S", "日")).toBe("S/日"));
   it("uses a space after a sentence", () => expect(joinPair("Done.", "完成。")).toBe("Done. 完成。"));
   it("uses a middot for labels", () => expect(joinPair("Save", "保存")).toBe("Save · 保存"));
-});
-
-describe("bilingual seed", () => {
-  it("names starter habits in both languages", () => {
-    const first = seedSet("both").habits[0];
-    expect(first.name).toBe("Read for learning · 阅读学习");
-    expect(first.unit).toBe("min · 分钟");
-  });
-
-  it("still produces 16 habits and 3 goals", () => {
-    expect(seedSet("both").habits).toHaveLength(16);
-    expect(seedSet("both").goals).toHaveLength(3);
-  });
 });
 
 describe("no value is rendered twice in bilingual mode", () => {

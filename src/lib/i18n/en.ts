@@ -101,6 +101,44 @@ export const en = {
     Sleep: "Sleep",
   } as Record<string, string>,
 
+  /**
+   * System-provided starter content. These are keyed, not stored as text: the
+   * database keeps `template_key` and the display name is resolved here, so a
+   * seeded habit follows the language the reader picked. A habit the user
+   * renames loses its key and keeps their words forever after.
+   */
+  templates: {
+    habits: {
+      read_for_learning: "Read for learning",
+      exercise: "Exercise",
+      plan_priorities: "Plan today's priorities",
+      personal_goal: "Work on a personal goal",
+      skip_early_email: "Skip the early email check",
+      goal_related_work: "Do important goal-related work",
+      drink_water: "Drink enough water",
+      avoid_junk_food: "Avoid junk food",
+      avoid_gossip: "Avoid gossip",
+      downtime_learning: "Use downtime for learning",
+      limit_tv: "Limit recreational TV",
+      limit_internet: "Limit recreational internet",
+      meaningful_goal_hour: "Spend an hour on a meaningful goal",
+      read_for_learning_night: "Read for learning",
+      prepare_tomorrow: "Prepare for tomorrow",
+      bed_on_time: "Go to bed on time",
+    } as Record<string, string>,
+    goals: {
+      career_growth: "Career growth",
+      health_energy: "Health & energy",
+      learning: "Learning",
+    } as Record<string, string>,
+    units: {
+      min: "min",
+      glasses: "glasses",
+      tasks: "tasks",
+      hr: "hr",
+    } as Record<string, string>,
+  },
+
   trends: {
     up: "Improving",
     down: "Slipping",
