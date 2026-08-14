@@ -3,10 +3,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { Empty, ScoreDial } from "@/components/ui";
-import { DAY_LABEL, addDays, dow, prettyDate, todayISO } from "@/lib/dates";
+import { addDays, dow, prettyDate, todayISO } from "@/lib/dates";
 import {
   CATEGORIES, dayScore, dayStreak, encouragement, habitStreak, isDone, scheduledOn,
 } from "@/lib/habits";
+import { useLocale, useT } from "@/lib/i18n/context";
+import { intlTag } from "@/lib/i18n";
 import type { AppState, Habit } from "@/lib/types";
 
 function HabitRow({
@@ -15,6 +17,7 @@ function HabitRow({
   state: AppState; habit: Habit; date: string;
   onToggle: (id: string) => void; onOpen: (h: Habit) => void;
 }) {
+  const t = useT();
   const done = isDone(state, date, habit.id);
   const streak = habitStreak(state, habit);
   const entry = state.completions[date]?.[habit.id];
@@ -22,7 +25,7 @@ function HabitRow({
     <div className="flex items-center gap-3 py-3">
       <button
         className="tick" data-on={done} onClick={() => onToggle(habit.id)} aria-pressed={done}
-        aria-label={`${done ? "Uncheck" : "Check"} ${habit.name}`}
+        aria-label={done ? t.today.uncheck(habit.name) : t.today.check(habit.name)}
       >
         {done && (
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -37,14 +40,14 @@ function HabitRow({
         onClick={() => onOpen(habit)}
       >
         <div style={{ fontSize: 15.5, fontWeight: 500, opacity: done ? 0.55 : 1, letterSpacing: "-0.01em" }}>
-          {habit.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>Avoid · </span>}
+          {habit.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoidPrefix}</span>}
           {habit.name}
         </div>
         <div className="faint flex items-center gap-2 mt-0.5" style={{ fontSize: 12 }}>
           {habit.target != null && <span className="num">{habit.target} {habit.unit}</span>}
-          {streak > 0 && <span className="num">{streak} day{streak === 1 ? "" : "s"} running</span>}
-          {habit.weight === 3 && <span>High priority</span>}
-          {entry?.note && <span>Note</span>}
+          {streak > 0 && <span className="num">{t.today.daysRunning(streak)}</span>}
+          {habit.weight === 3 && <span>{t.today.highPriority}</span>}
+          {entry?.note && <span>{t.today.note}</span>}
         </div>
       </button>
     </div>
@@ -53,6 +56,8 @@ function HabitRow({
 
 export default function Today() {
   const { state, actions } = useHabits();
+  const t = useT();
+  const locale = useLocale();
   const router = useRouter();
   const [date, setDate] = useState(todayISO());
   const isToday = date === todayISO();
@@ -69,14 +74,14 @@ export default function Today() {
       <section className="card p-5">
         <div className="flex items-center justify-between">
           <div>
-            <div className="eyebrow">{isToday ? "Today" : DAY_LABEL[dow(date)]}</div>
-            <h1 className="display" style={{ fontSize: 27, lineHeight: 1.15, marginTop: 2 }}>{prettyDate(date)}</h1>
+            <div className="eyebrow">{isToday ? t.today.todayLabel : t.days.short[dow(date)]}</div>
+            <h1 className="display" style={{ fontSize: 27, lineHeight: 1.15, marginTop: 2 }}>{prettyDate(date, intlTag(locale))}</h1>
           </div>
           <div className="flex gap-1">
             <button className="btn btn-quiet" style={{ padding: "8px 12px" }}
-              onClick={() => setDate(addDays(date, -1))} aria-label="Previous day">‹</button>
+              onClick={() => setDate(addDays(date, -1))} aria-label={t.common.previousDay}>‹</button>
             <button className="btn btn-quiet" style={{ padding: "8px 12px" }} disabled={isToday}
-              onClick={() => setDate(addDays(date, 1))} aria-label="Next day">›</button>
+              onClick={() => setDate(addDays(date, 1))} aria-label={t.common.nextDay}>›</button>
           </div>
         </div>
 
@@ -89,7 +94,7 @@ export default function Today() {
                 const done = hs.filter((h) => isDone(state, date, h.id)).length;
                 return (
                   <div key={c.id} className="flat p-3">
-                    <div className="eyebrow" style={{ fontSize: 10 }}>{c.label}</div>
+                    <div className="eyebrow" style={{ fontSize: 10 }}>{t.categories[c.id].label}</div>
                     <div className="num display mt-1" style={{ fontSize: 20 }}>
                       {done}<span className="faint">/{hs.length}</span>
                     </div>
@@ -98,18 +103,18 @@ export default function Today() {
               })}
             </div>
             <div className="flex items-center gap-4 mt-3" style={{ fontSize: 13 }}>
-              <span className="muted">Current streak <b className="num" style={{ color: "var(--ink)" }}>{dayStreak(state)}d</b></span>
-              <span className="muted">Done <b className="num" style={{ color: "var(--ink)" }}>{score.done}/{score.total}</b></span>
+              <span className="muted">{t.today.currentStreak} <b className="num" style={{ color: "var(--ink)" }}>{t.today.streakDays(dayStreak(state))}</b></span>
+              <span className="muted">{t.today.done} <b className="num" style={{ color: "var(--ink)" }}>{score.done}/{score.total}</b></span>
             </div>
             <p className="mt-2.5 muted" style={{ fontSize: 14, lineHeight: 1.45 }}>
-              {encouragement(state, date, score)}
+              {t.encouragement[encouragement(state, date, score)]}
             </p>
           </div>
         </div>
       </section>
 
       {list.length === 0 ? (
-        <Empty title="Nothing scheduled" body="Add a habit or change a schedule to see it here." />
+        <Empty title={t.today.nothingScheduled} body={t.today.nothingScheduledBody} />
       ) : (
         CATEGORIES.map((c) => {
           const hs = list.filter((h) => h.category === c.id);
@@ -117,9 +122,9 @@ export default function Today() {
           return (
             <section key={c.id} className="card px-5 py-2">
               <div className="flex items-baseline justify-between pt-3 pb-1">
-                <h2 className="display" style={{ fontSize: 20 }}>{c.label}</h2>
+                <h2 className="display" style={{ fontSize: 20 }}>{t.categories[c.id].label}</h2>
                 <span className="eyebrow">
-                  {hs.filter((h) => isDone(state, date, h.id)).length} of {hs.length}
+                  {t.common.of(hs.filter((h) => isDone(state, date, h.id)).length, hs.length)}
                 </span>
               </div>
               <div className="divide">
@@ -136,10 +141,10 @@ export default function Today() {
       )}
 
       <section className="card p-5">
-        <div className="eyebrow mb-2">Notes for this day</div>
+        <div className="eyebrow mb-2">{t.today.notesTitle}</div>
         <textarea
           className="textarea" rows={3}
-          placeholder="What shaped the day? Anything worth remembering."
+          placeholder={t.today.notesPlaceholder}
           value={state.dayNotes[date] ?? ""}
           onChange={(e) => actions.setDayNote(date, e.target.value)}
         />

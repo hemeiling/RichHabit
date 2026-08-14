@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { MAX_PASSWORD, MIN_PASSWORD, createSession, hashPassword } from "@/lib/auth";
 import { transaction } from "@/lib/db/pool";
+import { getLocale } from "@/lib/i18n/server";
+import { seedAccount } from "@/lib/seed";
 
 /**
- * Creating an account. The user row and its starter habits go in together —
- * `seed_new_user` used to be a trigger on auth.users, and wrapping both in one
- * transaction keeps the same guarantee: no account exists half-seeded.
+ * Creating an account. The user row and its starter habits go in together, so
+ * no account can exist half-seeded — the same guarantee the old database
+ * trigger gave. The starter set is created in the language the visitor is
+ * using, which is what makes the app usable for someone who never switches it
+ * to English.
  */
 export async function POST(request: Request) {
   const parsed = await request.json().catch(() => null);
   const email = typeof parsed?.email === "string" ? parsed.email.trim().toLowerCase() : "";
   const password = typeof parsed?.password === "string" ? parsed.password : "";
+  const locale = getLocale();
 
   if (!email.includes("@")) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
@@ -36,7 +41,7 @@ export async function POST(request: Request) {
         "insert into users (email, password_hash) values ($1, $2) returning id",
         [email, passwordHash],
       );
-      await q("select seed_new_user($1)", [rows[0].id]);
+      await seedAccount(q, rows[0].id, locale);
       return rows[0].id;
     });
   } catch (e) {

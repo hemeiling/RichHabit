@@ -1,3 +1,5 @@
+// Day names live in the dictionaries (`t.days`); these are the fallback for
+// non-UI callers that have no locale to hand.
 export const DAY_LABEL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const DAY_INITIAL = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -19,9 +21,14 @@ export const dow = (s: string) => parseISO(s).getDay();
 export const weekStart = (s: string) => addDays(s, -dow(s));
 export const daysBetween = (a: string, b: string) =>
   Math.round((parseISO(b).getTime() - parseISO(a).getTime()) / 86400000);
-export const prettyDate = (s: string) =>
-  parseISO(s).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-export const shortDate = (s: string) =>
-  parseISO(s).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/**
+ * Date formatting takes an explicit BCP-47 tag rather than reading the system
+ * locale, so the page matches the language the user picked in the app — the two
+ * are often not the same.
+ */
+export const prettyDate = (s: string, tag = "en-US") =>
+  parseISO(s).toLocaleDateString(tag, { weekday: "long", month: "long", day: "numeric" });
+export const shortDate = (s: string, tag = "en-US") =>
+  parseISO(s).toLocaleDateString(tag, { month: "short", day: "numeric" });
 export const rangeBack = (endISO: string, n: number) =>
   Array.from({ length: n }, (_, i) => addDays(endISO, -(n - 1 - i)));

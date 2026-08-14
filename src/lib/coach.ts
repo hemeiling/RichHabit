@@ -1,12 +1,20 @@
 import { rangeBack, todayISO } from "./dates";
-import { CATEGORIES, catLabel, habitStats, rangeScore } from "./habits";
-import type { AppState } from "./types";
+import { CATEGORIES, habitStats, rangeScore } from "./habits";
+import type { AppState, Category } from "./types";
 
 /**
  * The seam for the AI coach. Nothing in the app depends on a model:
  * `suggestions` is computed from the data, and `buildContext` is what `ask`
  * POSTs to /api/coach when you want a real answer.
  */
+export type Suggestion =
+  | { kind: "needData" }
+  | { kind: "allGood" }
+  | { kind: "tooMany" }
+  | { kind: "worst"; name: string; pct: number }
+  | { kind: "best"; name: string; pct: number }
+  | { kind: "weakestWindow"; category: Category; pct: number };
+
 export const coach = {
   buildContext(state: AppState, days = 90) {
     const end = todayISO();
@@ -36,20 +44,25 @@ export const coach = {
     };
   },
 
-  suggestions(state: AppState): string[] {
-    const out: string[] = [];
+  /**
+   * Observations computed from the data alone — no model involved. Returns
+   * structured values rather than sentences so the screen can render them in
+   * whichever language the account is using.
+   */
+  suggestions(state: AppState): Suggestion[] {
+    const out: Suggestion[] = [];
     const active = state.habits.filter((h) => h.active);
     const stats = active
       .map((h) => ({ h, s: habitStats(state, h, 14) }))
       .filter((x) => x.s.scheduled >= 3 && x.s.pct != null);
-    if (!stats.length) return ["Give it a few days of tracking — patterns need data before they mean anything."];
+    if (!stats.length) return [{ kind: "needData" }];
 
     const sorted = [...stats].sort((a, b) => (a.s.pct ?? 100) - (b.s.pct ?? 100));
     const worst = sorted[0], best = sorted[sorted.length - 1];
     if ((worst.s.pct ?? 100) < 60)
-      out.push(`"${worst.h.name}" is landing ${worst.s.pct}% of the time. Consider shrinking it or moving it earlier in the day.`);
+      out.push({ kind: "worst", name: worst.h.name, pct: worst.s.pct ?? 0 });
     if ((best.s.pct ?? 0) >= 85)
-      out.push(`"${best.h.name}" is solid at ${best.s.pct}%. It's a good anchor to stack a newer habit onto.`);
+      out.push({ kind: "best", name: best.h.name, pct: best.s.pct ?? 0 });
 
     const catAvg = CATEGORIES.map((c) => {
       const xs = stats.filter((x) => x.h.category === c.id);
@@ -57,12 +70,11 @@ export const coach = {
     }).filter((x): x is { c: (typeof CATEGORIES)[number]; avg: number } => x.avg != null)
       .sort((a, b) => a.avg - b.avg);
     if (catAvg.length > 1 && catAvg[0].avg < catAvg[catAvg.length - 1].avg - 15)
-      out.push(`${catLabel(catAvg[0].c.id)} is your weakest window (${Math.round(catAvg[0].avg)}%). One habit there will move the score more than three anywhere else.`);
+      out.push({ kind: "weakestWindow", category: catAvg[0].c.id, pct: Math.round(catAvg[0].avg) });
 
-    if (active.length > 12)
-      out.push("You're tracking a lot at once. The phased approach works better: pick one window and let it settle.");
+    if (active.length > 12) out.push({ kind: "tooMany" });
 
-    return out.length ? out : ["Nothing looks off. Keep the current set steady for another week."];
+    return out.length ? out : [{ kind: "allGood" }];
   },
 
   /**

@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { Empty, Field, Segmented, Sheet } from "@/components/ui";
-import { DAY_INITIAL, DAY_LABEL, todayISO } from "@/lib/dates";
+import { todayISO } from "@/lib/dates";
 import { CATEGORIES, blankHabit, habitStats } from "@/lib/habits";
+import { useT } from "@/lib/i18n/context";
 import type { Category, Goal, Habit } from "@/lib/types";
 
 function HabitEditor({
@@ -13,6 +14,7 @@ function HabitEditor({
   habit: Habit; goals: Goal[];
   onSave: (h: Habit) => void; onDelete: (id: string) => void; onClose: () => void;
 }) {
+  const t = useT();
   const [h, setH] = useState<Habit>(habit);
   const set = <K extends keyof Habit>(k: K, v: Habit[K]) => setH((p) => ({ ...p, [k]: v }));
   const setFreq = <K extends keyof Habit["frequency"]>(k: K, v: Habit["frequency"][K]) =>
@@ -22,44 +24,44 @@ function HabitEditor({
 
   return (
     <Sheet
-      open onClose={onClose} title={isNew ? "New habit" : "Edit habit"}
+      open onClose={onClose} title={isNew ? t.habits.newHabit : t.habits.editHabit}
       footer={
         <>
-          {!isNew && <button className="btn btn-danger mr-auto" onClick={() => onDelete(h.id)}>Delete</button>}
-          <button className="btn" onClick={onClose}>Cancel</button>
+          {!isNew && <button className="btn btn-danger mr-auto" onClick={() => onDelete(h.id)}>{t.common.delete}</button>}
+          <button className="btn" onClick={onClose}>{t.common.cancel}</button>
           <button className="btn btn-primary" disabled={!valid} onClick={() => onSave({ ...h, name: h.name.trim() })}>
-            {isNew ? "Add habit" : "Save changes"}
+            {isNew ? t.habits.addHabit : t.habits.saveChanges}
           </button>
         </>
       }
     >
-      <Field label="Habit">
+      <Field label={t.habits.fieldHabit}>
         <input className="input" autoFocus value={h.name}
-          onChange={(e) => set("name", e.target.value)} placeholder="Read for learning" />
+          onChange={(e) => set("name", e.target.value)} placeholder={t.habits.habitPlaceholder} />
       </Field>
-      <Field label="Description" hint="Optional — what counts as done?">
+      <Field label={t.habits.fieldDescription} hint={t.habits.descriptionHint}>
         <input className="input" value={h.description}
           onChange={(e) => set("description", e.target.value)}
-          placeholder="Non-fiction, anything that teaches me something" />
+          placeholder={t.habits.descriptionPlaceholder} />
       </Field>
-      <Field label="Time of day">
+      <Field label={t.habits.fieldTimeOfDay}>
         <Segmented<Category> value={h.category} onChange={(v) => set("category", v)}
-          options={CATEGORIES.map((c) => ({ value: c.id, label: c.label }))} />
+          options={CATEGORIES.map((c) => ({ value: c.id, label: t.categories[c.id].label }))} />
       </Field>
-      <Field label="Kind">
+      <Field label={t.habits.fieldKind}>
         <Segmented value={h.type} onChange={(v) => set("type", v)}
-          options={[{ value: "good" as const, label: "Habit to build" }, { value: "avoid" as const, label: "Habit to drop" }]} />
+          options={[{ value: "good" as const, label: t.habits.kindBuild }, { value: "avoid" as const, label: t.habits.kindDrop }]} />
       </Field>
-      <Field label="Frequency">
+      <Field label={t.habits.fieldFrequency}>
         <Segmented value={h.frequency.mode} onChange={(v) => setFreq("mode", v)}
           options={[
-            { value: "daily" as const, label: "Every day" },
-            { value: "days" as const, label: "Certain days" },
-            { value: "times" as const, label: "X times a week" },
+            { value: "daily" as const, label: t.habits.freqDaily },
+            { value: "days" as const, label: t.habits.freqDays },
+            { value: "times" as const, label: t.habits.freqTimes },
           ]} />
         {h.frequency.mode === "days" && (
           <div className="flex gap-1.5 mt-2.5">
-            {DAY_INITIAL.map((d, i) => (
+            {t.days.initial.map((d, i) => (
               <button key={i} type="button" className="chip" data-on={h.frequency.days.includes(i)}
                 style={{ width: 38, padding: "7px 0", textAlign: "center" }}
                 onClick={() => setFreq("days", h.frequency.days.includes(i)
@@ -74,38 +76,38 @@ function HabitEditor({
           <div className="flex items-center gap-3 mt-2.5">
             <input type="range" min={1} max={7} value={h.frequency.timesPerWeek}
               onChange={(e) => setFreq("timesPerWeek", Number(e.target.value))} style={{ flex: 1 }} />
-            <span className="num" style={{ fontSize: 14 }}>{h.frequency.timesPerWeek} / week</span>
+            <span className="num" style={{ fontSize: 14 }}>{t.habits.perWeek(h.frequency.timesPerWeek)}</span>
           </div>
         )}
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Target" hint="Optional">
+        <Field label={t.habits.fieldTarget} hint={t.common.optional}>
           <input className="input num" type="number" min={0} value={h.target ?? ""}
             onChange={(e) => set("target", e.target.value === "" ? null : Number(e.target.value))} placeholder="30" />
         </Field>
-        <Field label="Unit">
-          <input className="input" value={h.unit} onChange={(e) => set("unit", e.target.value)} placeholder="min" />
+        <Field label={t.habits.fieldUnit}>
+          <input className="input" value={h.unit} onChange={(e) => set("unit", e.target.value)} placeholder={t.habits.unitPlaceholder} />
         </Field>
       </div>
-      <Field label="Priority" hint="Higher priority habits count for more in your score.">
+      <Field label={t.habits.fieldPriority} hint={t.habits.priorityHint}>
         <Segmented<1 | 2 | 3> value={h.weight} onChange={(v) => set("weight", v)}
-          options={[{ value: 1, label: "Low" }, { value: 2, label: "Medium" }, { value: 3, label: "High" }]} />
+          options={[{ value: 1, label: t.priority.low }, { value: 2, label: t.priority.medium }, { value: 3, label: t.priority.high }]} />
       </Field>
-      <Field label="Goal it supports">
+      <Field label={t.habits.fieldGoal}>
         <select className="select" value={h.goalId ?? ""}
           onChange={(e) => set("goalId", e.target.value || null)}>
-          <option value="">Not linked to a goal</option>
+          <option value="">{t.habits.noGoal}</option>
           {goals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Start date">
+        <Field label={t.habits.fieldStartDate}>
           <input className="input num" type="date" value={h.startDate} max={todayISO()}
             onChange={(e) => e.target.value && set("startDate", e.target.value)} />
         </Field>
-        <Field label="Status">
+        <Field label={t.habits.fieldStatus}>
           <Segmented<boolean> value={h.active} onChange={(v) => set("active", v)}
-            options={[{ value: true, label: "Active" }, { value: false, label: "Paused" }]} />
+            options={[{ value: true, label: t.habits.active }, { value: false, label: t.habits.paused }]} />
         </Field>
       </div>
     </Sheet>
@@ -114,6 +116,7 @@ function HabitEditor({
 
 export default function Habits() {
   const { state, actions } = useHabits();
+  const t = useT();
   const params = useSearchParams();
   const preselect = params.get("edit");
   const fromActivity = params.get("from");
@@ -132,38 +135,38 @@ export default function Habits() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <Segmented<Category | "all"> value={filter} onChange={setFilter} small
-          options={[{ value: "all", label: "All" }, ...CATEGORIES.map((c) => ({ value: c.id, label: c.label }))]} />
-        <button className="btn btn-primary" style={{ flex: "none" }} onClick={() => setEditing(blankHabit())}>New</button>
+          options={[{ value: "all", label: t.habits.all }, ...CATEGORIES.map((c) => ({ value: c.id, label: t.categories[c.id].label }))]} />
+        <button className="btn btn-primary" style={{ flex: "none" }} onClick={() => setEditing(blankHabit())}>{t.common.new}</button>
       </div>
 
       {shown.length === 0 ? (
         <Empty
-          title="No habits here yet"
-          body="Start with one or two. Changing everything at once is why most attempts don't hold."
-          action={<button className="btn btn-primary" onClick={() => setEditing(blankHabit())}>Add your first habit</button>}
+          title={t.habits.noneTitle}
+          body={t.habits.noneBody}
+          action={<button className="btn btn-primary" onClick={() => setEditing(blankHabit())}>{t.habits.addFirst}</button>}
         />
       ) : (
         CATEGORIES.filter((c) => shown.some((h) => h.category === c.id)).map((c) => (
           <section key={c.id} className="card px-5 py-2">
             <div className="flex items-baseline justify-between pt-3 pb-1">
-              <h2 className="display" style={{ fontSize: 20 }}>{c.label}</h2>
-              <span className="eyebrow">{c.note}</span>
+              <h2 className="display" style={{ fontSize: 20 }}>{t.categories[c.id].label}</h2>
+              <span className="eyebrow">{t.categories[c.id].note}</span>
             </div>
             <div className="divide">
               {shown.filter((h) => h.category === c.id).map((h) => {
                 const st = habitStats(state, h, 30);
                 const goal = state.goals.find((g) => g.id === h.goalId);
                 const freq = h.frequency.mode === "daily"
-                  ? "Every day"
+                  ? t.habits.freqDaily
                   : h.frequency.mode === "days"
-                    ? h.frequency.days.map((d) => DAY_LABEL[d].slice(0, 2)).join(" ")
-                    : `${h.frequency.timesPerWeek}× a week`;
+                    ? h.frequency.days.map((d) => t.days.initial[d]).join(" ")
+                    : t.habits.timesAWeek(h.frequency.timesPerWeek);
                 return (
                   <button key={h.id} onClick={() => setEditing(h)} className="w-full text-left py-3.5"
                     style={{ background: "none", border: "none", cursor: "pointer", opacity: h.active ? 1 : 0.5 }}>
                     <div className="flex items-baseline justify-between gap-3">
                       <span style={{ fontSize: 15.5, fontWeight: 500 }}>
-                        {h.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>Avoid · </span>}
+                        {h.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoidPrefix}</span>}
                         {h.name}
                       </span>
                       <span className="num muted" style={{ fontSize: 13, flex: "none" }}>
@@ -174,9 +177,9 @@ export default function Habits() {
                     <div className="faint flex flex-wrap gap-x-3 mt-1" style={{ fontSize: 12 }}>
                       <span>{freq}</span>
                       {h.target != null && <span className="num">{h.target} {h.unit}</span>}
-                      <span>{["Low", "Medium", "High"][h.weight - 1]} priority</span>
+                      <span>{t.habits.priorityLabel([t.priority.low, t.priority.medium, t.priority.high][h.weight - 1])}</span>
                       {goal && <span>→ {goal.name}</span>}
-                      {!h.active && <span>Paused</span>}
+                      {!h.active && <span>{t.habits.paused}</span>}
                     </div>
                   </button>
                 );

@@ -12,8 +12,10 @@
 --      inside Supabase. Every query now runs through the API layer, which takes
 --      the user id from the session cookie and scopes each statement by it —
 --      the browser never sends a user id and never sees DATABASE_URL.
---   3. The `on_auth_user_created` trigger became `seed_new_user(uuid)`, called
---      explicitly by the sign-up route. Same starter habits, same goals.
+--   3. The `on_auth_user_created` trigger is gone. The starter habits and goals
+--      it inserted now live in src/lib/seed.ts, so they can be created in the
+--      language the account signed up in. The sign-up route writes them inside
+--      the same transaction as the user row.
 
 -- Requires Postgres 13 or newer. There is deliberately no `create extension
 -- pgcrypto` here: the only thing this schema wanted from it was
@@ -220,55 +222,12 @@ begin
 end $$;
 
 -- ------------------------------ new-user seed ------------------------------
--- Starter habits every new account gets. All of them editable and deletable.
--- Was a trigger on auth.users; the sign-up route calls it directly now, inside
--- the same transaction that creates the user.
-create or replace function seed_new_user(p_user uuid) returns void
-language plpgsql as $$
-declare
-  g_career uuid; g_health uuid; g_learn uuid; h uuid;
-  rec record;
-begin
-  insert into profiles (id) values (p_user);
-  insert into user_preferences (user_id) values (p_user);
-
-  insert into goals (user_id, name, area) values (p_user, 'Career growth', 'Career') returning id into g_career;
-  insert into goals (user_id, name, area) values (p_user, 'Health & energy', 'Health') returning id into g_health;
-  insert into goals (user_id, name, area) values (p_user, 'Learning', 'Learning') returning id into g_learn;
-
-  for rec in
-    select * from (values
-      ('Read for learning','morning',3,30,'min',g_learn),
-      ('Exercise','morning',3,30,'min',g_health),
-      ('Plan today''s priorities','morning',2,null,null,g_career),
-      ('Work on a personal goal','morning',2,null,null,g_career),
-      ('Skip the early email check','morning',1,null,null,null),
-      ('Do important goal-related work','daytime',3,3,'tasks',g_career),
-      ('Drink enough water','daytime',1,8,'glasses',g_health),
-      ('Avoid junk food','daytime',2,null,null,g_health),
-      ('Avoid gossip','daytime',1,null,null,null),
-      ('Use downtime for learning','daytime',1,null,null,g_learn),
-      ('Limit recreational TV','nighttime',2,1,'hr',null),
-      ('Limit recreational internet','nighttime',2,1,'hr',null),
-      ('Spend an hour on a meaningful goal','nighttime',3,60,'min',g_career),
-      ('Read for learning','nighttime',2,30,'min',g_learn),
-      ('Prepare for tomorrow','nighttime',2,null,null,null),
-      ('Go to bed on time','nighttime',3,null,null,g_health)
-    ) as v(name, category, weight, target, unit, goal_id)
-  loop
-    insert into habits (user_id, name, category, weight, target, unit,
-                        kind, sort_order)
-    values (p_user, rec.name, rec.category::habit_category, rec.weight, rec.target, rec.unit,
-            case when rec.name like 'Avoid%' or rec.name like 'Limit%' or rec.name like 'Skip%'
-                 then 'avoid' else 'good' end::habit_kind, 0)
-    returning id into h;
-
-    insert into habit_schedules (habit_id, user_id, mode) values (h, p_user, 'daily');
-    if rec.goal_id is not null then
-      insert into goal_habits (goal_id, habit_id, user_id) values (rec.goal_id, h, p_user);
-    end if;
-  end loop;
-end $$;
+-- The starter habits and goals used to live here as seed_new_user(), fired by a
+-- trigger on auth.users. They moved to src/lib/seed.ts: the names have to be
+-- translated per account, and deriving 'avoid' from an English name prefix
+-- stopped working once they could be Chinese. The sign-up route inserts them
+-- inside the same transaction that creates the user, so the guarantee is
+-- unchanged — no account exists half-seeded.
 
 -- ------------------------------ derived views ------------------------------
 -- The schedule in force on a given date.

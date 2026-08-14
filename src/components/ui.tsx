@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
+import { useT } from "@/lib/i18n/context";
 import { addDays, dow, rangeBack, shortDate, todayISO } from "@/lib/dates";
 import { dayScore } from "@/lib/habits";
 import type { AppState } from "@/lib/types";
@@ -10,6 +11,7 @@ export function Sheet({
   open: boolean; onClose: () => void; title: string;
   children: React.ReactNode; footer?: React.ReactNode;
 }) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -24,7 +26,7 @@ export function Sheet({
       <div className="sheet fade-in">
         <div className="flex items-start justify-between mb-4">
           <h2 className="display" style={{ fontSize: 26, lineHeight: 1.1 }}>{title}</h2>
-          <button className="btn btn-quiet" onClick={onClose}>Close</button>
+          <button className="btn btn-quiet" onClick={onClose}>{t.common.close}</button>
         </div>
         {children}
         {footer && <div className="mt-5 flex gap-2 justify-end">{footer}</div>}
@@ -95,6 +97,7 @@ export function Empty({
 export function ScoreDial({
   score, segments, size = 168,
 }: { score: number | null; segments: { weight: number; done: boolean }[]; size?: number }) {
+  const t = useT();
   const R = size / 2, inner = R - 20, outer = R - 6;
   const total = segments.reduce((a, s) => a + s.weight, 0) || 1;
   const START = -220, SWEEP = 260;
@@ -136,7 +139,7 @@ export function ScoreDial({
           {score == null ? "—" : score}
           {score != null && <span style={{ fontSize: 22 }}>%</span>}
         </div>
-        <div className="eyebrow mt-1">Habit score</div>
+        <div className="eyebrow mt-1">{t.ui.habitScore}</div>
       </div>
     </div>
   );
@@ -145,6 +148,7 @@ export function ScoreDial({
 export function Heatmap({
   state, weeks = 17, onPick,
 }: { state: AppState; weeks?: number; onPick?: (d: string) => void }) {
+  const t = useT();
   const end = todayISO();
   const last = addDays(end, 6 - dow(end));
   const days = rangeBack(last, weeks * 7);
@@ -183,14 +187,14 @@ export function Heatmap({
       <div className="flex items-center gap-2 mt-2.5 faint" style={{ fontSize: 11 }}>
         <span>{shortDate(days[0])}</span>
         <span className="flex-1" />
-        <span>Less</span>
+        <span>{t.ui.less}</span>
         {[0, 30, 60, 100].map((p) => (
           <span key={p} style={{
             width: 11, height: 11, borderRadius: 3,
             background: p === 0 ? "var(--line)" : `color-mix(in srgb, var(--accent) ${18 + p * 0.82}%, var(--line-soft))`,
           }} />
         ))}
-        <span>More</span>
+        <span>{t.ui.more}</span>
       </div>
     </div>
   );
@@ -199,9 +203,10 @@ export function Heatmap({
 export function Spark({
   points, height = 52, format = (v: number) => String(v),
 }: { points: { d: string; v: number | null }[]; height?: number; format?: (v: number) => string }) {
+  const t = useT();
   const vals = points.filter((p): p is { d: string; v: number } => p.v != null && !Number.isNaN(p.v));
   if (vals.length < 2) {
-    return <div className="faint" style={{ fontSize: 13 }}>Two entries and a line appears here.</div>;
+    return <div className="faint" style={{ fontSize: 13 }}>{t.ui.sparkEmpty}</div>;
   }
   const min = Math.min(...vals.map((p) => p.v));
   const max = Math.max(...vals.map((p) => p.v));

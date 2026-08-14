@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Inter } from "next/font/google";
+import { getLocale } from "@/lib/i18n/server";
 import "./globals.css";
 
 /**
@@ -39,7 +40,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${instrumentSerif.variable}`}>
+    <html lang={getLocale() === "zh" ? "zh-Hans" : "en"}
+      className={`${inter.variable} ${instrumentSerif.variable}`}>
       <body>{children}</body>
     </html>
   );

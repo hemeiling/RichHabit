@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { Empty, Field, Sheet } from "@/components/ui";
 import { GOAL_AREAS, habitStats, uid } from "@/lib/habits";
+import { useT } from "@/lib/i18n/context";
 import type { Goal } from "@/lib/types";
 
 export default function Goals() {
   const { state, actions } = useHabits();
+  const t = useT();
   const router = useRouter();
   const [draft, setDraft] = useState<Goal | null>(null);
 
@@ -18,14 +20,14 @@ export default function Goals() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <p className="muted" style={{ fontSize: 14, maxWidth: 420 }}>
-          A habit you can&apos;t attach to a goal is usually a habit you&apos;ll drop.
+          {t.goals.intro}
         </p>
         <button className="btn btn-primary" style={{ flex: "none" }}
-          onClick={() => setDraft({ id: uid(), name: "", area: GOAL_AREAS[0], why: "" })}>New</button>
+          onClick={() => setDraft({ id: uid(), name: "", area: GOAL_AREAS[0], why: "" })}>{t.common.new}</button>
       </div>
 
       {state.goals.length === 0 && (
-        <Empty title="No goals yet" body="Name the outcome first, then decide which habits actually serve it." />
+        <Empty title={t.goals.noneTitle} body={t.goals.noneBody} />
       )}
 
       {state.goals.map((g) => {
@@ -38,19 +40,19 @@ export default function Goals() {
           <section key={g.id} className="card p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="eyebrow">{g.area}</div>
+                <div className="eyebrow">{t.goalAreas[g.area] ?? g.area}</div>
                 <h2 className="display" style={{ fontSize: 23, lineHeight: 1.15, marginTop: 2 }}>{g.name}</h2>
               </div>
               <div className="text-right" style={{ flex: "none" }}>
                 <div className="display num" style={{ fontSize: 27 }}>{progress == null ? "—" : `${progress}%`}</div>
-                <div className="eyebrow" style={{ fontSize: 10 }}>30-day</div>
+                <div className="eyebrow" style={{ fontSize: 10 }}>{t.goals.thirtyDay}</div>
               </div>
             </div>
             {g.why && <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.45 }}>{g.why}</p>}
 
             <div className="mt-3.5">
               {habits.length === 0 ? (
-                <p className="faint" style={{ fontSize: 13.5 }}>No habits point at this goal yet.</p>
+                <p className="faint" style={{ fontSize: 13.5 }}>{t.goals.noHabitsYet}</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {habits.map((h) => {
@@ -75,8 +77,8 @@ export default function Goals() {
             </div>
 
             <div className="flex gap-2 mt-3.5">
-              <button className="btn" onClick={() => setDraft(g)}>Edit goal</button>
-              <button className="btn" onClick={() => router.push("/habits")}>Add a habit</button>
+              <button className="btn" onClick={() => setDraft(g)}>{t.goals.editGoal}</button>
+              <button className="btn" onClick={() => router.push("/habits")}>{t.goals.addAHabit}</button>
             </div>
           </section>
         );
@@ -84,7 +86,7 @@ export default function Goals() {
 
       {unlinked.length > 0 && (
         <section className="card p-5">
-          <div className="eyebrow mb-2">Not linked to a goal</div>
+          <div className="eyebrow mb-2">{t.goals.notLinked}</div>
           <div className="flex flex-wrap gap-2">
             {unlinked.map((h) => (
               <button key={h.id} className="chip" onClick={() => router.push(`/habits?edit=${h.id}`)}>{h.name}</button>
@@ -95,31 +97,31 @@ export default function Goals() {
 
       {draft && (
         <Sheet
-          open onClose={() => setDraft(null)} title={isExisting(draft) ? "Edit goal" : "New goal"}
+          open onClose={() => setDraft(null)} title={isExisting(draft) ? t.goals.editGoal : t.goals.newGoal}
           footer={
             <>
               {isExisting(draft) && (
                 <button className="btn btn-danger mr-auto"
-                  onClick={() => { actions.deleteGoal(draft.id); setDraft(null); }}>Delete</button>
+                  onClick={() => { actions.deleteGoal(draft.id); setDraft(null); }}>{t.common.delete}</button>
               )}
-              <button className="btn" onClick={() => setDraft(null)}>Cancel</button>
+              <button className="btn" onClick={() => setDraft(null)}>{t.common.cancel}</button>
               <button className="btn btn-primary" disabled={!draft.name.trim()}
                 onClick={() => { actions.saveGoal({ ...draft, name: draft.name.trim() }); setDraft(null); }}>
-                Save goal
+                {t.goals.saveGoal}
               </button>
             </>
           }
         >
-          <Field label="Goal">
+          <Field label={t.goals.fieldGoal}>
             <input className="input" autoFocus value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Career growth" />
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t.goals.goalPlaceholder} />
           </Field>
-          <Field label="Area">
+          <Field label={t.goals.fieldArea}>
             <select className="select" value={draft.area} onChange={(e) => setDraft({ ...draft, area: e.target.value })}>
-              {GOAL_AREAS.map((a) => <option key={a}>{a}</option>)}
+              {GOAL_AREAS.map((a) => <option key={a} value={a}>{t.goalAreas[a] ?? a}</option>)}
             </select>
           </Field>
-          <Field label="Why it matters" hint="You'll read this on the days you don't feel like it.">
+          <Field label={t.goals.fieldWhy} hint={t.goals.whyHint}>
             <textarea className="textarea" rows={3} value={draft.why}
               onChange={(e) => setDraft({ ...draft, why: e.target.value })} />
           </Field>

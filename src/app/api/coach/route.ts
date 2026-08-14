@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { getSessionUser } from "@/lib/auth";
 import { loadState } from "@/lib/db/queries";
 import { coach } from "@/lib/coach";
+import { getLocale } from "@/lib/i18n/server";
 
 /**
  * The AI coach. The client sends a question and nothing else; this route reads
@@ -40,9 +41,22 @@ Recommend one small change the person can act on tomorrow, not a new routine.
 Be brief: a few sentences, or a short list when the answer really has parts. No
 preamble, no restating the question back.`;
 
+/**
+ * The reply has to come back in the language the person is reading the app in.
+ * Habit names in the data may be in either language — someone can rename a
+ * habit in English while using the Chinese interface — so the instruction is
+ * about the prose, and names are quoted as they were written.
+ */
+const LANGUAGE: Record<string, string> = {
+  en: "Answer in English.",
+  zh: "用简体中文回答。习惯和目标的名称按用户记录时的原文引用，不要翻译。语气自然、直接，不要书面公文腔。",
+};
+
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  const locale = getLocale();
 
   const body = await request.json().catch(() => null);
   const question = typeof body?.question === "string" ? body.question.trim() : "";
@@ -70,7 +84,7 @@ export async function POST(request: Request) {
     const response = await client.responses.create({
       model: MODEL,
       reasoning: { effort: "medium" },
-      instructions: INSTRUCTIONS,
+      instructions: `${INSTRUCTIONS}\n\n${LANGUAGE[locale] ?? LANGUAGE.en}`,
       input: [
         `Their data:\n${JSON.stringify(context)}`,
         `Their question:\n${question}`,

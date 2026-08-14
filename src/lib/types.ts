@@ -1,3 +1,4 @@
+export type Locale = "en" | "zh";
 export type Category = "morning" | "daytime" | "nighttime";
 export type HabitKind = "good" | "avoid";
 export type FreqMode = "daily" | "days" | "times";

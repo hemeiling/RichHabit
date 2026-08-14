@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { coach } from "@/lib/coach";
+import { useT } from "@/lib/i18n/context";
 
 /**
  * The asking half of Insights. Everything else on the screen is computed from
@@ -41,14 +42,8 @@ function Answer({ text }: { text: string }) {
   );
 }
 
-const SUGGESTIONS = [
-  "What habit should I focus on next?",
-  "Why is my rich habit score not improving?",
-  "Which habits are helping me most?",
-  "What should I change this week?",
-];
-
 export default function AskCoach() {
+  const t = useT();
   const [question, setQuestion] = useState("");
   const [asked, setAsked] = useState("");
   const [answer, setAnswer] = useState("");
@@ -75,17 +70,17 @@ export default function AskCoach() {
       if (!controller.signal.aborted) setAnswer(reply);
     } catch (e) {
       if (controller.signal.aborted) return; // unmounted or superseded
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : t.coach.wentWrong);
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
-  }, [busy]);
+  }, [busy, t]);
 
   return (
     <section className="card p-5">
-      <div className="eyebrow">Ask Rich Habits</div>
+      <div className="eyebrow">{t.coach.title}</div>
       <p className="muted mt-1" style={{ fontSize: 13, lineHeight: 1.45 }}>
-        Answered from the data on this screen — your habits, goals and metrics.
+        {t.coach.subtitle}
       </p>
 
       <textarea
@@ -93,7 +88,7 @@ export default function AskCoach() {
         rows={2}
         value={question}
         disabled={busy}
-        placeholder="Ask about your habits, progress, or what to improve next..."
+        placeholder={t.coach.placeholder}
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={(e) => {
           // Enter asks; Shift+Enter is a newline, since this is a textarea.
@@ -105,7 +100,7 @@ export default function AskCoach() {
       />
 
       <div className="flex flex-wrap gap-2 mt-3">
-        {SUGGESTIONS.map((s) => (
+        {t.coach.suggestions.map((s) => (
           <button
             key={s}
             type="button"
@@ -125,7 +120,7 @@ export default function AskCoach() {
           disabled={busy || !question.trim()}
           onClick={() => void ask(question)}
         >
-          {busy ? "Thinking…" : "Ask"}
+          {busy ? t.coach.thinking : t.coach.ask}
         </button>
       </div>
 
@@ -135,7 +130,7 @@ export default function AskCoach() {
             <div className="faint" style={{ fontSize: 12, lineHeight: 1.4 }}>{asked}</div>
           )}
           {busy ? (
-            <p className="muted mt-1.5" style={{ fontSize: 14 }}>Reading your last 90 days…</p>
+            <p className="muted mt-1.5" style={{ fontSize: 14 }}>{t.coach.reading}</p>
           ) : error ? (
             <>
               <p className="mt-1.5" style={{ fontSize: 14, lineHeight: 1.5, color: "var(--warn)" }}>
@@ -146,7 +141,7 @@ export default function AskCoach() {
                 className="btn btn-quiet mt-2"
                 onClick={() => void ask(asked)}
               >
-                Try again
+                {t.coach.tryAgain}
               </button>
             </>
           ) : (

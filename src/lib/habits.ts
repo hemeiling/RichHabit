@@ -188,13 +188,18 @@ export function weekSummary(s: AppState, weekOf: string, category: Category | nu
   };
 }
 
-export function encouragement(s: AppState, date: string, score: DayScore) {
+export type EncouragementKey =
+  | "nothingScheduled" | "startAgain" | "firstIsHardest"
+  | "allDone" | "strongDay" | "underway";
+
+/** Returns a dictionary key rather than a sentence, so it can be translated. */
+export function encouragement(s: AppState, date: string, score: DayScore): EncouragementKey {
   const y = dayScore(s, addDays(date, -1));
   const missedYesterday = y.total > 0 && (y.pct ?? 0) < 50;
-  if (score.total === 0) return "Nothing scheduled today. Rest counts too.";
-  if (score.done === 0 && missedYesterday) return "Start again today. One habit is enough to turn it around.";
-  if (score.done === 0) return "First one is the hard one. Pick the easiest and go.";
-  if (score.done === score.total) return "Every habit done. That's the whole day's work on yourself, finished.";
-  if ((score.pct ?? 0) >= 70) return "Strong day. A couple left if you want them.";
-  return "Underway. Consistency beats a perfect record.";
+  if (score.total === 0) return "nothingScheduled";
+  if (score.done === 0 && missedYesterday) return "startAgain";
+  if (score.done === 0) return "firstIsHardest";
+  if (score.done === score.total) return "allDone";
+  if ((score.pct ?? 0) >= 70) return "strongDay";
+  return "underway";
 }

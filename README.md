@@ -3,6 +3,8 @@
 A habit system rather than a checkbox list: notice the day you actually have, grade it,
 pick a few habits to change, track them in phases, and review what the data says.
 
+Bilingual — English and 简体中文.
+
 Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, behind the app's own API layer.
 
 ## Getting it running
@@ -43,7 +45,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 52 tests: habit engine, validation, throttle, TLS resolution, coach contract |
+| `npm test` | Vitest — 67 tests: habit engine, validation, throttle, TLS, i18n parity, coach contract |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to `DATABASE_URL`. Idempotent |
 
@@ -56,6 +58,8 @@ src/
     types.ts        The client-side shape of everything.
     habits.ts       The engine: scheduling, scoring, streaks, stats. Pure functions, no I/O.
     coach.ts        Context builder for the AI coach + data-only suggestions.
+    i18n/           en.ts, zh.ts, locale resolution, the LocaleProvider.
+    seed.ts         The starter habits, per language.
     auth.ts         Password hashing, session rows, the session cookie.
     throttle.ts     Failed sign-in limiter, in memory.
     http.ts         ApiError + field checks. No Next, no pg — importable anywhere.
@@ -94,6 +98,33 @@ future native client gets identical numbers without a second implementation to k
 
 **Schedules are versioned.** `habit_schedules` rows carry `effective_from`, so changing a habit
 from daily to three-times-a-week doesn't silently rewrite what last month was supposed to look like.
+
+### Languages
+
+Every string lives in `src/lib/i18n/en.ts`, and `zh.ts` is typed as `Dict` — a missing or misspelled
+key fails the build rather than leaving a blank on someone's screen. A test also checks that no
+Chinese value is still English, and that interpolated numbers and habit names survive translation.
+
+Anything with a value in it is a function, not string concatenation at the call site: word order
+differs, and `"3 days running"` cannot be assembled from parts that work in both languages.
+
+A few things follow from that:
+
+- **The locale is resolved on the server**, from the `rh_locale` cookie and then `Accept-Language`,
+  and passed into the tree — so the first paint is already correct and there's no flash of English.
+  Someone opening the link from a Chinese browser lands in Chinese without being told to change
+  anything.
+- **New accounts are seeded in the language they signed up in.** That's why the starter habits moved
+  out of SQL into `src/lib/seed.ts` — and why `kind` is now stated outright instead of inferred from
+  an English name prefix (`Avoid…`/`Limit…`/`Skip…`), which silently stopped working once the names
+  could be Chinese.
+- **Habit names are user data and are never translated.** Rename a habit in English, switch to
+  Chinese, and it still reads as you wrote it. Goal *areas* are the exception: the English key is
+  stored and translated on render, so old rows keep matching.
+- **The coach answers in the user's language**, and is told to quote habit names as written rather
+  than translating them.
+- Dates go through `Intl` with an explicit tag (`en-US` / `zh-CN`), not the system locale — the
+  browser's language and the one chosen in the app are often not the same.
 
 ### How access control works
 
@@ -190,6 +221,10 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 - Malformed bodies return 400 with a readable message (`category must be one of morning, daytime,
   nighttime`), and a server-side failure returns a fixed string rather than the Postgres error.
 - `/api/health` returns `{ok: true, db: "up"}` and 503 when the database is unreachable.
+- In a Chinese browser with no cookie: `/login` renders in Chinese, sign-up seeds the 16 starter
+  habits with Chinese names, `<html lang>` is `zh-Hans`, dates read `8月13日星期四`, and the coach
+  answers in Chinese — correctly hedging that one day of data establishes no trend. Switching to
+  English from 更多 changes the interface and leaves habit names as written.
 - The deploy path, rehearsed end to end: `npm ci` is in sync with the lockfile; `npm run build`
   succeeds with `DATABASE_URL` unset; `npm run db:setup` creates 14 tables on an empty database
   and is a no-op on the next two runs; and a production-mode boot on a non-default `PORT` serves
