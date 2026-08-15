@@ -362,7 +362,16 @@ export async function habitEngagement() {
 // ─────────────────────────── users list ──────────────────────────────────────
 
 export interface AdminUserRow {
-  id: string; email: string; role: string; createdAt: string;
+  id: string;
+  /** How the account is identified: address, or username when it has none. */
+  email: string;
+  /** The columns behind that, so the table can show both. */
+  address: string | null;
+  username: string | null;
+  displayName: string | null;
+  /** 'self_signup' | 'admin' | 'test', or null on rows that predate the column. */
+  createdVia: string | null;
+  role: string; createdAt: string;
   /** Null means active. Shown in the list so a disabled account is visible. */
   disabledAt: string | null;
   firstActive: string | null; lastActive: string | null;
@@ -372,6 +381,31 @@ export interface AdminUserRow {
 }
 
 export type UserSort = "active" | "least_active" | "newest" | "oldest" | "last_active";
+export type RoleFilter = "all" | "user" | "admin";
+export type StatusFilter = "all" | "active" | "disabled";
+export type KindFilter = "all" | "email" | "username";
+/** Only ever from `created_via`, never inferred from what an address looks like. */
+export type SourceFilter = "all" | "real" | "test" | "unclassified";
+
+export interface UserQuery {
+  search?: string;
+  sort?: UserSort;
+  role?: RoleFilter;
+  status?: StatusFilter;
+  kind?: KindFilter;
+  source?: SourceFilter;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdminUserPage {
+  rows: AdminUserRow[];
+  /** Everything the filters match, not just this page. */
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+}
 
 const SORT_SQL: Record<UserSort, string> = {
   active: "active_days desc nulls last, last_active desc nulls last",
@@ -386,12 +420,43 @@ const SORT_SQL: Record<UserSort, string> = {
  * the admin view answers "is this person using it", not "what are they doing
  * with their life".
  */
-export async function adminUsers(
-  { search = "", sort = "active" as UserSort, limit = 100 } = {},
-): Promise<AdminUserRow[]> {
+export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
+  const {
+    search = "", sort = "active", role = "all", status = "all",
+    kind = "all", source = "all",
+  } = q;
+  const pageSize = Math.min(200, Math.max(10, q.pageSize ?? 50));
+  const page = Math.max(1, q.page ?? 1);
+
+  /*
+   * Filters are built as fragments with numbered parameters rather than
+   * interpolated — the only thing that ever reaches the SQL text is a key from
+   * these maps, and the values travel as bound parameters.
+   */
+  const where: string[] = [
+    "($1 = '' or u.email ilike '%' || $1 || '%' or u.username ilike '%' || $1 || '%'"
+    + " or p.display_name ilike '%' || $1 || '%')",
+  ];
+  if (role !== "all") where.push(`u.role = '${role === "admin" ? "admin" : "user"}'::user_role`);
+  if (status === "active") where.push("u.disabled_at is null");
+  if (status === "disabled") where.push("u.disabled_at is not null");
+  if (kind === "email") where.push("u.email is not null");
+  if (kind === "username") where.push("u.email is null and u.username is not null");
+  if (source === "test") where.push("u.created_via = 'test'");
+  if (source === "real") where.push("u.created_via in ('self_signup','admin')");
+  if (source === "unclassified") where.push("u.created_via is null");
+  const clause = where.join(" and ");
+
+  const counted = await query<{ n: string }>(
+    `select count(*) as n from users u
+       left join profiles p on p.id = u.id
+      where ${clause}`, [search]);
+  const total = Number(counted[0].n);
+
   const rows = await query<Record<string, any>>(`
-    select u.id, coalesce(u.email, u.username) as email, u.role::text as role,
-           u.created_at, u.disabled_at,
+    select u.id, coalesce(u.email, u.username) as identifier,
+           u.email as address, u.username, p.display_name, u.created_via,
+           u.role::text as role, u.created_at, u.disabled_at,
            ev.first_active, ev.last_active, coalesce(ev.active_days, 0) as active_days,
            coalesce(s.sessions, 0) as sessions,
            coalesce(h.habits, 0) as habits,
@@ -399,6 +464,7 @@ export async function adminUsers(
            coalesce(g.goals, 0) as goals,
            coalesce(wr.reviews, 0) as reviews
       from users u
+      left join profiles p on p.id = u.id
       left join (select user_id, min(occurred_at) first_active, max(occurred_at) last_active,
                         count(distinct occurred_at::date) active_days
                    from analytics_events group by user_id) ev on ev.user_id = u.id
@@ -407,22 +473,53 @@ export async function adminUsers(
       left join (select user_id, count(*) completions from habit_completions group by user_id) hc on hc.user_id = u.id
       left join (select user_id, count(*) goals from goals group by user_id) g on g.user_id = u.id
       left join (select user_id, count(*) reviews from weekly_reviews group by user_id) wr on wr.user_id = u.id
-     -- Searching by either name, since either can be the one you know.
-     where ($1 = '' or u.email ilike '%' || $1 || '%' or u.username ilike '%' || $1 || '%')
+     where ${clause}
      order by ${SORT_SQL[sort] ?? SORT_SQL.active}
-     limit $2
-  `, [search, limit]);
+     limit $2 offset $3
+  `, [search, pageSize, (page - 1) * pageSize]);
 
-  return rows.map((r) => ({
-    id: r.id, email: r.email, role: r.role,
-    createdAt: r.created_at, disabledAt: r.disabled_at ?? null, firstActive: r.first_active, lastActive: r.last_active,
-    activeDays: Number(r.active_days), sessions: Number(r.sessions),
-    habits: Number(r.habits), completions: Number(r.completions),
-    goals: Number(r.goals), reviews: Number(r.reviews),
-    status: classify({
-      createdAt: r.created_at, lastActive: r.last_active, activeDays: Number(r.active_days),
-    }),
-  }));
+  return {
+    total, page, pageSize,
+    pages: Math.max(1, Math.ceil(total / pageSize)),
+    rows: rows.map((r) => ({
+      id: r.id, email: r.identifier, address: r.address ?? null,
+      username: r.username ?? null, displayName: r.display_name ?? null,
+      createdVia: r.created_via ?? null, role: r.role,
+      createdAt: r.created_at, disabledAt: r.disabled_at ?? null,
+      firstActive: r.first_active, lastActive: r.last_active,
+      activeDays: Number(r.active_days), sessions: Number(r.sessions),
+      habits: Number(r.habits), completions: Number(r.completions),
+      goals: Number(r.goals), reviews: Number(r.reviews),
+      status: classify({
+        createdAt: r.created_at, lastActive: r.last_active, activeDays: Number(r.active_days),
+      }),
+    })),
+  };
+}
+
+/**
+ * One account, by id. Its own query rather than a search: `search` matches
+ * addresses and names, so paging the whole list to find a uuid would be both
+ * slow and, past the last page, wrong.
+ */
+export async function adminUserById(id: string): Promise<AdminUserRow | null> {
+  const found = await query<{ identifier: string }>(
+    "select coalesce(email, username) as identifier from users where id = $1", [id]);
+  if (!found[0]) return null;
+  const page = await adminUsers({ search: found[0].identifier, pageSize: 200 });
+  return page.rows.find((r) => r.id === id) ?? null;
+}
+
+/** Every id the current filters match, for "select all matching". */
+export async function adminUserIds(q: UserQuery = {}): Promise<string[]> {
+  const page = await adminUsers({ ...q, page: 1, pageSize: 200 });
+  if (page.total <= 200) return page.rows.map((r) => r.id);
+  const all: string[] = [];
+  for (let p = 1; p <= page.pages; p++) {
+    const chunk = await adminUsers({ ...q, page: p, pageSize: 200 });
+    all.push(...chunk.rows.map((r) => r.id));
+  }
+  return all;
 }
 
 const daysSince = (d: string | Date | null) =>
@@ -447,8 +544,7 @@ export function classify(
 }
 
 export async function userProfile(userId: string) {
-  const [row] = await adminUsers({ search: "", sort: "active", limit: 1000 })
-    .then((rows) => rows.filter((r) => r.id === userId));
+  const row = await adminUserById(userId);
   if (!row) return null;
   const recent = await query<{ day: string; events: number }>(`
     select occurred_at::date::text as day, count(*)::int as events

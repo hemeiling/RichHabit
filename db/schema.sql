@@ -75,6 +75,14 @@ create table users (
   -- Set when an admin issues a temporary password. The app makes the user
   -- choose their own before it will let them anywhere else.
   must_change_password boolean not null default false,
+  /*
+   * Where this account came from, recorded when it is made rather than guessed
+   * later: 'self_signup' from the public form, 'admin' from Admin -> Users,
+   * 'test' from the throwaway test instance. Null on rows that predate the
+   * column — those are honestly unclassified, and the admin screens say so
+   * rather than pretending an email pattern is evidence.
+   */
+  created_via   text check (created_via in ('self_signup','admin','test')),
   created_at    timestamptz not null default now(),
   -- An account nobody can name is an account nobody can sign in to.
   constraint users_identified check (email is not null or username is not null)

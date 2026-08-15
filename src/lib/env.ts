@@ -84,6 +84,14 @@ export const coach = {
   timeoutSeconds: num("COACH_TIMEOUT_SECONDS", 60),
 };
 
+/**
+ * Set on the throwaway stack (`npm run dev:test`). Accounts created against it
+ * are stamped as test accounts at the moment they are made, which is the only
+ * reliable way to know — an email pattern is a guess, and guessing is not a
+ * good enough reason to offer someone a delete button.
+ */
+export const isTestInstance = process.env.RH_TEST_INSTANCE === "true";
+
 // ─────────────────────────────── analytics ───────────────────────────────────
 
 export const analytics = {

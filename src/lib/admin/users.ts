@@ -4,6 +4,7 @@ import {
   MAX_USERNAME, MIN_USERNAME, checkUsername, isPlausibleEmail, normaliseEmail, normaliseUsername,
 } from "@/lib/identity";
 import { hashPassword } from "@/lib/auth";
+import { isTestInstance } from "@/lib/env";
 import { query, transaction } from "@/lib/db/pool";
 import { seedAccount } from "@/lib/seed";
 import type { AdminUser } from "@/lib/admin";
@@ -44,8 +45,8 @@ import type { Locale } from "@/lib/i18n";
  */
 
 export type AdminAction =
-  | "user_created" | "user_disabled" | "user_enabled" | "user_role_changed"
-  | "user_deleted" | "password_reset_requested";
+  | "user_created" | "admin_account_created" | "user_disabled" | "user_enabled"
+  | "user_role_changed" | "user_deleted" | "password_reset_requested";
 
 /** Never called with a password, a hash, or a setup token. */
 async function audit(
@@ -128,10 +129,11 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
     created = await transaction(async (q) => {
       const rows = await q<{ id: string }>(
         `insert into users (email, username, password_hash, role, disabled_at,
-                            must_change_password)
-         values ($1, $2, $3, $4::user_role, $5, $6) returning id`,
+                            must_change_password, created_via)
+         values ($1, $2, $3, $4::user_role, $5, $6, $7) returning id`,
         [email || null, username || null, passwordHash, input.role,
-          input.disabled ? new Date() : null, input.credential === "temporary"],
+          input.disabled ? new Date() : null, input.credential === "temporary",
+          isTestInstance ? "test" : "admin"],
       );
       const id = rows[0].id;
 
@@ -186,8 +188,13 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
     result.setupToken = rows[0].token;
   }
 
+  /*
+   * Creating an admin gets its own action, so "who was given admin access, and
+   * by whom" is one query rather than a scan of every creation event.
+   */
+  const action: AdminAction = input.role === "admin" ? "admin_account_created" : "user_created";
   // The audit entry records that a credential was issued, never which one it was.
-  await audit(admin, "user_created", { id: created.id, email: email || username }, {
+  await audit(admin, action, { id: created.id, email: email || username }, {
     role: input.role,
     disabled: input.disabled,
     credential: input.credential,
@@ -314,4 +321,189 @@ export async function auditFor(targetId: string, limit = 25): Promise<AuditEntry
     id: String(r.id), adminEmail: r.admin_email, targetEmail: r.target_email,
     action: r.action, details: r.details ?? {}, at: new Date(r.created_at).toISOString(),
   }));
+}
+
+// ─────────────────────────── bulk operations ─────────────────────────────────
+
+export type SkipReason =
+  | "self" | "last_admin" | "not_found";
+
+export interface BulkResult {
+  requested: number;
+  deleted: number;
+  skipped: { id: string; email: string | null; reason: SkipReason }[];
+}
+
+/**
+ * Deleting several accounts in one authorised operation.
+ *
+ * One request, not one per account: the caller's role is checked once, the
+ * protections are evaluated against the whole set, and the answer says exactly
+ * what happened to each id. A loop of individual requests from the browser
+ * could half-finish, would re-check authorisation N times, and — the real
+ * problem — evaluates "is this the last admin" against a database that its own
+ * earlier deletions have already changed.
+ *
+ * Protections, enforced here rather than by hiding checkboxes:
+ *
+ *   self       the account the caller is signed in with, always
+ *   last_admin an admin whose removal would leave nobody able to administer
+ *              the system. Evaluated against *the set being deleted*, so
+ *              selecting every admin at once cannot slip the last one through
+ *              on a technicality — the survivors are counted excluding
+ *              everything still slated for deletion.
+ *
+ * A protected account is skipped with a reason rather than failing the whole
+ * operation, so selecting 200 accounts and one of your own colleagues does not
+ * mean starting again.
+ */
+export async function bulkDeleteAccounts(
+  admin: AdminUser, ids: string[],
+): Promise<BulkResult> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return { requested: 0, deleted: 0, skipped: [] };
+  if (unique.length > 500) throw new ApiError("Too many accounts in one request", 400);
+
+  const rows = await query<{ id: string; email: string; role: string; disabled_at: string | null }>(
+    `select id, coalesce(email, username) as email, role::text as role, disabled_at
+       from users where id = any($1::uuid[])`,
+    [unique],
+  );
+  const found = new Map(rows.map((r) => [r.id, r]));
+
+  const skipped: BulkResult["skipped"] = [];
+  const candidates: typeof rows = [];
+
+  for (const id of unique) {
+    const row = found.get(id);
+    if (!row) { skipped.push({ id, email: null, reason: "not_found" }); continue; }
+    if (row.id === admin.id) { skipped.push({ id, email: row.email, reason: "self" }); continue; }
+    candidates.push(row);
+  }
+
+  /*
+   * How many active admins would be left. Counted once, against everyone not
+   * already being deleted — then admins are released from the set one at a
+   * time only while at least one would survive.
+   */
+  const deleting = new Set(candidates.map((c) => c.id));
+  const survivors = await query<{ n: string }>(
+    `select count(*) as n from users
+      where role = 'admin' and disabled_at is null and id <> all($1::uuid[])`,
+    [[...deleting]],
+  );
+  let remainingAdmins = Number(survivors[0].n);
+
+  const doomed: typeof rows = [];
+  for (const row of candidates) {
+    if (row.role === "admin" && row.disabled_at === null && remainingAdmins === 0) {
+      // Releasing this one keeps an administrator in the system.
+      skipped.push({ id: row.id, email: row.email, reason: "last_admin" });
+      remainingAdmins += 1;
+      continue;
+    }
+    doomed.push(row);
+  }
+
+  if (doomed.length > 0) {
+    // Audited before the delete: afterwards there is no row to read the
+    // address from. One transaction, so the log and the deletion agree.
+    await transaction(async (q) => {
+      for (const row of doomed) {
+        await q(
+          `insert into admin_audit_log (admin_id, admin_email, target_id, target_email,
+                                        action, details)
+           values ($1,$2,$3,$4,'user_deleted',$5)`,
+          [admin.id, admin.email, row.id, row.email,
+            JSON.stringify({ role: row.role, bulk: true })],
+        );
+      }
+      // Everything owned cascades; analytics detach. Same path as one-at-a-time.
+      await q("delete from users where id = any($1::uuid[])", [doomed.map((d) => d.id)]);
+    });
+  }
+
+  return { requested: unique.length, deleted: doomed.length, skipped };
+}
+
+/** Disable or enable several accounts. Same protections as deletion. */
+export async function bulkSetDisabled(
+  admin: AdminUser, ids: string[], disabled: boolean,
+): Promise<BulkResult> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return { requested: 0, deleted: 0, skipped: [] };
+  if (unique.length > 500) throw new ApiError("Too many accounts in one request", 400);
+
+  const rows = await query<{ id: string; email: string; role: string; disabled_at: string | null }>(
+    `select id, coalesce(email, username) as email, role::text as role, disabled_at
+       from users where id = any($1::uuid[])`,
+    [unique],
+  );
+  const found = new Map(rows.map((r) => [r.id, r]));
+  const skipped: BulkResult["skipped"] = [];
+  const targets: typeof rows = [];
+
+  for (const id of unique) {
+    const row = found.get(id);
+    if (!row) { skipped.push({ id, email: null, reason: "not_found" }); continue; }
+    // Only disabling can lock anyone out, so only disabling is protected.
+    if (disabled && row.id === admin.id) {
+      skipped.push({ id, email: row.email, reason: "self" }); continue;
+    }
+    targets.push(row);
+  }
+
+  let changed = 0;
+  if (disabled) {
+    const disabling = new Set(targets.filter((t) => t.role === "admin" && !t.disabled_at)
+      .map((t) => t.id));
+    const survivors = await query<{ n: string }>(
+      `select count(*) as n from users
+        where role = 'admin' and disabled_at is null and id <> all($1::uuid[])`,
+      [[...disabling]],
+    );
+    let remainingAdmins = Number(survivors[0].n);
+
+    const doable: typeof rows = [];
+    for (const row of targets) {
+      if (row.role === "admin" && !row.disabled_at && remainingAdmins === 0) {
+        skipped.push({ id: row.id, email: row.email, reason: "last_admin" });
+        remainingAdmins += 1;
+        continue;
+      }
+      doable.push(row);
+    }
+    if (doable.length) {
+      await transaction(async (q) => {
+        const ids = doable.map((d) => d.id);
+        await q("update users set disabled_at = now() where id = any($1::uuid[])", [ids]);
+        await q("delete from sessions where user_id = any($1::uuid[])", [ids]);
+        for (const row of doable) {
+          await q(
+            `insert into admin_audit_log (admin_id, admin_email, target_id, target_email,
+                                          action, details)
+             values ($1,$2,$3,$4,'user_disabled',$5)`,
+            [admin.id, admin.email, row.id, row.email, JSON.stringify({ bulk: true })],
+          );
+        }
+      });
+    }
+    changed = doable.length;
+  } else if (targets.length) {
+    await transaction(async (q) => {
+      const ids = targets.map((t) => t.id);
+      await q("update users set disabled_at = null where id = any($1::uuid[])", [ids]);
+      for (const row of targets) {
+        await q(
+          `insert into admin_audit_log (admin_id, admin_email, target_id, target_email,
+                                        action, details)
+           values ($1,$2,$3,$4,'user_enabled',$5)`,
+          [admin.id, admin.email, row.id, row.email, JSON.stringify({ bulk: true })],
+        );
+      }
+    });
+    changed = targets.length;
+  }
+
+  return { requested: unique.length, deleted: changed, skipped };
 }

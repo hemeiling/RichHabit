@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { MAX_PASSWORD, MIN_PASSWORD, createSession, hashPassword } from "@/lib/auth";
 import { transaction } from "@/lib/db/pool";
+import { isTestInstance } from "@/lib/env";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { seedAccount } from "@/lib/seed";
 
@@ -38,9 +39,16 @@ export async function POST(request: Request) {
   let userId: string;
   try {
     userId = await transaction(async (q) => {
+      /*
+       * `role` is not in this statement, and nothing in this file reads one
+       * from the request. A self-registered account takes the column default,
+       * which is 'user'. Sending {"role":"admin"} to this endpoint changes
+       * nothing, because there is no code path here that could apply it.
+       */
       const rows = await q<{ id: string }>(
-        "insert into users (email, password_hash) values ($1, $2) returning id",
-        [email, passwordHash],
+        `insert into users (email, password_hash, created_via)
+         values ($1, $2, $3) returning id`,
+        [email, passwordHash, isTestInstance ? "test" : "self_signup"],
       );
       await seedAccount(q, rows[0].id, locale);
       return rows[0].id;

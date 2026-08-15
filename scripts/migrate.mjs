@@ -108,6 +108,11 @@ try {
     // Sign in with a username as well as an email. Existing rows all have an
     // address, so the column starts null everywhere and nothing is backfilled.
     ["users", "username", null],
+    // Deliberately not backfilled: an existing row's origin is unknown, and
+    // writing a guess into it would make the guess look like a fact.
+    ["users", "created_via",
+     "alter table users add column created_via text " +
+     "check (created_via in ('self_signup','admin','test'))"],
   ]) {
     if (await columnExists(table, column)) continue;
 

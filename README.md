@@ -496,6 +496,43 @@ the acting admin (id and email), the target (id and email), and a timestamp. It
 never records a password, a hash, or a setup token — only *that* a credential
 was issued. The last 25 entries for an account are shown on its detail page.
 
+### Managing accounts at scale
+
+The users list is filtered, paged and selectable.
+
+Filters are URL state, so a view can be shared and bookmarked, and the filtering
+happens in SQL — the page never ships every row to the browser to hide most of
+them. Role, status, login type (email or username), source and five sorts, plus
+a search across address, username and display name. Fifty rows a page.
+
+Selection is deliberately two separate actions. **Select all visible** ticks the
+page and says how many that is; **Select all N matching** ticks everything the
+filters match and says that number instead. Nobody should be able to believe
+they have selected ten thousand accounts when they have ticked fifty.
+
+Bulk delete is one server-side operation, not a loop of requests from the
+browser: authorisation is checked once, the protections are evaluated against
+the whole set, and the response says what happened to every id —
+`{requested, deleted, skipped: [{id, email, reason}]}`. A loop would re-check
+authorisation N times, could half-finish, and — the real problem — would
+evaluate "is this the last admin" against a database its own earlier deletions
+had already changed.
+
+Confirming requires typing `DELETE N ACCOUNTS`. The modal shows the count, the
+list (scrolling past a few), and what deletion takes with it.
+
+**Protections are server-side.** The account you are signed in with is always
+skipped, with a reason. There is a last-active-admin guard behind that, though
+it is defence in depth rather than the operative rule: the acting admin is
+removed from the set before the surviving-admin count is taken, so they are
+always among the survivors and the system can never be left with nobody able to
+administer it. Selecting every admin including yourself deletes the others and
+skips you.
+
+Deletion itself is the same path as deleting one account — see the deletion
+strategy above. Verified after a bulk delete of ten: no rows left in any owning
+table and no orphans.
+
 ### Test accounts, and where they came from
 
 The development database accumulated 157 accounts. They are not seed data and
@@ -507,9 +544,15 @@ guessing is not a good enough reason to destroy an account.
 Two things came out of that:
 
 - `npm run db:test` runs a **throwaway** database on port 5434, wiped on every
-  start, and `npm run dev:test` runs the app against it on port 3002. The
-  browser suites default to that stack, so acceptance runs no longer touch the
-  database you develop against.
+  start, and `npm run dev:test` runs the app against it on port 3002 with
+  `RH_TEST_INSTANCE=true`. The browser suites default to that stack, so
+  acceptance runs no longer touch the database you develop against.
+- **`users.created_via` records where an account came from at the moment it is
+  made** — `self_signup`, `admin`, or `test` when the server is the test
+  instance. That is what the **Source** filter reads. Rows created before the
+  column existed show as *unclassified* rather than being guessed at: an address
+  ending in `example.com` is not evidence, and a delete button offered on the
+  strength of a heuristic is worse than no filter at all.
 - `npm run db:prune` lists what it *would* remove and removes nothing. It only
   matches `<prefix>-<13-digit epoch>@example.com`, refuses to touch an admin or
   any address outside `example.com`, prints every row with its age and
@@ -729,6 +772,20 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   退出登录) with the email untranslated; admin renders the same sidebar with its
   own items and none of the app's; and sign out from the sidebar ends the
   session for real.
+- **Admin → Users at scale, 57 checks in a browser**: public signup posted with
+  `{"role":"admin"}` still produces a `user`; an admin creates an email account,
+  a username-only account and a second admin, the last audited as
+  `admin_account_created` and able to reach `/admin`; a normal user gets 404
+  from create, from promote-self and from the bulk endpoint. Ten accounts are
+  selected and the bar says 10; the two select-all controls name their own
+  counts ("Select all visible (10)", "Select all 10 matching"); the confirm
+  button stays disabled for `DELETE 9 ACCOUNTS` and enables for
+  `DELETE 10 ACCOUNTS`; all ten are deleted with no orphans in any owning table.
+  A mixed request of `[self, deletable, nonexistent]` returns
+  `requested 3, deleted 1, skipped 2` with reasons `self` and `not_found`, and
+  the deletable one is still deleted. Selecting every admin leaves an active
+  admin. Every account on the test instance reports `created_via = test`, the
+  *Real users* filter finds none of them and *Test / fixture* finds them all.
 - **Show / hide password, 43 checks in a browser**: masked by default, one click
   reveals, another hides, and the typed value is identical throughout; the icon
   is `aria-hidden` and the button's only accessible name is its `aria-label`,

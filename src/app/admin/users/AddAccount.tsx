@@ -25,6 +25,7 @@ export default function AddAccount() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ email: string; password?: string; link?: string } | null>(null);
 
+  const [loginType, setLoginType] = useState<"email" | "username">("email");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -35,7 +36,7 @@ export default function AddAccount() {
   const [seedHabits, setSeedHabits] = useState(true);
 
   const reset = () => {
-    setEmail(""); setUsername(""); setDisplayName(""); setRole("user"); setDisabled(false);
+    setLoginType("email"); setEmail(""); setUsername(""); setDisplayName(""); setRole("user"); setDisabled(false);
     setCredential("invite"); setLocale("en"); setSeedHabits(true);
     setError(null); setDone(null);
   };
@@ -47,8 +48,12 @@ export default function AddAccount() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // Only the chosen identifier is sent, so a half-typed one left in the
+        // other box cannot end up on the account.
         body: JSON.stringify({
-          email, username, displayName, role, disabled, credential, locale, seedHabits,
+          email: loginType === "email" ? email : "",
+          username: loginType === "username" ? username : "",
+          displayName, role, disabled, credential, locale, seedHabits,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -111,23 +116,35 @@ export default function AddAccount() {
       ) : (
         <>
           <div className="eyebrow">New account</div>
+
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <span className="eyebrow" style={{ minWidth: 86 }}>Login type</span>
+            {([["email", "Email"], ["username", "Username"]] as const).map(([v, label]) => (
+              <button key={v} type="button" className="chip" data-on={loginType === v}
+                onClick={() => setLoginType(v)}>{label}</button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 min-[560px]:grid-cols-2 gap-3 mt-3">
-            <label style={{ fontSize: 13 }}>
-              Email <span className="faint">or username below</span>
-              <input className="input mt-1" type="email" autoFocus value={email}
-                onChange={(e) => setEmail(e.target.value)} placeholder="person@example.com" />
-            </label>
-            {/*
-              * A managed account can be named by a username instead. Requiring
-              * an address for one would mean inventing a fake, which then looks
-              * real in the users list.
-              */}
-            <label style={{ fontSize: 13 }}>
-              Username <span className="faint">or email above</span>
-              <input className="input mt-1" value={username} autoCapitalize="none"
-                spellCheck={false} placeholder="emma"
-                onChange={(e) => setUsername(e.target.value)} />
-            </label>
+            {loginType === "email" ? (
+              <label style={{ fontSize: 13 }}>
+                Email
+                <input className="input mt-1" type="email" autoFocus value={email}
+                  onChange={(e) => setEmail(e.target.value)} placeholder="person@example.com" />
+              </label>
+            ) : (
+              /* A managed account for someone with no address. Requiring one
+                 would mean inventing a fake, which then looks real in the list. */
+              <label style={{ fontSize: 13 }}>
+                Username
+                <input className="input mt-1" autoFocus value={username} autoCapitalize="none"
+                  spellCheck={false} placeholder="emma"
+                  onChange={(e) => setUsername(e.target.value)} />
+                <span className="faint block mt-1" style={{ fontSize: 12 }}>
+                  3–30 characters: letters, digits, and dots, hyphens or underscores between them.
+                </span>
+              </label>
+            )}
             <label style={{ fontSize: 13 }}>
               Display name <span className="faint">optional</span>
               <input className="input mt-1" value={displayName}
@@ -137,10 +154,10 @@ export default function AddAccount() {
 
           <div className="grid grid-cols-1 min-[560px]:grid-cols-2 gap-3 mt-3">
             <label style={{ fontSize: 13 }}>
-              Role
+              Account type
               <select className="select mt-1" value={role}
                 onChange={(e) => setRole(e.target.value as "user" | "admin")}>
-                <option value="user">User</option>
+                <option value="user">Regular user</option>
                 <option value="admin">Admin</option>
               </select>
             </label>
@@ -169,6 +186,18 @@ export default function AddAccount() {
             </label>
           </div>
 
+          {/* Said plainly, at the moment of choosing. The server records this as
+              its own audit action, admin_account_created. */}
+          {role === "admin" && (
+            <p className="flat p-3 mt-3" role="status" style={{
+              fontSize: 13, lineHeight: 1.55, borderColor: "var(--warn)",
+              background: "var(--warn-soft)",
+            }}>
+              This account will have <b>admin access</b>: it can see every user&apos;s activity,
+              create and delete accounts, and grant admin to others.
+            </p>
+          )}
+
           <label className="flex items-center gap-2 mt-3" style={{ fontSize: 13.5 }}>
             <input type="checkbox" checked={seedHabits}
               onChange={(e) => setSeedHabits(e.target.checked)} />
@@ -184,7 +213,8 @@ export default function AddAccount() {
           <div className="flex gap-2 mt-4">
             <button className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
             <button className="btn btn-primary"
-              disabled={busy || (!email.includes("@") && username.trim().length < 3)}
+              disabled={busy || (loginType === "email"
+                ? !email.includes("@") : username.trim().length < 3)}
               onClick={submit}>
               {busy ? "Creating…" : "Create account"}
             </button>
