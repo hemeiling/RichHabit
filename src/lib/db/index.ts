@@ -1,6 +1,6 @@
 "use client";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -59,6 +59,9 @@ export const saveMetrics = (date: string, metrics: DayMetrics) =>
   post("/api/metrics", { date, metrics });
 
 export const saveReview = (r: WeeklyReview) => post("/api/reviews", r);
+
+export const saveSpending = (r: SpendingRecord) => post("/api/spending", r);
+export const deleteSpending = (id: string) => remove("/api/spending", id);
 
 export const savePrefs = (p: Prefs) => post("/api/prefs", p);
 

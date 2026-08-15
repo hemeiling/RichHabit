@@ -1,7 +1,8 @@
 import { ApiError, check, isUuid } from "@/lib/http";
 import { isTemplateWording } from "@/lib/templates";
+import { SPENDING_CATEGORIES } from "@/lib/types";
 import type {
-  AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
+  AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -171,6 +172,23 @@ export function parseReview(b: any): WeeklyReview {
     add: check.text(b?.add, "add", 10_000),
     // Written as jsonb; the shape is the app's own snapshot, not user input.
     stats: b?.stats && typeof b.stats === "object" ? b.stats : undefined,
+  };
+}
+
+export function parseSpending(b: any): SpendingRecord {
+  const amount = check.numberOrNull(b?.amount, "amount");
+  if (amount == null || amount < 0) throw new ApiError("amount must be zero or more");
+  if (amount > 1_000_000_000) throw new ApiError("amount is too large");
+  return {
+    id: check.uuid(b?.id, "id"),
+    date: check.date(b?.date, "date"),
+    // Two decimal places: currency-agnostic, but still money.
+    amount: Math.round(amount * 100) / 100,
+    description: check.text(b?.description, "description", 200),
+    category: check.oneOf(b?.category ?? "other", SPENDING_CATEGORIES, "category"),
+    needWant: check.oneOf(b?.needWant ?? "need", ["need", "want"] as const, "needWant"),
+    planned: b?.planned !== false,
+    notes: check.text(b?.notes, "notes", 500),
   };
 }
 

@@ -2,7 +2,7 @@ import { ApiError } from "@/lib/http";
 import { query, transaction } from "@/lib/db/pool";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -56,7 +56,8 @@ async function assertRef(q: Q, table: Owned, id: string, userId: string) {
 // ------------------------------- read --------------------------------------
 
 export async function loadState(userId: string): Promise<AppState> {
-  const [habits, schedules, goalLinks, goals, completions, notes, awareness, stacks, metrics, reviews, prefs] =
+  const [habits, schedules, goalLinks, goals, completions, notes, awareness, stacks, metrics,
+    reviews, spending, prefs] =
     await Promise.all([
       query("select * from habits where user_id = $1 order by sort_order", [userId]),
       query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
@@ -68,6 +69,11 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select * from habit_stacks where user_id = $1", [userId]),
       query("select * from daily_metrics where user_id = $1", [userId]),
       query("select * from weekly_reviews where user_id = $1", [userId]),
+      // Bounded: a year is enough for month-over-month, and the payload stays
+      // small however long the account has existed.
+      query(`select * from spending_records
+              where user_id = $1 and spent_on >= current_date - 365
+              order by spent_on desc`, [userId]),
       query("select * from user_preferences where user_id = $1", [userId]),
     ]);
 
@@ -171,6 +177,12 @@ export async function loadState(userId: string): Promise<AppState> {
   state.reviews = reviews.map((r: any): WeeklyReview => ({
     id: r.id, weekStart: r.week_start, wentWell: r.went_well ?? "", gotInWay: r.got_in_way ?? "",
     focus: r.focus_next ?? "", modify: r.modify ?? "", add: r.add_or_drop ?? "", stats: r.stats ?? undefined,
+  }));
+
+  state.spending = spending.map((s: any): SpendingRecord => ({
+    id: s.id, date: s.spent_on, amount: Number(s.amount),
+    description: s.description ?? "", category: s.category ?? "other",
+    needWant: s.need_want ?? "need", planned: s.planned !== false, notes: s.notes ?? "",
   }));
 
   if (prefs[0]) {
@@ -360,6 +372,25 @@ export async function saveReview(userId: string, r: WeeklyReview) {
     [r.id, userId, r.weekStart, r.wentWell, r.gotInWay, r.focus, r.modify, r.add,
       r.stats ? JSON.stringify(r.stats) : null],
   );
+}
+
+export async function saveSpending(userId: string, r: SpendingRecord) {
+  await query(
+    `insert into spending_records (id, user_id, spent_on, amount, description, category,
+                                   need_want, planned, notes)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     on conflict (id) do update set
+       spent_on = excluded.spent_on, amount = excluded.amount,
+       description = excluded.description, category = excluded.category,
+       need_want = excluded.need_want, planned = excluded.planned, notes = excluded.notes
+     where spending_records.user_id = $2`,
+    [r.id, userId, r.date, r.amount, r.description || null, r.category,
+      r.needWant, r.planned, r.notes || null],
+  );
+}
+
+export async function deleteSpending(userId: string, id: string) {
+  await query("delete from spending_records where id = $1 and user_id = $2", [id, userId]);
 }
 
 export async function savePrefs(userId: string, p: Prefs) {

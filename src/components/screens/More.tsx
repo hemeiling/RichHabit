@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/more/awareness", key: "awareness" },
   { href: "/more/goals", key: "goals" },
   { href: "/more/metrics", key: "metrics" },
+  { href: "/more/spending", key: "spending" },
   { href: "/more/stacks", key: "stacks" },
   { href: "/more/review", key: "review" },
 ] as const;

@@ -56,6 +56,10 @@ export const FEATURES = {
   metrics: { label: "Metrics", events: ["metric_logged"] },
   awareness: { label: "Habit awareness", events: ["habit_awareness_entry_created"] },
   stacking: { label: "Habit stacking", events: ["habit_stack_created"] },
+  // §27. The event says a record happened. It carries no amount, no merchant
+  // and no note — what someone spends is theirs, and the adoption table only
+  // needs to know the module is being used.
+  spending: { label: "Spending awareness", events: ["spending_recorded"] },
   coach: { label: "AI coach", events: ["coach_question_asked"] },
 } as const;
 

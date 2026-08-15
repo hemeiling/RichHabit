@@ -128,6 +128,19 @@ export interface WeeklyReview {
   };
 }
 
+/** §27. Awareness of where money goes — an outcome record, not a habit. */
+export interface SpendingRecord {
+  id: string;
+  date: string;            // YYYY-MM-DD
+  amount: number;
+  description: string;
+  /** An English key; the UI translates it on render. */
+  category: string;
+  needWant: "need" | "want";
+  planned: boolean;
+  notes: string;
+}
+
 export interface Prefs {
   theme: "light" | "dark";
   weighted: boolean;
@@ -144,11 +157,18 @@ export interface AppState {
   stacks: Stack[];
   metrics: Record<string, DayMetrics>;
   reviews: WeeklyReview[];
+  spending: SpendingRecord[];
   prefs: Prefs;
 }
 
+/** §27. The suggested set. Stored as these keys; translated on render. */
+export const SPENDING_CATEGORIES = [
+  "housing", "food", "shopping", "transport", "travel",
+  "entertainment", "personal_care", "education", "gifts", "other",
+] as const;
+
 export const emptyState = (): AppState => ({
   habits: [], goals: [], completions: {}, dayNotes: {},
-  awareness: [], stacks: [], metrics: {}, reviews: [],
+  awareness: [], stacks: [], metrics: {}, reviews: [], spending: [],
   prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en" },
 });

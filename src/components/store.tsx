@@ -4,7 +4,7 @@ import * as db from "@/lib/db";
 import { isDone } from "@/lib/habits";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
 interface Actions {
@@ -22,6 +22,8 @@ interface Actions {
   deleteStack: (id: string) => void;
   setMetrics: (date: string, m: DayMetrics) => void;
   saveReview: (r: WeeklyReview) => void;
+  saveSpending: (r: SpendingRecord) => void;
+  deleteSpending: (id: string) => void;
   setPrefs: (p: Partial<Prefs>) => void;
 }
 
@@ -243,6 +245,21 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
           : [...s.reviews, r],
       }),
       () => db.saveReview(r),
+    ),
+
+    saveSpending: (r) => run(
+      (s) => ({
+        ...s,
+        spending: s.spending.some((x) => x.id === r.id)
+          ? s.spending.map((x) => (x.id === r.id ? r : x))
+          : [r, ...s.spending],
+      }),
+      () => db.saveSpending(r),
+    ),
+
+    deleteSpending: (id) => run(
+      (s) => ({ ...s, spending: s.spending.filter((r) => r.id !== id) }),
+      () => db.deleteSpending(id),
     ),
 
     setPrefs: (p) => {

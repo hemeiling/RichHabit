@@ -348,6 +348,30 @@ create table habit_library (
 );
 create index habit_library_category_idx on habit_library (category, sort_order);
 
+-- ---------------------------- spending awareness ---------------------------
+-- §17/§27. Deliberately not a habit. "Did you record your spending" could be a
+-- boolean habit, but what was spent is an outcome, and forcing it into a
+-- checkbox would lose the only part worth looking at.
+--
+-- Categories are stored as English keys and translated on render, the same way
+-- goal areas are, so an existing row keeps matching after a language change.
+create table spending_records (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users on delete cascade,
+  spent_on    date not null default current_date,
+  -- Currency-agnostic on purpose: the module is about proportion and
+  -- awareness, and a single user's own numbers compare fine to each other.
+  amount      numeric(12,2) not null check (amount >= 0),
+  description text,
+  category    text not null default 'other',
+  -- §27. Two separate judgements, both the user's own.
+  need_want   text not null default 'need' check (need_want in ('need','want')),
+  planned     boolean not null default true,
+  notes       text,
+  created_at  timestamptz not null default now()
+);
+create index spending_user_date_idx on spending_records (user_id, spent_on desc);
+
 -- --------------------------- updated_at trigger ----------------------------
 create or replace function touch_updated_at() returns trigger
 language plpgsql as $$

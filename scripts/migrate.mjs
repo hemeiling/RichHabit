@@ -182,7 +182,32 @@ try {
     changed++;
   }
 
-  // ---- 4. backfill template keys on rows seeded before keys existed ---------
+  // ---- 4. spending awareness -----------------------------------------------
+  const { rows: spending } = await client.query(
+    `select 1 from information_schema.tables
+      where table_schema = 'public' and table_name = 'spending_records'`,
+  );
+  if (spending.length === 0) {
+    await client.query(`
+      create table spending_records (
+        id          uuid primary key default gen_random_uuid(),
+        user_id     uuid not null references users on delete cascade,
+        spent_on    date not null default current_date,
+        amount      numeric(12,2) not null check (amount >= 0),
+        description text,
+        category    text not null default 'other',
+        need_want   text not null default 'need' check (need_want in ('need','want')),
+        planned     boolean not null default true,
+        notes       text,
+        created_at  timestamptz not null default now()
+      )`);
+    await client.query(
+      "create index spending_user_date_idx on spending_records (user_id, spent_on desc)");
+    console.log("  created spending_records");
+    changed++;
+  }
+
+  // ---- 5. backfill template keys on rows seeded before keys existed ---------
   if (await columnExists("habits", "template_key")) {
     for (const [key, aliases] of Object.entries(HABIT_ALIASES)) {
       const { rowCount } = await client.query(

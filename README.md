@@ -51,7 +51,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 92 tests: engine, validation, throttle, TLS, i18n, library, analytics, coach |
+| `npm test` | Vitest — 108 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
@@ -90,7 +90,7 @@ src/
     api/health/     Liveness + a real database round-trip, for Render
     api/state/      The whole account in one read
     api/*/          One route per resource: habits, completions, goals, notes,
-                    awareness, stacks, metrics, reviews, prefs
+                    awareness, stacks, metrics, reviews, spending, prefs
     (app)/more/refine  Behaviours to change, and the backlog they wait in
     api/coach/      The AI coach, against the OpenAI Responses API
   middleware.ts     Cookie presence only; validity is decided against the database
@@ -255,6 +255,25 @@ shown as such rather than offered twice. Above nine active habits the workspace
 mentions pacing (§13); it is a sentence, not a limit, and the backlog keeps
 whatever you leave there.
 
+### Spending is not a habit
+
+"Record what I spent" would make a fine checkbox, and that is exactly the problem: what was
+spent is an outcome, and the only interesting part — where the money actually goes — does not
+survive being flattened into done/not-done. So spending lives in its own table with its own
+shape (amount, category, need or want, planned or not) and its own screen under **More →
+Spending awareness**.
+
+Two properties it keeps deliberately. It reports proportions and stops there — no budget, no
+target, nothing coloured red; a module that scored people would become the opposite of awareness.
+And amounts are currency-agnostic, because it only ever compares one person's numbers against
+their own.
+
+The month-over-month figure is real arithmetic on `YYYY-MM` strings rather than `Date.setMonth`,
+which lands on March 3 when today is March 31 and would quietly compare a month against itself.
+`src/lib/spending.ts` is pure and tested for exactly that.
+
+Analytics see `spending_recorded` and nothing else — no amount, no description, no category.
+
 ### How access control works
 
 There is no row-level security any more — it keyed off `auth.uid()`, which only exists inside
@@ -355,7 +374,8 @@ Every screen is wired to the database, and there are no buttons that do nothing.
 Today · My habits (create, edit, pause, delete) · seven-day phase checklist · analytics with a
 17-week heatmap, per-habit trends and a sleep/next-day correlation · health metrics with week,
 month and year trends · goals with supporting habits and progress · habit awareness log with
-grading · habit stacking · weekly review, stored per week · light and dark · mobile-first.
+grading · habit stacking · spending awareness · weekly review, stored per week · light and dark ·
+mobile-first.
 
 Not built, deliberately: Apple Health. `daily_metrics.source` marks where synced rows would come
 from and metrics write through a single function, so a sync job can fill the same rows later.
@@ -385,7 +405,7 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 
 ## Verified, not assumed
 
-- `npm test` — 22 tests: the habit engine (scheduling in all three frequency modes, weighted vs
+- `npm test` — 108 tests: the habit engine (scheduling in all three frequency modes, weighted vs
   unweighted scoring, streaks continuing across an unchecked today, streaks breaking on a missed
   past day, best/worst habit selection, an account with no habits) and the coach wire contract.
 - `npm run typecheck` — clean under `strict`.
@@ -440,6 +460,14 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   完成重要的目标相关工作 / 喝足够的水 / 避免垃圾食品 and back again; seeded units and goals switch
   too; a habit called "Practice violin" is untouched throughout; and renaming a seeded habit stops
   it translating while the others carry on.
+- **Spending awareness, 38 checks in a browser**: three purchases of 60 / 30 / 10 report a 100.00
+  total with food at 60.0%, transport 30.0% and entertainment 10.0%, ordered largest first; the
+  unplanned and wants shares are computed separately and both land on 10.0%; with no prior month it
+  says so rather than inventing a comparison; a negative amount and an absurd one are both refused
+  400; removing a record survives a reload; the whole screen reads in Chinese while the user's own
+  "Groceries" stays exactly as typed; and nothing on the page is red or judging. Checked directly
+  against the events table afterwards: every `spending_recorded` row has empty properties, and no
+  row anywhere mentions an amount or a description.
 - `npm run db:migrate` backfilled 42 template keys on the existing database — ids, completions,
   schedules and goal links untouched — and is a no-op on the second run.
 - Bilingual rendering in a real browser: every label carries both languages, nothing overflows its
