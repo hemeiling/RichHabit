@@ -7,9 +7,18 @@ import { useT } from "@/lib/i18n/context";
 type Mode = "signin" | "signup";
 
 /**
- * Email and password against /api/auth/*. The magic-link option went with
- * Supabase Auth — sending a link needs an email provider, and this app has none
- * configured. Both routes set the session cookie and land on /today.
+ * Signing in with an email *or* a username, and signing up with an email.
+ *
+ * One field either way. Which kind of account an identifier names is decided
+ * server-side from the value, so nothing here has to guess and nothing the
+ * browser sends chooses which column is searched. Signing up still asks for an
+ * address, because an account created here with only a username would have no
+ * way back in if the password were lost — usernames belong to accounts an admin
+ * manages, and an admin can reset them.
+ *
+ * The magic-link option went with Supabase Auth — sending a link needs an email
+ * provider, and this app has none configured. Both routes set the session
+ * cookie and land on /today.
  *
  * The language switcher is here as well as in More: a relative opening this for
  * the first time has to be able to change it before they have an account.
@@ -18,19 +27,22 @@ export default function LoginForm() {
   const t = useT();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
-    if (busy || !email || !password) return;
+    if (busy || !identifier.trim() || !password) return;
     setBusy(true); setError(null);
     try {
       const res = await fetch(`/api/auth/${mode === "signup" ? "signup" : "signin"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        // Sign-up is an address; sign-in is either, and the server decides which.
+        body: JSON.stringify(mode === "signup"
+          ? { email: identifier, password }
+          : { identifier, password }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || t.login.genericError);
@@ -57,12 +69,26 @@ export default function LoginForm() {
 
         <div className="mt-5 flex flex-col gap-3">
           <label className="block">
-            <div className="eyebrow mb-1.5">{t.login.email}</div>
+            <div className="eyebrow mb-1.5">
+              {mode === "signup" ? t.login.email : t.login.identifier}
+            </div>
+            {/*
+              * `type="text"` on sign-in: `type="email"` makes the browser
+              * refuse a username outright, which is exactly the validation this
+              * field must not do. Sign-up still asks for an address, so it
+              * keeps the email keyboard and the browser's own check.
+              */}
             <input
-              className="input" type="email" autoComplete="email" value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              className="input"
+              name="identifier"
+              type={mode === "signup" ? "email" : "text"}
+              autoComplete={mode === "signup" ? "email" : "username"}
+              autoCapitalize="none" spellCheck={false}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submit()}
-              placeholder={t.login.emailPlaceholder}
+              placeholder={mode === "signup"
+                ? t.login.emailPlaceholder : t.login.identifierPlaceholder}
             />
           </label>
           <label className="block">
@@ -83,7 +109,7 @@ export default function LoginForm() {
           </div>
         )}
 
-        <button className="btn btn-primary w-full mt-4" disabled={busy || !email || !password} onClick={submit}>
+        <button className="btn btn-primary w-full mt-4" disabled={busy || !identifier.trim() || !password} onClick={submit}>
           {busy ? t.login.working : mode === "signup" ? t.login.createButton : t.login.signIn}
         </button>
 

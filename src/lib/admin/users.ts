@@ -1,5 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { ApiError } from "@/lib/http";
+import {
+  MAX_USERNAME, MIN_USERNAME, checkUsername, isPlausibleEmail, normaliseEmail, normaliseUsername,
+} from "@/lib/identity";
 import { hashPassword } from "@/lib/auth";
 import { query, transaction } from "@/lib/db/pool";
 import { seedAccount } from "@/lib/seed";
@@ -66,7 +69,9 @@ export function temporaryPassword(): string {
 }
 
 export interface NewAccount {
+  /** Either of these may be empty, but not both. */
   email: string;
+  username: string;
   displayName?: string;
   role: "user" | "admin";
   disabled: boolean;
@@ -88,8 +93,26 @@ export interface CreatedAccount {
 const INVITE_DAYS = 7;
 
 export async function createAccount(admin: AdminUser, input: NewAccount): Promise<CreatedAccount> {
-  const email = input.email.trim().toLowerCase();
-  if (!email.includes("@") || email.length > 254) throw new ApiError("Enter a valid email address");
+  /*
+   * A managed account may be named by a username instead of an address — that
+   * is the whole point of usernames here. Requiring an email for one would
+   * force an admin to invent a fake address, which then looks real in the
+   * users list. One of the two is required; both are allowed.
+   */
+  const email = normaliseEmail(input.email ?? "");
+  const username = normaliseUsername(input.username ?? "");
+  if (!email && !username) throw new ApiError("Enter an email address or a username");
+  if (email && !isPlausibleEmail(email)) throw new ApiError("Enter a valid email address");
+  if (username) {
+    const problem = checkUsername(username);
+    if (problem) {
+      throw new ApiError(problem.reason === "too_short"
+        ? `A username must be at least ${MIN_USERNAME} characters`
+        : problem.reason === "too_long"
+          ? `A username must be under ${MAX_USERNAME} characters`
+          : "A username may use letters, digits, and dots, hyphens or underscores in between");
+    }
+  }
 
   /*
    * An account created by invite still gets a password hash, of a long random
@@ -104,10 +127,11 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
   try {
     created = await transaction(async (q) => {
       const rows = await q<{ id: string }>(
-        `insert into users (email, password_hash, role, disabled_at, must_change_password)
-         values ($1, $2, $3::user_role, $4, $5) returning id`,
-        [email, passwordHash, input.role, input.disabled ? new Date() : null,
-          input.credential === "temporary"],
+        `insert into users (email, username, password_hash, role, disabled_at,
+                            must_change_password)
+         values ($1, $2, $3, $4::user_role, $5, $6) returning id`,
+        [email || null, username || null, passwordHash, input.role,
+          input.disabled ? new Date() : null, input.credential === "temporary"],
       );
       const id = rows[0].id;
 
@@ -143,10 +167,13 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
     if (e instanceof Error && /users_email_idx/.test(e.message)) {
       throw new ApiError("An account with that email already exists", 409);
     }
+    if (e instanceof Error && /users_username_idx/.test(e.message)) {
+      throw new ApiError("That username is already taken", 409);
+    }
     throw e;
   }
 
-  const result: CreatedAccount = { id: created.id, email };
+  const result: CreatedAccount = { id: created.id, email: email || username };
 
   if (input.credential === "temporary") {
     result.temporaryPassword = initial;
@@ -160,7 +187,7 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
   }
 
   // The audit entry records that a credential was issued, never which one it was.
-  await audit(admin, "user_created", { id: created.id, email }, {
+  await audit(admin, "user_created", { id: created.id, email: email || username }, {
     role: input.role,
     disabled: input.disabled,
     credential: input.credential,
@@ -181,7 +208,8 @@ async function otherActiveAdmins(exceptId: string): Promise<number> {
 
 async function loadTarget(id: string) {
   const rows = await query<{ id: string; email: string; role: string; disabled_at: string | null }>(
-    "select id, email, role, disabled_at from users where id = $1",
+    `select id, coalesce(email, username) as email, role, disabled_at
+       from users where id = $1`,
     [id],
   );
   if (!rows[0]) throw new ApiError("No such account", 404);

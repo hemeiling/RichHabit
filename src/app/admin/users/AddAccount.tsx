@@ -26,6 +26,7 @@ export default function AddAccount() {
   const [done, setDone] = useState<{ email: string; password?: string; link?: string } | null>(null);
 
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
   const [disabled, setDisabled] = useState(false);
@@ -34,7 +35,7 @@ export default function AddAccount() {
   const [seedHabits, setSeedHabits] = useState(true);
 
   const reset = () => {
-    setEmail(""); setDisplayName(""); setRole("user"); setDisabled(false);
+    setEmail(""); setUsername(""); setDisplayName(""); setRole("user"); setDisabled(false);
     setCredential("invite"); setLocale("en"); setSeedHabits(true);
     setError(null); setDone(null);
   };
@@ -46,7 +47,9 @@ export default function AddAccount() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, displayName, role, disabled, credential, locale, seedHabits }),
+        body: JSON.stringify({
+          email, username, displayName, role, disabled, credential, locale, seedHabits,
+        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
@@ -110,9 +113,20 @@ export default function AddAccount() {
           <div className="eyebrow">New account</div>
           <div className="grid grid-cols-1 min-[560px]:grid-cols-2 gap-3 mt-3">
             <label style={{ fontSize: 13 }}>
-              Email
+              Email <span className="faint">or username below</span>
               <input className="input mt-1" type="email" autoFocus value={email}
                 onChange={(e) => setEmail(e.target.value)} placeholder="person@example.com" />
+            </label>
+            {/*
+              * A managed account can be named by a username instead. Requiring
+              * an address for one would mean inventing a fake, which then looks
+              * real in the users list.
+              */}
+            <label style={{ fontSize: 13 }}>
+              Username <span className="faint">or email above</span>
+              <input className="input mt-1" value={username} autoCapitalize="none"
+                spellCheck={false} placeholder="emma"
+                onChange={(e) => setUsername(e.target.value)} />
             </label>
             <label style={{ fontSize: 13 }}>
               Display name <span className="faint">optional</span>
@@ -169,7 +183,8 @@ export default function AddAccount() {
 
           <div className="flex gap-2 mt-4">
             <button className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn-primary" disabled={busy || !email.includes("@")}
+            <button className="btn btn-primary"
+              disabled={busy || (!email.includes("@") && username.trim().length < 3)}
               onClick={submit}>
               {busy ? "Creating…" : "Create account"}
             </button>

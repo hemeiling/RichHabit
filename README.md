@@ -51,7 +51,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 118 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
+| `npm test` | Vitest — 133 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
@@ -372,6 +372,40 @@ What happens when you confirm:
 The client never decides any of this. If the request fails, the app says so and
 stays signed in rather than pretending.
 
+### Signing in: email or username
+
+The first field on the login form takes either. Which kind it is, is decided
+server-side from the value — anything containing `@` can only ever match
+`users.email`, anything without can only ever match `users.username` — so one
+can never be used to probe the other, and nothing the browser sends chooses
+which column is searched. `src/lib/identity.ts` holds the rules, is pure and
+tested, and is the same code the login route, the admin create form and
+validation all use.
+
+Both are trimmed and compared lowercased. Nothing else is rewritten: silently
+turning `e.mma` into `emma` would mean the name someone was given is not the
+name that works. A username is 3–30 characters of letters and digits, with
+single interior dots, hyphens or underscores — no `@`, and no leading, trailing
+or doubled punctuation, because "emma..jones" and "emma.jones" are impossible to
+tell apart read aloud, which is how a managed account's name usually travels.
+
+Failures say **"Invalid username/email or password."** — the same words for an
+unknown username, an unknown address and a wrong password, so the form cannot be
+used to find out which accounts exist. A disabled account is the one exception:
+it answers 403 and says so, but only after the right password, so the person has
+already proved the account is theirs.
+
+The sign-in field is `type="text"`, deliberately. `type="email"` makes the
+browser refuse a username before the request is ever sent — exactly the
+validation this field must not do.
+
+**Create Account still asks for an address**, and that is not an oversight.
+Usernames belong to accounts an admin manages and can reset; an account created
+from the public form with only a username would have no way back in if the
+password were lost. Admin → Add Account takes either, and stores `email` as null
+rather than a placeholder when a username is used — a fake address in the users
+list looks real.
+
 ### Managing accounts
 
 **Admin → Users** has **+ Add Account**: email, optional display name, role,
@@ -589,7 +623,7 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 
 ## Verified, not assumed
 
-- `npm test` — 118 tests: the habit engine (scheduling in all three frequency modes, weighted vs
+- `npm test` — 133 tests: the habit engine (scheduling in all three frequency modes, weighted vs
   unweighted scoring, streaks continuing across an unchecked today, streaks breaking on a missed
   past day, best/worst habit selection, an account with no habits) and the coach wire contract.
 - `npm run typecheck` — clean under `strict`.
@@ -671,6 +705,19 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   退出登录) with the email untranslated; admin renders the same sidebar with its
   own items and none of the app's; and sign out from the sidebar ends the
   session for real.
+- **Signing in with either identifier, 38 checks in a browser**: the field reads
+  "Email or username" / 邮箱或用户名 with the matching placeholders and no English
+  left in Chinese; an admin creates an account with no address at all and its
+  `email` column is null; that account signs in by username, and by the username
+  upper-cased and padded with spaces; an email account still signs in, cased and
+  padded too. An unknown username, an unknown address and a wrong password all
+  return 401 with the *same* sentence; a malformed identifier is a failed
+  sign-in, not a validation error; a disabled account is refused 403 with its own
+  message even though the password was right. Server-side, the same username in
+  a different case is refused 409, and "em", "emma jones", "emma@example.com" and
+  ".emma" are each refused 400. The sign-up form still asks for Email, and the
+  username account is shown by its name in the sidebar and found by it in
+  Admin → Users.
 - **Signing out, 46 checks in a browser, two users on one machine**: Alice creates
   a habit and a note, signs out, and her cookie is gone from the jar; replaying
   the token she had is refused 401 and cannot reach `/today`; Back does not

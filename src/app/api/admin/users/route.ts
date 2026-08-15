@@ -18,6 +18,8 @@ export async function POST(request: Request) {
 
     return createAccount(admin, {
       email: check.text(b?.email, "email", 254),
+      // Either identifies the account; `createAccount` requires one of them.
+      username: check.text(b?.username, "username", 40),
       displayName: check.text(b?.displayName, "displayName", 120),
       role: check.oneOf(b?.role ?? "user", ["user", "admin"] as const, "role"),
       disabled: b?.disabled === true,

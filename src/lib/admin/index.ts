@@ -25,7 +25,8 @@ export async function currentAdmin(): Promise<AdminUser | null> {
   const user = await getSessionUser();
   if (!user) return null;
   const rows = await query<{ id: string; email: string }>(
-    "select id, email from users where id = $1 and role = 'admin'",
+    // Coalesced, so an admin named only by a username is still attributable.
+    "select id, coalesce(email, username) as email from users where id = $1 and role = 'admin'",
     [user.id],
   );
   return rows[0] ?? null;

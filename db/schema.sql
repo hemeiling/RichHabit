@@ -57,7 +57,12 @@ create type habit_status   as enum (
 -- ------------------------------ identity -----------------------------------
 create table users (
   id            uuid primary key default gen_random_uuid(),
-  email         text not null,
+  -- Nullable: a managed account may be identified by username alone. One of
+  -- the two must be present, which the check below enforces.
+  email         text,
+  -- Lowercase, 3-30 chars, no '@' — see src/lib/identity.ts. Nullable, because
+  -- an account that signed itself up has an address and needs no second name.
+  username      text,
   password_hash text not null,
   -- Set by `npm run admin:grant` or by an existing admin through the admin API,
   -- which checks the caller's own role against this column on every request.
@@ -70,10 +75,14 @@ create table users (
   -- Set when an admin issues a temporary password. The app makes the user
   -- choose their own before it will let them anywhere else.
   must_change_password boolean not null default false,
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  -- An account nobody can name is an account nobody can sign in to.
+  constraint users_identified check (email is not null or username is not null)
 );
 -- Email is compared case-insensitively; the index is what enforces uniqueness.
 create unique index users_email_idx on users (lower(email));
+-- Usernames are compared lowercased, so uniqueness has to be too.
+create unique index users_username_idx on users (lower(username));
 
 -- Opaque session tokens. The cookie carries the id; nothing is signed into it,
 -- so revoking a session is a delete rather than a key rotation.

@@ -105,6 +105,9 @@ try {
     ["users", "disabled_at", "alter table users add column disabled_at timestamptz"],
     ["users", "must_change_password",
      "alter table users add column must_change_password boolean not null default false"],
+    // Sign in with a username as well as an email. Existing rows all have an
+    // address, so the column starts null everywhere and nothing is backfilled.
+    ["users", "username", null],
   ]) {
     if (await columnExists(table, column)) continue;
 
@@ -136,6 +139,19 @@ try {
         // that cannot be undone, and nothing reads it any more.
         console.log("  habits.status backfilled from habits.active (which is now unused)");
       }
+    } else if (table === "users" && column === "username") {
+      await client.query("alter table users add column username text");
+      await client.query(
+        "create unique index if not exists users_username_idx on users (lower(username))");
+      // Email stops being mandatory once a username can identify an account,
+      // but every row still needs one of the two.
+      await client.query("alter table users alter column email drop not null");
+      await client.query(`do $$ begin
+        if not exists (select 1 from pg_constraint where conname = 'users_identified') then
+          alter table users add constraint users_identified
+            check (email is not null or username is not null);
+        end if;
+      end $$;`);
     } else if (table === "users" && column === "role") {
       await client.query(`do $$ begin
         if not exists (select 1 from pg_type where typname = 'user_role') then

@@ -660,6 +660,9 @@ export const en = {
     welcomeBack: "Welcome back",
     createAccount: "Create your account",
     tagline: "Your habits, your data, only yours.",
+    /** One field, either kind of account — the server works out which. */
+    identifier: "Email or username",
+    identifierPlaceholder: "Enter your email or username",
     email: "Email",
     emailPlaceholder: "you@example.com",
     password: "Password",
@@ -693,7 +696,11 @@ export const en = {
     emailTaken: "That email is already registered.",
     passwordTooShort: (n: number) => `Password must be at least ${n} characters.`,
     passwordTooLong: (n: number) => `Password must be under ${n} characters.`,
-    wrongCredentials: "That email and password don't match.",
+    // Deliberately says nothing about whether the account exists.
+    wrongCredentials: "Invalid username/email or password.",
+    invalidUsername: "A username is 3-30 characters: letters, digits, and dots, hyphens or underscores in between.",
+    usernameTaken: "That username is already taken.",
+    needIdentifier: "Enter an email address or a username.",
     tooManyAttempts: "Too many attempts. Wait a few minutes and try again.",
     coachUnavailable: "The AI coach isn't switched on for this app yet.",
     coachEmpty: "The coach didn't return anything. Try asking again.",

@@ -425,7 +425,7 @@ export interface AccountSummary {
 
 export async function loadAccount(userId: string): Promise<AccountSummary | null> {
   const rows = await query<any>(
-    `select u.email,
+    `select coalesce(u.email, u.username) as email,
             u.created_at,
             u.role = 'admin' as is_admin,
             (select count(*) from habits h

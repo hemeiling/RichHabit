@@ -390,7 +390,8 @@ export async function adminUsers(
   { search = "", sort = "active" as UserSort, limit = 100 } = {},
 ): Promise<AdminUserRow[]> {
   const rows = await query<Record<string, any>>(`
-    select u.id, u.email, u.role::text as role, u.created_at, u.disabled_at,
+    select u.id, coalesce(u.email, u.username) as email, u.role::text as role,
+           u.created_at, u.disabled_at,
            ev.first_active, ev.last_active, coalesce(ev.active_days, 0) as active_days,
            coalesce(s.sessions, 0) as sessions,
            coalesce(h.habits, 0) as habits,
@@ -406,7 +407,8 @@ export async function adminUsers(
       left join (select user_id, count(*) completions from habit_completions group by user_id) hc on hc.user_id = u.id
       left join (select user_id, count(*) goals from goals group by user_id) g on g.user_id = u.id
       left join (select user_id, count(*) reviews from weekly_reviews group by user_id) wr on wr.user_id = u.id
-     where ($1 = '' or u.email ilike '%' || $1 || '%')
+     -- Searching by either name, since either can be the one you know.
+     where ($1 = '' or u.email ilike '%' || $1 || '%' or u.username ilike '%' || $1 || '%')
      order by ${SORT_SQL[sort] ?? SORT_SQL.active}
      limit $2
   `, [search, limit]);

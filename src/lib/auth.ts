@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "@/lib/cookies";
 import { auth as authEnv, isProduction } from "@/lib/env";
+import { looksLikeEmail, normaliseIdentifier } from "@/lib/identity";
 import { query } from "@/lib/db/pool";
 
 /**
@@ -89,8 +90,45 @@ export async function destroySession(): Promise<void> {
   });
 }
 
+/**
+ * Resolves what someone typed into the first login box to an account.
+ *
+ * The kind is decided here, server-side, from the value itself — the client
+ * sends one string and has no say in which column it is matched against. An
+ * identifier with an `@` can only ever match an email, and one without can only
+ * ever match a username, so neither can be used to probe the other.
+ *
+ * Returns null for anything unknown, and the caller must answer the same way it
+ * answers a wrong password.
+ */
+export interface Credentials {
+  id: string;
+  passwordHash: string;
+  disabledAt: string | null;
+}
+
+export async function findByIdentifier(raw: string): Promise<Credentials | null> {
+  const value = normaliseIdentifier(raw);
+  if (!value) return null;
+
+  const rows = await query<{ id: string; password_hash: string; disabled_at: string | null }>(
+    looksLikeEmail(value)
+      ? "select id, password_hash, disabled_at from users where lower(email) = $1"
+      : "select id, password_hash, disabled_at from users where lower(username) = $1",
+    [value],
+  );
+  const row = rows[0];
+  return row
+    ? { id: row.id, passwordHash: row.password_hash, disabledAt: row.disabled_at }
+    : null;
+}
+
 export interface SessionUser {
   id: string;
+  /**
+   * How the account is identified: its address, or its username when it has no
+   * address. Every screen that shows "signed in as" shows this.
+   */
   email: string;
   /** Set when an admin issued a temporary password and it has not been changed. */
   mustChangePassword: boolean;
@@ -109,7 +147,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
      * one can be made because sign-in checks the same column.
      */
     const rows = await query<{ id: string; email: string; must_change_password: boolean }>(
-      `select u.id, u.email, u.must_change_password
+      `select u.id, coalesce(u.email, u.username) as email, u.must_change_password
          from sessions s join users u on u.id = s.user_id
         where s.id = $1 and s.expires_at > now() and u.disabled_at is null`,
       [token],
