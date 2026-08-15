@@ -23,6 +23,9 @@ export const zh: Dict = {
     week: "本周",
     insights: "洞察",
     more: "更多",
+    mainNavigation: "主导航",
+    openMenu: "打开菜单",
+    account: "账户与设置",
   },
 
   titles: {

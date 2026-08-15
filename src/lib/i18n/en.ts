@@ -36,6 +36,10 @@ export const en = {
     week: "Week",
     insights: "Insights",
     more: "More",
+    /** The sidebar's own labels: the landmark, the drawer, the account block. */
+    mainNavigation: "Main navigation",
+    openMenu: "Open menu",
+    account: "Account & settings",
   },
 
   titles: {

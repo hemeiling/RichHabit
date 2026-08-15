@@ -12,6 +12,9 @@
      used for the swap and if the font files ever fail to load. */
   --display: var(--font-display), 'Iowan Old Style', Palatino, Georgia, serif;
   --body: var(--font-body), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Declared once: the sidebar's width and the inset of the content beside it
+     have to agree, and they are set in different rules. */
+  --sidebar-w: 244px;
 }
 
 [data-theme="dark"] {
@@ -81,12 +84,58 @@ body {
 .tick[data-on="true"] { background: var(--accent); border-color: var(--accent); }
 .tick:active { transform: scale(.9); }
 
-.navbtn {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 9px 0 7px; background: none; border: none; cursor: pointer;
-  color: var(--faint); font-size: 10.5px;
+/* ------------------------------- sidebar ---------------------------------- */
+/*
+ * One set of rules for the app and for admin. Below `--sidebar-at` it is a
+ * drawer over the page; at or above, it is simply always there and the content
+ * column is inset to make room. The breakpoint is a CSS media query rather
+ * than a measured viewport width in JS, so the server and the client render
+ * the same markup and nothing shifts after hydration.
+ */
+.sidebar {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 50;
+  width: var(--sidebar-w); display: flex; flex-direction: column;
+  background: var(--surface); border-right: 1px solid var(--line);
+  transform: translateX(-100%);
+  /*
+   * `visibility` as well as `transform`. Sliding it off-screen hides it from
+   * the eye but not from the tab order or the accessibility tree — a keyboard
+   * user could tab into a closed drawer and a screen reader would read it out.
+   * Transitioning visibility keeps it around for the length of the slide-out
+   * and then takes it out of the document properly.
+   */
+  visibility: hidden;
+  transition: transform .22s ease, visibility .22s;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding-bottom: env(safe-area-inset-bottom);
 }
-.navbtn[data-on="true"] { color: var(--ink); }
+.sidebar[data-open="true"] { transform: none; visibility: visible; }
+.sidebar-scrim {
+  position: fixed; inset: 0; z-index: 45;
+  background: rgba(10,10,12,.45); backdrop-filter: blur(2px);
+}
+
+/* Sign out is anchored to the bottom by pushing everything above it up. */
+.sidebar-foot { margin-top: auto; }
+
+.navlink {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; margin: 1px 8px; border-radius: 10px;
+  color: var(--muted); font-size: 14.5px; text-decoration: none;
+  border: 1px solid transparent; background: none; width: calc(100% - 16px);
+  text-align: left; cursor: pointer;
+}
+.navlink:hover { background: var(--raise); color: var(--ink); }
+.navlink[aria-current="page"] {
+  background: var(--accent-soft); border-color: var(--accent-soft);
+  color: var(--accent); font-weight: 500;
+}
+
+@media (min-width: 900px) {
+  .sidebar { transform: none; visibility: visible; }
+  .sidebar-scrim, .sidebar-only-mobile { display: none; }
+  .with-sidebar { padding-left: var(--sidebar-w); }
+}
 
 .sheet-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
 @media (min-width: 640px) { .sheet-wrap { align-items: center; } }

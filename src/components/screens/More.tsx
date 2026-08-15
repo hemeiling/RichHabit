@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useHabits } from "@/components/store";
 import LanguageToggle from "@/components/LanguageToggle";
 import { Segmented, Sheet } from "@/components/ui";
+import { useSignOut } from "@/components/useSignOut";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { instantDateFor } from "@/lib/i18n";
 import { todayISO } from "@/lib/dates";
@@ -18,42 +19,6 @@ const LINKS = [
   { href: "/more/stacks", key: "stacks" },
   { href: "/more/review", key: "review" },
 ] as const;
-
-/**
- * Signing out, for real.
- *
- * The session lives in a `sessions` row and an opaque HttpOnly cookie, so the
- * only thing that ends it is the server deleting that row — which is why this
- * waits for the response and refuses to navigate if the request failed. A
- * redirect on its own would leave a working session behind and merely look
- * signed out.
- *
- * The navigation is a full document load rather than `router.push`. Next keeps
- * a client-side cache of already-rendered routes, and React keeps this
- * account's state in memory; a soft navigation leaves both intact, so Back
- * could paint the previous user's habits from memory without asking the server
- * anything. Replacing the document drops every byte of it, and `replace` keeps
- * the signed-in page out of history entirely.
- */
-function useSignOut() {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  const signOut = async () => {
-    setBusy(true);
-    setFailed(false);
-    try {
-      const res = await fetch("/api/auth/signout", { method: "POST" });
-      if (!res.ok) throw new Error(String(res.status));
-      window.location.replace("/login");
-    } catch {
-      setBusy(false);
-      setFailed(true);
-    }
-  };
-
-  return { signOut, busy, failed };
-}
 
 export default function More({ account }: { account: AccountSummary }) {
   const { state, actions, saving } = useHabits();

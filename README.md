@@ -81,7 +81,10 @@ src/
   components/
     store.tsx       Loads state once, applies changes optimistically, rolls back on failure.
     ui.tsx          Sheet, Field, Segmented, ScoreDial, Heatmap, Spark, Bars.
-    AppShell.tsx    Header, tab bar, theme, save indicator, error banner.
+    Sidebar.tsx     The navigation, shared by the app and admin. Holds no strings.
+    AppShell.tsx    Sidebar, header, theme, save indicator, error banner.
+    AdminShell.tsx  The same sidebar with admin's items, in English.
+    useSignOut.ts   One sign-out, used by the sidebar and by More.
     screens/        One file per screen. They read the store; they never touch the API directly.
   app/
     (app)/          Authenticated routes: today, habits, week, insights, more/*
@@ -273,6 +276,29 @@ which lands on March 3 when today is March 31 and would quietly compare a month 
 `src/lib/spending.ts` is pure and tested for exactly that.
 
 Analytics see `spending_recorded` and nothing else — no amount, no description, no category.
+
+### Navigation
+
+One sidebar component, two sets of items — the app's (Today, Habits, Week,
+Insights, More) and admin's. It holds no strings of its own: every label,
+including the ones only a screen reader hears, arrives as a prop. That is what
+lets the same component serve the bilingual app from the dictionary and admin,
+which is internal and stays English, without either leaking into it.
+
+It used to be a bar fixed across the bottom. That code is gone, not hidden —
+there is no second navigation system to keep in step.
+
+Persistent from 900px, a drawer below it. The split is a media query in
+`globals.css`, not a measured width in JS: measuring means the server and the
+first client render can disagree and the navigation visibly jumps on load. The
+content column is inset by the same `--sidebar-w` the sidebar is wide, declared
+once because two different rules have to agree on it.
+
+The closed drawer sets `visibility: hidden`, not only `transform`. Sliding it
+off-screen hides it from the eye but not from the tab order or the
+accessibility tree, and a keyboard user could tab into navigation they cannot
+see. The transition carries visibility so it stays put for the length of the
+slide-out and then leaves the document properly.
 
 ### Signing out
 
@@ -489,6 +515,20 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   完成重要的目标相关工作 / 喝足够的水 / 避免垃圾食品 and back again; seeded units and goals switch
   too; a habit called "Practice violin" is untouched throughout; and renaming a seeded habit stops
   it translating while the others carry on.
+- **The navigation refactor, 60 checks in a browser**: no `position: fixed` nav
+  across the bottom and no `.navbtn` left in the DOM; the sidebar is 244px, flush
+  left, full height, and stays put across navigations; the current page is the
+  one highlighted and `/more/spending` lights up More, exactly one item at a
+  time; the account block and sign out sit at the bottom-left; `main` starts
+  clear of the sidebar and never underneath it; all twelve app routes render;
+  below 900px it is off-canvas with the content at full width, opens from a
+  hamburger, and closes on a link, the scrim or Escape — and while closed its
+  links are out of the tab order and cannot be focused even programmatically;
+  no sideways scroll at 320, 390, 768, 900, 1024 or 1440px; every label switches
+  to Chinese from the dictionary (今日 · 习惯 · 本周 · 洞察 · 更多 · 账户与设置 ·
+  退出登录) with the email untranslated; admin renders the same sidebar with its
+  own items and none of the app's; and sign out from the sidebar ends the
+  session for real.
 - **Signing out, 46 checks in a browser, two users on one machine**: Alice creates
   a habit and a note, signs out, and her cookie is gone from the jar; replaying
   the token she had is refused 401 and cannot reach `/today`; Back does not

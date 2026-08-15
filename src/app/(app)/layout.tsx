@@ -9,5 +9,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect("/login");
 
   // Resolved server-side so the first paint is already in the right language.
-  return <AppShell userId={user.id} locale={getLocale()}>{children}</AppShell>;
+  return (
+    <AppShell userId={user.id} email={user.email} locale={getLocale()}>
+      {children}
+    </AppShell>
+  );
 }

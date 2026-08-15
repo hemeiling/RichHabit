@@ -1,11 +1,19 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { HabitsProvider, useHabits } from "@/components/store";
 import LanguageToggle from "@/components/LanguageToggle";
+import Sidebar, { SidebarToggle, type NavItem } from "@/components/Sidebar";
+import { useSignOut } from "@/components/useSignOut";
 import { LocaleProvider, useAdoptLocale, useLocale, useT } from "@/lib/i18n/context";
 import type { Locale } from "@/lib/i18n";
 
+/**
+ * The app's navigation. It used to be a bar fixed to the bottom of the screen;
+ * it is a sidebar now, persistent from 900px and a drawer below that, sharing
+ * one component with admin.
+ */
 const TABS = [
   { href: "/today", key: "today", path: "M4 5h16v15H4z M4 10h16 M8 3v4 M16 3v4" },
   { href: "/habits", key: "habits", path: "M5 7h14 M5 12h14 M5 17h9" },
@@ -45,17 +53,73 @@ function LocaleSync() {
   return null;
 }
 
-function Chrome({ children }: { children: React.ReactNode }) {
+/**
+ * The account block at the foot of the sidebar: who you are, a way into the
+ * account screen, and sign out — anchored to the bottom by `.sidebar-foot`.
+ */
+function SidebarAccount({ email, onNavigate }: { email: string; onNavigate: () => void }) {
+  const t = useT();
+  const { signOut, busy, failed } = useSignOut();
+
+  return (
+    <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 8 }}>
+      <div className="px-5 pt-2 pb-1 faint"
+        style={{ fontSize: 12, overflowWrap: "anywhere", lineHeight: 1.35 }}>
+        {email}
+      </div>
+      <Link href="/more" className="navlink" onClick={onNavigate}>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          style={{ flex: "none" }}>
+          <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
+        </svg>
+        {t.nav.account}
+      </Link>
+      <button className="navlink" onClick={signOut} disabled={busy}>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          style={{ flex: "none" }}>
+          <path d="M15 17l5-5-5-5 M20 12H9 M12 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
+        </svg>
+        {busy ? t.more.signingOut : t.more.signOut}
+      </button>
+      {failed && (
+        <p className="px-5 pt-1" role="alert" style={{ fontSize: 12, color: "var(--warn)" }}>
+          {t.more.signOutFailed}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Chrome({ email, children }: { email: string; children: React.ReactNode }) {
   const { state, actions, loading, saving, error, dismissError } = useHabits();
   const t = useT();
   const pathname = usePathname();
   const router = useRouter();
-  const activeTab = TABS.find((x) => pathname === x.href || pathname.startsWith(`${x.href}/`))?.href;
   const isSubPage = pathname.split("/").length > 2;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+  const items: NavItem[] = TABS.map((tab) => ({
+    href: tab.href, label: t.nav[tab.key], icon: tab.path,
+  }));
 
   return (
     <div data-theme={state.prefs.theme} style={{ minHeight: "100vh" }}>
       <LocaleSync />
+
+      <Sidebar
+        brand={<span className="display" style={{ fontSize: 19 }}>{t.appName}</span>}
+        items={items}
+        footer={<SidebarAccount email={email} onNavigate={closeMenu} />}
+        open={menuOpen} onClose={closeMenu}
+        closeLabel={t.common.close} navLabel={t.nav.mainNavigation}
+      />
+
+      {/* Everything that is not the sidebar sits in this column, inset from the
+          left at the width where the sidebar is always on screen. */}
+      <div className="with-sidebar">
       <header style={{
         position: "sticky", top: 0, zIndex: 20, background: "var(--bg)",
         borderBottom: "1px solid var(--line)",
@@ -63,6 +127,7 @@ function Chrome({ children }: { children: React.ReactNode }) {
         <div className="mx-auto px-4 sm:px-6 flex items-center justify-between"
           style={{ maxWidth: 780, height: 56 }}>
           <div className="flex items-center gap-2.5 min-w-0">
+            <SidebarToggle onClick={() => setMenuOpen(true)} label={t.nav.openMenu} />
             {isSubPage && (
               <button className="btn btn-quiet" style={{ padding: "5px 10px" }}
                 onClick={() => router.back()} aria-label={t.common.back}>‹</button>
@@ -93,42 +158,21 @@ function Chrome({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="mx-auto px-4 sm:px-6 py-5 fade-in"
-        style={{ maxWidth: 780, paddingBottom: 96 }} key={pathname}>
+        style={{ maxWidth: 780, paddingBottom: 40 }} key={pathname}>
         {loading ? <div className="eyebrow py-10 text-center">{t.common.loading}</div> : children}
       </main>
-
-      <nav style={{
-        position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 30,
-        background: "color-mix(in srgb, var(--bg) 88%, transparent)", backdropFilter: "blur(12px)",
-        borderTop: "1px solid var(--line)", paddingBottom: "env(safe-area-inset-bottom)",
-      }}>
-        <div className="mx-auto flex" style={{ maxWidth: 780 }}>
-          {TABS.map((tab) => {
-            const on = activeTab === tab.href;
-            return (
-              <button key={tab.href} className="navbtn" data-on={on} onClick={() => router.push(tab.href)}>
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none"
-                  stroke={on ? "var(--ink)" : "var(--faint)"} strokeWidth="1.6"
-                  strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d={tab.path} />
-                </svg>
-                {t.nav[tab.key]}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      </div>
     </div>
   );
 }
 
 export default function AppShell({
-  userId, locale, children,
-}: { userId: string; locale: Locale; children: React.ReactNode }) {
+  userId, email, locale, children,
+}: { userId: string; email: string; locale: Locale; children: React.ReactNode }) {
   return (
     <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
-        <Chrome>{children}</Chrome>
+        <Chrome email={email}>{children}</Chrome>
       </HabitsProvider>
     </LocaleProvider>
   );
