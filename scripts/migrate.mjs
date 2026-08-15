@@ -171,14 +171,66 @@ try {
     changed++;
   }
 
-  // ---- 2. analytics tables --------------------------------------------------
-  const { rows: analytics } = await client.query(
-    `select 1 from information_schema.tables
-      where table_schema = 'public' and table_name = 'analytics_events'`,
-  );
-  if (analytics.length === 0) {
-    console.log("  analytics tables are missing — apply db/schema.sql to a fresh database,");
-    console.log("  or copy the 'Product usage analytics' section from it into this database.");
+  /*
+   * ---- 2. analytics tables --------------------------------------------------
+   *
+   * These arrived after the first release, so a database created from the
+   * original schema does not have them. This used to print advice and carry on,
+   * which meant the step further down that alters `analytics_events` then threw
+   * and rolled the whole migration back — a deploy from that state failed
+   * outright. Create them instead.
+   *
+   * `user_sessions` first: `analytics_events.session_id` references it.
+   */
+  for (const [table, ddl, indexes] of [
+    ["user_sessions", `
+      create table user_sessions (
+        id               uuid primary key default gen_random_uuid(),
+        user_id          uuid references users on delete set null,
+        started_at       timestamptz not null default now(),
+        last_activity_at timestamptz not null default now(),
+        ended_at         timestamptz,
+        event_count      int not null default 0,
+        device_type      text,
+        timezone         text,
+        created_at       timestamptz not null default now()
+      )`, [
+      "create index sessions_open_idx on user_sessions (user_id, last_activity_at desc)",
+      "create index user_sessions_started_idx on user_sessions (started_at)",
+    ]],
+    ["analytics_events", `
+      create table analytics_events (
+        id            bigserial primary key,
+        user_id       uuid references users on delete set null,
+        anonymous_id  text,
+        session_id    uuid references user_sessions on delete set null,
+        event_name    text not null,
+        event_category text,
+        feature       text,
+        page          text,
+        entity_type   text,
+        entity_id     uuid,
+        properties    jsonb not null default '{}'::jsonb,
+        occurred_at   timestamptz not null default now(),
+        user_timezone text,
+        app_version   text,
+        created_at    timestamptz not null default now()
+      )`, [
+      "create index events_user_time_idx on analytics_events (user_id, occurred_at desc)",
+      "create index events_time_idx on analytics_events (occurred_at desc)",
+      "create index events_name_idx on analytics_events (event_name, occurred_at desc)",
+      "create index events_session_idx on analytics_events (session_id)",
+      "create index events_feature_idx on analytics_events (feature, occurred_at desc)",
+    ]],
+  ]) {
+    const { rows } = await client.query(
+      `select 1 from information_schema.tables
+        where table_schema = 'public' and table_name = $1`, [table]);
+    if (rows.length) continue;
+    await client.query(ddl);
+    for (const index of indexes) await client.query(index);
+    console.log(`  created ${table}`);
+    changed++;
   }
 
   // ---- 3. habit library catalogue ------------------------------------------
@@ -273,6 +325,12 @@ try {
    * while removing the link to a person. Both columns cascaded before this.
    */
   for (const [table, column] of [["analytics_events", "user_id"], ["user_sessions", "user_id"]]) {
+    // Belt and braces: step 2 creates these when missing, but a table that is
+    // not there must never take the whole migration down with it.
+    const { rows: exists } = await client.query(
+      `select 1 from information_schema.tables
+        where table_schema = 'public' and table_name = $1`, [table]);
+    if (exists.length === 0) continue;
     const { rows } = await client.query(
       `select rc.delete_rule
          from information_schema.table_constraints tc

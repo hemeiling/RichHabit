@@ -1,13 +1,21 @@
 # Render blueprint: one web service, one Postgres instance.
 # Create it from the dashboard with "New → Blueprint" pointed at this repo.
 #
-# The schema is applied by `npm run db:setup` as a pre-deploy step. That script
-# is idempotent — it checks for the `users` table and does nothing if the
-# database is already set up — so it is safe on every deploy, not just the first.
+# The database is brought up to date by two idempotent scripts, in this order:
+#
+#   db:setup    applies db/schema.sql to an *empty* database. It checks for the
+#               `users` table first and does nothing if one exists.
+#   db:migrate  brings an *existing* database up to the current schema — adds
+#               columns and tables added since, and backfills where it can.
+#
+# Both are needed on every deploy. The first is what a brand-new database needs
+# and the second is a no-op there; the second is what every deploy after that
+# needs and the first is a no-op then. Running only db:setup would leave an
+# existing database missing every column added since it was created.
 #
 # preDeployCommand runs only on paid instance types. On the free tier, remove it
-# and run the same command once from the service's Shell tab after the first
-# deploy: `npm run db:setup`.
+# and run the same command from the service's Shell tab after each deploy that
+# changes the schema:  npm run db:setup && npm run db:migrate
 services:
   - type: web
     name: rich-habits
@@ -15,7 +23,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm ci && npm run build
-    preDeployCommand: npm run db:setup
+    preDeployCommand: npm run db:setup && npm run db:migrate
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -35,6 +43,11 @@ services:
       # `sync: false` keeps the secret out of this file and out of git.
       - key: OPENAI_API_KEY
         sync: false
+      # Production is production. RH_TEST_INSTANCE is deliberately absent: it
+      # stamps every account created as created_via='test', which would make
+      # real sign-ups look like fixtures in Admin -> Users.
+      - key: NODE_ENV
+        value: production
 
 databases:
   - name: rich-habits-db

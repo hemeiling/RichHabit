@@ -15,3 +15,8 @@ next-env.d.ts
 # Throwaway database and build output for the browser suites
 .pgdata-test/
 .next-test/
+
+# Scratch databases and builds used to rehearse a deploy
+.pgdata-deploy/
+.pgdata-old/
+.next-prod/

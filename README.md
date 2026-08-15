@@ -683,26 +683,96 @@ from and metrics write through a single function, so a sync job can fill the sam
 
 ## Deploying to Render
 
-`render.yaml` is a blueprint: **New → Blueprint** in the Render dashboard, pointed at this repo,
-creates the web service and the Postgres together and wires `DATABASE_URL` between them.
+`render.yaml` is a blueprint: **New → Blueprint** in the Render dashboard,
+pointed at this repo, creates the web service and the Postgres together and
+wires `DATABASE_URL` between them.
 
-What it sets up, and why:
+### The pre-deploy step runs two scripts, and needs both
 
-- **`preDeployCommand: npm run db:setup`** applies `db/schema.sql`. The script checks for the
-  `users` table first and exits quietly if the database is already set up, so it is safe on every
-  deploy rather than just the first. `preDeployCommand` needs a paid instance type — on the free
-  tier, delete that line and run `npm run db:setup` once from the service's Shell tab.
-- **`healthCheckPath: /api/health`** does a real `select now()` rather than only proving the
-  process is alive, so an instance that can't reach Postgres is taken out of rotation.
-- **`OPENAI_API_KEY` is `sync: false`** — Render prompts for it in the dashboard and it never
-  enters this file or git. Leave it unset and the coach returns 501; nothing else is affected.
+```
+preDeployCommand: npm run db:setup && npm run db:migrate
+```
+
+| | |
+|---|---|
+| `db:setup` | applies `db/schema.sql` to an **empty** database; checks for the `users` table first and does nothing if one exists |
+| `db:migrate` | brings an **existing** database up to the current schema — adds columns and tables added since, backfills where it can |
+
+Each is a no-op in the other's situation, and both are idempotent, so this line
+is safe on every deploy. Running only `db:setup` — which is what this used to
+do — would leave an already-created database missing every column added since,
+and the app would fail at runtime rather than at deploy time.
+
+`preDeployCommand` needs a paid instance type. On the free tier, delete the line
+and run the same two commands from the service's Shell tab after any deploy that
+changes the schema.
+
+### What else the blueprint sets
+
+- **`healthCheckPath: /api/health`** does a real `select now()` rather than only
+  proving the process is alive. Verified: it answers `{ok:true,db:"up"}` on 200,
+  **503 `{ok:false,db:"down"}` while Postgres is unreachable**, and 200 again
+  once it returns — so an instance that cannot reach its database is taken out
+  of rotation instead of serving errors.
+- **`OPENAI_API_KEY` is `sync: false`** — Render prompts for it in the dashboard
+  and it never enters this file or git. Leave it unset and the coach answers
+  501; nothing else changes.
+- **`NODE_ENV=production`**, which is what makes the session cookie `Secure`.
+- **`RH_TEST_INSTANCE` is deliberately absent.** It stamps every account the
+  server creates as `created_via='test'`, which is how Admin → Users tells
+  fixtures from real people. Setting it in production would make every real
+  sign-up look like a test account.
 - **TLS is worked out from the connection string.** Render's internal host
-  (`dpg-xxxx-a`) doesn't speak TLS and the external one (`dpg-xxxx-a.oregon-postgres.render.com`)
-  requires it — the difference is the dot. Override with `DATABASE_SSL=false` / `=require` or an
-  `sslmode` parameter if you ever need to.
+  (`dpg-xxxx-a`) doesn't speak TLS and the external one
+  (`dpg-xxxx-a.oregon-postgres.render.com`) requires it — the difference is the
+  dot. Override with `DATABASE_SSL=false` / `=require` if that guess is ever
+  wrong.
 
-The schema needs **Postgres 13 or newer** and no extensions, so it requires no elevated
-privileges. `npm run build` does not touch the database, so a build can't fail on a cold one.
+The schema needs **Postgres 13 or newer** and no extensions, so it requires no
+elevated privileges. `npm run build` does not touch the database, so a build
+cannot fail on a cold one.
+
+### Your first admin
+
+Nothing in the app can grant admin — deliberately; an API that could would be
+the hole. Do it against the database, either from the service's Shell tab or
+from your own machine using the **External** connection string:
+
+```bash
+DATABASE_URL='postgres://…external…' npm run admin:grant -- you@example.com
+```
+
+After that, Admin → Users can create further admins.
+
+### The deploy, rehearsed
+
+Not reasoned about — actually run, against Postgres, before writing this:
+
+1. **`npm ci && npm run build` with `DATABASE_URL` unset** — compiles.
+2. **An empty database** → `db:setup` creates 20 tables → `db:migrate` reports
+   nothing to do. Running both again: still nothing to do.
+3. **`npm start` with `NODE_ENV=production`** on a non-default `PORT` — serves
+   `/login`, answers `/api/health`, redirects `/today` to `/login` with
+   `no-store`, 401s `/api/state`, and sets
+   `rh_session=…; Path=/; Secure; HttpOnly; SameSite=lax`.
+4. **A browser against that production build**: sign-up seeds ten starter
+   habits, ticking one writes to Postgres, every screen renders, a signed-in
+   non-admin gets 404 from `/admin`, and no client chunk contains
+   `DATABASE_URL`, a `postgres://` string, an API key or the cookie name.
+   `created_via` is `self_signup`, confirming `RH_TEST_INSTANCE` is unset.
+5. **An upgrade from the oldest deployable schema.** A database built from the
+   first Render-ready commit (14 tables), seeded with an account, a habit and a
+   completion, then taken through the same pre-deploy line. It ends with the
+   same 20 tables, the same 179 columns and the same foreign-key delete rules as
+   a fresh database — the only difference being `habits.active`, the retired
+   column the migration deliberately keeps. The legacy habit kept its id and its
+   completion and gained `template_key = read_for_learning`. The current app
+   then ran against it: new sign-ups, completions and every screen.
+
+Step 5 is what this rehearsal was for. The migration used to *warn* that the
+analytics tables were missing and carry on, and a later step that alters
+`analytics_events` then threw and rolled the whole thing back — so a deploy from
+an old database failed outright. It creates them now.
 
 ## Verified, not assumed
 
