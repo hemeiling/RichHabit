@@ -28,8 +28,21 @@ export async function POST(request: Request) {
     );
   }
 
-  // Email or username — decided from the value, in one place, server-side.
-  const user = await findByIdentifier(identifier);
+  /*
+   * Email or username — decided from the value, in one place, server-side.
+   *
+   * A database that cannot be reached is answered plainly. It used to escape as
+   * an unhandled 500 with an empty body, which the form could not parse, so a
+   * deployment with no database told everyone "Something went wrong. Try again."
+   * — indistinguishable from a wrong password, and untrue.
+   */
+  let user;
+  try {
+    user = await findByIdentifier(identifier);
+  } catch (e) {
+    console.error("[signin]", e);
+    return NextResponse.json({ error: msg.serviceUnavailable }, { status: 503 });
+  }
 
   // One message for both branches, so this can't be used to enumerate accounts.
   const ok = user ? await verifyPassword(password, user.passwordHash) : false;

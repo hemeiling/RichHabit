@@ -58,7 +58,10 @@ export async function POST(request: Request) {
     if (e instanceof Error && /users_email_idx|duplicate key/.test(e.message)) {
       return NextResponse.json({ error: msg.emailTaken }, { status: 409 });
     }
-    throw e;
+    // Same reasoning as sign-in: an unreachable database says so, rather than
+    // escaping as an empty 500 the form can only describe as "went wrong".
+    console.error("[signup]", e);
+    return NextResponse.json({ error: msg.serviceUnavailable }, { status: 503 });
   }
 
   await createSession(userId);

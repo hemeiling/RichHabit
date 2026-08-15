@@ -663,6 +663,7 @@ export const zh: Dict = {
     newPassword: "新密码",
   },
   errors: {
+    serviceUnavailable: "暂时无法连接到数据库，请稍后再试。",
     setupLinkInvalid: "这个设置链接已失效。请索取新的链接。",
     accountDisabled: "该账户已被停用。请联系管理员。",
     notSignedIn: "你尚未登录。",

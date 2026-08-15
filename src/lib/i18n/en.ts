@@ -690,6 +690,7 @@ export const en = {
     newPassword: "New password",
   },
   errors: {
+    serviceUnavailable: "The service can't reach its database right now. Try again in a moment.",
     setupLinkInvalid: "This setup link is not valid any more. Ask for a new one.",
     accountDisabled: "This account has been disabled. Contact whoever administers it.",
     notSignedIn: "You're not signed in.",
