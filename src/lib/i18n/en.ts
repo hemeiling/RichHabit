@@ -205,6 +205,57 @@ export const en = {
     check: (name: string) => `Check ${name}`,
     uncheck: (name: string) => `Uncheck ${name}`,
   },
+  /** §12/§14. Customising the checklist without leaving Today. */
+  customise: {
+    addHabit: "Add habit",
+    addTo: (section: string) => `Add to ${section}`,
+    fromLibrary: "Choose from the library",
+    createOwn: "Create my own",
+    searchPlaceholder: "Search habits",
+    showAll: "All times of day",
+    showSection: (section: string) => `${section} only`,
+    build: "Build",
+    avoid: "Avoid",
+    noMatches: "Nothing matches that.",
+    alreadyOnSheet: "Already on your sheet",
+    duplicateTitle: "You already have this one",
+    duplicateBody: (name: string) =>
+      `“${name}” is already on your sheet. Adding it again means two rows to tick and a score counted twice.`,
+    addAnyway: "Add it anyway",
+    added: (name: string) => `Added ${name}`,
+
+    /** The row menu. */
+    menuTitle: "Habit options",
+    logEntry: "Add a note or amount",
+    edit: "Edit habit",
+    moveTo: "Move to",
+    moveUp: "Move up",
+    moveDown: "Move down",
+    pause: "Pause",
+    resume: "Resume",
+    pauseHint: "Stops appearing on Today. Nothing is lost.",
+    replace: "Replace with something else",
+    replaceHint: "Keeps this one and its history, and starts the new one in its place.",
+    replacing: (name: string) => `Replacing “${name}”`,
+    remove: "Remove from my checklist",
+    removeHint: "Stops tracking it. Your history stays, so Insights and the coach still see it.",
+    removeTitle: "Remove from your checklist?",
+    removeBody: (name: string) =>
+      `“${name}” will stop appearing on Today. Its record is kept — every day you completed it still counts in Insights, and you can put it back later from My habits.`,
+    removeConfirm: "Remove it",
+    deleteForever: "Delete permanently",
+    deleteHint: "Erases the habit and everything recorded against it.",
+    deleteTitle: "Delete permanently?",
+    deleteBody: (name: string) =>
+      `“${name}” and anything recorded against it will be erased. This cannot be undone.`,
+    deleteConfirm: "Delete permanently",
+    deleteUnavailable: (days: number) =>
+      days === 1
+        ? "There is 1 day of history here, so this can only be removed, not erased."
+        : `There are ${days} days of history here, so this can only be removed, not erased.`,
+    reorderHint: "Drag to reorder, or use the habit's menu.",
+    dragHandle: "Reorder",
+  },
   habits: {
     all: "All",
     newHabit: "New habit",

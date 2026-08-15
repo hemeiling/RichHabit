@@ -59,6 +59,11 @@ export interface Habit {
   rationale: string | null;
   weight: 1 | 2 | 3;
   goalId: string | null;
+  /**
+   * Where it sits inside its section. The user's own arrangement, so it is
+   * stored rather than derived — there is no rule that would reproduce it.
+   */
+  sortOrder: number;
   createdAt: number;
 }
 

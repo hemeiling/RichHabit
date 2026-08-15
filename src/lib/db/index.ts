@@ -38,6 +38,7 @@ export async function loadAll(): Promise<AppState> {
 }
 
 export const saveHabit = (h: Habit) => post("/api/habits", h);
+export const reorderHabits = (ids: string[]) => post("/api/habits/reorder", { ids });
 export const deleteHabit = (id: string) => remove("/api/habits", id);
 
 export const setCompletion = (

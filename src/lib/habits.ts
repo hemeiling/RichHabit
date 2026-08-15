@@ -25,8 +25,27 @@ export const blankHabit = (): Habit => ({
   anchor: "", environment: "", friction: "",
   startDate: todayISO(), status: "active", active: true, weight: 2,
   replacesHabitId: null, rationale: null,
-  goalId: null, createdAt: Date.now(),
+  goalId: null, sortOrder: 0, createdAt: Date.now(),
 });
+
+/**
+ * A list with `id` moved to where `targetId` currently sits — the one rule for
+ * what a rearrangement means, shared by dragging and by the menu's up/down so
+ * the two cannot disagree.
+ *
+ * The moved item takes the target's place and the target shifts away from it,
+ * which is what dropping something onto a row looks like it should do in both
+ * directions. Unknown ids leave the list alone rather than throwing: a stale
+ * drag after a habit was removed elsewhere is not an error.
+ */
+export function moveWithin(ids: string[], id: string, targetId: string): string[] {
+  const from = ids.indexOf(id);
+  const to = ids.indexOf(targetId);
+  if (from < 0 || to < 0 || from === to) return ids;
+  const next = [...ids];
+  next.splice(to, 0, ...next.splice(from, 1));
+  return next;
+}
 
 export const isDone = (s: AppState, date: string, habitId: string) =>
   !!s.completions[date]?.[habitId]?.done;

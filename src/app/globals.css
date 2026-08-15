@@ -137,8 +137,46 @@ body {
   .with-sidebar { padding-left: var(--sidebar-w); }
 }
 
+/* --------------------------- reordering a habit ---------------------------- */
+/*
+ * The handle is not part of the resting state of a row. Today is a checklist
+ * first, and a permanent grip beside every habit is exactly the clutter this
+ * screen is supposed to avoid — so it appears on hover, and only where there is
+ * a pointer to hover with. On a touch screen reordering lives in the ⋯ menu,
+ * which is also the keyboard path.
+ */
+.drag-handle { opacity: 0; transition: opacity .12s ease; width: 10px; }
+@media (hover: hover) and (pointer: fine) {
+  .habit-row:hover .drag-handle,
+  .habit-row:focus-within .drag-handle { opacity: .55; }
+}
+@media not all and (hover: hover) {
+  .drag-handle { display: none; }
+}
+.habit-row[data-dragging="true"] { opacity: .4; }
+.habit-row[data-over="true"] { box-shadow: inset 0 2px 0 -1px var(--accent); }
+
 .sheet-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
-@media (min-width: 640px) { .sheet-wrap { align-items: center; } }
+@media (min-width: 640px) { /* --------------------------- reordering a habit ---------------------------- */
+/*
+ * The handle is not part of the resting state of a row. Today is a checklist
+ * first, and a permanent grip beside every habit is exactly the clutter this
+ * screen is supposed to avoid — so it appears on hover, and only where there is
+ * a pointer to hover with. On a touch screen reordering lives in the ⋯ menu,
+ * which is also the keyboard path.
+ */
+.drag-handle { opacity: 0; transition: opacity .12s ease; width: 10px; }
+@media (hover: hover) and (pointer: fine) {
+  .habit-row:hover .drag-handle,
+  .habit-row:focus-within .drag-handle { opacity: .55; }
+}
+@media not all and (hover: hover) {
+  .drag-handle { display: none; }
+}
+.habit-row[data-dragging="true"] { opacity: .4; }
+.habit-row[data-over="true"] { box-shadow: inset 0 2px 0 -1px var(--accent); }
+
+.sheet-wrap { align-items: center; } }
 .scrim { position: absolute; inset: 0; background: rgba(10,10,12,.45); backdrop-filter: blur(2px); }
 .sheet {
   position: relative; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;

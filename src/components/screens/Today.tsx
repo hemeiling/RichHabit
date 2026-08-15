@@ -2,16 +2,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
+import AddHabit from "@/components/AddHabit";
+import HabitEditor from "@/components/HabitEditor";
+import HabitMenu from "@/components/HabitMenu";
 import { Empty, Field, ScoreDial, Sheet } from "@/components/ui";
 import { isNumericTracking } from "@/lib/types";
 import { addDays, dow, prettyDate, todayISO } from "@/lib/dates";
 import {
-  CATEGORIES, dayScore, dayStreak, encouragement, habitStreak, isDone, scheduledOn,
+  CATEGORIES, blankHabit, dayScore, dayStreak, encouragement, habitStreak, isDone,
+  moveWithin, scheduledOn,
 } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import { habitName, habitUnit } from "@/lib/templates";
-import type { AppState, Habit } from "@/lib/types";
+import type { AppState, Category, Habit } from "@/lib/types";
 
 /**
  * Logging how much, and how it went. The "Note" marker on a row used to have no
@@ -61,11 +65,20 @@ function LogSheet({
 }
 
 function HabitRow({
-  state, habit, date, onToggle, onOpen, onLog, onStep,
+  state, habit, date, onToggle, onOpen, onMenu, onStep, drag,
 }: {
   state: AppState; habit: Habit; date: string;
-  onToggle: (id: string) => void; onOpen: (h: Habit) => void; onLog: (h: Habit) => void;
+  onToggle: (id: string) => void; onOpen: (h: Habit) => void; onMenu: (h: Habit) => void;
   onStep: (h: Habit, delta: number) => void;
+  /** Drag-and-drop wiring, supplied by the section. */
+  drag: {
+    dragging: boolean;
+    over: boolean;
+    onDragStart: () => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDrop: () => void;
+    onDragEnd: () => void;
+  };
 }) {
   const t = useT();
   const done = isDone(state, date, habit.id);
@@ -100,7 +113,21 @@ function HabitRow({
   })();
 
   return (
-    <div className="flex items-center gap-3 py-3">
+    <div
+      className="habit-row flex items-center gap-3 py-3"
+      data-dragging={drag.dragging || undefined}
+      data-over={drag.over || undefined}
+      onDragOver={drag.onDragOver}
+      onDrop={(e) => { e.preventDefault(); drag.onDrop(); }}
+    >
+      {/* Appears on hover on a pointer device only. The normal state of the row
+          stays a checkbox and a name; on a phone reordering lives in the menu. */}
+      <span
+        className="drag-handle faint" draggable
+        onDragStart={drag.onDragStart} onDragEnd={drag.onDragEnd}
+        aria-hidden="true" title={t.customise.dragHandle}
+        style={{ flex: "none", cursor: "grab", fontSize: 13, lineHeight: 1, userSelect: "none" }}
+      >⠿</span>
       <button
         className="tick" data-on={done} onClick={() => onToggle(habit.id)} aria-pressed={done}
         aria-label={done ? t.today.uncheck(habitName(habit, t)) : t.today.check(habitName(habit, t))}
@@ -153,7 +180,7 @@ function HabitRow({
       )}
       <button
         className="btn btn-quiet" style={{ padding: "4px 9px", flex: "none", fontSize: 15 }}
-        onClick={() => onLog(habit)} aria-label={t.today.logOpen} title={t.today.logOpen}
+        onClick={() => onMenu(habit)} aria-label={t.customise.menuTitle} title={t.customise.menuTitle}
       >
         ⋯
       </button>
@@ -168,7 +195,60 @@ export default function Today() {
   const router = useRouter();
   const [date, setDate] = useState(todayISO());
   const [logging, setLogging] = useState<Habit | null>(null);
+  const [menu, setMenu] = useState<Habit | null>(null);
+  const [editing, setEditing] = useState<Habit | null>(null);
+  const [adding, setAdding] = useState<Category | null>(null);
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   const isToday = date === todayISO();
+
+  /** Distinct days with a completion — what decides whether erasing is offered. */
+  const daysRecorded = (habitId: string) =>
+    Object.values(state.completions).filter((day) => day[habitId]).length;
+
+  /**
+   * The order of one section after moving `id` to sit where `target` is. Both
+   * dragging and the menu's up/down end here, so there is one rule for what an
+   * arrangement means, and one write.
+   */
+  const reorderWithin = (category: Category, id: string, targetId: string) => {
+    if (id === targetId) return;
+    const inSection = state.habits
+      .filter((h) => h.category === category && h.status !== "retired")
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt);
+    const ids = moveWithin(inSection.map((h) => h.id), id, targetId);
+    actions.reorderHabits(ids);
+  };
+
+  /** Menu "move up / move down": the same operation, one place along. */
+  const nudge = (habit: Habit, delta: -1 | 1) => {
+    const siblings = list.filter((h) => h.category === habit.category);
+    const at = siblings.findIndex((h) => h.id === habit.id);
+    const neighbour = siblings[at + delta];
+    if (neighbour) reorderWithin(habit.category, habit.id, neighbour.id);
+  };
+
+  /**
+   * §14. Taking a habit off the sheet is a status change, never a delete: the
+   * row and every completion against it stay exactly where they were, so
+   * Insights and the coach still see the history.
+   */
+  const setStatus = (habit: Habit, status: Habit["status"]) =>
+    actions.saveHabit({ ...habit, status, active: status === "active" });
+
+  /**
+   * §10/§18. Replacing keeps the original and its record, retires it, and
+   * starts a new habit that points back at what it replaced.
+   */
+  const startReplacement = (habit: Habit) => {
+    setMenu(null);
+    setEditing({
+      ...blankHabit(),
+      category: habit.category,
+      sortOrder: habit.sortOrder,
+      replacesHabitId: habit.id,
+    });
+  };
 
   /**
    * §12/§20. Stepping a numeric habit records the amount and, with it, whether
@@ -245,33 +325,54 @@ export default function Today() {
         </div>
       </section>
 
-      {list.length === 0 ? (
-        <Empty title={t.today.nothingScheduled} body={t.today.nothingScheduledBody} />
-      ) : (
-        CATEGORIES.map((c) => {
-          const hs = list.filter((h) => h.category === c.id);
-          if (!hs.length) return null;
-          return (
-            <section key={c.id} className="card px-5 py-2">
-              <div className="flex items-baseline justify-between pt-3 pb-1">
-                <h2 className="display" style={{ fontSize: 20 }}>{t.categories[c.id].label}</h2>
+      {/* Every section is rendered whether or not it has habits: an empty one
+          still needs its "+ Add habit", or the page would offer no way to fill
+          it. The old empty state only appeared when the whole day was empty. */}
+      {CATEGORIES.map((c) => {
+        const hs = list.filter((h) => h.category === c.id);
+        return (
+          <section key={c.id} className="card px-5 py-2">
+            <div className="flex items-baseline justify-between pt-3 pb-1">
+              <h2 className="display" style={{ fontSize: 20 }}>{t.categories[c.id].label}</h2>
+              {hs.length > 0 && (
                 <span className="eyebrow">
                   {t.common.of(hs.filter((h) => isDone(state, date, h.id)).length, hs.length)}
                 </span>
-              </div>
-              <div className="divide">
-                {hs.map((h) => (
-                  <HabitRow key={h.id} state={state} habit={h} date={date}
-                    onToggle={(id) => actions.toggle(date, id)}
-                    onOpen={(habit) => router.push(`/habits?edit=${habit.id}`)}
-                    onLog={setLogging}
-                    onStep={step} />
-                ))}
-              </div>
-              <div className="h-2" />
-            </section>
-          );
-        })
+              )}
+            </div>
+            <div className="divide">
+              {hs.map((h) => (
+                <HabitRow key={h.id} state={state} habit={h} date={date}
+                  onToggle={(id) => actions.toggle(date, id)}
+                  onOpen={(habit) => setEditing(habit)}
+                  onMenu={setMenu}
+                  onStep={step}
+                  drag={{
+                    dragging: dragged === h.id,
+                    over: overId === h.id && dragged !== null && dragged !== h.id,
+                    onDragStart: () => setDragged(h.id),
+                    onDragOver: (e) => { e.preventDefault(); setOverId(h.id); },
+                    onDrop: () => {
+                      if (dragged) reorderWithin(c.id, dragged, h.id);
+                      setDragged(null); setOverId(null);
+                    },
+                    onDragEnd: () => { setDragged(null); setOverId(null); },
+                  }} />
+              ))}
+            </div>
+
+            {/* §12. Subtle on purpose: the page is a checklist first. */}
+            <button className="w-full text-left py-3 faint"
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14 }}
+              onClick={() => setAdding(c.id)}>
+              + {t.customise.addHabit}
+            </button>
+          </section>
+        );
+      })}
+
+      {list.length === 0 && (
+        <Empty title={t.today.nothingScheduled} body={t.today.nothingScheduledBody} />
       )}
 
       {logging && (
@@ -279,6 +380,59 @@ export default function Today() {
           habit={logging} date={date} entry={state.completions[date]?.[logging.id]}
           onSave={(value, note) => actions.logCompletion(date, logging.id, value, note)}
           onClose={() => setLogging(null)}
+        />
+      )}
+
+      {menu && (() => {
+        const siblings = list.filter((h) => h.category === menu.category);
+        const at = siblings.findIndex((h) => h.id === menu.id);
+        return (
+          <HabitMenu
+            habit={menu}
+            daysRecorded={daysRecorded(menu.id)}
+            canMoveUp={at > 0}
+            canMoveDown={at >= 0 && at < siblings.length - 1}
+            onLog={() => { setLogging(menu); setMenu(null); }}
+            onEdit={() => { setEditing(menu); setMenu(null); }}
+            onMove={(category) => actions.saveHabit({ ...menu, category })}
+            onReorder={(delta) => { nudge(menu, delta); setMenu(null); }}
+            onStatus={(status) => setStatus(menu, status)}
+            onReplace={() => startReplacement(menu)}
+            onDelete={() => actions.deleteHabit(menu.id)}
+            onClose={() => setMenu(null)}
+          />
+        );
+      })()}
+
+      {adding && (
+        <AddHabit
+          section={adding}
+          habits={state.habits}
+          goals={state.goals}
+          nextSortOrder={
+            Math.max(0, ...state.habits.filter((h) => h.category === adding)
+              .map((h) => h.sortOrder)) + 1
+          }
+          onSave={actions.saveHabit}
+          onClose={() => setAdding(null)}
+        />
+      )}
+
+      {editing && (
+        <HabitEditor
+          habit={editing} goals={state.goals}
+          onSave={(h) => {
+            actions.saveHabit(h);
+            // §10. A replacement retires what it replaces, rather than deleting
+            // it — the old habit and its record are the point of comparison.
+            if (h.replacesHabitId) {
+              const old = state.habits.find((x) => x.id === h.replacesHabitId);
+              if (old) setStatus(old, "retired");
+            }
+            setEditing(null);
+          }}
+          onDelete={(id) => { actions.deleteHabit(id); setEditing(null); }}
+          onClose={() => setEditing(null)}
         />
       )}
 

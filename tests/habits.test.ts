@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addDays, dow, todayISO, weekStart } from "../src/lib/dates";
 import {
   blankHabit, dayScore, dayStreak, habitLongestStreak, habitStats, habitStreak,
-  isScheduled, rangeScore, scheduledOn, weekSummary,
+  isScheduled, moveWithin, rangeScore, scheduledOn, weekSummary,
 } from "../src/lib/habits";
 import { emptyState } from "../src/lib/types";
 import type { AppState, Habit } from "../src/lib/types";
@@ -151,5 +151,45 @@ describe("stats and summaries", () => {
     expect(scheduledOn(s, todayISO())).toEqual([]);
     expect(rangeScore(s, [todayISO()]).pct).toBeNull();
     expect(dayStreak(s)).toBe(0);
+  });
+});
+
+describe("moveWithin", () => {
+  const ids = ["a", "b", "c", "d"];
+
+  it("moves an item down to where the target sits", () => {
+    expect(moveWithin(ids, "a", "c")).toEqual(["b", "c", "a", "d"]);
+  });
+
+  it("moves an item up to where the target sits", () => {
+    expect(moveWithin(ids, "d", "b")).toEqual(["a", "d", "b", "c"]);
+  });
+
+  it("handles neighbours in both directions", () => {
+    expect(moveWithin(ids, "a", "b")).toEqual(["b", "a", "c", "d"]);
+    expect(moveWithin(ids, "b", "a")).toEqual(["b", "a", "c", "d"]);
+  });
+
+  it("moves to either end", () => {
+    expect(moveWithin(ids, "d", "a")).toEqual(["d", "a", "b", "c"]);
+    expect(moveWithin(ids, "a", "d")).toEqual(["b", "c", "d", "a"]);
+  });
+
+  it("keeps every id exactly once", () => {
+    const out = moveWithin(ids, "b", "d");
+    expect([...out].sort()).toEqual([...ids].sort());
+    expect(out.length).toBe(ids.length);
+  });
+
+  it("does nothing when the ids are unknown or the same", () => {
+    expect(moveWithin(ids, "a", "a")).toEqual(ids);
+    expect(moveWithin(ids, "z", "a")).toEqual(ids);
+    expect(moveWithin(ids, "a", "z")).toEqual(ids);
+  });
+
+  it("does not mutate the list it was given", () => {
+    const original = [...ids];
+    moveWithin(ids, "a", "d");
+    expect(ids).toEqual(original);
   });
 });

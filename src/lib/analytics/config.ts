@@ -44,7 +44,8 @@ export const RETENTION_DAYS = [1, 7, 30] as const;
 export const FEATURES = {
   habits: {
     label: "Daily habit tracking",
-    events: ["habit_completed", "habit_uncompleted", "habit_created", "habit_edited", "habit_archived"],
+    events: ["habit_completed", "habit_uncompleted", "habit_created", "habit_edited",
+      "habit_archived", "habits_reordered"],
   },
   refine: {
     label: "Refine my habits",

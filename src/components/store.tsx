@@ -13,6 +13,8 @@ interface Actions {
   logCompletion: (date: string, habitId: string, value: number | null, note: string) => void;
   saveHabit: (h: Habit) => void;
   deleteHabit: (id: string) => void;
+  /** The user's arrangement of one section, as the ids in their new order. */
+  reorderHabits: (ids: string[]) => void;
   saveGoal: (g: Goal) => void;
   deleteGoal: (id: string) => void;
   setDayNote: (date: string, body: string) => void;
@@ -176,6 +178,20 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       },
       () => db.deleteHabit(id),
     ),
+
+    reorderHabits: (ids) => {
+      // The order is a fact about the list, so it is applied to the list in one
+      // go and written in one request rather than one save per habit.
+      const rank = new Map(ids.map((id, i) => [id, i]));
+      run(
+        (s) => ({
+          ...s,
+          habits: s.habits.map((h) => (rank.has(h.id) ? { ...h, sortOrder: rank.get(h.id)! } : h))
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt),
+        }),
+        () => db.reorderHabits(ids),
+      );
+    },
 
     saveGoal: (g) => run(
       (s) => ({

@@ -59,7 +59,7 @@ export async function loadState(userId: string): Promise<AppState> {
   const [habits, schedules, goalLinks, goals, completions, notes, awareness, stacks, metrics,
     reviews, spending, prefs] =
     await Promise.all([
-      query("select * from habits where user_id = $1 order by sort_order", [userId]),
+      query("select * from habits where user_id = $1 order by sort_order, created_at", [userId]),
       query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
       query("select * from goal_habits where user_id = $1", [userId]),
       query("select * from goals where user_id = $1 and archived = false", [userId]),
@@ -114,6 +114,7 @@ export async function loadState(userId: string): Promise<AppState> {
       rationale: h.rationale ?? null,
       weight: h.weight,
       goalId: goalOf.get(h.id) ?? null,
+      sortOrder: h.sort_order ?? 0,
       createdAt: new Date(h.created_at).getTime(),
     };
   });
@@ -208,9 +209,9 @@ export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
     await q(
       `insert into habits (id, user_id, name, template_key, description, category, kind,
                            tracking_type, minimum, target, unit, anchor, environment, friction,
-                           weight, start_date, status, replaces_habit_id, rationale)
+                           weight, start_date, status, replaces_habit_id, rationale, sort_order)
        values ($1,$2,$3,$4,$5,$6::habit_category,$7::habit_kind,$8::tracking_type,$9,$10,$11,
-               $12,$13,$14,$15,$16,$17::habit_status,$18,$19)
+               $12,$13,$14,$15,$16,$17::habit_status,$18,$19,$20)
        on conflict (id) do update set
          name = excluded.name, template_key = excluded.template_key,
          description = excluded.description, category = excluded.category,
@@ -219,12 +220,13 @@ export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
          anchor = excluded.anchor, environment = excluded.environment,
          friction = excluded.friction,
          weight = excluded.weight, start_date = excluded.start_date, status = excluded.status,
-         replaces_habit_id = excluded.replaces_habit_id, rationale = excluded.rationale
+         replaces_habit_id = excluded.replaces_habit_id, rationale = excluded.rationale,
+         sort_order = excluded.sort_order
        where habits.user_id = $2`,
       [h.id, userId, h.name, h.templateKey, h.description || null, h.category, h.type,
         h.tracking, h.minimum, h.target, h.unit || null,
         h.anchor || null, h.environment || null, h.friction || null,
-        h.weight, h.startDate, h.status, h.replacesHabitId, h.rationale],
+        h.weight, h.startDate, h.status, h.replacesHabitId, h.rationale, h.sortOrder],
     );
 
     // A schedule change opens a new version from today, so history keeps its own rules.
@@ -444,4 +446,23 @@ export async function loadAccount(userId: string): Promise<AccountSummary | null
     activeHabits: Number(r.active_habits),
     daysRecorded: Number(r.days_recorded),
   };
+}
+
+/**
+ * The user's own arrangement of a section.
+ *
+ * One statement rather than a save per habit: the order is a single fact about
+ * a list, and writing it row by row would leave the list briefly inconsistent
+ * if a request failed halfway. `user_id` is in the where clause, so ids the
+ * account does not own simply match nothing — a foreign id is a no-op, not an
+ * error and not a write.
+ */
+export async function reorderHabits(userId: string, ids: string[]) {
+  if (ids.length === 0) return;
+  await query(
+    `update habits as h set sort_order = o.position
+       from unnest($2::uuid[]) with ordinality as o(id, position)
+      where h.id = o.id and h.user_id = $1`,
+    [userId, ids],
+  );
 }

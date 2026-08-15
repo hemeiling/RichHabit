@@ -83,6 +83,8 @@ export function parseHabit(b: any): Habit {
     rationale: check.text(b?.rationale, "rationale", 600) || null,
     weight: weight as 1 | 2 | 3,
     goalId: isUuid(b?.goalId) ? b.goalId : null,
+    // Bounded so a client cannot write an order that overflows the int column.
+    sortOrder: Math.min(9999, Math.max(0, Math.trunc(Number(b?.sortOrder) || 0))),
     createdAt: Number(b?.createdAt) || Date.now(),
   };
 }
@@ -199,4 +201,16 @@ export function parsePrefs(b: any): Prefs {
     goalWeight: check.numberOrNull(b?.goalWeight, "goalWeight"),
     locale: check.oneOf(b?.locale ?? "en", LOCALES, "locale"),
   };
+}
+
+/**
+ * A list of ids, for operations that are about the list rather than about any
+ * one row — reordering a section, for instance. Bounded, because the only
+ * legitimate caller sends one section's worth.
+ */
+export function parseIdList(b: any, field: string): string[] {
+  const raw = b?.[field];
+  if (!Array.isArray(raw)) throw new ApiError(`${field} must be an array`);
+  if (raw.length > 200) throw new ApiError(`${field} has too many entries`);
+  return raw.map((v, i) => check.uuid(v, `${field}[${i}]`));
 }

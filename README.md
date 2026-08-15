@@ -51,7 +51,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 111 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
+| `npm test` | Vitest — 118 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
@@ -258,6 +258,46 @@ shown as such rather than offered twice. Above nine active habits the workspace
 mentions pacing (§13); it is a sentence, not a limit, and the backlog keeps
 whatever you leave there.
 
+### Editing the checklist from Today
+
+Each section ends with a subtle **+ Add habit**, which opens two ways in: the
+library, filtered to that section and searchable in either language, or a blank
+form. They exist separately because they are different situations — someone who
+does not know what to track wants suggestions; someone who does wants a form and
+no browsing. Both end at the same `Habit` saved by the same action, and both
+positive habits and ones to drop are offered, since half the work is dropping
+things. Adding something already on the sheet warns and explains why (two rows
+to tick, a score counted twice) but does not refuse: it is the user's sheet.
+
+The `⋯` menu carries everything else — log an amount, edit, move between
+sections, move up or down, pause, replace, remove, delete. It is a menu because
+the resting state of a row has to stay a checkbox and a name; a yes/no row has
+exactly three controls, and a numeric one adds only the − / + stepper.
+
+**Remove and delete are not the same action, and the app never conflates them.**
+
+| | What it does | Offered |
+|---|---|---|
+| Remove from my checklist | `status` → `retired`. The row stays, every completion stays, Insights and the coach still see it, and it can be put back. | Always |
+| Delete permanently | The habit and everything recorded against it are erased. | Only with no history |
+
+Once a habit has been completed even once, the destructive option is replaced by
+a sentence saying how many days of history are there and that it can only be
+removed. The case permanent deletion is actually for — something added by
+mistake a minute ago — is exactly the case where nothing is lost.
+
+Replacing (§10/§18) keeps the original, retires it, and starts a new habit whose
+`replaces_habit_id` points back at it, because the old habit and its record are
+the point of comparison.
+
+Order is the user's own arrangement, so it is stored rather than derived — there
+is no rule that would reproduce it. Dragging is the shortcut on a pointer
+device, with a handle that appears on hover rather than sitting permanently
+beside every habit; move up/down in the menu is the keyboard and touch path.
+Both call one `moveWithin`, so they cannot disagree about what a rearrangement
+means, and the result is written as one statement (`unnest … with ordinality`)
+rather than a save per habit — the order is one fact about a list.
+
 ### Spending is not a habit
 
 "Record what I spent" would make a fine checkbox, and that is exactly the problem: what was
@@ -460,7 +500,7 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 
 ## Verified, not assumed
 
-- `npm test` — 111 tests: the habit engine (scheduling in all three frequency modes, weighted vs
+- `npm test` — 118 tests: the habit engine (scheduling in all three frequency modes, weighted vs
   unweighted scoring, streaks continuing across an unchecked today, streaks breaking on a missed
   past day, best/worst habit selection, an account with no habits) and the coach wire contract.
 - `npm run typecheck` — clean under `strict`.
@@ -515,6 +555,19 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   完成重要的目标相关工作 / 喝足够的水 / 避免垃圾食品 and back again; seeded units and goals switch
   too; a habit called "Practice violin" is untouched throughout; and renaming a seeded habit stops
   it translating while the others carry on.
+- **Customising the checklist, 72 checks in a browser**: every section offers to
+  add, including an empty one; the library opens filtered to that section, widens
+  on request, searches, offers habits to avoid, and marks what is already there;
+  adding a duplicate warns and cancelling adds nothing; a habit created by hand
+  lands in the right section with the priority chosen and no template key.
+  Moving between sections, pausing, reordering by menu and by drag — the order
+  surviving a reload with distinct `sort_order` values in the database — and the
+  resting row still being three controls. **Remove leaves the habit row and its
+  completion in place and only flips the status to `retired`; delete is not even
+  offered once there is a day of history, and where it is offered it erases the
+  row with no orphaned completions left behind** (checked directly against the
+  database). Replacing retires the original and points the new habit at it. All
+  of it again in Chinese, and no sideways scroll at 320, 390 or 1440px.
 - **The navigation refactor, 60 checks in a browser**: no `position: fixed` nav
   across the bottom and no `.navbtn` left in the DOM; the sidebar is 244px, flush
   left, full height, and stays put across navigations; the current page is the
