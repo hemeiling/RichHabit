@@ -682,93 +682,127 @@ mobile-first.
 Not built, deliberately: Apple Health. `daily_metrics.source` marks where synced rows would come
 from and metrics write through a single function, so a sync job can fill the same rows later.
 
-## Deploying free
+## Deploying: Neon + Render Blueprint
 
-The blueprint in `render.yaml` is already set to Render's free plans. **New →
-Blueprint** in the dashboard, pointed at this repo, creates the web service and
-the Postgres together and wires `DATABASE_URL` between them.
+The infrastructure is `render.yaml`. The database is Neon, because Render's free
+Postgres is removed after about 30 days and a habit tracker that loses its
+history is worse than no habit tracker. Two secrets are pasted once, into
+Render; nothing else is configured by hand.
 
-### Steps
+### 1. Neon
 
-1. **Create the blueprint.** Render prompts for `OPENAI_API_KEY` because it is
-   `sync: false`. Leave it empty if you do not want the AI coach — it answers
-   501 and nothing else changes.
-2. **Set up the database from your own machine.** The free tier has no
-   `preDeployCommand` and no Shell tab, so this is the one manual step. Copy the
-   **External** connection string from the database page and run:
+1. Create a project. Pick the region nearest the Render service — **US West
+   (Oregon)** to match `region: oregon` — because every query crosses that gap.
+2. Copy the **direct** connection string: the one *without* `-pooler` in the
+   hostname. The pooled one would also work (nothing here uses named prepared
+   statements, `LISTEN`, advisory locks or session-level `SET`), but with
+   `PG_POOL_MAX=5` there is nothing for a pooler to do.
 
-   ```bash
-   DATABASE_URL='postgres://…external…' npm run db:deploy
-   ```
+It looks like `postgresql://USER:PASSWORD@ep-xxxx-1234.us-west-2.aws.neon.tech/neondb?sslmode=require`.
+TLS needs no configuration — `resolveSsl` turns it on for any dotted host and
+honours `sslmode`, and `tests/pool.test.ts` pins that for both Neon endpoints.
 
-   That is `db:setup && db:migrate`. Both are idempotent, so running it again is
-   harmless — do it after any deploy whose commit changed `db/schema.sql`.
-3. **Make yourself an admin.** Nothing in the app can do this, deliberately:
+### 2. Create the schema, before deploying
 
-   ```bash
-   DATABASE_URL='postgres://…external…' npm run admin:grant -- you@example.com
-   ```
+From your own machine, so the first deploy meets a database that is ready:
 
-   Sign up in the app first so the account exists. After that, Admin → Users can
-   create further admins, set their passwords, and disable or delete accounts.
-
-### What free actually costs you
-
-- **The service sleeps.** After about 15 minutes without traffic it spins down,
-  and the next request wakes it — expect roughly a minute for that first page.
-  Nothing keeps it awake on this plan, including the health check.
-- **The free database is time-limited.** Check Render's current terms when you
-  create it; at the time of writing a free Postgres is removed after 30 days.
-  For a habit tracker that means losing history you cannot get back, so decide
-  this up front rather than in a month:
-
-  | | |
-  |---|---|
-  | Upgrade the database only | Keep the web service free and move `databases[0].plan` to a paid tier. The cheapest paid Postgres is far less than the web service. |
-  | Free Postgres elsewhere | Providers such as Neon and Supabase offer a free Postgres that does not expire. See below. |
-  | Accept it | Fine for trying the app out. Export from **More → Your data → Export JSON** before the month is up. |
-
-- **512MB of RAM and a small connection allowance**, which is why the blueprint
-  sets `PG_POOL_MAX=5`.
-
-### Using Neon for the database
-
-Render's free web service with a free Postgres somewhere that does not expire is
-the combination worth having. Nothing in the app cares where Postgres lives — it
-needs version 13 or newer and no extensions.
-
-1. Create a Neon project. Pick the region closest to the Render service
-   (`us-west-2` for Oregon) — every query crosses that gap.
-2. Copy the **direct** connection string, the one *without* `-pooler` in the
-   host. Neon's pooled endpoint would also work — nothing here uses a named
-   prepared statement, `LISTEN`, an advisory lock or a session-level `SET`, which
-   are what break behind PgBouncer — but with `PG_POOL_MAX=5` there is nothing
-   for a pooler to do, and the direct endpoint has no edge cases at all.
-3. On the Render service, delete the `DATABASE_URL` entry that points at the
-   Render database and paste Neon's in its place. Delete the Render database too,
-   or it will sit there until it expires.
-4. Run the schema step against the same string:
-
-   ```bash
-   DATABASE_URL='postgresql://…neon.tech/neondb?sslmode=require' npm run db:deploy
-   ```
-
-TLS needs no configuration: `resolveSsl` turns it on for any dotted hostname and
-honours an explicit `sslmode`, both of which a Neon string has. Neon's free tier
-also suspends the database after a few minutes idle and wakes it on the next
-query, which pairs with the free web service sleeping — the first request after a
-quiet spell pays for both.
-
-### Upgrading later
-
-```
-services[0].plan   free → starter
-databases[0].plan  free → basic-256mb
-and add back:      preDeployCommand: npm run db:deploy
+```bash
+cd rich-habits
+DATABASE_URL='postgresql://…neon.tech/neondb?sslmode=require' npm run db:deploy
 ```
 
-That is the whole difference. Nothing in the application changes, and the
-manual step in point 2 goes away because the pre-deploy hook does it for you.
+Expect `Schema applied — 20 tables created.` then `Nothing to do; already up to
+date.` It is `db:setup && db:migrate`, both idempotent — run it again after any
+deploy whose commit changed `db/schema.sql`.
+
+Keep the string in your shell history or a password manager, not in a file you
+might commit. It is not needed in `.env.local`, and putting it there points your
+*local* app at production.
+
+### 3. Render
+
+**New → Blueprint**, pointed at this repo. It prompts for the two `sync: false`
+variables and sets the rest itself:
+
+| Variable | Value | Set by |
+|---|---|---|
+| `DATABASE_URL` | the Neon direct string from step 1 | **you, at the prompt** |
+| `OPENAI_API_KEY` | your OpenAI key, or leave empty | **you, at the prompt** — empty means `/api/coach` answers 501 and nothing else changes |
+| `NODE_ENV` | `production` | blueprint — this is what makes the session cookie `Secure` |
+| `NODE_VERSION` | `20` | blueprint |
+| `APP_VERSION` | `0.1.0` | blueprint — stamped on analytics events |
+| `PG_POOL_MAX` | `5` | blueprint — 512MB instance, modest Neon allowance |
+
+Do **not** set `RH_TEST_INSTANCE`; the app refuses to start with it against a
+non-local database anyway. There is deliberately no `ADMIN_PASSWORD`: no
+environment variable is a credential anywhere in this application.
+
+### 4. Verify, in this order
+
+Replace `HOST` with the new service's URL. The first request wakes a sleeping
+free instance, so allow a minute.
+
+```bash
+curl -s https://HOST/api/health                 # {"ok":true,"db":"up",…}
+curl -si https://HOST/today | head -3           # 307 → /login
+curl -s -o /dev/null -w '%{http_code}\n' https://HOST/api/state   # 401
+```
+
+Then in a browser:
+
+1. **Registration** — create an account. Today shows ten starter habits.
+2. **Login** — sign out, sign back in. A wrong password must say *"Invalid
+   username/email or password."*, not *"Something went wrong"*; the latter means
+   the database is unreachable.
+3. **Admin** — you are not an admin yet, so `/admin` must answer 404.
+4. Make yourself one, then reload `/admin`:
+   ```bash
+   DATABASE_URL='postgresql://…neon.tech/…' npm run admin:grant -- you@example.com
+   ```
+5. **Admin functions** — Admin → Users lists your account. Create one with
+   **Login type: Email** and a setup link; create another with **Login type:
+   Username**, **Credential: Set password**.
+6. **Username authentication** — sign out and sign in with that username and
+   password. Then try it upper-cased and with spaces around it: both must work.
+7. **Bulk safety** — select yourself in Admin → Users and try to delete. The
+   result must report you as skipped, reason `self`.
+
+### 5. Only then, the old service
+
+The replacement must be verified first — steps 4.1 through 4.7 green — because
+deleting the old one is not reversible and its subdomain is released with it.
+
+- **If you want `richhabit.onrender.com` back**: delete the old service, then in
+  the new service's **Settings → Name**, rename it to `richhabit`. Render's
+  `onrender.com` subdomain follows the service name, so the URL moves with it.
+  Check the dashboard actually offers the rename before relying on this; if it
+  does not, a custom domain on the new service is the durable answer.
+- **If you do not mind the URL**: just delete the old one. It is a hand-created
+  Starter service costing $7/month, it is running an old build, and it has no
+  database — there is nothing on it to keep.
+
+Either way, delete it. Leaving it running bills you for a broken copy.
+
+### Automated tests cannot reach production
+
+Three independent measures, because one convention is not a guarantee:
+
+1. **The suites default to the throwaway stack** — `RH_BASE` defaults to
+   `localhost:3002` and `RH_DB` to `localhost:5434`, the database `npm run
+   db:test` wipes on every start.
+2. **A test instance physically cannot open a production connection.** With
+   `RH_TEST_INSTANCE=true`, the pool refuses any host that is not
+   `localhost`/`127.0.0.1`/`::1` and throws before the first query, naming the
+   host it refused. An unparseable string is refused too, rather than assumed
+   safe.
+3. **The destructive script refuses a remote database.** `npm run db:prune`
+   loads `.env.local` *first*, then checks the host, then connects — so a
+   production string left in that file after a deploy is caught rather than
+   used. `RH_ALLOW_REMOTE=1` overrides it, deliberately awkwardly.
+
+And `created_via` records how each account was made, so if a fixture ever did
+reach production it would be visible in Admin → Users under **Source**, not
+guessed at from its email address.
 
 ## Deploying to Render (paid)
 

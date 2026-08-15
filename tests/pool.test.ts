@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolveSsl } from "../src/lib/db/pool";
 
 /**
@@ -75,5 +75,59 @@ describe("a Neon connection string", () => {
 
   it("lets an explicit override still win", () => {
     expect(resolveSsl(direct, "disable")).toBe(false);
+  });
+});
+
+/**
+ * A test instance may only ever reach a local database. The browser suites sign
+ * up freely against it and every account it creates is marked
+ * `created_via='test'`; pointed at production by accident it would fill the real
+ * database with fixtures and mislabel real people.
+ */
+describe("a test instance cannot reach production", () => {
+  const neon = "postgresql://o:p@ep-cool-frost-1234.us-east-2.aws.neon.tech/neondb?sslmode=require";
+  const local = "postgres://postgres@127.0.0.1:5434/postgres";
+
+  const withTestInstance = async (value: string | undefined, fn: (m: any) => void) => {
+    const before = process.env.RH_TEST_INSTANCE;
+    if (value === undefined) delete process.env.RH_TEST_INSTANCE;
+    else process.env.RH_TEST_INSTANCE = value;
+    vi.resetModules();
+    const mod = await import("../src/lib/db/pool");
+    try { fn(mod); } finally {
+      if (before === undefined) delete process.env.RH_TEST_INSTANCE;
+      else process.env.RH_TEST_INSTANCE = before;
+      vi.resetModules();
+    }
+  };
+
+  it("refuses a remote database while RH_TEST_INSTANCE is set", async () => {
+    await withTestInstance("true", (m) => {
+      expect(() => m.assertTestInstanceIsLocal(neon)).toThrow(/not a local database/i);
+    });
+  });
+
+  it("names the host it refused, so the mistake is obvious", async () => {
+    await withTestInstance("true", (m) => {
+      expect(() => m.assertTestInstanceIsLocal(neon)).toThrow(/neon\.tech/);
+    });
+  });
+
+  it("allows a local database", async () => {
+    await withTestInstance("true", (m) => {
+      expect(() => m.assertTestInstanceIsLocal(local)).not.toThrow();
+    });
+  });
+
+  it("refuses anything it cannot parse, rather than assuming it is safe", async () => {
+    await withTestInstance("true", (m) => {
+      expect(() => m.assertTestInstanceIsLocal("not a url")).toThrow();
+    });
+  });
+
+  it("does nothing at all when the flag is unset — production is unaffected", async () => {
+    await withTestInstance(undefined, (m) => {
+      expect(() => m.assertTestInstanceIsLocal(neon)).not.toThrow();
+    });
   });
 });

@@ -60,6 +60,28 @@ export function resolveSsl(url) {
   return host.includes(".") ? on : false;
 }
 
+/**
+ * Refuses to run a destructive script against anything but a local database.
+ *
+ * `npm run db:prune` deletes accounts. `loadEnv()` reads `.env.local`, and the
+ * whole point of production is that its connection string is convenient to have
+ * lying around — so the one thing standing between a tidy-up and deleting real
+ * people is a guard that does not depend on remembering. `RH_ALLOW_REMOTE=1`
+ * overrides it, deliberately awkwardly.
+ */
+export function assertLocalDatabase(connectionString, what) {
+  if (process.env.RH_ALLOW_REMOTE === "1") return;
+  let host = "";
+  try { host = new URL(connectionString).hostname; } catch { host = "unknown"; }
+  if (["localhost", "127.0.0.1", "::1", ""].includes(host)) return;
+  console.error(
+    `Refusing to ${what} against "${host}", which is not a local database.\n` +
+    "This script deletes accounts and everything they own.\n" +
+    "If you really mean it, re-run with RH_ALLOW_REMOTE=1.",
+  );
+  process.exit(1);
+}
+
 /** A connected client, or a clear message about what is missing. */
 export async function connect() {
   loadEnv();

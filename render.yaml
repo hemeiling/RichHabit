@@ -1,37 +1,44 @@
-# Render blueprint — free tier.
-# Create it from the dashboard with "New → Blueprint" pointed at this repo.
+# Render blueprint — free web service, Neon for the database.
 #
-# ── What the free tier changes ───────────────────────────────────────────────
+# Create it with "New → Blueprint" in the dashboard, pointed at this repo. The
+# infrastructure is this file: the service, its plan, its health check and every
+# variable except the two secrets. Nothing needs configuring by hand afterwards
+# beyond pasting those two in.
 #
-# 1. No `preDeployCommand`. It needs a paid instance type, so the database is
-#    brought up to date from your own machine instead, using the database's
-#    EXTERNAL connection string:
+# ── Why there is no `databases:` block ───────────────────────────────────────
 #
-#        DATABASE_URL='postgres://…external…' npm run db:deploy
+# The database is Neon, not Render. Render's free Postgres is removed after
+# about 30 days, which for a habit tracker means losing history that cannot be
+# recovered. Neon's free tier persists.
 #
-#    Run that once after the first deploy, and again after any deploy whose
-#    commit changes db/schema.sql. `db:deploy` is `db:setup && db:migrate`;
-#    both are idempotent, so running it when nothing has changed is harmless.
+# So DATABASE_URL is `sync: false`: Render prompts for it once when the
+# blueprint is created and stores it as a secret. It never enters this file or
+# git. Use Neon's DIRECT connection string — the one *without* `-pooler` in the
+# hostname. TLS needs no configuration; `resolveSsl` turns it on for any dotted
+# host and honours the `sslmode` Neon includes.
 #
-# 2. No Shell tab. That is the same restriction, and the reason for the above.
+# ── The database step ────────────────────────────────────────────────────────
 #
-# 3. The web service sleeps after about 15 minutes with no traffic, and the
-#    next request wakes it — expect roughly a minute for that first page. The
-#    health check does not keep it awake; nothing does, on this plan.
+# `preDeployCommand` needs a paid instance, so on the free plan the schema is
+# applied from your own machine against the same connection string:
 #
-# 4. Render's free Postgres is time-limited. Check the current terms when you
-#    create it: at the time of writing a free database is removed after 30
-#    days, which for a habit tracker means losing history you cannot get back.
-#    See README → "Deploying free" for how to keep the free web service and put
-#    the data somewhere that persists.
+#     DATABASE_URL='postgresql://…neon.tech/neondb?sslmode=require' npm run db:deploy
+#
+# Run it once before the first deploy, and again after any deploy whose commit
+# changes db/schema.sql. It is `db:setup && db:migrate`, both idempotent.
+#
+# ── What free costs ──────────────────────────────────────────────────────────
+#
+# The service sleeps after ~15 minutes without traffic and takes about a minute
+# to wake. Neon's free tier also suspends after a few minutes idle and wakes on
+# the next query, so the first request after a quiet spell pays for both.
 #
 # ── Upgrading later ──────────────────────────────────────────────────────────
 #
-#   services[0].plan   free  →  starter
-#   databases[0].plan  free  →  basic-256mb
-#   and add back:      preDeployCommand: npm run db:deploy
+#   services[0].plan  free → starter        (no sleeping, SSH, pre-deploy)
+#   and add:          preDeployCommand: npm run db:deploy
 #
-# That is the whole difference; nothing in the application changes.
+# Nothing in the application changes.
 
 services:
   - type: web
@@ -43,36 +50,27 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
-      # The internal connection string: same private network, no TLS. pool.ts
-      # detects that from the undotted hostname.
+      # SECRET. Neon's direct connection string. Render prompts for it when the
+      # blueprint is created; it is never written to this file.
       - key: DATABASE_URL
-        fromDatabase:
-          name: rich-habits-db
-          property: connectionString
+        sync: false
+      # SECRET, and optional. Without it /api/coach answers 501 and nothing
+      # else changes. Leave the prompt empty if you do not want the AI coach.
+      - key: OPENAI_API_KEY
+        sync: false
       - key: NODE_VERSION
         value: "20"
+      # Production is production. RH_TEST_INSTANCE is deliberately absent — it
+      # stamps every account created as created_via='test', which would make
+      # real sign-ups look like fixtures in Admin → Users. The application also
+      # refuses to start with it set against a non-local database.
+      - key: NODE_ENV
+        value: production
       # Stamped onto analytics events. npm_package_version is unset in most
       # production runtimes, so set it explicitly.
       - key: APP_VERSION
         value: "0.1.0"
-      # Optional — the AI coach at /api/coach. Set the value in the dashboard;
-      # `sync: false` keeps the secret out of this file and out of git. Leave it
-      # empty and the coach answers 501; nothing else changes.
-      - key: OPENAI_API_KEY
-        sync: false
-      # Production is production. RH_TEST_INSTANCE is deliberately absent: it
-      # stamps every account created as created_via='test', which would make
-      # real sign-ups look like fixtures in Admin -> Users.
-      - key: NODE_ENV
-        value: production
-      # A free instance has 512MB and a free database has few connections to
-      # spare. The app is comfortable with a small pool.
+      # A free instance has 512MB, and Neon's free tier has a modest connection
+      # allowance. The app is comfortable with a small pool.
       - key: PG_POOL_MAX
         value: "5"
-
-databases:
-  - name: rich-habits-db
-    databaseName: richhabits
-    user: richhabits
-    plan: free
-    region: oregon

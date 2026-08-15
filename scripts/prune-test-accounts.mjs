@@ -19,7 +19,7 @@
  * `npm run dev:test` runs the suites against a throwaway database on port 5434,
  * which is wiped on every start. This script is for the ones already made.
  */
-import { connect } from "./lib.mjs";
+import { assertLocalDatabase, connect, loadEnv } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const commit = args.includes("--yes");
@@ -28,6 +28,15 @@ const cutoff = args.includes("--before") && before ? before : null;
 
 // A suite fixture: some prefix, a hyphen, a 13-digit epoch, at example.com.
 const FIXTURE = '^[a-z0-9-]+-[0-9]{13}@example\\.com$';
+
+/*
+ * `loadEnv()` first, then the guard, then the connection. Checking before the
+ * env file is read would see an empty DATABASE_URL, treat that as local, and
+ * wave through exactly the case this exists for: a production connection string
+ * sitting in .env.local because it was convenient during a deploy.
+ */
+loadEnv();
+assertLocalDatabase(process.env.DATABASE_URL ?? "", "prune accounts");
 
 const client = await connect();
 try {

@@ -1,5 +1,5 @@
 import { Pool, types } from "pg";
-import { database, databaseUrl, isProduction } from "@/lib/env";
+import { database, databaseUrl, isProduction, isTestInstance } from "@/lib/env";
 
 /**
  * The one connection pool. Server-only — nothing under `components/` may import
@@ -60,8 +60,43 @@ export function resolveSsl(
   return host.includes(".") ? on : false;
 }
 
+/**
+ * Hosts a test instance is allowed to talk to.
+ *
+ * `RH_TEST_INSTANCE=true` makes every account the server creates
+ * `created_via='test'`, and the browser suites sign up freely against it. If
+ * that server were ever pointed at production — a stray `.env.local`, a copied
+ * command, a mistyped dashboard variable — the suites would create hundreds of
+ * accounts in the real database and mark real sign-ups as fixtures.
+ *
+ * So it is not a convention or a default: a test instance physically cannot
+ * open a connection to anything but a local database. This throws at pool
+ * creation, before a single query runs.
+ */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", ""]);
+
+export function assertTestInstanceIsLocal(connectionString: string) {
+  if (!isTestInstance) return;
+  let host = "";
+  try {
+    host = new URL(connectionString).hostname;
+  } catch {
+    // Unparseable: treat as unknown, which is not local.
+    host = "unknown";
+  }
+  if (!LOCAL_HOSTS.has(host)) {
+    throw new Error(
+      `RH_TEST_INSTANCE is set but DATABASE_URL points at "${host}", which is not a local `
+      + "database. A test instance may only talk to localhost — it creates accounts marked "
+      + "created_via='test' and is driven by automated suites. Unset RH_TEST_INSTANCE, or "
+      + "point DATABASE_URL at your local Postgres.",
+    );
+  }
+}
+
 function create() {
   const connectionString = databaseUrl();
+  assertTestInstanceIsLocal(connectionString);
   return new Pool({
     connectionString,
     ssl: resolveSsl(connectionString),
