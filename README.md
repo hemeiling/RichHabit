@@ -56,6 +56,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
 | `npm run db:migrate` | Bring an existing database up to date. Idempotent |
+| `npm run db:deploy` | `db:setup` then `db:migrate` — the whole database step, for a free-tier deploy |
 | `npm run db:test` | Throwaway database on :5434 for the browser suites. Wiped each start |
 | `npm run dev:test` | The app on :3002 against that database |
 | `npm run db:prune` | List suite-created test accounts. Dry run; `-- --yes` to delete |
@@ -681,7 +682,67 @@ mobile-first.
 Not built, deliberately: Apple Health. `daily_metrics.source` marks where synced rows would come
 from and metrics write through a single function, so a sync job can fill the same rows later.
 
-## Deploying to Render
+## Deploying free
+
+The blueprint in `render.yaml` is already set to Render's free plans. **New →
+Blueprint** in the dashboard, pointed at this repo, creates the web service and
+the Postgres together and wires `DATABASE_URL` between them.
+
+### Steps
+
+1. **Create the blueprint.** Render prompts for `OPENAI_API_KEY` because it is
+   `sync: false`. Leave it empty if you do not want the AI coach — it answers
+   501 and nothing else changes.
+2. **Set up the database from your own machine.** The free tier has no
+   `preDeployCommand` and no Shell tab, so this is the one manual step. Copy the
+   **External** connection string from the database page and run:
+
+   ```bash
+   DATABASE_URL='postgres://…external…' npm run db:deploy
+   ```
+
+   That is `db:setup && db:migrate`. Both are idempotent, so running it again is
+   harmless — do it after any deploy whose commit changed `db/schema.sql`.
+3. **Make yourself an admin.** Nothing in the app can do this, deliberately:
+
+   ```bash
+   DATABASE_URL='postgres://…external…' npm run admin:grant -- you@example.com
+   ```
+
+   Sign up in the app first so the account exists. After that, Admin → Users can
+   create further admins, set their passwords, and disable or delete accounts.
+
+### What free actually costs you
+
+- **The service sleeps.** After about 15 minutes without traffic it spins down,
+  and the next request wakes it — expect roughly a minute for that first page.
+  Nothing keeps it awake on this plan, including the health check.
+- **The free database is time-limited.** Check Render's current terms when you
+  create it; at the time of writing a free Postgres is removed after 30 days.
+  For a habit tracker that means losing history you cannot get back, so decide
+  this up front rather than in a month:
+
+  | | |
+  |---|---|
+  | Upgrade the database only | Keep the web service free and move `databases[0].plan` to a paid tier. The cheapest paid Postgres is far less than the web service. |
+  | Free Postgres elsewhere | Providers such as Neon and Supabase offer a free Postgres that does not expire. Create one, and set `DATABASE_URL` on the Render service by hand instead of `fromDatabase`. Nothing in the app cares where Postgres is — it needs version 13+ and no extensions. |
+  | Accept it | Fine for trying the app out. Export from **More → Your data → Export JSON** before the month is up. |
+
+- **512MB of RAM and a small connection allowance**, which is why the blueprint
+  sets `PG_POOL_MAX=5`.
+
+### Upgrading later
+
+```
+services[0].plan   free → starter
+databases[0].plan  free → basic-256mb
+and add back:      preDeployCommand: npm run db:deploy
+```
+
+That is the whole difference. Nothing in the application changes, and the
+manual step in point 2 goes away because the pre-deploy hook does it for you.
+
+## Deploying to Render (paid)
 
 `render.yaml` is a blueprint: **New → Blueprint** in the Render dashboard,
 pointed at this repo, creates the web service and the Postgres together and
@@ -690,7 +751,7 @@ wires `DATABASE_URL` between them.
 ### The pre-deploy step runs two scripts, and needs both
 
 ```
-preDeployCommand: npm run db:setup && npm run db:migrate
+preDeployCommand: npm run db:deploy
 ```
 
 | | |

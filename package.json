@@ -17,6 +17,7 @@
     "admin:grant": "node scripts/grant-admin.mjs",
     "admin:password": "node scripts/set-password.mjs",
     "db:migrate": "node scripts/migrate.mjs",
+    "db:deploy": "npm run db:setup && npm run db:migrate",
     "db:test": "node scripts/dev-db.mjs --test",
     "dev:test": "DATABASE_URL=postgres://postgres@127.0.0.1:5434/postgres PG_POOL_MAX=1 NEXT_DIST_DIR=.next-test RH_TEST_INSTANCE=true next dev -p 3002",
     "db:prune": "node scripts/prune-test-accounts.mjs"

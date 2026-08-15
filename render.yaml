@@ -1,29 +1,45 @@
-# Render blueprint: one web service, one Postgres instance.
+# Render blueprint — free tier.
 # Create it from the dashboard with "New → Blueprint" pointed at this repo.
 #
-# The database is brought up to date by two idempotent scripts, in this order:
+# ── What the free tier changes ───────────────────────────────────────────────
 #
-#   db:setup    applies db/schema.sql to an *empty* database. It checks for the
-#               `users` table first and does nothing if one exists.
-#   db:migrate  brings an *existing* database up to the current schema — adds
-#               columns and tables added since, and backfills where it can.
+# 1. No `preDeployCommand`. It needs a paid instance type, so the database is
+#    brought up to date from your own machine instead, using the database's
+#    EXTERNAL connection string:
 #
-# Both are needed on every deploy. The first is what a brand-new database needs
-# and the second is a no-op there; the second is what every deploy after that
-# needs and the first is a no-op then. Running only db:setup would leave an
-# existing database missing every column added since it was created.
+#        DATABASE_URL='postgres://…external…' npm run db:deploy
 #
-# preDeployCommand runs only on paid instance types. On the free tier, remove it
-# and run the same command from the service's Shell tab after each deploy that
-# changes the schema:  npm run db:setup && npm run db:migrate
+#    Run that once after the first deploy, and again after any deploy whose
+#    commit changes db/schema.sql. `db:deploy` is `db:setup && db:migrate`;
+#    both are idempotent, so running it when nothing has changed is harmless.
+#
+# 2. No Shell tab. That is the same restriction, and the reason for the above.
+#
+# 3. The web service sleeps after about 15 minutes with no traffic, and the
+#    next request wakes it — expect roughly a minute for that first page. The
+#    health check does not keep it awake; nothing does, on this plan.
+#
+# 4. Render's free Postgres is time-limited. Check the current terms when you
+#    create it: at the time of writing a free database is removed after 30
+#    days, which for a habit tracker means losing history you cannot get back.
+#    See README → "Deploying free" for how to keep the free web service and put
+#    the data somewhere that persists.
+#
+# ── Upgrading later ──────────────────────────────────────────────────────────
+#
+#   services[0].plan   free  →  starter
+#   databases[0].plan  free  →  basic-256mb
+#   and add back:      preDeployCommand: npm run db:deploy
+#
+# That is the whole difference; nothing in the application changes.
+
 services:
   - type: web
     name: rich-habits
     runtime: node
-    plan: starter
+    plan: free
     region: oregon
     buildCommand: npm ci && npm run build
-    preDeployCommand: npm run db:setup && npm run db:migrate
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -40,7 +56,8 @@ services:
       - key: APP_VERSION
         value: "0.1.0"
       # Optional — the AI coach at /api/coach. Set the value in the dashboard;
-      # `sync: false` keeps the secret out of this file and out of git.
+      # `sync: false` keeps the secret out of this file and out of git. Leave it
+      # empty and the coach answers 501; nothing else changes.
       - key: OPENAI_API_KEY
         sync: false
       # Production is production. RH_TEST_INSTANCE is deliberately absent: it
@@ -48,10 +65,14 @@ services:
       # real sign-ups look like fixtures in Admin -> Users.
       - key: NODE_ENV
         value: production
+      # A free instance has 512MB and a free database has few connections to
+      # spare. The app is comfortable with a small pool.
+      - key: PG_POOL_MAX
+        value: "5"
 
 databases:
   - name: rich-habits-db
     databaseName: richhabits
     user: richhabits
-    plan: basic-256mb
+    plan: free
     region: oregon
