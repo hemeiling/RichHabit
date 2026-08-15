@@ -45,3 +45,35 @@ describe("resolveSsl", () => {
     expect(() => resolveSsl("not a url")).not.toThrow();
   });
 });
+
+/**
+ * Neon hands out two connection strings — a direct one and a pooled one whose
+ * host carries `-pooler` — and both require TLS. Getting this wrong is not a
+ * subtle failure: the app simply reports `db: "down"` forever.
+ */
+describe("a Neon connection string", () => {
+  const direct = "postgresql://owner:pw@ep-cool-frost-12345678.us-east-2.aws.neon.tech/neondb?sslmode=require";
+  const pooled = "postgresql://owner:pw@ep-cool-frost-12345678-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require";
+
+  it("turns TLS on for the direct endpoint", () => {
+    expect(resolveSsl(direct, null)).toEqual({ rejectUnauthorized: false });
+  });
+
+  it("turns TLS on for the pooled endpoint too", () => {
+    expect(resolveSsl(pooled, null)).toEqual({ rejectUnauthorized: false });
+  });
+
+  it("still honours sslmode when channel binding is requested", () => {
+    const withBinding = `${direct}&channel_binding=require`;
+    expect(resolveSsl(withBinding, null)).toEqual({ rejectUnauthorized: false });
+  });
+
+  it("keeps TLS on even without an explicit sslmode, because the host is a FQDN", () => {
+    const bare = "postgresql://owner:pw@ep-cool-frost-12345678.us-east-2.aws.neon.tech/neondb";
+    expect(resolveSsl(bare, null)).toEqual({ rejectUnauthorized: false });
+  });
+
+  it("lets an explicit override still win", () => {
+    expect(resolveSsl(direct, "disable")).toBe(false);
+  });
+});

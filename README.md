@@ -725,11 +725,39 @@ the Postgres together and wires `DATABASE_URL` between them.
   | | |
   |---|---|
   | Upgrade the database only | Keep the web service free and move `databases[0].plan` to a paid tier. The cheapest paid Postgres is far less than the web service. |
-  | Free Postgres elsewhere | Providers such as Neon and Supabase offer a free Postgres that does not expire. Create one, and set `DATABASE_URL` on the Render service by hand instead of `fromDatabase`. Nothing in the app cares where Postgres is — it needs version 13+ and no extensions. |
+  | Free Postgres elsewhere | Providers such as Neon and Supabase offer a free Postgres that does not expire. See below. |
   | Accept it | Fine for trying the app out. Export from **More → Your data → Export JSON** before the month is up. |
 
 - **512MB of RAM and a small connection allowance**, which is why the blueprint
   sets `PG_POOL_MAX=5`.
+
+### Using Neon for the database
+
+Render's free web service with a free Postgres somewhere that does not expire is
+the combination worth having. Nothing in the app cares where Postgres lives — it
+needs version 13 or newer and no extensions.
+
+1. Create a Neon project. Pick the region closest to the Render service
+   (`us-west-2` for Oregon) — every query crosses that gap.
+2. Copy the **direct** connection string, the one *without* `-pooler` in the
+   host. Neon's pooled endpoint would also work — nothing here uses a named
+   prepared statement, `LISTEN`, an advisory lock or a session-level `SET`, which
+   are what break behind PgBouncer — but with `PG_POOL_MAX=5` there is nothing
+   for a pooler to do, and the direct endpoint has no edge cases at all.
+3. On the Render service, delete the `DATABASE_URL` entry that points at the
+   Render database and paste Neon's in its place. Delete the Render database too,
+   or it will sit there until it expires.
+4. Run the schema step against the same string:
+
+   ```bash
+   DATABASE_URL='postgresql://…neon.tech/neondb?sslmode=require' npm run db:deploy
+   ```
+
+TLS needs no configuration: `resolveSsl` turns it on for any dotted hostname and
+honours an explicit `sslmode`, both of which a Neon string has. Neon's free tier
+also suspends the database after a few minutes idle and wakes it on the next
+query, which pairs with the free web service sleeping — the first request after a
+quiet spell pays for both.
 
 ### Upgrading later
 
