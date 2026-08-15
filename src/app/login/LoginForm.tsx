@@ -99,6 +99,7 @@ export default function LoginForm() {
             onKeyDown={(e) => e.key === "Enter" && submit()}
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
             placeholder={t.login.passwordPlaceholder}
+            showLabel={t.login.showPassword} hideLabel={t.login.hidePassword}
           />
         </div>
 

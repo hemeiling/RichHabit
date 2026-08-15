@@ -23,8 +23,15 @@ export async function POST(request: Request) {
       displayName: check.text(b?.displayName, "displayName", 120),
       role: check.oneOf(b?.role ?? "user", ["user", "admin"] as const, "role"),
       disabled: b?.disabled === true,
-      credential: check.oneOf(b?.credential ?? "invite", ["invite", "temporary"] as const,
-        "credential"),
+      credential: check.oneOf(b?.credential ?? "invite",
+        ["invite", "temporary", "set"] as const, "credential"),
+      /*
+       * Read straight into the service and hashed there. It is never written to
+       * a profile table, an analytics event, a log line, or this response — the
+       * only thing that leaves this request is a user id.
+       */
+      password: typeof b?.password === "string" ? b.password : "",
+      requireChange: b?.requireChange === true,
       locale,
       // Defaults on: an account with no habits opens on an empty checklist,
       // which is a worse first morning than one someone edits down.

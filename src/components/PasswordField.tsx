@@ -1,6 +1,5 @@
 "use client";
 import { useId, useState } from "react";
-import { useT } from "@/lib/i18n/context";
 
 /**
  * A password input with a show/hide control, used everywhere a password is
@@ -20,9 +19,14 @@ import { useT } from "@/lib/i18n/context";
  *
  * The icon is `aria-hidden`; the button carries the label, so a screen reader
  * hears "Show password" rather than an unnamed graphic.
+ *
+ * Like `Sidebar`, it holds no strings of its own — the two labels arrive as
+ * props. That is what lets the bilingual app pass dictionary values and admin,
+ * which has no LocaleProvider and is English by design, pass literals.
  */
 export default function PasswordField({
   value, onChange, onKeyDown, placeholder, autoComplete, autoFocus, label, hint,
+  showLabel, hideLabel, invalid,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -33,8 +37,12 @@ export default function PasswordField({
   /** Rendered above the field. Supply it already translated. */
   label: React.ReactNode;
   hint?: React.ReactNode;
+  /** Accessible names for the toggle, in the caller's language. */
+  showLabel: string;
+  hideLabel: string;
+  /** Draws the error border without changing anything else about the field. */
+  invalid?: boolean;
 }) {
-  const t = useT();
   const [shown, setShown] = useState(false);
   const id = useId();
 
@@ -56,15 +64,16 @@ export default function PasswordField({
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          style={{ paddingRight: 44 }}
+          aria-invalid={invalid || undefined}
+          style={{ paddingRight: 44, borderColor: invalid ? "var(--warn)" : undefined }}
         />
         <button
           type="button"
           className="btn btn-quiet"
           onClick={() => setShown((s) => !s)}
-          aria-label={shown ? t.login.hidePassword : t.login.showPassword}
+          aria-label={shown ? hideLabel : showLabel}
           aria-pressed={shown}
-          title={shown ? t.login.hidePassword : t.login.showPassword}
+          title={shown ? hideLabel : showLabel}
           style={{
             position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
             padding: "6px 8px", lineHeight: 0, borderColor: "transparent",

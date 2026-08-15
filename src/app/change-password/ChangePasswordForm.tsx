@@ -39,10 +39,12 @@ export default function ChangePasswordForm(
       </p>
       <form onSubmit={submit} className="card p-5 mt-4">
         <PasswordField label={t.setup.currentPassword} value={current}
-          onChange={setCurrent} autoFocus autoComplete="current-password" />
+          onChange={setCurrent} autoFocus autoComplete="current-password"
+          showLabel={t.login.showPassword} hideLabel={t.login.hidePassword} />
         <div className="mt-3">
           <PasswordField label={t.setup.newPassword} value={next}
-            onChange={setNext} autoComplete="new-password" />
+            onChange={setNext} autoComplete="new-password"
+            showLabel={t.login.showPassword} hideLabel={t.login.hidePassword} />
         </div>
         {error && (
           <p className="mt-3" role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>{error}</p>

@@ -35,7 +35,8 @@ export default function SetupForm({ token }: { token: string }) {
       <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.5 }}>{t.setup.body}</p>
       <form onSubmit={submit} className="card p-5 mt-4">
         <PasswordField label={t.setup.choosePassword} value={password}
-          onChange={setPassword} autoFocus autoComplete="new-password" />
+          onChange={setPassword} autoFocus autoComplete="new-password"
+          showLabel={t.login.showPassword} hideLabel={t.login.hidePassword} />
         {error && (
           <p className="mt-3" role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>{error}</p>
         )}

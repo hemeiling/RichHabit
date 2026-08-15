@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ApiError } from "@/lib/http";
+import { MAX_LENGTH, MIN_LENGTH, passwordProblems } from "@/lib/password";
 import {
   MAX_USERNAME, MIN_USERNAME, checkUsername, isPlausibleEmail, normaliseEmail, normaliseUsername,
 } from "@/lib/identity";
@@ -76,8 +77,17 @@ export interface NewAccount {
   displayName?: string;
   role: "user" | "admin";
   disabled: boolean;
-  /** "invite" hands back a setup link; "temporary" hands back a password. */
-  credential: "invite" | "temporary";
+  /**
+   * "invite" hands back a setup link; "set" uses the password the admin typed;
+   * "temporary" has the server generate one and hands it back. Only "invite"
+   * and "set" are offered in the form — "temporary" stays for callers that
+   * want a generated credential without a person present.
+   */
+  credential: "invite" | "temporary" | "set";
+  /** Only read when credential is "set". Never stored, logged or returned. */
+  password?: string;
+  /** Sends them to /change-password until they choose their own. */
+  requireChange?: boolean;
   locale: Locale;
   seedHabits: boolean;
 }
@@ -85,7 +95,12 @@ export interface NewAccount {
 export interface CreatedAccount {
   id: string;
   email: string;
-  /** Present only for `credential: "temporary"`, and only in this response. */
+  /**
+   * Present only for `credential: "temporary"` — a password the server
+   * generated, handed back once so the admin can pass it on. A password the
+   * admin *typed* is never echoed: they already have it, and returning it
+   * would put it in a response body for no reason.
+   */
   temporaryPassword?: string;
   /** Present only for `credential: "invite"`. Single use, expires. */
   setupToken?: string;
@@ -116,13 +131,49 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
   }
 
   /*
-   * An account created by invite still gets a password hash, of a long random
-   * string nobody has ever seen. That keeps `password_hash` NOT NULL honest and
-   * means an un-redeemed invite cannot be signed into by any input at all,
-   * rather than by an empty one.
+   * Where the first password comes from:
+   *
+   *   set        the one the admin typed, checked against the same rules the
+   *              form showed them — a client that skipped the form gets the
+   *              same refusal.
+   *   temporary  generated here, returned once.
+   *   invite     a long random string nobody has ever seen. That keeps
+   *              `password_hash` NOT NULL honest and means an un-redeemed
+   *              invite cannot be signed into by any input at all, rather than
+   *              by an empty one.
+   *
+   * Only the hash is ever written. `initial` is a local that leaves this
+   * function only for "temporary", and is never logged or audited.
    */
-  const initial = input.credential === "temporary" ? temporaryPassword() : randomBytes(32).toString("hex");
+  let initial: string;
+  if (input.credential === "set") {
+    const supplied = input.password ?? "";
+    const problems = passwordProblems(supplied);
+    if (problems.length) {
+      throw new ApiError(
+        problems.includes("too_short")
+          ? `The password must be at least ${MIN_LENGTH} characters`
+          : problems.includes("too_long")
+            ? `The password must be under ${MAX_LENGTH} characters`
+            : "That password is too easy to guess — choose another",
+      );
+    }
+    initial = supplied;
+  } else if (input.credential === "temporary") {
+    initial = temporaryPassword();
+  } else {
+    initial = randomBytes(32).toString("hex");
+  }
   const passwordHash = await hashPassword(initial);
+
+  /*
+   * A generated password always has to be changed — the admin has seen it. One
+   * the admin chose *with* the person is a real password already, so the change
+   * is offered rather than forced.
+   */
+  const mustChange = input.credential === "temporary"
+    ? true
+    : input.credential === "set" ? input.requireChange === true : false;
 
   let created: { id: string };
   try {
@@ -132,7 +183,7 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
                             must_change_password, created_via)
          values ($1, $2, $3, $4::user_role, $5, $6, $7) returning id`,
         [email || null, username || null, passwordHash, input.role,
-          input.disabled ? new Date() : null, input.credential === "temporary",
+          input.disabled ? new Date() : null, mustChange,
           isTestInstance ? "test" : "admin"],
       );
       const id = rows[0].id;
@@ -179,7 +230,7 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
 
   if (input.credential === "temporary") {
     result.temporaryPassword = initial;
-  } else {
+  } else if (input.credential === "invite") {
     const rows = await query<{ token: string }>(
       `insert into user_invites (user_id, created_by, expires_at)
        values ($1, $2, now() + ($3 || ' days')::interval) returning token`,
@@ -187,6 +238,8 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
     );
     result.setupToken = rows[0].token;
   }
+  // credential === "set" returns neither: the admin has the password already,
+  // and there is nothing about it worth putting in a response body.
 
   /*
    * Creating an admin gets its own action, so "who was given admin access, and
@@ -197,7 +250,9 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
   await audit(admin, action, { id: created.id, email: email || username }, {
     role: input.role,
     disabled: input.disabled,
+    // Which method was used, never the credential itself.
     credential: input.credential,
+    mustChangePassword: mustChange,
     seeded: input.seedHabits,
   });
 

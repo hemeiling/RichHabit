@@ -51,7 +51,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 135 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
+| `npm test` | Vitest — 145 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
@@ -439,16 +439,32 @@ re-reads `users.role` from the database on every request and answers 404 — an
 ordinary user is not told the endpoints exist. Duplicate emails are refused 409
 by the unique index, not by a check-then-insert.
 
-Two ways to hand over the account:
+Three ways to hand over the account — two of them in the form:
 
 - **Setup link** (default) — a single-use token that expires in 7 days. The
   admin copies it and passes it on. **Nothing is emailed**: this deployment has
   no mail transport, and saying "an invite has been sent" would strand every
   account created that way. The account still gets a password hash, of a random
   string nobody has seen, so an un-redeemed invite cannot be signed into at all.
+- **Set password** — the admin types it, with a strength meter, the minimum
+  spelled out, a confirm field, and show/hide on both. It is the default for a
+  username account, which has no address a link could be sent to. The password
+  is hashed by the same `hashPassword` every account uses and is never returned,
+  displayed back, or written to a profile table, an analytics event, a log line,
+  browser storage or a URL. **The admin cannot look it up afterwards** — they can
+  only issue a new one. "Require a password change on first login" is an
+  optional tick that sets `must_change_password`.
 - **Temporary password** — generated, shown once, never written to the audit
-  log. The account is marked `must_change_password`, and the app layout sends
-  them to `/change-password` until they choose their own.
+  log. API-only now, for callers that want a credential with nobody present.
+  The account is marked `must_change_password`, and the app layout sends them to
+  `/change-password` until they choose their own.
+
+`src/lib/password.ts` holds the rules — minimum and maximum length, and a floor
+that refuses the handful of passwords at the top of every breach list, one
+repeated character, and plain runs. It is pure and tested, and the *same*
+function backs the meter the admin sees and the check the server makes, so the
+form can never accept what the server then refuses. The audit records which
+method was used and whether a change was required — never the credential.
 
 The user detail page adds **Account actions** (disable / re-enable, reset
 password, change role) and a separate **Danger zone**. Deleting requires typing
@@ -690,7 +706,7 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 
 ## Verified, not assumed
 
-- `npm test` — 135 tests: the habit engine (scheduling in all three frequency modes, weighted vs
+- `npm test` — 145 tests: the habit engine (scheduling in all three frequency modes, weighted vs
   unweighted scoring, streaks continuing across an unchecked today, streaks breaking on a missed
   past day, best/worst habit selection, an account with no habits) and the coach wire contract.
 - `npm run typecheck` — clean under `strict`.
@@ -772,6 +788,19 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   退出登录) with the email untranslated; admin renders the same sidebar with its
   own items and none of the app's; and sign out from the sidebar ends the
   session for real.
+- **Setting a password when creating an account, 37 checks in a browser**:
+  choosing Username switches the credential default to Set password; the two
+  options offered are Setup link and Set password; too short, "password" and one
+  repeated character are each called out as you type and block creation, and are
+  refused 400 when posted straight to the API; a mismatched confirmation blocks
+  it and says so; both fields have show/hide. After creation the response has no
+  password field, the panel does not show it back and says it cannot be looked
+  up, the database holds a `scrypt$` hash, and the password appears in no
+  analytics event, no audit detail, no browser storage and no URL. The account
+  then signs in with username + password, is refused on a wrong one, and a
+  duplicate username is refused 409. Same for an email account. With "require a
+  change" ticked, the first sign-in lands on `/change-password`. A normal user
+  posting the same request gets 404 and nothing is created.
 - **Admin → Users at scale, 57 checks in a browser**: public signup posted with
   `{"role":"admin"}` still produces a `user`; an admin creates an email account,
   a username-only account and a second admin, the last audited as

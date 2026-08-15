@@ -1,6 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import PasswordField from "@/components/PasswordField";
+import { MIN_LENGTH, passwordProblems, passwordStrength } from "@/lib/password";
 
 /**
  * Creating an account from Admin → Users.
@@ -31,15 +33,28 @@ export default function AddAccount() {
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
   const [disabled, setDisabled] = useState(false);
-  const [credential, setCredential] = useState<"invite" | "temporary">("invite");
+  const [credential, setCredential] = useState<"invite" | "set">("invite");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [requireChange, setRequireChange] = useState(false);
   const [locale, setLocale] = useState("en");
   const [seedHabits, setSeedHabits] = useState(true);
 
   const reset = () => {
     setLoginType("email"); setEmail(""); setUsername(""); setDisplayName(""); setRole("user"); setDisabled(false);
-    setCredential("invite"); setLocale("en"); setSeedHabits(true);
+    setCredential("invite"); setPassword(""); setConfirm(""); setRequireChange(false);
+    setLocale("en"); setSeedHabits(true);
     setError(null); setDone(null);
   };
+
+  /*
+   * A username account has no address a setup link could be sent to, so
+   * setting a password is the normal way in. Only the default changes — an
+   * admin can still choose a link and hand it over some other way.
+   */
+  useEffect(() => {
+    setCredential(loginType === "username" ? "set" : "invite");
+  }, [loginType]);
 
   const submit = async () => {
     setBusy(true);
@@ -54,10 +69,17 @@ export default function AddAccount() {
           email: loginType === "email" ? email : "",
           username: loginType === "username" ? username : "",
           displayName, role, disabled, credential, locale, seedHabits,
+          // Sent once, over the same origin, straight into the create service.
+          // Nothing else here writes it anywhere.
+          password: credential === "set" ? password : undefined,
+          requireChange: credential === "set" ? requireChange : undefined,
         }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+      // Dropped the moment the request succeeds; it is never shown back.
+      setPassword("");
+      setConfirm("");
       setDone({
         email: data.email,
         password: data.temporaryPassword,
@@ -72,6 +94,17 @@ export default function AddAccount() {
       setBusy(false);
     }
   };
+
+  const problems = passwordProblems(password);
+  const problemText = problems.includes("too_short")
+    ? `At least ${MIN_LENGTH} characters.`
+    : problems.includes("too_long") ? "That password is too long."
+      : problems.includes("too_simple") ? "That password is too easy to guess."
+        : "";
+  const strength = passwordStrength(password);
+  const matches = password === confirm;
+  const passwordReady = credential !== "set"
+    || (problems.length === 0 && matches && confirm.length > 0);
 
   if (!open) {
     return (
@@ -98,6 +131,13 @@ export default function AddAccount() {
                 Shown once. They will be asked to choose their own on first sign-in.
               </p>
             </div>
+          )}
+          {!done.password && !done.link && (
+            <p className="muted mt-3" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+              They can sign in now with the password you set. It is not shown here,
+              and it cannot be looked up later — issue a new one from the account
+              page if it is lost.
+            </p>
           )}
           {done.link && (
             <div className="flat p-3.5 mt-3">
@@ -172,9 +212,9 @@ export default function AddAccount() {
             <label style={{ fontSize: 13 }}>
               Credential
               <select className="select mt-1" value={credential}
-                onChange={(e) => setCredential(e.target.value as "invite" | "temporary")}>
+                onChange={(e) => setCredential(e.target.value as "invite" | "set")}>
                 <option value="invite">Setup link</option>
-                <option value="temporary">Temporary password</option>
+                <option value="set">Set password</option>
               </select>
             </label>
             <label style={{ fontSize: 13 }}>
@@ -185,6 +225,54 @@ export default function AddAccount() {
               </select>
             </label>
           </div>
+
+          {credential === "set" && (
+            <div className="mt-3 flex flex-col gap-3">
+              <PasswordField
+                label="Password" value={password} onChange={setPassword}
+                autoComplete="new-password"
+                showLabel="Show password" hideLabel="Hide password"
+                invalid={password.length > 0 && problems.length > 0}
+                hint={
+                  <>
+                    At least {MIN_LENGTH} characters. Longer beats complicated —
+                    a few ordinary words is stronger than eight of punctuation.
+                  </>
+                }
+              />
+              {password.length > 0 && (
+                <div>
+                  <div style={{ display: "flex", gap: 4 }} aria-hidden="true">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div key={i} style={{
+                        flex: 1, height: 4, borderRadius: 2,
+                        background: i < strength.score
+                          ? (strength.score <= 1 ? "var(--warn)" : "var(--accent)")
+                          : "var(--line-soft)",
+                      }} />
+                    ))}
+                  </div>
+                  <p className="faint mt-1" style={{ fontSize: 12.5 }} role="status">
+                    {problems.length > 0 ? problemText : `Strength: ${strength.label}`}
+                  </p>
+                </div>
+              )}
+              <PasswordField
+                label="Confirm password" value={confirm} onChange={setConfirm}
+                autoComplete="new-password"
+                showLabel="Show password" hideLabel="Hide password"
+                invalid={confirm.length > 0 && !matches}
+                hint={confirm.length > 0 && !matches
+                  ? <span style={{ color: "var(--warn)" }}>The passwords do not match.</span>
+                  : undefined}
+              />
+              <label className="flex items-center gap-2" style={{ fontSize: 13.5 }}>
+                <input type="checkbox" checked={requireChange}
+                  onChange={(e) => setRequireChange(e.target.checked)} />
+                Require a password change on first login
+              </label>
+            </div>
+          )}
 
           {/* Said plainly, at the moment of choosing. The server records this as
               its own audit action, admin_account_created. */}
@@ -213,7 +301,7 @@ export default function AddAccount() {
           <div className="flex gap-2 mt-4">
             <button className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
             <button className="btn btn-primary"
-              disabled={busy || (loginType === "email"
+              disabled={busy || !passwordReady || (loginType === "email"
                 ? !email.includes("@") : username.trim().length < 3)}
               onClick={submit}>
               {busy ? "Creating…" : "Create account"}
