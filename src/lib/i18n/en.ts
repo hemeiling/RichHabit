@@ -672,7 +672,20 @@ export const en = {
     genericError: "Something went wrong. Try again.",
   },
 
+  setup: {
+    title: "Set your password",
+    body: "This link was created for you by an administrator. Choose a password and the account is yours.",
+    choosePassword: "New password",
+    finish: "Continue",
+    changeTitle: "Choose a new password",
+    changeBody: "Signed in as",
+    changeForced: "An administrator issued you a temporary password. Choose your own to carry on —",
+    currentPassword: "Current password",
+    newPassword: "New password",
+  },
   errors: {
+    setupLinkInvalid: "This setup link is not valid any more. Ask for a new one.",
+    accountDisabled: "This account has been disabled. Contact whoever administers it.",
     notSignedIn: "You're not signed in.",
     saveFailed: "Something went wrong saving that.",
     invalidEmail: "Enter a valid email address.",

@@ -7,6 +7,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // The real session check. Middleware only looked at whether a cookie existed.
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  /*
+   * A temporary password gets you exactly one place. Enforced in the layout
+   * rather than in middleware, because middleware cannot reach the database and
+   * this is a fact about the user row, not about the cookie.
+   */
+  if (user.mustChangePassword) redirect("/change-password");
 
   // Resolved server-side so the first paint is already in the right language.
   return (

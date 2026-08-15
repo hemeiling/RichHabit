@@ -59,9 +59,17 @@ create table users (
   id            uuid primary key default gen_random_uuid(),
   email         text not null,
   password_hash text not null,
-  -- Deliberately has no API that can set it. Granting admin is a deployment
-  -- action (`npm run admin:grant`), never something a request can do.
+  -- Set by `npm run admin:grant` or by an existing admin through the admin API,
+  -- which checks the caller's own role against this column on every request.
+  -- Nothing a non-admin can call touches it.
   role          user_role not null default 'user',
+  -- Null means active. A disabled account keeps all its data and can be turned
+  -- back on; it simply stops resolving to a session, so every protected route
+  -- and every API call refuses it.
+  disabled_at   timestamptz,
+  -- Set when an admin issues a temporary password. The app makes the user
+  -- choose their own before it will let them anywhere else.
+  must_change_password boolean not null default false,
   created_at    timestamptz not null default now()
 );
 -- Email is compared case-insensitively; the index is what enforces uniqueness.
@@ -281,9 +289,12 @@ create table weekly_reviews (
 -- joined but not read for its content.
 -- ===========================================================================
 
+-- `user_id` is nullable and detaches rather than cascading: deleting a person
+-- must not rewrite history that is only ever read in aggregate. See the
+-- deletion strategy in README.
 create table user_sessions (
   id               uuid primary key default gen_random_uuid(),
-  user_id          uuid not null references users on delete cascade,
+  user_id          uuid references users on delete set null,
   started_at       timestamptz not null default now(),
   last_activity_at timestamptz not null default now(),
   ended_at         timestamptz,
@@ -298,7 +309,8 @@ create index user_sessions_started_idx on user_sessions (started_at);
 
 create table analytics_events (
   id            bigserial primary key,
-  user_id       uuid references users on delete cascade,
+  -- Detaches on delete, like user_sessions: the event stays, the identity goes.
+  user_id       uuid references users on delete set null,
   anonymous_id  text,            -- pre-signup, when there is no user yet
   session_id    uuid references user_sessions on delete set null,
   event_name    text not null,
@@ -415,7 +427,8 @@ language sql stable as $$
            (schedule_on(h.id, d.d)).days_of_week   as dow,
            (schedule_on(h.id, d.d)).times_per_week as tpw
     from habits h cross join days d
-    where h.user_id = p_user and h.active and h.start_date <= d.d
+    -- §14. `active` is the status now; the boolean column it replaced is gone.
+    where h.user_id = p_user and h.status = 'active' and h.start_date <= d.d
   )
   select s.id, s.d, s.weight, c.id is not null
   from sched s
@@ -441,3 +454,36 @@ language sql stable as $$
   from scheduled_habits(p_user, p_from, p_to)
   group by on_date order by on_date
 $$;
+
+-- ---------------------------- account setup links --------------------------
+-- An admin-created account starts with no password the admin has seen. The
+-- setup link is the preferred route: a single-use token the admin hands over,
+-- which lets the person choose their own password. No mail is sent because this
+-- deployment has no mail transport — pretending otherwise would silently strand
+-- every account created this way.
+create table user_invites (
+  token       uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users on delete cascade,
+  created_by  uuid references users on delete set null,
+  expires_at  timestamptz not null,
+  used_at     timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index user_invites_user_idx on user_invites (user_id);
+
+-- ------------------------------- audit log ---------------------------------
+-- Who did what to whom. Both sides are recorded as text as well as by id,
+-- because the log has to survive the deletion of either party — an entry that
+-- says "someone deleted someone" is not an audit log. It never records a
+-- password, a token, or anything the user wrote.
+create table admin_audit_log (
+  id           bigserial primary key,
+  admin_id     uuid references users on delete set null,
+  admin_email  text not null,
+  target_id    uuid references users on delete set null,
+  target_email text,
+  action       text not null,
+  details      jsonb not null default '{}'::jsonb,
+  created_at   timestamptz not null default now()
+);
+create index admin_audit_log_created_idx on admin_audit_log (created_at desc);

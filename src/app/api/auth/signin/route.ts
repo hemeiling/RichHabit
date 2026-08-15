@@ -18,8 +18,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const rows = await query<{ id: string; password_hash: string }>(
-    "select id, password_hash from users where lower(email) = $1",
+  const rows = await query<{ id: string; password_hash: string; disabled_at: string | null }>(
+    "select id, password_hash, disabled_at from users where lower(email) = $1",
     [email],
   );
 
@@ -28,6 +28,15 @@ export async function POST(request: Request) {
   const ok = user ? await verifyPassword(password, user.password_hash) : false;
   if (!ok) {
     return NextResponse.json({ error: msg.wrongCredentials }, { status: 401 });
+  }
+  /*
+   * The password was right and the account is still refused. This is told
+   * plainly rather than hidden behind the generic message: someone whose
+   * account an admin turned off needs to know that is what happened, and they
+   * have already proved they own it.
+   */
+  if (user.disabled_at) {
+    return NextResponse.json({ error: msg.accountDisabled }, { status: 403 });
   }
 
   clearThrottle(`${ip}:${email}`);

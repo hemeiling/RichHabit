@@ -363,6 +363,8 @@ export async function habitEngagement() {
 
 export interface AdminUserRow {
   id: string; email: string; role: string; createdAt: string;
+  /** Null means active. Shown in the list so a disabled account is visible. */
+  disabledAt: string | null;
   firstActive: string | null; lastActive: string | null;
   activeDays: number; sessions: number; habits: number;
   completions: number; goals: number; reviews: number;
@@ -388,7 +390,7 @@ export async function adminUsers(
   { search = "", sort = "active" as UserSort, limit = 100 } = {},
 ): Promise<AdminUserRow[]> {
   const rows = await query<Record<string, any>>(`
-    select u.id, u.email, u.role::text as role, u.created_at,
+    select u.id, u.email, u.role::text as role, u.created_at, u.disabled_at,
            ev.first_active, ev.last_active, coalesce(ev.active_days, 0) as active_days,
            coalesce(s.sessions, 0) as sessions,
            coalesce(h.habits, 0) as habits,
@@ -411,7 +413,7 @@ export async function adminUsers(
 
   return rows.map((r) => ({
     id: r.id, email: r.email, role: r.role,
-    createdAt: r.created_at, firstActive: r.first_active, lastActive: r.last_active,
+    createdAt: r.created_at, disabledAt: r.disabled_at ?? null, firstActive: r.first_active, lastActive: r.last_active,
     activeDays: Number(r.active_days), sessions: Number(r.sessions),
     habits: Number(r.habits), completions: Number(r.completions),
     goals: Number(r.goals), reviews: Number(r.reviews),

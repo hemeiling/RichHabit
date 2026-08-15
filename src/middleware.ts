@@ -2,7 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/cookies";
 
 // API routes do their own auth check so fetch() callers get JSON, not an HTML redirect.
-const PUBLIC_PATHS = ["/login", "/api"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api",
+  // Redeeming a setup link is how an admin-created account first gets in; the
+  // token in the URL is the credential and is checked server-side.
+  "/setup",
+];
 
 /**
  * A cookie-presence check, nothing more. /admin is not listed as public, so a

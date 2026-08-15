@@ -56,6 +56,9 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
 | `npm run db:migrate` | Bring an existing database up to date. Idempotent |
+| `npm run db:test` | Throwaway database on :5434 for the browser suites. Wiped each start |
+| `npm run dev:test` | The app on :3002 against that database |
+| `npm run db:prune` | List suite-created test accounts. Dry run; `-- --yes` to delete |
 
 ## How it's organised
 
@@ -368,6 +371,92 @@ What happens when you confirm:
 
 The client never decides any of this. If the request fails, the app says so and
 stays signed in rather than pretending.
+
+### Managing accounts
+
+**Admin → Users** has **+ Add Account**: email, optional display name, role,
+active/disabled, credential, optional language, and whether to seed the standard
+starter habits. Everything happens server-side behind `withAdmin`, which
+re-reads `users.role` from the database on every request and answers 404 — an
+ordinary user is not told the endpoints exist. Duplicate emails are refused 409
+by the unique index, not by a check-then-insert.
+
+Two ways to hand over the account:
+
+- **Setup link** (default) — a single-use token that expires in 7 days. The
+  admin copies it and passes it on. **Nothing is emailed**: this deployment has
+  no mail transport, and saying "an invite has been sent" would strand every
+  account created that way. The account still gets a password hash, of a random
+  string nobody has seen, so an un-redeemed invite cannot be signed into at all.
+- **Temporary password** — generated, shown once, never written to the audit
+  log. The account is marked `must_change_password`, and the app layout sends
+  them to `/change-password` until they choose their own.
+
+The user detail page adds **Account actions** (disable / re-enable, reset
+password, change role) and a separate **Danger zone**. Deleting requires typing
+the account's email; the button stays disabled until it matches.
+
+**Disabling is one column.** `users.disabled_at` is checked inside
+`getSessionUser`, the single place everything already asks "who is this", so a
+disabled account stops resolving for every page and every API call at once.
+Existing session rows are deleted too, and sign-in refuses with a message that
+says what happened — they proved they own the account, so hiding it would only
+confuse them.
+
+**Self-protection is server-side.** An admin cannot delete or disable the
+account they are signed in with, cannot remove their own admin role, and cannot
+leave the system with no active admin. The buttons are disabled as a courtesy;
+the refusal is a 409 from `lib/admin/users.ts`.
+
+#### Deletion strategy
+
+Everything a person owns hangs off `users.id` with `on delete cascade`, so one
+`delete from users` removes all of it in a single statement: profile,
+preferences, habits, schedules, completions, goals and goal links, stacks,
+awareness entries, daily metrics, day notes, weekly reviews, spending records,
+sessions and any outstanding setup link. No ordered teardown to get wrong, no
+window where half an account exists.
+
+Two tables deliberately do **not** cascade:
+
+| Table | On delete | Why |
+|---|---|---|
+| `analytics_events` | `set null` | Carries no name, note, habit text or amount — only that something happened, and when. Detaching keeps every aggregate honest across a deletion while removing the link to a person. |
+| `user_sessions` | `set null` | Same reasoning; session counts and durations are aggregate facts. |
+| `admin_audit_log` | `set null` + stored emails | Both parties are recorded as text as well as by id, so an entry survives the deletion of either. A log that forgets who was deleted is not a log. |
+
+Verified rather than asserted: after deleting an account with rows in fourteen
+tables, all fourteen are empty, `analytics_events` has the same total row count
+as before with four rows detached, and a left join from every owning table back
+to `users` finds no orphans.
+
+#### Audit log
+
+`admin_audit_log` records `user_created`, `user_disabled`, `user_enabled`,
+`user_role_changed`, `user_deleted` and `password_reset_requested`, each with
+the acting admin (id and email), the target (id and email), and a timestamp. It
+never records a password, a hash, or a setup token — only *that* a credential
+was issued. The last 25 entries for an account are shown on its detail page.
+
+### Test accounts, and where they came from
+
+The development database accumulated 157 accounts. They are not seed data and
+not real sign-ups: they are the browser suites in this repo, each of which
+creates `<prefix>-<timestamp>@example.com` and signs up through the real form.
+Nothing has been deleted automatically — an email pattern is a guess, and
+guessing is not a good enough reason to destroy an account.
+
+Two things came out of that:
+
+- `npm run db:test` runs a **throwaway** database on port 5434, wiped on every
+  start, and `npm run dev:test` runs the app against it on port 3002. The
+  browser suites default to that stack, so acceptance runs no longer touch the
+  database you develop against.
+- `npm run db:prune` lists what it *would* remove and removes nothing. It only
+  matches `<prefix>-<13-digit epoch>@example.com`, refuses to touch an admin or
+  any address outside `example.com`, prints every row with its age and
+  completion count, and needs `--yes` before it deletes. `--before <date>` narrows
+  it further.
 
 ### How access control works
 

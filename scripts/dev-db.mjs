@@ -19,8 +19,17 @@ import { ROOT, loadEnv } from "./lib.mjs";
 
 loadEnv();
 const root = ROOT;
-const dataDir = path.join(root, ".pgdata");
-const PORT = Number(process.env.DEV_DB_PORT ?? 5433);
+/*
+ * `--test` runs a second, throwaway database on its own port and its own
+ * directory, so browser suites never write to the database you develop against.
+ * It is wiped on every start: a test database that accumulates is the thing
+ * this exists to prevent.
+ */
+const isTest = process.argv.includes("--test");
+const dataDir = path.join(root, isTest ? ".pgdata-test" : ".pgdata");
+const PORT = Number(process.env.DEV_DB_PORT ?? (isTest ? 5434 : 5433));
+
+if (isTest) fs.rmSync(dataDir, { recursive: true, force: true });
 
 const db = await PGlite.create({ dataDir });
 
@@ -32,9 +41,9 @@ const [{ present }] = (await db.query(
 if (!present) {
   const sql = fs.readFileSync(path.join(root, "db", "schema.sql"), "utf8");
   await db.exec(sql);
-  console.log("schema applied to a fresh database");
+  console.log(`schema applied to a fresh database${isTest ? " (test)" : ""}`);
 } else {
-  console.log("existing database found in .pgdata");
+  console.log(`existing database found in ${path.basename(dataDir)}`);
 }
 
 await new PGLiteSocketServer({ db, port: PORT, host: "127.0.0.1" }).start();

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdminPage } from "@/lib/admin";
 import { adminUsers, type UserSort } from "@/lib/analytics/queries";
 import { Card, Table, date } from "../ui";
+import AddAccount from "./AddAccount";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,10 @@ export default async function Users(
   return (
     <div className="flex flex-col gap-4">
       <section className="card p-5">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h1 className="display" style={{ fontSize: 22 }}>Users</h1>
+          <AddAccount />
+        </div>
         {/* A GET form: the query lives in the URL, so a view can be shared or
             bookmarked, and no client JavaScript is needed for search. */}
         <form method="get" className="flex gap-2">
@@ -54,7 +59,9 @@ export default async function Users(
             <Link key={u.id} href={`/admin/users/${u.id}`} style={{ textDecoration: "underline" }}>
               {u.email}{u.role === "admin" ? " ·admin" : ""}
             </Link>,
-            <span key="s" style={{ color: STATUS_COLOUR[u.status] }}>{u.status.replace("_", " ")}</span>,
+            u.disabledAt
+              ? <span key="s" style={{ color: "var(--warn)" }}>disabled</span>
+              : <span key="s" style={{ color: STATUS_COLOUR[u.status] }}>{u.status.replace("_", " ")}</span>,
             date(u.createdAt), date(u.lastActive), u.activeDays, u.sessions,
             u.habits, u.completions, u.goals, u.reviews,
           ])}

@@ -92,6 +92,8 @@ export async function destroySession(): Promise<void> {
 export interface SessionUser {
   id: string;
   email: string;
+  /** Set when an admin issued a temporary password and it has not been changed. */
+  mustChangePassword: boolean;
 }
 
 /** The signed-in user, or null. Never throws on a bad or absent cookie. */
@@ -99,13 +101,23 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {
-    const rows = await query<SessionUser>(
-      `select u.id, u.email
+    /*
+     * `disabled_at is null` is the whole of what "disabled" means. It is
+     * checked here rather than in each route, so a disabled account stops
+     * resolving to anyone at the single point every page and every API call
+     * already asks "who is this" — no existing session survives it, and no new
+     * one can be made because sign-in checks the same column.
+     */
+    const rows = await query<{ id: string; email: string; must_change_password: boolean }>(
+      `select u.id, u.email, u.must_change_password
          from sessions s join users u on u.id = s.user_id
-        where s.id = $1 and s.expires_at > now()`,
+        where s.id = $1 and s.expires_at > now() and u.disabled_at is null`,
       [token],
     );
-    return rows[0] ?? null;
+    const row = rows[0];
+    return row
+      ? { id: row.id, email: row.email, mustChangePassword: row.must_change_password }
+      : null;
   } catch {
     // A malformed uuid in the cookie is a 401, not a 500.
     return null;

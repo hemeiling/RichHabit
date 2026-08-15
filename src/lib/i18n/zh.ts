@@ -646,7 +646,20 @@ export const zh: Dict = {
     genericError: "出了点问题，请再试一次。",
   },
 
+  setup: {
+    title: "设置你的密码",
+    body: "这个链接是管理员为你创建的。设置一个密码，账户就是你的了。",
+    choosePassword: "新密码",
+    finish: "继续",
+    changeTitle: "设置新密码",
+    changeBody: "当前登录：",
+    changeForced: "管理员给了你一个临时密码。请设置你自己的密码后继续 ——",
+    currentPassword: "当前密码",
+    newPassword: "新密码",
+  },
   errors: {
+    setupLinkInvalid: "这个设置链接已失效。请索取新的链接。",
+    accountDisabled: "该账户已被停用。请联系管理员。",
     notSignedIn: "你尚未登录。",
     saveFailed: "保存时出了点问题。",
     invalidEmail: "请输入有效的邮箱地址。",

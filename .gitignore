@@ -11,3 +11,7 @@ next-env.d.ts
 .DS_Store
 .pgdata
 .next-build
+
+# Throwaway database and build output for the browser suites
+.pgdata-test/
+.next-test/

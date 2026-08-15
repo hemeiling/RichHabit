@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { ApiError } from "@/lib/http";
 import { query } from "@/lib/db/pool";
 
 /**
@@ -47,8 +48,14 @@ export async function withAdmin(
   const admin = await currentAdmin();
   if (!admin) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try {
-    return NextResponse.json(await fn(admin));
+    return NextResponse.json(await fn(admin) ?? { ok: true });
   } catch (e) {
+    // A refusal an admin needs to read — "that email already exists", "this is
+    // the last active admin" — carries its own status and its own words. Only
+    // genuine faults fall through to the generic message.
+    if (e instanceof ApiError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
     console.error("[admin]", e);
     return NextResponse.json({ error: "Request failed" }, { status: 500 });
   }

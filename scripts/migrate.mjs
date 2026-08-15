@@ -100,6 +100,11 @@ try {
     ["habits", "environment", "alter table habits add column environment text"],
     ["habits", "friction", "alter table habits add column friction text"],
     ["goals", "template_key", "alter table goals add column template_key text"],
+    // Admin account management. Null disabled_at means active, so every
+    // existing account stays active without a backfill.
+    ["users", "disabled_at", "alter table users add column disabled_at timestamptz"],
+    ["users", "must_change_password",
+     "alter table users add column must_change_password boolean not null default false"],
   ]) {
     if (await columnExists(table, column)) continue;
 
@@ -207,7 +212,66 @@ try {
     changed++;
   }
 
-  // ---- 5. backfill template keys on rows seeded before keys existed ---------
+  // ---- 5. admin account management ------------------------------------------
+  for (const [table, ddl, extra] of [
+    ["user_invites", `
+      create table user_invites (
+        token       uuid primary key default gen_random_uuid(),
+        user_id     uuid not null references users on delete cascade,
+        created_by  uuid references users on delete set null,
+        expires_at  timestamptz not null,
+        used_at     timestamptz,
+        created_at  timestamptz not null default now()
+      )`, "create index user_invites_user_idx on user_invites (user_id)"],
+    ["admin_audit_log", `
+      create table admin_audit_log (
+        id           bigserial primary key,
+        admin_id     uuid references users on delete set null,
+        admin_email  text not null,
+        target_id    uuid references users on delete set null,
+        target_email text,
+        action       text not null,
+        details      jsonb not null default '{}'::jsonb,
+        created_at   timestamptz not null default now()
+      )`, "create index admin_audit_log_created_idx on admin_audit_log (created_at desc)"],
+  ]) {
+    const { rows } = await client.query(
+      `select 1 from information_schema.tables
+        where table_schema = 'public' and table_name = $1`, [table]);
+    if (rows.length) continue;
+    await client.query(ddl);
+    if (extra) await client.query(extra);
+    console.log(`  created ${table}`);
+    changed++;
+  }
+
+  /*
+   * Analytics detach from a deleted user instead of vanishing with them. The
+   * rows carry no name, note or habit text — only that something happened and
+   * when — so keeping them preserves every aggregate the admin screens draw
+   * while removing the link to a person. Both columns cascaded before this.
+   */
+  for (const [table, column] of [["analytics_events", "user_id"], ["user_sessions", "user_id"]]) {
+    const { rows } = await client.query(
+      `select rc.delete_rule
+         from information_schema.table_constraints tc
+         join information_schema.referential_constraints rc
+           on rc.constraint_name = tc.constraint_name
+         join information_schema.key_column_usage k
+           on k.constraint_name = tc.constraint_name
+        where tc.table_name = $1 and k.column_name = $2
+          and tc.constraint_type = 'FOREIGN KEY'`, [table, column]);
+    if (rows[0]?.delete_rule === "SET NULL") continue;
+    await client.query(`alter table ${table} drop constraint ${table}_${column}_fkey`);
+    await client.query(`alter table ${table} alter column ${column} drop not null`);
+    await client.query(
+      `alter table ${table} add constraint ${table}_${column}_fkey
+         foreign key (${column}) references users on delete set null`);
+    console.log(`  ${table}.${column} now detaches instead of cascading`);
+    changed++;
+  }
+
+  // ---- 6. backfill template keys on rows seeded before keys existed ---------
   if (await columnExists("habits", "template_key")) {
     for (const [key, aliases] of Object.entries(HABIT_ALIASES)) {
       const { rowCount } = await client.query(
