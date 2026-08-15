@@ -403,3 +403,45 @@ export async function savePrefs(userId: string, p: Prefs) {
     [userId, p.theme, p.weighted, p.goalWeight, p.locale],
   );
 }
+
+/**
+ * What the account section shows. Deliberately small: an email, when the
+ * account started, and two counts that come from rows the user can already see.
+ *
+ * The role is read here rather than trusted from the client, and it is only
+ * ever used to decide whether to *show* the admin link — /admin re-checks it
+ * against the database on every request and 404s regardless of what any client
+ * believes.
+ */
+export interface AccountSummary {
+  email: string;
+  createdAt: string;
+  isAdmin: boolean;
+  activeHabits: number;
+  daysRecorded: number;
+}
+
+export async function loadAccount(userId: string): Promise<AccountSummary | null> {
+  const rows = await query<any>(
+    `select u.email,
+            u.created_at,
+            u.role = 'admin' as is_admin,
+            (select count(*) from habits h
+              where h.user_id = u.id and h.status = 'active')          as active_habits,
+            (select count(distinct done_on) from habit_completions c
+              where c.user_id = u.id)                                  as days_recorded
+       from users u where u.id = $1`,
+    [userId],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    email: r.email,
+    // The full instant, not a calendar date: the server has no idea what
+    // timezone the reader is in, so the browser decides which day it was.
+    createdAt: new Date(r.created_at).toISOString(),
+    isAdmin: r.is_admin === true,
+    activeHabits: Number(r.active_habits),
+    daysRecorded: Number(r.days_recorded),
+  };
+}

@@ -30,5 +30,13 @@ export const prettyDate = (s: string, tag = "en-US") =>
   parseISO(s).toLocaleDateString(tag, { weekday: "long", month: "long", day: "numeric" });
 export const shortDate = (s: string, tag = "en-US") =>
   parseISO(s).toLocaleDateString(tag, { month: "short", day: "numeric" });
+/**
+ * For an instant rather than a calendar day — when an account was created, say.
+ * Takes a full ISO timestamp and renders it in the reader's own timezone, with
+ * a year and no weekday: nobody needs to know it was a Tuesday, and a year that
+ * is not this one matters.
+ */
+export const instantDate = (iso: string, tag = "en-US") =>
+  new Date(iso).toLocaleDateString(tag, { year: "numeric", month: "long", day: "numeric" });
 export const rangeBack = (endISO: string, n: number) =>
   Array.from({ length: n }, (_, i) => addDays(endISO, -(n - 1 - i)));

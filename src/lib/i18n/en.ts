@@ -468,12 +468,28 @@ export const en = {
     weightedHint: "High-priority habits count for more",
     on: "On",
     off: "Off",
+    language: "Language",
     languageHint: "Changes the app, and the coach answers in it too",
     account: "Account",
-    signedInAs: (email: string) =>
-      `Signed in as ${email}. Every query is scoped to your account, so your rows are visible only to you.`,
+    memberSince: "Member since",
+    activeHabits: "Active habits",
+    daysRecorded: "Days recorded",
+    adminLink: "Product analytics",
+    adminNote: "Admin only",
+    yourData: "Your data",
+    yourDataHint: "A full copy of everything in this account, as JSON.",
     exportJson: "Export JSON",
     signOut: "Sign out",
+    signOutHint: "Ends this session on this device.",
+    /**
+     * The confirmation exists to say what sign-out does *not* do. People
+     * hesitate over it because they half-expect to lose their history.
+     */
+    signOutTitle: "Sign out?",
+    signOutBody: "Your habits, history and notes stay exactly as they are. Sign back in any time with the same email.",
+    signOutConfirm: "Sign out",
+    signingOut: "Signing out…",
+    signOutFailed: "Couldn't sign out — check your connection and try again.",
     footer: "Awareness → grade → select → track → review.",
     footerTwo: "Missing a day is data, not failure.",
   },

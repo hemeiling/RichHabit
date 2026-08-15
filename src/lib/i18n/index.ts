@@ -1,4 +1,4 @@
-import { prettyDate, shortDate } from "@/lib/dates";
+import { instantDate, prettyDate, shortDate } from "@/lib/dates";
 import { both, joinPair } from "./both";
 import { en, type Dict } from "./en";
 import { zh } from "./zh";
@@ -46,6 +46,12 @@ export function shortDateFor(iso: string, locale: Locale): string {
   return locale === "both"
     ? joinPair(shortDate(iso, "en-US"), shortDate(iso, "zh-CN"))
     : shortDate(iso, intlTag(locale));
+}
+
+export function instantDateFor(iso: string, locale: Locale): string {
+  return locale === "both"
+    ? joinPair(instantDate(iso, "en-US"), instantDate(iso, "zh-CN"))
+    : instantDate(iso, intlTag(locale));
 }
 
 /**

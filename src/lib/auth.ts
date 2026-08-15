@@ -63,13 +63,30 @@ export async function createSession(userId: string): Promise<void> {
   });
 }
 
+/**
+ * Ends the session. The row is what matters — deleting it makes the token
+ * meaningless everywhere, including in any copy of the cookie that survives.
+ *
+ * The cookie is then expired explicitly rather than with `cookies().delete()`,
+ * which emitted `rh_session=; Path=/; HttpOnly` with no `Max-Age` — an empty
+ * *session* cookie rather than a deleted one. Nothing could be done with it,
+ * but it lingered in the jar for the rest of the browsing session, and a
+ * cookie that is supposed to be gone should be gone.
+ */
 export async function destroySession(): Promise<void> {
   const token = cookies().get(SESSION_COOKIE)?.value;
   if (token) {
     // Expired rows are cleared here rather than by a scheduled job.
     await query("delete from sessions where id = $1 or expires_at < now()", [token]);
   }
-  cookies().delete(SESSION_COOKIE);
+  cookies().set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProduction,
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  });
 }
 
 export interface SessionUser {

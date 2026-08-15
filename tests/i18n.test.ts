@@ -337,3 +337,39 @@ describe("habit library", () => {
     expect(new Set(LIBRARY.map((h) => h.lifeDomain)).size).toBeGreaterThan(3);
   });
 });
+
+/**
+ * The account section, and sign-out in particular. The generic i18n sweep above
+ * would catch a missing key, but not a wrong word — and 退出登录 is the wording
+ * the product asked for by name.
+ */
+describe("account and sign out", () => {
+  it("names sign out in both languages, with the requested Chinese wording", () => {
+    expect(en.more.signOut).toBe("Sign out");
+    expect(zh.more.signOut).toBe("退出登录");
+    expect(zh.more.signOutConfirm).toBe("退出登录");
+    expect(both.more.signOut).toContain("Sign out");
+    expect(both.more.signOut).toContain("退出登录");
+  });
+
+  it("translates every string the account section renders", () => {
+    const keys = [
+      "account", "memberSince", "activeHabits", "daysRecorded", "adminLink", "adminNote",
+      "yourData", "yourDataHint", "exportJson", "signOut", "signOutHint",
+      "signOutTitle", "signOutBody", "signOutConfirm", "signingOut", "signOutFailed",
+      "language", "languageHint", "preferences",
+    ] as const;
+    for (const key of keys) {
+      expect(en.more[key], `en.more.${key}`).toBeTruthy();
+      expect(zh.more[key], `zh.more.${key}`).toBeTruthy();
+      expect(HAS_CJK.test(zh.more[key] as string), `zh.more.${key} is untranslated`).toBe(true);
+    }
+  });
+
+  it("promises in both languages that signing out keeps the data", () => {
+    // The confirmation exists to answer "will I lose my history"; a version
+    // that only said "are you sure" would be worse than no confirmation.
+    expect(en.more.signOutBody).toMatch(/stay|keep/i);
+    expect(zh.more.signOutBody).toMatch(/保留/);
+  });
+});

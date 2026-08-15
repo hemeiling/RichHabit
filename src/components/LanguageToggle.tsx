@@ -17,7 +17,10 @@ export default function LanguageToggle() {
   const setLocale = useSetLocale();
 
   return (
-    <div className="flex items-center" role="group" aria-label="Language · 语言">
+    // `flex: none` so it keeps its width beside a label rather than being
+    // squeezed until 双语 and 中文 break across two lines.
+    <div className="flex items-center" role="group" aria-label="Language · 语言"
+      style={{ flex: "none", whiteSpace: "nowrap" }}>
       {LOCALES.map((l, i, shown) => (
         <span key={l} className="flex items-center">
           <button

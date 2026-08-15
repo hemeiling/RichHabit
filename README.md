@@ -51,7 +51,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 108 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
+| `npm test` | Vitest — 111 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
@@ -274,6 +274,35 @@ which lands on March 3 when today is March 31 and would quietly compare a month 
 
 Analytics see `spending_recorded` and nothing else — no amount, no description, no category.
 
+### Signing out
+
+The account section is the first card on **More**: which address you are signed
+in as, when the account started, two counts, and — for an admin, decided by
+`users.role` in the database — a link to the analytics. Sign out sits at the
+bottom in a card of its own, a full-width row rather than a small button beside
+"Export JSON", where it used to be indistinguishable from a settings action.
+Nothing about it is red; signing out destroys nothing.
+
+What happens when you confirm:
+
+1. `POST /api/auth/signout` deletes the `sessions` row. That is the part that
+   matters — the token becomes meaningless everywhere, including in any copy of
+   the cookie that outlives the browser.
+2. The cookie is expired by exactly one writer. `cookies().delete()` emitted
+   `rh_session=; Path=/; HttpOnly` with **no `Max-Age`**, which is an empty
+   *session* cookie rather than a deleted one, and setting it a second time in
+   the route made it worse: two `Set-Cookie` values for one name, and whichever
+   Next merged last won. `destroySession` now writes it once, explicitly expired.
+3. The browser is sent to `/login` with `location.replace`, not `router.push`.
+   Next keeps a client-side cache of rendered routes and React keeps the
+   account's state in memory; a soft navigation leaves both, so Back could
+   repaint the previous user's habits without asking the server anything.
+4. Signed-in responses carry `Cache-Control: no-store`, set in middleware, so
+   neither the HTTP cache nor bfcache can hand the page back afterwards.
+
+The client never decides any of this. If the request fails, the app says so and
+stays signed in rather than pretending.
+
 ### How access control works
 
 There is no row-level security any more — it keyed off `auth.uid()`, which only exists inside
@@ -405,7 +434,7 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 
 ## Verified, not assumed
 
-- `npm test` — 108 tests: the habit engine (scheduling in all three frequency modes, weighted vs
+- `npm test` — 111 tests: the habit engine (scheduling in all three frequency modes, weighted vs
   unweighted scoring, streaks continuing across an unchecked today, streaks breaking on a missed
   past day, best/worst habit selection, an account with no habits) and the coach wire contract.
 - `npm run typecheck` — clean under `strict`.
@@ -460,6 +489,22 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   完成重要的目标相关工作 / 喝足够的水 / 避免垃圾食品 and back again; seeded units and goals switch
   too; a habit called "Practice violin" is untouched throughout; and renaming a seeded habit stops
   it translating while the others carry on.
+- **Signing out, 46 checks in a browser, two users on one machine**: Alice creates
+  a habit and a note, signs out, and her cookie is gone from the jar; replaying
+  the token she had is refused 401 and cannot reach `/today`; Back does not
+  repaint her habits or her notes; every protected route redirects; signed-in
+  pages answer `no-store`. Bob then signs up in the same browser and no habit,
+  note, row or email address of Alice's appears anywhere — and when Alice signs
+  back in afterwards, her habit and her note are both still there. The control
+  is a 77px full-width row in a card of its own, not red, not mixed in with
+  settings; it confirms first, names the account, and promises the history is
+  kept; cancelling leaves the session untouched. All of it again in Chinese
+  (退出登录 / 账户 / 注册于 / 进行中的习惯), with the email address untranslated,
+  and visible with no sideways scroll at 320, 390, 768 and 1440px.
+- The admin entry, 7 checks: invisible to an ordinary user, who also gets 404
+  from `/admin`; it appears after `users.role` is set to admin in the database
+  and opens the analytics; revoking removes both again. The link is rendered
+  from the role read server-side, and `/admin` re-checks for itself regardless.
 - **Spending awareness, 38 checks in a browser**: three purchases of 60 / 30 / 10 report a 100.00
   total with food at 60.0%, transport 30.0% and entertainment 10.0%, ordered largest first; the
   unplanned and wants shares are computed separately and both land on 10.0%; with no prior month it

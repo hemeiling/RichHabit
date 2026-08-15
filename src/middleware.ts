@@ -13,6 +13,11 @@ const PUBLIC_PATHS = ["/login", "/api"];
  * here — it is validated in the app layout and in every /api route, both of
  * which do reach the database. This only saves a redirect round-trip.
  */
+function noStore(res: NextResponse): NextResponse {
+  res.headers.set("Cache-Control", "no-store, must-revalidate");
+  return res;
+}
+
 export function middleware(request: NextRequest) {
   const hasCookie = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
   const path = request.nextUrl.pathname;
@@ -21,15 +26,21 @@ export function middleware(request: NextRequest) {
   if (!hasCookie && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return noStore(NextResponse.redirect(url));
   }
   // Deliberately no "has a cookie, so bounce them off /login" rule here.
+  //
+  // Signed-in HTML and RSC payloads are `no-store`, which is what makes signing
+  // out stick. Without it the browser is entitled to keep the rendered page and
+  // hand it back on Back — bfcache restores a live DOM, cache restores the
+  // markup — and the previous account's habits would paint again with no
+  // request reaching the server to say the session is gone.
   // Middleware can only see that a cookie exists, while the app layout checks
   // whether the session behind it is still valid. When those two disagree —
   // an expired session, a revoked one, a rebuilt database — /today redirects
   // to /login and /login redirects back, forever. Whether someone is really
   // signed in is decided in one place: the login page, against the database.
-  return NextResponse.next();
+  return noStore(NextResponse.next());
 }
 
 export const config = {
