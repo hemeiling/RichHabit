@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import PasswordField from "@/components/PasswordField";
 import { useT } from "@/lib/i18n/context";
 
 export default function ChangePasswordForm(
@@ -37,16 +38,12 @@ export default function ChangePasswordForm(
         {forced ? t.setup.changeForced : t.setup.changeBody} {email}
       </p>
       <form onSubmit={submit} className="card p-5 mt-4">
-        <label style={{ fontSize: 13 }}>
-          {t.setup.currentPassword}
-          <input className="input mt-1" type="password" autoFocus value={current}
-            onChange={(e) => setCurrent(e.target.value)} />
-        </label>
-        <label className="block mt-3" style={{ fontSize: 13 }}>
-          {t.setup.newPassword}
-          <input className="input mt-1" type="password" value={next}
-            onChange={(e) => setNext(e.target.value)} />
-        </label>
+        <PasswordField label={t.setup.currentPassword} value={current}
+          onChange={setCurrent} autoFocus autoComplete="current-password" />
+        <div className="mt-3">
+          <PasswordField label={t.setup.newPassword} value={next}
+            onChange={setNext} autoComplete="new-password" />
+        </div>
         {error && (
           <p className="mt-3" role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>{error}</p>
         )}

@@ -639,6 +639,9 @@ export const zh: Dict = {
     email: "邮箱",
     emailPlaceholder: "you@example.com",
     password: "密码",
+    showPassword: "显示密码",
+    hidePassword: "隐藏密码",
+
     passwordPlaceholder: "至少 8 个字符",
     signIn: "登录",
     createButton: "创建账户",

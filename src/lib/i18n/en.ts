@@ -666,6 +666,9 @@ export const en = {
     email: "Email",
     emailPlaceholder: "you@example.com",
     password: "Password",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
+
     passwordPlaceholder: "At least 8 characters",
     signIn: "Sign in",
     createButton: "Create account",

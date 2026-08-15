@@ -51,7 +51,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit`, strict mode |
 | `npm run lint` | ESLint via `next lint` |
-| `npm test` | Vitest — 133 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
+| `npm test` | Vitest — 135 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
@@ -85,6 +85,7 @@ src/
     store.tsx       Loads state once, applies changes optimistically, rolls back on failure.
     ui.tsx          Sheet, Field, Segmented, ScoreDial, Heatmap, Spark, Bars.
     Sidebar.tsx     The navigation, shared by the app and admin. Holds no strings.
+    PasswordField.tsx  Password input + show/hide, used by all four password fields.
     AppShell.tsx    Sidebar, header, theme, save indicator, error banner.
     AdminShell.tsx  The same sidebar with admin's items, in English.
     useSignOut.ts   One sign-out, used by the sidebar and by More.
@@ -372,6 +373,29 @@ What happens when you confirm:
 The client never decides any of this. If the request fails, the app says so and
 stays signed in rather than pretending.
 
+### Showing a password
+
+Every password field in the app is one component,
+`src/components/PasswordField.tsx` — sign in, create account, redeem a setup
+link, and both fields on change-password. Four separate toggles would have
+drifted into four slightly different ones.
+
+Hidden by default. Revealing swaps `type` between `password` and `text` and
+touches nothing else: the value is never rewritten, nothing is written to
+`localStorage`, `sessionStorage` or a cookie, and the visibility flag is local
+React state that dies with the component — a reload comes back masked.
+
+The control is a real `<button type="button">`, so it is in the tab order and
+answers Enter and Space without any key handling of its own. `type="button"`
+is load-bearing: inside a form a bare button submits, and revealing your
+password would have attempted a sign-in. The icon is `aria-hidden` and the
+accessible name comes from `aria-label` — "Show password" / "Hide password",
+显示密码 / 隐藏密码 — so a screen reader never meets an unnamed graphic.
+`aria-pressed` carries the state.
+
+The input keeps its own `.input` class and only gains right padding, so focus
+and error styling are exactly what they were.
+
 ### Signing in: email or username
 
 The first field on the login form takes either. Which kind it is, is decided
@@ -623,7 +647,7 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
 
 ## Verified, not assumed
 
-- `npm test` — 133 tests: the habit engine (scheduling in all three frequency modes, weighted vs
+- `npm test` — 135 tests: the habit engine (scheduling in all three frequency modes, weighted vs
   unweighted scoring, streaks continuing across an unchecked today, streaks breaking on a missed
   past day, best/worst habit selection, an account with no habits) and the coach wire contract.
 - `npm run typecheck` — clean under `strict`.
@@ -705,6 +729,17 @@ privileges. `npm run build` does not touch the database, so a build can't fail o
   退出登录) with the email untranslated; admin renders the same sidebar with its
   own items and none of the app's; and sign out from the sidebar ends the
   session for real.
+- **Show / hide password, 43 checks in a browser**: masked by default, one click
+  reveals, another hides, and the typed value is identical throughout; the icon
+  is `aria-hidden` and the button's only accessible name is its `aria-label`,
+  which flips with `aria-pressed`; Tab from the field reaches it and Enter and
+  Space both toggle; it is `type="button"`, so revealing on the login form does
+  not submit it. `localStorage` and `sessionStorage` are empty, no cookie
+  carries the password, and a reload comes back empty *and* masked. The focus
+  border still changes (`rgb(229,228,223)` → `rgb(47,93,80)`). Present on
+  sign-up, on the setup link, and twice on change-password where the two fields
+  toggle independently. Both labels in Chinese, and at 320/390/768px the button
+  sits inside the field, taps to reveal, and leaves no sideways scroll.
 - **Signing in with either identifier, 38 checks in a browser**: the field reads
   "Email or username" / 邮箱或用户名 with the matching placeholders and no English
   left in Chinese; an admin creates an account with no address at all and its

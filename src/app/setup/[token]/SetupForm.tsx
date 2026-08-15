@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import PasswordField from "@/components/PasswordField";
 import { useT } from "@/lib/i18n/context";
 
 export default function SetupForm({ token }: { token: string }) {
@@ -33,11 +34,8 @@ export default function SetupForm({ token }: { token: string }) {
       <h1 className="display" style={{ fontSize: 26 }}>{t.setup.title}</h1>
       <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.5 }}>{t.setup.body}</p>
       <form onSubmit={submit} className="card p-5 mt-4">
-        <label style={{ fontSize: 13 }}>
-          {t.setup.choosePassword}
-          <input className="input mt-1" type="password" autoFocus value={password}
-            onChange={(e) => setPassword(e.target.value)} />
-        </label>
+        <PasswordField label={t.setup.choosePassword} value={password}
+          onChange={setPassword} autoFocus autoComplete="new-password" />
         {error && (
           <p className="mt-3" role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>{error}</p>
         )}

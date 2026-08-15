@@ -373,3 +373,17 @@ describe("account and sign out", () => {
     expect(zh.more.signOutBody).toMatch(/保留/);
   });
 });
+
+describe("show / hide password", () => {
+  it("uses the wording the product asked for, in both languages", () => {
+    expect(en.login.showPassword).toBe("Show password");
+    expect(en.login.hidePassword).toBe("Hide password");
+    expect(zh.login.showPassword).toBe("显示密码");
+    expect(zh.login.hidePassword).toBe("隐藏密码");
+  });
+
+  it("carries both languages in bilingual mode", () => {
+    expect(both.login.showPassword).toContain("Show password");
+    expect(both.login.showPassword).toContain("显示密码");
+  });
+});

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import LanguageToggle from "@/components/LanguageToggle";
+import PasswordField from "@/components/PasswordField";
 import { useT } from "@/lib/i18n/context";
 
 type Mode = "signin" | "signup";
@@ -91,16 +92,14 @@ export default function LoginForm() {
                 ? t.login.emailPlaceholder : t.login.identifierPlaceholder}
             />
           </label>
-          <label className="block">
-            <div className="eyebrow mb-1.5">{t.login.password}</div>
-            <input
-              className="input" type="password" value={password}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              placeholder={t.login.passwordPlaceholder}
-            />
-          </label>
+          <PasswordField
+            label={t.login.password}
+            value={password}
+            onChange={setPassword}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            placeholder={t.login.passwordPlaceholder}
+          />
         </div>
 
         {error && (
