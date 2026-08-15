@@ -296,6 +296,27 @@ try {
         used_at     timestamptz,
         created_at  timestamptz not null default now()
       )`, "create index user_invites_user_idx on user_invites (user_id)"],
+    ["feedback", `
+      create table feedback (
+        id            uuid primary key default gen_random_uuid(),
+        user_id       uuid references users on delete set null,
+        type          text not null default 'general'
+                      check (type in ('bug','feature','suggestion','general')),
+        body          text not null check (length(body) between 1 and 4000),
+        rating        smallint check (rating between 1 and 5),
+        screenshot      bytea check (screenshot is null or length(screenshot) <= 1048576),
+        screenshot_type text check (screenshot_type in ('image/jpeg','image/png','image/webp')),
+        page          text,
+        app_version   text,
+        locale        text,
+        status        text not null default 'new'
+                      check (status in ('new','reviewing','planned','resolved')),
+        area          text check (area in ('today','habits','week','insights','coach',
+                                           'account','admin','mobile','other')),
+        admin_note    text,
+        created_at    timestamptz not null default now(),
+        updated_at    timestamptz not null default now()
+      )`, "create index feedback_status_idx on feedback (status, created_at desc)"],
     ["admin_audit_log", `
       create table admin_audit_log (
         id           bigserial primary key,

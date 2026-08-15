@@ -62,6 +62,8 @@ export const FEATURES = {
   // needs to know the module is being used.
   spending: { label: "Spending awareness", events: ["spending_recorded"] },
   coach: { label: "AI coach", events: ["coach_question_asked"] },
+  // That feedback was sent, never a word of what it said.
+  feedback: { label: "Feedback", events: ["feedback_submitted"] },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

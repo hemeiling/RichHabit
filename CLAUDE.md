@@ -1,5 +1,78 @@
 # Rich Habits --- Claude Engineering Instructions
+## CRITICAL: Production User Data Protection
 
+User-created data must survive all application updates and deployments.
+
+NEVER delete, reset, overwrite, reseed, or recreate production user data as part of:
+- deployments
+- application upgrades
+- schema migrations
+- feature changes
+- seed scripts
+- test setup
+- database initialization
+
+This includes, but is not limited to:
+- user accounts
+- custom habits
+- habit configurations
+- habit completion history
+- streak/history data
+- goals
+- gratitude journal entries
+- reflections
+- spending entries
+- custom spending categories
+- feedback
+- user preferences
+
+### Database Migration Rule
+
+Production database migrations must be NON-DESTRUCTIVE by default.
+
+Prefer:
+- CREATE TABLE
+- ADD COLUMN
+- ADD INDEX
+- nullable columns
+- safe backfills
+
+Do NOT automatically:
+- DROP TABLE
+- DROP COLUMN
+- TRUNCATE
+- DELETE existing records
+- recreate the database
+- rerun destructive seed data
+- replace user-created habits with new defaults
+
+If a destructive migration appears necessary, STOP and ask for explicit approval.
+
+### Starter Habit Rule
+
+When new default/starter habits are added to the application:
+
+DO NOT replace existing users' habit lists.
+
+Existing users keep their current customized habits and history.
+
+New starter habits should normally:
+- become available in the Habit Library, and/or
+- be applied only to newly created users.
+
+If existing users may benefit from a new habit, offer it as an optional recommendation rather than automatically changing their personal habit sheet.
+
+### Production Safety
+
+Before running any production migration:
+1. Determine whether it can affect existing records.
+2. Preserve all user-created data.
+3. Use a backup/recovery strategy.
+4. Verify migrations against a non-production database first.
+5. Never use test/reset/seed commands against production.
+6. After deployment, verify existing users and their historical data still exist.
+
+Treat preservation of user-created data as a release-blocking requirement.
 ## Minimize Tool Permission Interruptions
 
 When multiple implementation approaches are equally appropriate, prefer

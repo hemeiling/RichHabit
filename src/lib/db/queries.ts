@@ -466,3 +466,27 @@ export async function reorderHabits(userId: string, ids: string[]) {
     [userId, ids],
   );
 }
+
+// ─────────────────────────────── feedback ────────────────────────────────────
+
+/**
+ * Recording feedback about the product.
+ *
+ * The user id comes from the session, like everything else — a submission
+ * cannot be attributed to anyone else. Nothing of the user's own content is
+ * read or attached here; the only columns written are what they typed and the
+ * technical context the form gathered.
+ */
+export async function saveFeedback(userId: string, f: {
+  type: string; body: string; rating: number | null;
+  screenshot: Buffer | null; screenshotType: string | null;
+  page: string; appVersion: string; locale: string;
+}) {
+  await query(
+    `insert into feedback (user_id, type, body, rating, screenshot, screenshot_type,
+                           page, app_version, locale)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [userId, f.type, f.body, f.rating, f.screenshot, f.screenshotType,
+      f.page || null, f.appVersion || null, f.locale || null],
+  );
+}

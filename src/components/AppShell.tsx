@@ -6,6 +6,7 @@ import { HabitsProvider, useHabits } from "@/components/store";
 import LanguageToggle from "@/components/LanguageToggle";
 import Sidebar, { SidebarToggle, type NavItem } from "@/components/Sidebar";
 import { useSignOut } from "@/components/useSignOut";
+import FeedbackSheet from "@/components/FeedbackSheet";
 import { LocaleProvider, useAdoptLocale, useLocale, useT } from "@/lib/i18n/context";
 import type { Locale } from "@/lib/i18n";
 
@@ -60,6 +61,7 @@ function LocaleSync() {
 function SidebarAccount({ email, onNavigate }: { email: string; onNavigate: () => void }) {
   const t = useT();
   const { signOut, busy, failed } = useSignOut();
+  const [feedback, setFeedback] = useState(false);
 
   return (
     <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 8 }}>
@@ -75,6 +77,17 @@ function SidebarAccount({ email, onNavigate }: { email: string; onNavigate: () =
         </svg>
         {t.nav.account}
       </Link>
+      {/* Feedback about the app, not about the user's habits — which is why it
+          sits with the account rather than anywhere in the tracking screens. */}
+      <button className="navlink" onClick={() => { setFeedback(true); onNavigate(); }}>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          style={{ flex: "none" }}>
+          <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
+        </svg>
+        {t.feedback.open}
+      </button>
+      {feedback && <FeedbackSheet onClose={() => setFeedback(false)} />}
       <button className="navlink" onClick={signOut} disabled={busy}>
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"

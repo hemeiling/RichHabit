@@ -504,3 +504,46 @@ create table admin_audit_log (
   created_at   timestamptz not null default now()
 );
 create index admin_audit_log_created_idx on admin_audit_log (created_at desc);
+
+-- ================================= feedback =================================
+-- Feedback from users to whoever runs Rich Habits, about Rich Habits. It is not
+-- habit tracking, not coaching and not reflection: nothing here is ever shown
+-- back to the user as part of their own record, and nothing about their habits,
+-- goals, notes or spending is attached to it.
+--
+-- What is captured automatically is technical context only — which page they
+-- were on, which build, which language — plus what they chose to write.
+--
+-- `user_id` detaches rather than cascades. A person deleting their account
+-- should not silently delete the product's record of a bug, but nothing should
+-- still name them: the row survives, the identity does not, and the admin table
+-- shows "(deleted account)".
+create table feedback (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid references users on delete set null,
+  type          text not null default 'general'
+                check (type in ('bug','feature','suggestion','general')),
+  body          text not null check (length(body) between 1 and 4000),
+  -- 1-5, or null when they chose not to rate.
+  rating        smallint check (rating between 1 and 5),
+  -- Optional, and capped: a free Postgres is not object storage. Downscaled in
+  -- the browser before it is ever sent.
+  screenshot      bytea check (screenshot is null or length(screenshot) <= 1048576),
+  screenshot_type text check (screenshot_type in ('image/jpeg','image/png','image/webp')),
+  -- Technical context, gathered automatically. Deliberately nothing else.
+  page          text,
+  app_version   text,
+  locale        text,
+  -- The admin's side of the workflow.
+  status        text not null default 'new'
+                check (status in ('new','reviewing','planned','resolved')),
+  area          text check (area in ('today','habits','week','insights','coach',
+                                     'account','admin','mobile','other')),
+  -- Private to the admin. There is no user-facing read endpoint at all, so this
+  -- cannot be reached by the person who submitted the feedback.
+  admin_note    text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index feedback_status_idx on feedback (status, created_at desc);
+create index feedback_created_idx on feedback (created_at desc);

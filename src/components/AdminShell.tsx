@@ -18,6 +18,8 @@ const ITEMS: readonly NavItem[] = [
   { href: "/admin/features", label: "Features", icon: "M5 7h14 M5 12h14 M5 17h9" },
   { href: "/admin/funnel", label: "Funnel", icon: "M4 5h16l-6 7v6l-4 2v-8z" },
   { href: "/admin/usage", label: "Usage times", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2" },
+  { href: "/admin/feedback", label: "Feedback",
+    icon: "M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" },
   { href: "/admin/system", label: "System", icon: "M5 6h14v12H5z M9 10h6 M9 14h6" },
 ];
 

@@ -303,6 +303,34 @@ Both call one `moveWithin`, so they cannot disagree about what a rearrangement
 means, and the result is written as one statement (`unnest … with ordinality`)
 rather than a save per habit — the order is one fact about a list.
 
+### Feedback is about the app, not about you
+
+Feedback goes from someone using Rich Habits to whoever runs it, about Rich
+Habits. It is not habit tracking, not coaching and not reflection: it never
+appears in the user's own record, and none of their habits, goals, notes,
+metrics or spending is attached to it.
+
+It sits in the sidebar above Sign out, because it is about the account and the
+product rather than about a day. What travels with a submission is listed on the
+form itself, in the reader's language: the page path, the app version, the
+language. Nothing else. The path only — a query string can carry an id or a
+search term.
+
+**It is write-only.** There is no endpoint anywhere, for any user, that reads
+feedback back. That is what makes the admin's internal note private: it is not
+filtered out of a shared response, there is no shared response. A `GET` on the
+admin route answers 404 rather than 405, so it does not even confirm it exists.
+
+Screenshots are optional, downscaled in the browser to 1400px and capped at a
+megabyte — checked again server-side, since the downscale is a courtesy rather
+than the rule. They are served only to an admin, `private, no-store`.
+
+Admin → Feedback lists everything with tabs for New / Reviewing / Planned /
+Resolved, and each item can be opened, assigned an area (Today, Habits, Week,
+Insights, AI Coach, Account/Login, Admin, Mobile/UI, Other), moved along, and
+annotated. `user_id` detaches on account deletion rather than cascading: a bug
+report should outlive the reporter, but nothing should still name them.
+
 ### Spending is not a habit
 
 "Record what I spent" would make a fine checkbox, and that is exactly the problem: what was
@@ -994,6 +1022,17 @@ an old database failed outright. It creates them now.
   duplicate username is refused 409. Same for an email account. With "require a
   change" ticked, the first sign-in lands on `/change-password`. A normal user
   posting the same request gets 404 and nothing is created.
+- **Feedback, 70 checks in a browser**: it sits above Sign out; the form offers
+  all four types, free text, an optional 1–5 rating and an optional screenshot,
+  and states the page it will send and that habits, goals, notes and spending
+  are not attached. Submitting shows the exact thank-you, and the row carries the
+  type, rating, page, language, app version and user — with `status = new` and no
+  area or note. Analytics record that feedback happened and none of what it said.
+  A user gets 404 from the admin route, from triage and from the screenshot, and
+  the admin note appears neither on their screen nor in their state payload. The
+  admin sees the tabs, every column, opens the item, assigns Mobile/UI, moves it
+  to Reviewing, saves a note, and marks it Resolved. All of it again in Chinese,
+  including 反馈 in the sidebar and the translated privacy sentence.
 - **Admin → Users at scale, 57 checks in a browser**: public signup posted with
   `{"role":"admin"}` still produces a `user`; an admin creates an email account,
   a username-only account and a second admin, the last audited as
