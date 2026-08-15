@@ -45,6 +45,13 @@ export default function Spending() {
   const money = (n: number) => n.toFixed(2);
   const pct = (n: number) => (Math.round(n * 10) / 10).toFixed(1);
 
+  /**
+   * A third of a 390px row leaves about 80px of label. "Unplanned" at the
+   * eyebrow's usual .14em tracking does not fit and breaks as "UNPLANNE / D",
+   * so these three tighten up and stay on one line.
+   */
+  const statLabel = { fontSize: 10, letterSpacing: "0.06em", whiteSpace: "nowrap" } as const;
+
   const add = () => {
     const value = Number(amount);
     if (!Number.isFinite(value) || value < 0) return;
@@ -69,7 +76,7 @@ export default function Spending() {
               onChange={(e) => setAmount(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()} />
           </Field>
-          <Field label={t.habits.fieldStartDate}>
+          <Field label={t.spending.date}>
             <input className="input num" type="date" value={date} max={todayISO()}
               onChange={(e) => e.target.value && setDate(e.target.value)} />
           </Field>
@@ -117,17 +124,17 @@ export default function Spending() {
           <div className="eyebrow mb-3">{t.spending.thisMonth}</div>
           <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-3">
             <div className="flat p-3.5">
-              <div className="eyebrow" style={{ fontSize: 10 }}>{t.spending.total}</div>
+              <div className="eyebrow" style={statLabel}>{t.spending.total}</div>
               <div className="display num mt-1" style={{ fontSize: 24 }}>{money(month.total)}</div>
             </div>
             <div className="flat p-3.5">
-              <div className="eyebrow" style={{ fontSize: 10 }}>{t.spending.unplannedShare}</div>
+              <div className="eyebrow" style={statLabel}>{t.spending.unplannedShare}</div>
               <div className="display num mt-1" style={{ fontSize: 24 }}>
                 {month.unplannedPct == null ? "—" : `${pct(month.unplannedPct)}%`}
               </div>
             </div>
             <div className="flat p-3.5">
-              <div className="eyebrow" style={{ fontSize: 10 }}>{t.spending.wantShare}</div>
+              <div className="eyebrow" style={statLabel}>{t.spending.wantShare}</div>
               <div className="display num mt-1" style={{ fontSize: 24 }}>
                 {month.wantPct == null ? "—" : `${pct(month.wantPct)}%`}
               </div>

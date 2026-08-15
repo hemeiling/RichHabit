@@ -48,7 +48,7 @@ export const en = {
     "/more/awareness": "Habit awareness",
     "/more/goals": "Goals",
     "/more/metrics": "Metrics",
-    "/more/spending": "Spending awareness",
+    "/more/spending": "Spending",
     "/more/stacks": "Habit stacking",
     "/more/review": "Weekly review",
   } as Record<string, string>,
@@ -413,6 +413,9 @@ export const en = {
     intro: "Write down what you spent, and see where it actually goes. This is for noticing — it isn't a budget, and nothing here scores you.",
     addTitle: "Record a purchase",
     amount: "Amount",
+    // Its own word rather than reusing the habit form's "Start date", which is
+    // about when a habit begins and reads wrong against a purchase.
+    date: "Date",
     what: "What was it?",
     whatPlaceholder: "Coffee, train fare, new headphones",
     category: "Category",

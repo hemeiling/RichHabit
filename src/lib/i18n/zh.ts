@@ -398,6 +398,7 @@ export const zh: Dict = {
     intro: "记录你花了什么，看看钱实际去了哪里。这是为了看清楚 —— 它不是预算，也不会给你打分。",
     addTitle: "记一笔",
     amount: "金额",
+    date: "日期",
     what: "买了什么？",
     whatPlaceholder: "咖啡、车费、新耳机",
     category: "类别",
