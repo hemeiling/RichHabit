@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LanguageToggle from "@/components/LanguageToggle";
 import PasswordField from "@/components/PasswordField";
@@ -30,11 +31,15 @@ export default function LoginForm() {
   const [mode, setMode] = useState<Mode>("signin");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
     if (busy || !identifier.trim() || !password) return;
+    // Creating an account requires accepting the terms. The server requires it
+    // too; this only saves a round trip and says so in the reader's language.
+    if (mode === "signup" && !accepted) { setError(t.earlyAccess.mustAgree); return; }
     setBusy(true); setError(null);
     try {
       const res = await fetch(`/api/auth/${mode === "signup" ? "signup" : "signin"}`, {
@@ -42,7 +47,7 @@ export default function LoginForm() {
         headers: { "Content-Type": "application/json" },
         // Sign-up is an address; sign-in is either, and the server decides which.
         body: JSON.stringify(mode === "signup"
-          ? { email: identifier, password }
+          ? { email: identifier, password, acceptedTerms: accepted }
           : { identifier, password }),
       });
       const data = await res.json().catch(() => null);
@@ -66,7 +71,7 @@ export default function LoginForm() {
         <h1 className="display mt-1" style={{ fontSize: 30, lineHeight: 1.1 }}>
           {mode === "signup" ? t.login.createAccount : t.login.welcomeBack}
         </h1>
-        <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.5 }}>{t.login.tagline}</p>
+        <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.5 }}>{t.tagline}</p>
 
         <div className="mt-5 flex flex-col gap-3">
           <label className="block">
@@ -103,15 +108,38 @@ export default function LoginForm() {
           />
         </div>
 
+        {mode === "signup" && (
+          <label className="flex items-start gap-2 mt-3" style={{ fontSize: 13, lineHeight: 1.45 }}>
+            <input type="checkbox" checked={accepted} style={{ marginTop: 2, flex: "none" }}
+              onChange={(e) => { setAccepted(e.target.checked); setError(null); }} />
+            <span>{t.earlyAccess.agree}</span>
+          </label>
+        )}
+
         {error && (
           <div className="flat p-3 mt-3" style={{ fontSize: 13.5, borderColor: "var(--warn)", background: "var(--warn-soft)" }}>
             {error}
           </div>
         )}
 
-        <button className="btn btn-primary w-full mt-4" disabled={busy || !identifier.trim() || !password} onClick={submit}>
+        <button className="btn btn-primary w-full mt-4" disabled={busy || !identifier.trim() || !password || (mode === "signup" && !accepted)} onClick={submit}>
           {busy ? t.login.working : mode === "signup" ? t.login.createButton : t.login.signIn}
         </button>
+
+        {/*
+          * Read before anyone is inside, which is the point of putting it here
+          * rather than behind a link. Quiet on purpose: it is a notice, not a
+          * warning, and the card is still a sign-in form.
+          */}
+        <div className="flat p-3 mt-4">
+          <div className="eyebrow" style={{ fontSize: 10 }}>{t.earlyAccess.title}</div>
+          <p className="faint mt-1" style={{ fontSize: 11.5, lineHeight: 1.5 }}>
+            {t.earlyAccess.body}{" "}
+            <Link href="/terms" style={{ textDecoration: "underline" }}>
+              {t.earlyAccess.learnMore}
+            </Link>
+          </p>
+        </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
           {mode !== "signin" && (

@@ -29,7 +29,7 @@ export default async function FeedbackPage(
       <section className="card p-5">
         <h1 className="display" style={{ fontSize: 22 }}>Feedback</h1>
         <p className="muted mt-1" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-          What users have said about Rich Habits. Nothing from their habits, goals, notes
+          What users have said about RichHabit. Nothing from their habits, goals, notes
           or spending is attached — only what they wrote and where they were.
         </p>
         <div className="flex flex-wrap gap-1.5 mt-3">

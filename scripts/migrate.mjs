@@ -117,6 +117,9 @@ try {
     ["users", "username", null],
     // Deliberately not backfilled: an existing row's origin is unknown, and
     // writing a guess into it would make the guess look like a fact.
+    // Accepting the free early-access terms is recorded at sign-up. Existing
+    // accounts get null and are never asked — signing in is unchanged.
+    ["users", "terms_accepted_at", "alter table users add column terms_accepted_at timestamptz"],
     ["users", "created_via",
      "alter table users add column created_via text " +
      "check (created_via in ('self_signup','admin','test'))"],

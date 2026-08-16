@@ -8,6 +8,9 @@ const PUBLIC_PATHS = [
   // Redeeming a setup link is how an admin-created account first gets in; the
   // token in the URL is the credential and is checked server-side.
   "/setup",
+  // The early-access terms are linked from the sign-in card, so they have to be
+  // readable before anyone has an account.
+  "/terms",
 ];
 
 /**

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getDict } from "@/lib/i18n/server";
 import { Instrument_Serif, Inter } from "next/font/google";
 import { getLocale } from "@/lib/i18n/server";
 import "./globals.css";
@@ -22,10 +23,15 @@ const instrumentSerif = Instrument_Serif({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Rich Habits",
-  description: "Notice your habits, grade them, change a few, and watch what happens.",
-};
+/**
+ * The tab title follows the reader's language, like everything else. The locale
+ * cookie is readable before any query, so the first paint — and the title in
+ * the browser tab — is already right rather than flipping after hydration.
+ */
+export function generateMetadata(): Metadata {
+  const t = getDict();
+  return { title: t.appName, description: t.tagline };
+}
 
 export const viewport: Viewport = {
   width: "device-width",

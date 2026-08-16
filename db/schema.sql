@@ -83,6 +83,9 @@ create table users (
    * rather than pretending an email pattern is evidence.
    */
   created_via   text check (created_via in ('self_signup','admin','test')),
+  -- When the free early-access terms were accepted at sign-up. Null on accounts
+  -- that predate them, and on accounts an admin created; nobody is asked again.
+  terms_accepted_at timestamptz,
   created_at    timestamptz not null default now(),
   -- An account nobody can name is an account nobody can sign in to.
   constraint users_identified check (email is not null or username is not null)

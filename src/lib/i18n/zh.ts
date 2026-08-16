@@ -14,7 +14,8 @@ const UNIT: Record<UnitKey, string> = {
  * 避免, which reads stiff in a checklist.
  */
 export const zh: Dict = {
-  appName: "富习惯",
+  appName: "养成富有的习惯",
+  tagline: "好习惯，成就更富足的人生。",
   localeName: "中文",
 
   nav: {
@@ -665,7 +666,7 @@ export const zh: Dict = {
   feedback: {
     open: "反馈",
     title: "发送反馈",
-    intro: "这条反馈会发送给 Rich Habits 团队，用于改进应用。它不属于你的习惯记录，也不会附带你的习惯、目标、笔记或消费信息。",
+    intro: "这条反馈会发送给 RichHabit 团队，用于改进应用。它不属于你的习惯记录，也不会附带你的习惯、目标、笔记或消费信息。",
     typeLabel: "哪一类反馈？",
     types: {
       bug: "问题",
@@ -686,7 +687,7 @@ export const zh: Dict = {
       `你所在的页面（${page}）、应用版本（${version}）和你的语言（${locale}）。仅此而已。`,
     send: "发送反馈",
     sending: "发送中…",
-    thanks: "谢谢。你的反馈已发送给 Rich Habits 团队。",
+    thanks: "谢谢。你的反馈已发送给 RichHabit 团队。",
     another: "再写一条",
     failed: "发送失败，请稍后再试。",
     tooLong: "内容超出了表单允许的长度。",
@@ -737,6 +738,23 @@ export const zh: Dict = {
     moveUp: (n: number) => `第 ${n} 条上移`,
     moveDown: (n: number) => `第 ${n} 条下移`,
   },
+  earlyAccess: {
+    title: "免费早期体验",
+    body: "RichHabit 目前为前 50 位用户提供免费使用。为了保障平台公平、稳定地运行，对于过度或恶意使用、滥用平台、试图利用系统漏洞，或其他可能对平台及用户造成负面影响的行为，我们保留限制、暂停或删除相关账户的权利。随着 RichHabit 的发展，免费使用政策也可能进行调整。",
+    learnMore: "了解详情",
+    agree: "我同意免费早期体验条款。",
+    mustAgree: "请先同意「免费早期体验」条款，再创建账户。",
+    termsTitle: "免费早期体验条款",
+    back: "返回登录",
+    factsTitle: "具体来说",
+    facts: [
+      "你的习惯、备注、日记和消费记录都属于你。你写下的内容管理员看不到。",
+      "你随时可以在「更多 → 你的数据」里把全部内容导出为 JSON。",
+      "你可以要求删除账户，删除会连同它的全部数据一起清除。",
+      "早期体验期间免费名额为前 50 位用户，之后政策可能调整。",
+    ],
+  },
+
   errors: {
     serviceUnavailable: "暂时无法连接到数据库，请稍后再试。",
     setupLinkInvalid: "这个设置链接已失效。请索取新的链接。",

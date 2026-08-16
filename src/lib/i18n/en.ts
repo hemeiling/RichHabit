@@ -27,7 +27,9 @@ const UNIT: Record<UnitKey, string> = {
 };
 
 export const en = {
-  appName: "Rich Habits",
+  appName: "RichHabit",
+  /** One line, under the name. The product's promise in the reader's language. */
+  tagline: "Build Rich Habits. Build a Richer Life.",
   localeName: "English",
 
   nav: {
@@ -385,7 +387,7 @@ export const en = {
     allGood: "Nothing looks off. Keep the current set steady for another week.",
   },
   coach: {
-    title: "Ask Rich Habits",
+    title: "Ask RichHabit",
     subtitle: "Answered from the data on this screen — your habits, goals and metrics.",
     placeholder: "Ask about your habits, progress, or what to improve next...",
     ask: "Ask",
@@ -693,7 +695,7 @@ export const en = {
   feedback: {
     open: "Feedback",
     title: "Send feedback",
-    intro: "This goes to the Rich Habits team to help improve the app. It is not part of your habit tracking, and nothing from your habits, goals, notes or spending is attached.",
+    intro: "This goes to the RichHabit team to help improve the app. It is not part of your habit tracking, and nothing from your habits, goals, notes or spending is attached.",
     typeLabel: "What kind of feedback?",
     types: {
       bug: "Bug",
@@ -714,7 +716,7 @@ export const en = {
       `The page you were on (${page}), the app version (${version}) and your language (${locale}). Nothing else.`,
     send: "Send feedback",
     sending: "Sending…",
-    thanks: "Thank you. Your feedback has been sent to the Rich Habits team.",
+    thanks: "Thank you. Your feedback has been sent to the RichHabit team.",
     another: "Send more",
     failed: "That didn't send. Try again in a moment.",
     tooLong: "That is longer than the form allows.",
@@ -767,6 +769,28 @@ export const en = {
     moveUp: (n: number) => `Move item ${n} up`,
     moveDown: (n: number) => `Move item ${n} down`,
   },
+  /**
+   * The free early-access notice. Shown on the sign-in card so it is read
+   * before anyone is inside, and accepted explicitly when creating an account.
+   */
+  earlyAccess: {
+    title: "Free Early Access",
+    body: "RichHabit is currently free for our first 50 users. To keep the service fair and reliable, we reserve the right to limit, suspend, or delete accounts in cases of excessive or abusive usage, misuse, attempts to exploit the service, or other activity that may negatively affect the platform or its users. Free access may also change as RichHabit evolves.",
+    learnMore: "Learn more",
+    agree: "I agree to the Free Early Access terms.",
+    mustAgree: "Please accept the Free Early Access terms to create an account.",
+    termsTitle: "Free Early Access terms",
+    back: "Back to sign in",
+    /** Plain statements of what the app already does, not new promises. */
+    factsTitle: "What this means in practice",
+    facts: [
+      "Your habits, notes, journal and spending records are yours. Nothing you write is read by an administrator.",
+      "You can export everything as JSON at any time, from More → Your data.",
+      "You can ask for your account to be deleted, which removes it and everything it owns.",
+      "Free access is limited to the first 50 accounts while RichHabit is in early access, and may change later.",
+    ],
+  },
+
   errors: {
     serviceUnavailable: "The service can't reach its database right now. Try again in a moment.",
     setupLinkInvalid: "This setup link is not valid any more. Ask for a new one.",

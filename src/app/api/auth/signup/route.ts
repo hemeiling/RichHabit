@@ -33,6 +33,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: msg.passwordTooLong(MAX_PASSWORD) }, { status: 400 });
   }
+  /*
+   * Accepting the free early-access terms is required to create an account, and
+   * required here rather than only in the form — a checkbox is a courtesy, the
+   * refusal is the rule. Signing in is untouched: nobody is asked again.
+   */
+  if (parsed?.acceptedTerms !== true) {
+    return NextResponse.json({ error: getDict().earlyAccess.mustAgree }, { status: 400 });
+  }
 
   const passwordHash = await hashPassword(password);
 
@@ -46,8 +54,8 @@ export async function POST(request: Request) {
        * nothing, because there is no code path here that could apply it.
        */
       const rows = await q<{ id: string }>(
-        `insert into users (email, password_hash, created_via)
-         values ($1, $2, $3) returning id`,
+        `insert into users (email, password_hash, created_via, terms_accepted_at)
+         values ($1, $2, $3, now()) returning id`,
         [email, passwordHash, isTestInstance ? "test" : "self_signup"],
       );
       await seedAccount(q, rows[0].id, locale);

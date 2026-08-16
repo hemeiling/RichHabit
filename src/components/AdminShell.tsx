@@ -31,7 +31,7 @@ export default function AdminShell({ email, children }: { email: string; childre
   return (
     <div style={{ minHeight: "100vh" }}>
       <Sidebar
-        brand={<span className="display" style={{ fontSize: 18 }}>Rich Habits · Admin</span>}
+        brand={<span className="display" style={{ fontSize: 18 }}>RichHabit · Admin</span>}
         items={ITEMS}
         open={open} onClose={close}
         closeLabel="Close menu" navLabel="Admin navigation"

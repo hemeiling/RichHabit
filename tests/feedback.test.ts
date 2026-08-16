@@ -82,9 +82,13 @@ describe("bilingual, and honest about what it sends", () => {
     expect(en.feedback.open).toBe("Feedback");
   });
 
-  it("says the exact thank-you the product asked for", () => {
+  it("says the exact thank-you the product asked for, under the current name", () => {
+    // The sentence was specified as "…the Rich Habits team"; the product was
+    // then renamed to RichHabit, and the brand sweep is meant to reach every
+    // user-facing mention, this one included.
     expect(en.feedback.thanks)
-      .toBe("Thank you. Your feedback has been sent to the Rich Habits team.");
+      .toBe("Thank you. Your feedback has been sent to the RichHabit team.");
+    expect(zh.feedback.thanks).toBe("谢谢。你的反馈已发送给 RichHabit 团队。");
   });
 
   it("tells the user, in both languages, that their own content is not attached", () => {

@@ -53,7 +53,7 @@ export default function Triage({ id, status, area, adminNote }: {
       </div>
 
       <div className="mt-4" style={{ fontSize: 13 }}>
-        Area <span className="faint">— which part of Rich Habits this is about</span>
+        Area <span className="faint">— which part of RichHabit this is about</span>
       </div>
       <div className="flex flex-wrap gap-1.5 mt-1.5">
         {FEEDBACK_AREAS.map((a) => (

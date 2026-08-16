@@ -194,6 +194,9 @@ export default function More({ account }: { account: AccountSummary }) {
       )}
 
       <p className="faint text-center" style={{ fontSize: 12, lineHeight: 1.5 }}>
+        <span style={{ display: "block", marginBottom: 6 }}>
+          {t.appName} — {t.tagline}
+        </span>
         {t.more.footer}<br />{t.more.footerTwo}
       </p>
     </div>

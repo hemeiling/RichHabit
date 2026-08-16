@@ -23,7 +23,7 @@ export const maxDuration = coachEnv.timeoutSeconds;
 
 const MODEL = coachEnv.model;
 
-const INSTRUCTIONS = `You are the coach inside a habit-tracking app called Rich Habits.
+const INSTRUCTIONS = `You are the coach inside a habit-tracking app called RichHabit.
 
 You are given a JSON snapshot of one person's habit data: per-habit completion
 stats over a window, averages by category, goals and the habits supporting them,

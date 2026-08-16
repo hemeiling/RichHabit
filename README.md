@@ -1,4 +1,7 @@
-# Rich Habits
+# RichHabit · 养成富有的习惯
+
+**Build Rich Habits. Build a Richer Life.** · **好习惯，成就更富足的人生。**
+
 
 A habit system rather than a checkbox list: notice the day you actually have, grade it,
 pick a few habits to change, track them in phases, and review what the data says.
@@ -117,6 +120,24 @@ future native client gets identical numbers without a second implementation to k
 
 **Schedules are versioned.** `habit_schedules` rows carry `effective_from`, so changing a habit
 from daily to three-times-a-week doesn't silently rewrite what last month was supposed to look like.
+
+### Free early access, and accepting it
+
+The sign-in card carries the free early-access notice at its foot — quiet, small
+and in the reader's language, because it should be read before anyone is inside
+rather than hidden behind a link. `Learn more` goes to `/terms`, which is public
+for the same reason and repeats the notice in full alongside statements about
+what the app already does: your writing is yours, export is one click, deletion
+removes everything.
+
+Creating an account requires ticking **I agree to the Free Early Access terms** /
+**我同意免费早期体验条款。** The tick disables the button, and the server refuses
+a sign-up without it — a checkbox is a courtesy, the refusal is the rule.
+Acceptance is stamped on `users.terms_accepted_at`.
+
+**Signing in is untouched.** Nobody is asked again, and an account whose
+`terms_accepted_at` is null — every account that predates this — signs in
+exactly as before. Verified both ways.
 
 ### Languages
 
