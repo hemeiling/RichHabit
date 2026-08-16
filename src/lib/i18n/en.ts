@@ -754,6 +754,19 @@ export const en = {
     ],
     reflectPlaceholder: "In your own words.",
   },
+  /** The day's post-it. A sticky note, not a to-do application. */
+  priorities: {
+    title: "Today's priorities",
+    empty: "The few things that matter most today.",
+    placeholder: "Finish the project review",
+    add: "Add",
+    full: "Five is the limit — this is a post-it, not a to-do list.",
+    check: (text: string) => `Mark "${text}" done`,
+    uncheck: (text: string) => `Mark "${text}" not done`,
+    remove: (text: string) => `Remove "${text}"`,
+    moveUp: (n: number) => `Move item ${n} up`,
+    moveDown: (n: number) => `Move item ${n} down`,
+  },
   errors: {
     serviceUnavailable: "The service can't reach its database right now. Try again in a moment.",
     setupLinkInvalid: "This setup link is not valid any more. Ask for a new one.",

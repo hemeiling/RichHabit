@@ -4,7 +4,8 @@ import * as db from "@/lib/db";
 import { isDone } from "@/lib/habits";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, Prefs, SpendingRecord,
+  AppState, AwarenessEntry, DayJournal, DayMetrics, DayPriority, Goal, Habit, Prefs,
+  SpendingRecord,
   Stack, WeeklyReview,
 } from "@/lib/types";
 
@@ -21,6 +22,8 @@ interface Actions {
   /** The day's gratitude journal. Auto-saved; nothing to click. */
   setJournal: (date: string, entry: DayJournal) => void;
   setMonthlyReflection: (month: string, body: string) => void;
+  /** The day's post-it. Auto-saved, like the journal. */
+  setPriorities: (date: string, items: DayPriority[]) => void;
   saveAwareness: (e: AwarenessEntry) => void;
   deleteAwareness: (id: string) => void;
   saveStack: (k: Stack) => void;
@@ -220,6 +223,12 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       // thing to say should not store two empty entries.
       () => db.saveJournal(date, entry.gratitude.map((g) => g.trim()).filter(Boolean),
         entry.reflection),
+    ),
+
+    setPriorities: (date, items) => runDebounced(
+      `priorities:${date}`,
+      (s) => ({ ...s, priorities: { ...s.priorities, [date]: items } }),
+      () => db.savePriorities(date, items.filter((i) => i.text.trim())),
     ),
 
     setMonthlyReflection: (month, body) => runDebounced(

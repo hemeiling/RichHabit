@@ -72,6 +72,9 @@ export const FEATURES = {
     label: "Gratitude journal",
     events: ["gratitude_recorded", "monthly_reflection_written"],
   },
+  // How many priorities someone set and how many they finished — never a word
+  // of what they were.
+  priorities: { label: "Daily priorities", events: ["priorities_set"] },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

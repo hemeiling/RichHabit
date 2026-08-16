@@ -289,6 +289,27 @@ create table day_notes (
   primary key (user_id, note_date)
 );
 
+-- The day's post-it: the few things that matter most today.
+--
+-- Kept apart from the journal above. Gratitude is what the day gave you and is
+-- written at the end of it; this is what you mean to do and is written at the
+-- start. Same shape, different question — collapsing them would make both
+-- vaguer.
+--
+-- `items` is jsonb rather than rows because this is a value, not a set of
+-- entities: at most five tiny items, always read and written as a whole, and
+-- ordered by the user. A row per item would mean a sort_order column and a
+-- rewrite of it on every reorder, for a sticky note.
+create table day_priorities (
+  user_id  uuid not null references users on delete cascade,
+  on_date  date not null,
+  -- [{"text": "…", "done": false}, …] in the user's own order.
+  items    jsonb not null default '[]'::jsonb
+           check (jsonb_array_length(items) <= 5),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, on_date)
+);
+
 -- A reflection on a whole month, written from the Insights review. Kept apart
 -- from the daily journal: it is about the month, not about a day, and it is
 -- written weeks after the days it describes.

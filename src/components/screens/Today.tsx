@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import AddHabit from "@/components/AddHabit";
 import GratitudeJournal from "@/components/GratitudeJournal";
+import Priorities from "@/components/Priorities";
 import HabitEditor from "@/components/HabitEditor";
 import HabitMenu from "@/components/HabitMenu";
 import { Empty, Field, ScoreDial, Sheet } from "@/components/ui";
@@ -325,6 +326,9 @@ export default function Today() {
           </div>
         </div>
       </section>
+
+      {/* Written at the start of the day, so it sits above the checklist. */}
+      <Priorities date={date} />
 
       {/* Every section is rendered whether or not it has habits: an empty one
           still needs its "+ Add habit", or the page would offer no way to fill

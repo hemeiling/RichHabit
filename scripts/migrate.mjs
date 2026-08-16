@@ -303,6 +303,15 @@ try {
         used_at     timestamptz,
         created_at  timestamptz not null default now()
       )`, "create index user_invites_user_idx on user_invites (user_id)"],
+    ["day_priorities", `
+      create table day_priorities (
+        user_id  uuid not null references users on delete cascade,
+        on_date  date not null,
+        items    jsonb not null default '[]'::jsonb
+                 check (jsonb_array_length(items) <= 5),
+        updated_at timestamptz not null default now(),
+        primary key (user_id, on_date)
+      )`, null],
     ["monthly_reflections", `
       create table monthly_reflections (
         user_id    uuid not null references users on delete cascade,

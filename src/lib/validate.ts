@@ -1,6 +1,7 @@
 import { ApiError, check, isUuid } from "@/lib/http";
 import { isTemplateWording } from "@/lib/templates";
 import { SPENDING_CATEGORIES } from "@/lib/types";
+import { MAX_PRIORITIES } from "@/lib/types";
 import type {
   AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
@@ -130,6 +131,28 @@ export function parseJournal(b: any) {
     gratitude,
     reflection: check.text(b?.reflection ?? b?.body, "reflection", 10_000),
   };
+}
+
+export const MAX_PRIORITY_LENGTH = 200;
+
+/**
+ * The day's post-it. Bounded at five, because the point of the feature is that
+ * it cannot become a task manager.
+ */
+export function parsePriorities(b: any) {
+  const raw = Array.isArray(b?.items) ? b.items : [];
+  if (raw.length > MAX_PRIORITIES) {
+    throw new ApiError(`A day can hold at most ${MAX_PRIORITIES} priorities`);
+  }
+  const items = raw
+    .map((it: any) => ({
+      text: check.text(it?.text, "text", MAX_PRIORITY_LENGTH).trim(),
+      done: it?.done === true,
+    }))
+    // An empty line is a line someone has not written yet, not an error.
+    .filter((it: { text: string }) => it.text);
+
+  return { date: check.date(b?.date, "date"), items };
 }
 
 export function parseMonthlyReflection(b: any) {

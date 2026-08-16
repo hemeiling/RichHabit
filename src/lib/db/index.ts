@@ -48,6 +48,8 @@ export const setCompletion = (
 export const saveGoal = (g: Goal) => post("/api/goals", g);
 export const deleteGoal = (id: string) => remove("/api/goals", id);
 
+export const savePriorities = (date: string, items: { text: string; done: boolean }[]) =>
+  post("/api/priorities", { date, items });
 export const saveJournal = (date: string, gratitude: string[], reflection: string) =>
   post("/api/notes", { date, gratitude, reflection });
 export const saveMonthlyReflection = (month: string, body: string) =>

@@ -56,8 +56,8 @@ async function assertRef(q: Q, table: Owned, id: string, userId: string) {
 // ------------------------------- read --------------------------------------
 
 export async function loadState(userId: string): Promise<AppState> {
-  const [habits, schedules, goalLinks, goals, completions, notes, reflections, awareness,
-    stacks, metrics, reviews, spending, prefs] =
+  const [habits, schedules, goalLinks, goals, completions, notes, reflections, priorities,
+    awareness, stacks, metrics, reviews, spending, prefs] =
     await Promise.all([
       query("select * from habits where user_id = $1 order by sort_order, created_at", [userId]),
       query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
@@ -66,6 +66,7 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select * from habit_completions where user_id = $1", [userId]),
       query("select * from day_notes where user_id = $1", [userId]),
       query("select month, body from monthly_reflections where user_id = $1", [userId]),
+      query("select on_date, items from day_priorities where user_id = $1", [userId]),
       query("select * from habit_awareness_entries where user_id = $1", [userId]),
       query("select * from habit_stacks where user_id = $1", [userId]),
       query("select * from daily_metrics where user_id = $1", [userId]),
@@ -163,6 +164,11 @@ export async function loadState(userId: string): Promise<AppState> {
     };
   });
   reflections.forEach((r: any) => { state.monthlyReflections[r.month] = r.body ?? ""; });
+  priorities.forEach((p: any) => {
+    state.priorities[p.on_date] = Array.isArray(p.items)
+      ? p.items.map((it: any) => ({ text: String(it?.text ?? ""), done: it?.done === true }))
+      : [];
+  });
 
   state.awareness = awareness.map((a: any): AwarenessEntry => ({
     id: a.id, time: a.at_time?.slice(0, 5) ?? "", activity: a.activity,
@@ -297,6 +303,25 @@ export async function saveGoal(userId: string, g: Goal): Promise<boolean> {
 
 export async function deleteGoal(userId: string, id: string) {
   await query("delete from goals where id = $1 and user_id = $2", [id, userId]);
+}
+
+/**
+ * The day's post-it. An empty day removes the row rather than storing `[]`, so
+ * a day with nothing on it leaves no trace.
+ */
+export async function savePriorities(
+  userId: string, date: string, items: { text: string; done: boolean }[],
+) {
+  if (items.length === 0) {
+    await query("delete from day_priorities where user_id = $1 and on_date = $2", [userId, date]);
+    return;
+  }
+  await query(
+    `insert into day_priorities (user_id, on_date, items) values ($1,$2,$3::jsonb)
+     on conflict (user_id, on_date) do update set
+       items = excluded.items, updated_at = now()`,
+    [userId, date, JSON.stringify(items)],
+  );
 }
 
 export async function saveMonthlyReflection(userId: string, month: string, body: string) {

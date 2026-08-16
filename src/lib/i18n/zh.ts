@@ -725,6 +725,18 @@ export const zh: Dict = {
     ],
     reflectPlaceholder: "用你自己的话写。",
   },
+  priorities: {
+    title: "今日优先事项",
+    empty: "今天最重要的几件事。",
+    placeholder: "完成项目复盘",
+    add: "添加",
+    full: "最多五条 —— 这是便利贴，不是待办清单。",
+    check: (text: string) => `把「${text}」标记为完成`,
+    uncheck: (text: string) => `把「${text}」标记为未完成`,
+    remove: (text: string) => `删除「${text}」`,
+    moveUp: (n: number) => `第 ${n} 条上移`,
+    moveDown: (n: number) => `第 ${n} 条下移`,
+  },
   errors: {
     serviceUnavailable: "暂时无法连接到数据库，请稍后再试。",
     setupLinkInvalid: "这个设置链接已失效。请索取新的链接。",

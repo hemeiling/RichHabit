@@ -164,6 +164,15 @@ export interface DayJournal {
   reflection: string;
 }
 
+/** One line on the day's post-it. */
+export interface DayPriority {
+  text: string;
+  done: boolean;
+}
+
+/** Deliberately small: a post-it, not a backlog. */
+export const MAX_PRIORITIES = 5;
+
 export interface AppState {
   habits: Habit[];
   goals: Goal[];
@@ -175,6 +184,8 @@ export interface AppState {
   journal: Record<string, DayJournal>;
   /** A reflection on a whole month, keyed 'YYYY-MM'. */
   monthlyReflections: Record<string, string>;
+  /** The day's post-it, by local date. Private user content. */
+  priorities: Record<string, DayPriority[]>;
   awareness: AwarenessEntry[];
   stacks: Stack[];
   metrics: Record<string, DayMetrics>;
@@ -191,6 +202,7 @@ export const SPENDING_CATEGORIES = [
 
 export const emptyState = (): AppState => ({
   habits: [], goals: [], completions: {}, journal: {}, monthlyReflections: {},
+  priorities: {},
   awareness: [], stacks: [], metrics: {}, reviews: [], spending: [],
   prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en" },
 });

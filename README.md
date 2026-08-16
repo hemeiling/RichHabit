@@ -303,6 +303,36 @@ Both call one `moveWithin`, so they cannot disagree about what a rearrangement
 means, and the result is written as one statement (`unnest … with ordinality`)
 rather than a save per habit — the order is one fact about a list.
 
+### Today's priorities — a post-it, not a to-do list
+
+Today opens with a small pinned note: the few things that matter most today.
+Add a line, tick it, reorder it, delete it. **Five is the hard limit**, in the
+form, in validation and as a check constraint on the column — the cap is the
+feature, because "what matters most today" stops being a useful question once
+the answer can be twelve items long. At five the input disappears rather than
+erroring; a form that cannot be over-filled needs no message.
+
+It sits above the habit sections because it is written at the start of the day,
+and it pairs with the starter habit *"choose your top three priorities"*: that
+habit is the intention, this is where it gets written down.
+
+Each day has its own. Stepping back a day shows that day's note and edits that
+day; today starts blank; nothing is deleted. Auto-saved.
+
+`day_priorities.items` is `jsonb` rather than a row per item, deliberately: at
+most five tiny items, always read and written as a whole and ordered by the
+user, is a value rather than a set of entities. A row each would mean a
+`sort_order` column and a rewrite of it on every reorder — for a sticky note.
+Reordering goes through the same `moveWithin` the habit list uses, so a
+rearrangement means one thing in this app.
+
+Kept apart from the gratitude journal on purpose. Gratitude is what the day gave
+you, written at the end; this is what you mean to do, written at the start. Same
+shape, different question.
+
+Private user content: no admin screen shows it, and the analytics event carries
+`{"count": 3, "done": 1}` and nothing else.
+
 ### The gratitude journal
 
 Today ends with a gratitude journal rather than a free-text note. Three empty
@@ -1061,6 +1091,19 @@ an old database failed outright. It creates them now.
   duplicate username is refused 409. Same for an email account. With "require a
   change" ticked, the first sign-in lands on `/change-password`. A normal user
   posting the same request gets 404 and nothing is created.
+- **The daytime post-it, 43 checks in a browser**: it is on Today above the
+  habit sections with the pin; three items save in the order added; ticking one
+  marks only that one, counts it in the header and strikes it through; moving up
+  swaps with the row above and carries the done state with it; the first cannot
+  move up nor the last down; deleting removes the right one. At five the input
+  disappears, the card says why, **and the API refuses a sixth with 400 while the
+  stored list is untouched**. Yesterday starts fresh, saves to yesterday, and
+  today keeps its five — two rows, neither overwritten. Every admin page was
+  loaded against that account and none showed a priority, while the events
+  carried `{"done": 0, "count": 1}`. Chinese throughout, with the user's own
+  words untranslated. And a check that it has not grown into a task manager: no
+  due date, deadline, project, tag, subtask or priority level, and no screen of
+  its own.
 - **The gratitude journal, 52 checks in a browser**: Today shows the journal and
   not the old Notes card, with three lines and a way to add more; writing one
   thing saves one entry with no invented reflection, and there is no Save
