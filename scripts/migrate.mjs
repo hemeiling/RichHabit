@@ -100,6 +100,13 @@ try {
     ["habits", "environment", "alter table habits add column environment text"],
     ["habits", "friction", "alter table habits add column friction text"],
     ["goals", "template_key", "alter table goals add column template_key text"],
+    /*
+     * The gratitude journal. `day_notes.body` becomes the optional reflection
+     * rather than being replaced, so every note anyone has already written
+     * survives on the day it belongs to — nothing is migrated away or dropped.
+     */
+    ["day_notes", "gratitude",
+     "alter table day_notes add column gratitude text[] not null default '{}'"],
     // Admin account management. Null disabled_at means active, so every
     // existing account stays active without a backfill.
     ["users", "disabled_at", "alter table users add column disabled_at timestamptz"],
@@ -296,6 +303,15 @@ try {
         used_at     timestamptz,
         created_at  timestamptz not null default now()
       )`, "create index user_invites_user_idx on user_invites (user_id)"],
+    ["monthly_reflections", `
+      create table monthly_reflections (
+        user_id    uuid not null references users on delete cascade,
+        month      text not null check (month ~ '^[0-9]{4}-[0-9]{2}$'),
+        body       text not null default '',
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (user_id, month)
+      )`, null],
     ["feedback", `
       create table feedback (
         id            uuid primary key default gen_random_uuid(),

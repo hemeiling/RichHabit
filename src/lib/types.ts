@@ -153,11 +153,28 @@ export interface Prefs {
   locale: Locale;
 }
 
+/**
+ * A day's journal entry. Gratitude items are a list because people write one
+ * some days and four on others — the product asks for "1–3 things" without
+ * requiring three.
+ */
+export interface DayJournal {
+  gratitude: string[];
+  /** 今天的感想 — optional, and what the old day note became. */
+  reflection: string;
+}
+
 export interface AppState {
   habits: Habit[];
   goals: Goal[];
   completions: Completions;
-  dayNotes: Record<string, string>;
+  /**
+   * The gratitude journal, by local date. Private user content: it is never
+   * read by the admin screens and never leaves this account.
+   */
+  journal: Record<string, DayJournal>;
+  /** A reflection on a whole month, keyed 'YYYY-MM'. */
+  monthlyReflections: Record<string, string>;
   awareness: AwarenessEntry[];
   stacks: Stack[];
   metrics: Record<string, DayMetrics>;
@@ -173,7 +190,7 @@ export const SPENDING_CATEGORIES = [
 ] as const;
 
 export const emptyState = (): AppState => ({
-  habits: [], goals: [], completions: {}, dayNotes: {},
+  habits: [], goals: [], completions: {}, journal: {}, monthlyReflections: {},
   awareness: [], stacks: [], metrics: {}, reviews: [], spending: [],
   prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en" },
 });

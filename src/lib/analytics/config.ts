@@ -64,6 +64,14 @@ export const FEATURES = {
   coach: { label: "AI coach", events: ["coach_question_asked"] },
   // That feedback was sent, never a word of what it said.
   feedback: { label: "Feedback", events: ["feedback_submitted"] },
+  /*
+   * How many people journal and how often — never a word of what they wrote.
+   * The events carry a count and a boolean, nothing else.
+   */
+  gratitude: {
+    label: "Gratitude journal",
+    events: ["gratitude_recorded", "monthly_reflection_written"],
+  },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

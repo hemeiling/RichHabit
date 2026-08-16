@@ -272,12 +272,34 @@ create table daily_metrics (
   primary key (user_id, metric_date)
 );
 
+-- The day's journal: a few things worth being grateful for, and an optional
+-- reflection. One row per person per local date.
+--
+-- `body` predates the gratitude list and holds what used to be "today's notes".
+-- It is now the optional reflection, so every note anyone has written survives
+-- the change and stays on the day it belongs to.
 create table day_notes (
   user_id  uuid not null references users on delete cascade,
   note_date date not null,
   body     text,
+  -- One entry per line the user filled in. Empty lines are never stored, so
+  -- the count of entries is the length of this array.
+  gratitude text[] not null default '{}',
   updated_at timestamptz not null default now(),
   primary key (user_id, note_date)
+);
+
+-- A reflection on a whole month, written from the Insights review. Kept apart
+-- from the daily journal: it is about the month, not about a day, and it is
+-- written weeks after the days it describes.
+create table monthly_reflections (
+  user_id    uuid not null references users on delete cascade,
+  -- 'YYYY-MM', the user's local month.
+  month      text not null check (month ~ '^[0-9]{4}-[0-9]{2}$'),
+  body       text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, month)
 );
 
 create table weekly_reviews (

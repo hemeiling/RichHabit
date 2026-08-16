@@ -303,6 +303,45 @@ Both call one `moveWithin`, so they cannot disagree about what a rearrangement
 means, and the result is written as one statement (`unnest … with ordinality`)
 rather than a save per habit — the order is one fact about a list.
 
+### The gratitude journal
+
+Today ends with a gratitude journal rather than a free-text note. Three empty
+lines to start — a blank box asks a question a blank page does not — but nothing
+requires three: empty lines are never stored, so the number of entries is the
+number of things somebody actually wrote. Auto-saved, because forgetting to
+press Save is the commonest way a journal entry is lost.
+
+Navigating to an earlier day shows that day's entry and edits that day. Nothing
+is overwritten and nothing expires.
+
+**Existing notes were kept, not migrated away.** `day_notes.body` predates the
+gratitude list and is now the day's optional reflection, so every note anyone
+had written stays on the day it belongs to. The column gained
+`gratitude text[]`; nothing was rewritten or dropped.
+
+Insights carries the other half. **Monthly gratitude review** shows days
+journaled out of days in the month, the entry count, and the month read back
+newest-first with days expandable to their reflection. Month navigation stops at
+the current month — there is nothing to review in the future. **My monthly
+reflection** offers five prompts and a box, stored per month in
+`monthly_reflections`, so the quantitative half of Insights ("what did I
+consistently do") sits beside the qualitative one ("what mattered to me").
+
+The month arithmetic is the same `YYYY-MM` string maths spending uses, for the
+same reason: `Date.setMonth` lands on March 3 when today is March 31.
+
+**It is private user content.** No admin screen selects a gratitude entry, a
+daily reflection or a monthly reflection — verified by loading every admin page
+against an account that had written all three. Analytics record that someone
+journalled and how many entries, never a word of what they said:
+`{"entries": 3, "hasReflection": true}`.
+
+An AI summary of the month is deliberately not built yet. The data is in the
+shape it would need, and the constraint is written down: such a summary must
+describe what the user actually wrote, as observation rather than diagnosis, and
+must not invent emotions, relationships or conclusions the entries do not
+support.
+
 ### Feedback is about the app, not about you
 
 Feedback goes from someone using Rich Habits to whoever runs it, about Rich
@@ -1022,6 +1061,19 @@ an old database failed outright. It creates them now.
   duplicate username is refused 409. Same for an email account. With "require a
   change" ticked, the first sign-in lands on `/change-password`. A normal user
   posting the same request gets 404 and nothing is created.
+- **The gratitude journal, 52 checks in a browser**: Today shows the journal and
+  not the old Notes card, with three lines and a way to add more; writing one
+  thing saves one entry with no invented reflection, and there is no Save
+  button; three entries and a reflection round-trip. An earlier day starts
+  empty, saves to *that* day, and today keeps its three — two rows, neither
+  overwritten. Insights counts 5 days journaled and 9 entries from a seeded
+  month, lists them newest-first, expands a day to its reflection, refuses to
+  browse past the current month, and stores a monthly reflection that survives a
+  reload. Every admin page was then loaded against that account and none showed
+  a single entry, reflection or monthly reflection, while the analytics events
+  carried only `{"entries": 1, "hasReflection": false}`. All of it again in
+  Chinese, with the user's own words left untranslated. An old `day_notes.body`
+  written before the change keeps its text and gains an empty list.
 - **Feedback, 70 checks in a browser**: it sits above Sign out; the form offers
   all four types, free text, an optional 1–5 rating and an optional screenshot,
   and states the page it will send and that habits, goals, notes and spending

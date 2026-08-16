@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import AddHabit from "@/components/AddHabit";
+import GratitudeJournal from "@/components/GratitudeJournal";
 import HabitEditor from "@/components/HabitEditor";
 import HabitMenu from "@/components/HabitMenu";
 import { Empty, Field, ScoreDial, Sheet } from "@/components/ui";
@@ -436,15 +437,9 @@ export default function Today() {
         />
       )}
 
-      <section className="card p-5">
-        <div className="eyebrow mb-2">{t.today.notesTitle}</div>
-        <textarea
-          className="textarea" rows={3}
-          placeholder={t.today.notesPlaceholder}
-          value={state.dayNotes[date] ?? ""}
-          onChange={(e) => actions.setDayNote(date, e.target.value)}
-        />
-      </section>
+      {/* The day's journal, at the bottom where it was. Navigating to another
+          day shows that day's entry — nothing is overwritten. */}
+      <GratitudeJournal date={date} />
     </div>
   );
 }

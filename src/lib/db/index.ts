@@ -48,6 +48,10 @@ export const setCompletion = (
 export const saveGoal = (g: Goal) => post("/api/goals", g);
 export const deleteGoal = (id: string) => remove("/api/goals", id);
 
+export const saveJournal = (date: string, gratitude: string[], reflection: string) =>
+  post("/api/notes", { date, gratitude, reflection });
+export const saveMonthlyReflection = (month: string, body: string) =>
+  post("/api/reflections", { month, body });
 export const saveDayNote = (date: string, body: string) => post("/api/notes", { date, body });
 
 export const saveAwareness = (e: AwarenessEntry) => post("/api/awareness", e);

@@ -4,7 +4,8 @@ import * as db from "@/lib/db";
 import { isDone } from "@/lib/habits";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, Prefs, SpendingRecord,
+  Stack, WeeklyReview,
 } from "@/lib/types";
 
 interface Actions {
@@ -17,7 +18,9 @@ interface Actions {
   reorderHabits: (ids: string[]) => void;
   saveGoal: (g: Goal) => void;
   deleteGoal: (id: string) => void;
-  setDayNote: (date: string, body: string) => void;
+  /** The day's gratitude journal. Auto-saved; nothing to click. */
+  setJournal: (date: string, entry: DayJournal) => void;
+  setMonthlyReflection: (month: string, body: string) => void;
   saveAwareness: (e: AwarenessEntry) => void;
   deleteAwareness: (id: string) => void;
   saveStack: (k: Stack) => void;
@@ -210,10 +213,19 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       () => db.deleteGoal(id),
     ),
 
-    setDayNote: (date, body) => runDebounced(
-      `note:${date}`,
-      (s) => ({ ...s, dayNotes: { ...s.dayNotes, [date]: body } }),
-      () => db.saveDayNote(date, body),
+    setJournal: (date, entry) => runDebounced(
+      `journal:${date}`,
+      (s) => ({ ...s, journal: { ...s.journal, [date]: entry } }),
+      // Blank lines are dropped on the way out: a form with three boxes and one
+      // thing to say should not store two empty entries.
+      () => db.saveJournal(date, entry.gratitude.map((g) => g.trim()).filter(Boolean),
+        entry.reflection),
+    ),
+
+    setMonthlyReflection: (month, body) => runDebounced(
+      `reflection:${month}`,
+      (s) => ({ ...s, monthlyReflections: { ...s.monthlyReflections, [month]: body } }),
+      () => db.saveMonthlyReflection(month, body),
     ),
 
     saveAwareness: (e) => run(

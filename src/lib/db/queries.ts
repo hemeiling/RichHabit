@@ -56,8 +56,8 @@ async function assertRef(q: Q, table: Owned, id: string, userId: string) {
 // ------------------------------- read --------------------------------------
 
 export async function loadState(userId: string): Promise<AppState> {
-  const [habits, schedules, goalLinks, goals, completions, notes, awareness, stacks, metrics,
-    reviews, spending, prefs] =
+  const [habits, schedules, goalLinks, goals, completions, notes, reflections, awareness,
+    stacks, metrics, reviews, spending, prefs] =
     await Promise.all([
       query("select * from habits where user_id = $1 order by sort_order, created_at", [userId]),
       query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
@@ -65,6 +65,7 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select * from goals where user_id = $1 and archived = false", [userId]),
       query("select * from habit_completions where user_id = $1", [userId]),
       query("select * from day_notes where user_id = $1", [userId]),
+      query("select month, body from monthly_reflections where user_id = $1", [userId]),
       query("select * from habit_awareness_entries where user_id = $1", [userId]),
       query("select * from habit_stacks where user_id = $1", [userId]),
       query("select * from daily_metrics where user_id = $1", [userId]),
@@ -155,7 +156,13 @@ export async function loadState(userId: string): Promise<AppState> {
     state.completions[c.done_on][c.habit_id] = { done, value, note: c.note ?? "" };
   });
 
-  notes.forEach((n: any) => { state.dayNotes[n.note_date] = n.body ?? ""; });
+  notes.forEach((n: any) => {
+    state.journal[n.note_date] = {
+      gratitude: Array.isArray(n.gratitude) ? n.gratitude : [],
+      reflection: n.body ?? "",
+    };
+  });
+  reflections.forEach((r: any) => { state.monthlyReflections[r.month] = r.body ?? ""; });
 
   state.awareness = awareness.map((a: any): AwarenessEntry => ({
     id: a.id, time: a.at_time?.slice(0, 5) ?? "", activity: a.activity,
@@ -290,6 +297,33 @@ export async function saveGoal(userId: string, g: Goal): Promise<boolean> {
 
 export async function deleteGoal(userId: string, id: string) {
   await query("delete from goals where id = $1 and user_id = $2", [id, userId]);
+}
+
+export async function saveMonthlyReflection(userId: string, month: string, body: string) {
+  await query(
+    `insert into monthly_reflections (user_id, month, body) values ($1,$2,$3)
+     on conflict (user_id, month) do update set body = excluded.body, updated_at = now()`,
+    [userId, month, body],
+  );
+}
+
+/**
+ * A day's journal. Writing an empty day removes the row rather than leaving a
+ * blank one, so "days journaled" counts days somebody actually wrote on.
+ */
+export async function saveJournal(
+  userId: string, date: string, gratitude: string[], reflection: string,
+) {
+  if (gratitude.length === 0 && !reflection.trim()) {
+    await query("delete from day_notes where user_id = $1 and note_date = $2", [userId, date]);
+    return;
+  }
+  await query(
+    `insert into day_notes (user_id, note_date, gratitude, body) values ($1,$2,$3,$4)
+     on conflict (user_id, note_date) do update set
+       gratitude = excluded.gratitude, body = excluded.body, updated_at = now()`,
+    [userId, date, gratitude, reflection || null],
+  );
 }
 
 export async function saveDayNote(userId: string, date: string, body: string) {

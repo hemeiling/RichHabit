@@ -1,6 +1,7 @@
 "use client";
 import { useHabits } from "@/components/store";
 import AskCoach from "@/components/AskCoach";
+import MonthlyGratitude from "@/components/MonthlyGratitude";
 import { Bars, Heatmap } from "@/components/ui";
 import { addDays, rangeBack, todayISO } from "@/lib/dates";
 import { CATEGORIES, dayScore, dayStreak, habitStats, rangeScore } from "@/lib/habits";
@@ -151,6 +152,14 @@ export default function Insights() {
           ))}
         </div>
       </section>
+
+      {/*
+        * The qualitative half of the month, beside the quantitative one above:
+        * "what did I consistently do" and "what mattered to me". The AI coach
+        * follows, and can be given this history later — the data is already in
+        * the shape it would need.
+        */}
+      <MonthlyGratitude />
 
       <AskCoach />
     </div>

@@ -110,8 +110,32 @@ export function parseCompletion(b: any) {
   };
 }
 
-export function parseNote(b: any) {
-  return { date: check.date(b?.date, "date"), body: check.text(b?.body, "body", 10_000) };
+/** Bounds a journal entry so one day cannot be used as unbounded storage. */
+export const MAX_GRATITUDE_ITEMS = 20;
+export const MAX_GRATITUDE_LENGTH = 300;
+
+export function parseJournal(b: any) {
+  const raw = Array.isArray(b?.gratitude) ? b.gratitude : [];
+  if (raw.length > MAX_GRATITUDE_ITEMS) {
+    throw new ApiError(`A day can hold at most ${MAX_GRATITUDE_ITEMS} entries`);
+  }
+  // Blank lines are the natural state of a form with three boxes and one thing
+  // to say, so they are dropped rather than refused.
+  const gratitude = raw
+    .map((v: unknown) => check.text(v, "gratitude", MAX_GRATITUDE_LENGTH).trim())
+    .filter(Boolean);
+
+  return {
+    date: check.date(b?.date, "date"),
+    gratitude,
+    reflection: check.text(b?.reflection ?? b?.body, "reflection", 10_000),
+  };
+}
+
+export function parseMonthlyReflection(b: any) {
+  const month = check.text(b?.month, "month", 7);
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new ApiError("month must be YYYY-MM");
+  return { month, body: check.text(b?.body, "body", 10_000) };
 }
 
 export function parseAwareness(b: any): AwarenessEntry {
