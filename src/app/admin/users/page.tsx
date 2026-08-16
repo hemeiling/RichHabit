@@ -1,4 +1,5 @@
 import { requireAdminPage } from "@/lib/admin";
+import { currentCapacity } from "@/lib/db/capacity";
 import { adminUserIds, adminUsers } from "@/lib/analytics/queries";
 import type {
   KindFilter, RoleFilter, SourceFilter, StatusFilter, UserSort,
@@ -51,6 +52,7 @@ export default async function Users({ searchParams }: {
   const filters = { search, sort, role, status, kind, source };
   const result = await adminUsers({ ...filters, page, pageSize: 50 });
   const allMatchingIds = await adminUserIds(filters);
+  const seats = await currentCapacity();
 
   /** A link that keeps every current filter and changes one thing. */
   const href = (patch: Record<string, string | number>) => {
@@ -86,6 +88,35 @@ export default async function Users({ searchParams }: {
         <div className="flex items-center justify-between gap-3 mb-3">
           <h1 className="display" style={{ fontSize: 22 }}>Users</h1>
           <AddAccount />
+        </div>
+
+        {/* The number the owner reads and the number the door enforces come
+            from the same function, so they cannot disagree. */}
+        <div className="flat p-3.5 mb-3">
+          {seats.limit === 0 ? (
+            <div style={{ fontSize: 15 }}>
+              Users: <b className="num">{seats.used}</b>{" "}
+              <span className="faint">· no limit set</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 15 }}>
+                Users: <b className="num">{seats.used} / {seats.limit}</b>
+                {seats.full && (
+                  <span style={{ color: "var(--warn)" }}> — Early Access Full</span>
+                )}
+              </div>
+              {!seats.full && (
+                <div className="faint mt-0.5" style={{ fontSize: 12.5 }}>
+                  {seats.remaining} spot{seats.remaining === 1 ? "" : "s"} remaining
+                </div>
+              )}
+              <div className="faint mt-0.5" style={{ fontSize: 12 }}>
+                Active non-admin accounts. Admins do not use a spot; a disabled account
+                releases one.
+              </div>
+            </>
+          )}
         </div>
 
         <form method="get" className="flex gap-2">

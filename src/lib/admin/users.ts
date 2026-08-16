@@ -7,6 +7,7 @@ import {
 import { hashPassword } from "@/lib/auth";
 import { isTestInstance } from "@/lib/env";
 import { query, transaction } from "@/lib/db/pool";
+import { withCapacityFor } from "@/lib/db/capacity";
 import { seedAccount } from "@/lib/seed";
 import type { AdminUser } from "@/lib/admin";
 import type { Locale } from "@/lib/i18n";
@@ -175,9 +176,11 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
     ? true
     : input.credential === "set" ? input.requireChange === true : false;
 
-  let created: { id: string };
+  let created: { id: string } | null;
   try {
-    created = await transaction(async (q) => {
+    // An admin account takes no place; a user account does, even when an admin
+    // creates it — otherwise the cap would not be a cap.
+    created = await withCapacityFor(input.role === "admin" ? 0 : 1, async (q) => {
       const rows = await q<{ id: string }>(
         `insert into users (email, username, password_hash, role, disabled_at,
                             must_change_password, created_via)
@@ -224,6 +227,12 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
       throw new ApiError("That username is already taken", 409);
     }
     throw e;
+  }
+
+  if (!created) {
+    throw new ApiError(
+      "Early access is full — disable an account first, or raise "
+      + "EARLY_ACCESS_USER_LIMIT.", 409);
   }
 
   const result: CreatedAccount = { id: created.id, email: email || username };
@@ -291,8 +300,24 @@ export async function setDisabled(admin: AdminUser, id: string, disabled: boolea
     }
   }
 
-  await query("update users set disabled_at = $2 where id = $1",
-    [id, disabled ? new Date() : null]);
+  if (!disabled) {
+    /*
+     * Turning an account back on takes a place, so it queues behind the same
+     * lock a sign-up does — otherwise a re-enable and a registration could each
+     * see 49 and both proceed.
+     */
+    const ok = await withCapacityFor(target.role === "admin" ? 0 : 1, async (q) => {
+      await q("update users set disabled_at = null where id = $1", [id]);
+      return true;
+    });
+    if (!ok) {
+      throw new ApiError(
+        "Early access is full — disable another account first, or raise "
+        + "EARLY_ACCESS_USER_LIMIT.", 409);
+    }
+  } else {
+    await query("update users set disabled_at = $2 where id = $1", [id, new Date()]);
+  }
   // Existing sessions stop resolving because getSessionUser checks the column,
   // but the rows are cleared too so nothing lingers server-side.
   if (disabled) await query("delete from sessions where user_id = $1", [id]);
@@ -545,7 +570,10 @@ export async function bulkSetDisabled(
     }
     changed = doable.length;
   } else if (targets.length) {
-    await transaction(async (q) => {
+    // Only accounts that are actually off take a place when switched on, and
+    // admins never take one.
+    const wouldOccupy = targets.filter((t) => t.disabled_at && t.role !== "admin").length;
+    const done = await withCapacityFor(wouldOccupy, async (q) => {
       const ids = targets.map((t) => t.id);
       await q("update users set disabled_at = null where id = any($1::uuid[])", [ids]);
       for (const row of targets) {
@@ -556,7 +584,13 @@ export async function bulkSetDisabled(
           [admin.id, admin.email, row.id, row.email, JSON.stringify({ bulk: true })],
         );
       }
+      return true;
     });
+    if (!done) {
+      throw new ApiError(
+        `Enabling ${wouldOccupy} account(s) would exceed the early-access limit. `
+        + "Disable others first, or raise EARLY_ACCESS_USER_LIMIT.", 409);
+    }
     changed = targets.length;
   }
 

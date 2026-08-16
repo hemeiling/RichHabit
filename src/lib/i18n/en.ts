@@ -667,6 +667,12 @@ export const en = {
     identifierPlaceholder: "Enter your email or username",
     email: "Email",
     emailPlaceholder: "you@example.com",
+    firstName: "First name",
+    lastName: "Last name",
+    username: "Username",
+    usernameHint: "3–30 characters: letters, digits, and dots, hyphens or underscores between them.",
+    confirmPassword: "Confirm password",
+    passwordMismatch: "The passwords do not match.",
     password: "Password",
     showPassword: "Show password",
     hidePassword: "Hide password",
@@ -776,6 +782,9 @@ export const en = {
   earlyAccess: {
     title: "Free Early Access",
     body: "RichHabit is currently free for our first 50 users. To keep the service fair and reliable, we reserve the right to limit, suspend, or delete accounts in cases of excessive or abusive usage, misuse, attempts to exploit the service, or other activity that may negatively affect the platform or its users. Free access may also change as RichHabit evolves.",
+    /** Shown when the programme is full. The exact wording the product asked for. */
+    fullTitle: "RichHabit Early Access Is Full",
+    fullBody: "Thank you for your interest in RichHabit. Our free early-access program is currently limited to the first 50 users, and all available spots have been filled.\n\nWe are working on the next version of RichHabit and future access options. Please check back later.",
     learnMore: "Learn more",
     agree: "I agree to the Free Early Access terms.",
     mustAgree: "Please accept the Free Early Access terms to create an account.",
@@ -792,6 +801,9 @@ export const en = {
   },
 
   errors: {
+    nameRequired: "Enter your first and last name.",
+    passwordTooSimple: "That password is too easy to guess — choose another.",
+
     serviceUnavailable: "The service can't reach its database right now. Try again in a moment.",
     setupLinkInvalid: "This setup link is not valid any more. Ask for a new one.",
     accountDisabled: "This account has been disabled. Contact whoever administers it.",

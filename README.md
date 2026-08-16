@@ -121,6 +121,52 @@ future native client gets identical numbers without a second implementation to k
 **Schedules are versioned.** `habit_schedules` rows carry `effective_from`, so changing a habit
 from daily to three-times-a-week doesn't silently rewrite what last month was supposed to look like.
 
+### The 50-account limit
+
+RichHabit is free for a limited number of people, so registration stops at a
+configurable number of **active, non-admin accounts** — `EARLY_ACCESS_USER_LIMIT`,
+default 50, `0` for unlimited. Admins are exempt by decision: the cap is on
+people using it, and running it should not cost a place.
+
+**The count and the door share one definition**, `OCCUPIES_A_SLOT` in
+`src/lib/db/capacity.ts`, so the number the owner reads on Admin → Users and the
+number that refuses a sign-up cannot drift apart.
+
+Enforced in the database, not in the form:
+
+```sql
+begin;
+  select pg_advisory_xact_lock(…);          -- serialises everything that changes the count
+  select count(*) … where disabled_at is null and role <> 'admin';
+  -- at the limit: rollback, and answer 409
+  insert into users …;                       -- otherwise create, seed and commit
+commit;
+```
+
+`pg_advisory_xact_lock` rather than the session-scoped variant, because it is
+released at commit — the only kind that survives a connection pooler in
+transaction mode, and production connects through one. Re-enabling an account
+and creating one from Admin → Users take the same lock, so a re-enable cannot
+race a registration into overshooting.
+
+Proved, not argued: with the limit set to 4, **five simultaneous registrations
+against one free place produced exactly one success and four refusals**, and the
+count never read 5.
+
+Disabling an account releases its place immediately; deleting one does too.
+Nothing is deleted to make room, and no existing account is touched.
+
+**Email verification is structured but inert.** There is no mail provider in
+this application, so nothing is sent, `email_verified_at` stays null, and an
+account counts from creation. Setting `REQUIRE_EMAIL_VERIFICATION=true` later
+makes a place depend on that column instead — username-only accounts, which have
+no address to verify, stay exempt so a flag cannot strand them.
+
+Sign-up asks for a first name, last name, username, email, password and
+confirmation, and requires accepting the terms. Username and email are each
+unique, and either signs you in. Accounts created before those fields existed
+keep their nulls and are never locked out.
+
 ### Free early access, and accepting it
 
 The sign-in card carries the free early-access notice at its foot — quiet, small

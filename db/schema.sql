@@ -86,6 +86,13 @@ create table users (
   -- When the free early-access terms were accepted at sign-up. Null on accounts
   -- that predate them, and on accounts an admin created; nobody is asked again.
   terms_accepted_at timestamptz,
+  /*
+   * Structure for a verification step that does not exist yet: this app has no
+   * mail transport, so nothing is sent and this stays null. `capacity.ts` reads
+   * it only when REQUIRE_EMAIL_VERIFICATION is on, so adding a provider later
+   * needs no change to the account model.
+   */
+  email_verified_at timestamptz,
   created_at    timestamptz not null default now(),
   -- An account nobody can name is an account nobody can sign in to.
   constraint users_identified check (email is not null or username is not null)
@@ -109,6 +116,10 @@ create index sessions_expiry_idx on sessions (expires_at);
 -- ------------------------------ profiles -----------------------------------
 create table profiles (
   id          uuid primary key references users on delete cascade,
+  -- Asked for at sign-up. Null on accounts created before they were asked for,
+  -- and on accounts an admin created without them; nobody is locked out for it.
+  first_name  text,
+  last_name   text,
   display_name text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()

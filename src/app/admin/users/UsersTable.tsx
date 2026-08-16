@@ -28,6 +28,10 @@ const SOURCE_LABEL: Record<string, string> = {
 
 const date = (v: string | null) => (v ? new Date(v).toISOString().slice(0, 10) : "—");
 
+/** First and last name where the sign-up form asked for them; otherwise nothing. */
+const fullName = (u: AdminUserRow) =>
+  [u.firstName, u.lastName].filter(Boolean).join(" ") || u.displayName || null;
+
 export default function UsersTable({
   rows, total, page, pages, allMatchingIds, currentAdminId,
 }: {
@@ -188,8 +192,9 @@ export default function UsersTable({
                       return next;
                     })} />
                 </th>
-                {["User", "Username", "Email", "Role", "Status", "Source", "Joined",
-                  "Last active", "Days", "Sessions", "Habits", "Done", "Goals", "Reviews"]
+                {["Name", "Username", "Email", "Status", "Signup date", "Role", "Verified",
+                  "Source", "Last active", "Days", "Sessions", "Habits", "Done",
+                  "Goals", "Reviews"]
                   .map((h) => (
                     <th key={h} style={{ padding: "6px 10px", whiteSpace: "nowrap", fontWeight: 500 }}>
                       {h}
@@ -208,21 +213,24 @@ export default function UsersTable({
                   </td>
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
                     <Link href={`/admin/users/${u.id}`} style={{ textDecoration: "underline" }}>
-                      {u.displayName || u.email}
+                      {fullName(u) ?? u.email}
                     </Link>
                     {u.id === currentAdminId && <span className="faint"> · you</span>}
                   </td>
                   <td className="muted" style={{ padding: "8px 10px" }}>{u.username ?? "—"}</td>
                   <td className="muted" style={{ padding: "8px 10px" }}>{u.address ?? "—"}</td>
-                  <td style={{ padding: "8px 10px", color: ROLE_STYLE[u.role] }}>{u.role}</td>
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap",
                     color: u.disabledAt ? "var(--warn)" : undefined }}>
-                    {u.disabledAt ? "disabled" : u.status.replace("_", " ")}
+                    {u.disabledAt ? "disabled" : "active"}
+                  </td>
+                  <td className="muted num" style={{ padding: "8px 10px" }}>{date(u.createdAt)}</td>
+                  <td style={{ padding: "8px 10px", color: ROLE_STYLE[u.role] }}>{u.role}</td>
+                  <td className="muted" style={{ padding: "8px 10px" }}>
+                    {u.address == null ? "—" : u.emailVerifiedAt ? "yes" : "not yet"}
                   </td>
                   <td className="muted" style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
                     {u.createdVia ? SOURCE_LABEL[u.createdVia] ?? u.createdVia : "unclassified"}
                   </td>
-                  <td className="muted num" style={{ padding: "8px 10px" }}>{date(u.createdAt)}</td>
                   <td className="muted num" style={{ padding: "8px 10px" }}>{date(u.lastActive)}</td>
                   {[u.activeDays, u.sessions, u.habits, u.completions, u.goals, u.reviews].map((n, i) => (
                     <td key={i} className="num" style={{ padding: "8px 10px" }}>{n}</td>

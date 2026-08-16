@@ -639,6 +639,12 @@ export const zh: Dict = {
     identifierPlaceholder: "请输入邮箱或用户名",
     email: "邮箱",
     emailPlaceholder: "you@example.com",
+    firstName: "名",
+    lastName: "姓",
+    username: "用户名",
+    usernameHint: "3–30 个字符：字母、数字，中间可用点、连字符或下划线。",
+    confirmPassword: "确认密码",
+    passwordMismatch: "两次输入的密码不一致。",
     password: "密码",
     showPassword: "显示密码",
     hidePassword: "隐藏密码",
@@ -741,6 +747,8 @@ export const zh: Dict = {
   earlyAccess: {
     title: "免费早期体验",
     body: "RichHabit 目前为前 50 位用户提供免费使用。为了保障平台公平、稳定地运行，对于过度或恶意使用、滥用平台、试图利用系统漏洞，或其他可能对平台及用户造成负面影响的行为，我们保留限制、暂停或删除相关账户的权利。随着 RichHabit 的发展，免费使用政策也可能进行调整。",
+    fullTitle: "「养成富有的习惯」早期体验名额已满",
+    fullBody: "感谢您对「养成富有的习惯」的关注。目前免费早期体验仅开放给前 50 位用户，现有名额已经全部使用完毕。\n\n我们正在规划下一阶段的产品及后续使用方式，欢迎之后再次关注。",
     learnMore: "了解详情",
     agree: "我同意免费早期体验条款。",
     mustAgree: "请先同意「免费早期体验」条款，再创建账户。",
@@ -756,6 +764,9 @@ export const zh: Dict = {
   },
 
   errors: {
+    nameRequired: "请填写你的姓和名。",
+    passwordTooSimple: "这个密码太容易被猜到，请换一个。",
+
     serviceUnavailable: "暂时无法连接到数据库，请稍后再试。",
     setupLinkInvalid: "这个设置链接已失效。请索取新的链接。",
     accountDisabled: "该账户已被停用。请联系管理员。",

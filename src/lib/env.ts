@@ -92,6 +92,25 @@ export const coach = {
  */
 export const isTestInstance = process.env.RH_TEST_INSTANCE === "true";
 
+// ────────────────────────── early access capacity ────────────────────────────
+
+export const capacity = {
+  /**
+   * How many active non-admin accounts may exist. Configuration rather than a
+   * literal, so lifting or removing the cap when RichHabit stops being free is
+   * an environment change and not a code change. `0` means unlimited.
+   */
+  limit: num("EARLY_ACCESS_USER_LIMIT", 50),
+  /**
+   * Structure for later. There is no mail provider in this application, so
+   * nothing is sent and nothing can be verified yet; with this false, an
+   * account counts from the moment it is created. When a provider arrives,
+   * turning this on makes a slot depend on `users.email_verified_at` without
+   * anything else being redesigned.
+   */
+  requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === "true",
+};
+
 // ─────────────────────────────── analytics ───────────────────────────────────
 
 export const analytics = {

@@ -369,6 +369,10 @@ export interface AdminUserRow {
   address: string | null;
   username: string | null;
   displayName: string | null;
+  /** From the sign-up form. Null on accounts created before it asked. */
+  firstName: string | null;
+  lastName: string | null;
+  emailVerifiedAt: string | null;
   /** 'self_signup' | 'admin' | 'test', or null on rows that predate the column. */
   createdVia: string | null;
   role: string; createdAt: string;
@@ -455,7 +459,8 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
 
   const rows = await query<Record<string, any>>(`
     select u.id, coalesce(u.email, u.username) as identifier,
-           u.email as address, u.username, p.display_name, u.created_via,
+           u.email as address, u.username, p.display_name,
+           p.first_name, p.last_name, u.email_verified_at, u.created_via,
            u.role::text as role, u.created_at, u.disabled_at,
            ev.first_active, ev.last_active, coalesce(ev.active_days, 0) as active_days,
            coalesce(s.sessions, 0) as sessions,
@@ -484,6 +489,8 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
     rows: rows.map((r) => ({
       id: r.id, email: r.identifier, address: r.address ?? null,
       username: r.username ?? null, displayName: r.display_name ?? null,
+      firstName: r.first_name ?? null, lastName: r.last_name ?? null,
+      emailVerifiedAt: r.email_verified_at ?? null,
       createdVia: r.created_via ?? null, role: r.role,
       createdAt: r.created_at, disabledAt: r.disabled_at ?? null,
       firstActive: r.first_active, lastActive: r.last_active,

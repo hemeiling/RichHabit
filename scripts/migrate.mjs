@@ -120,6 +120,12 @@ try {
     // Accepting the free early-access terms is recorded at sign-up. Existing
     // accounts get null and are never asked — signing in is unchanged.
     ["users", "terms_accepted_at", "alter table users add column terms_accepted_at timestamptz"],
+    // Structure for a verification step that does not exist yet. Stays null.
+    ["users", "email_verified_at", "alter table users add column email_verified_at timestamptz"],
+    // Asked for at sign-up from now on. Existing accounts keep nulls and are
+    // never locked out for it.
+    ["profiles", "first_name", "alter table profiles add column first_name text"],
+    ["profiles", "last_name", "alter table profiles add column last_name text"],
     ["users", "created_via",
      "alter table users add column created_via text " +
      "check (created_via in ('self_signup','admin','test'))"],
