@@ -105,21 +105,39 @@ export interface Credentials {
   id: string;
   passwordHash: string;
   disabledAt: string | null;
+  /**
+   * True only for accounts registered while verification was switched on. Every
+   * account that predates it holds false and signs in exactly as before — the
+   * environment variable is not consulted here, so it cannot lock anyone out
+   * retroactively.
+   */
+  awaitingVerification: boolean;
+  email: string | null;
 }
+
+const CREDENTIAL_COLUMNS =
+  `id, password_hash, disabled_at, email,
+   (verification_required and email_verified_at is null) as awaiting`;
 
 export async function findByIdentifier(raw: string): Promise<Credentials | null> {
   const value = normaliseIdentifier(raw);
   if (!value) return null;
 
-  const rows = await query<{ id: string; password_hash: string; disabled_at: string | null }>(
+  const rows = await query<{
+    id: string; password_hash: string; disabled_at: string | null;
+    email: string | null; awaiting: boolean;
+  }>(
     looksLikeEmail(value)
-      ? "select id, password_hash, disabled_at from users where lower(email) = $1"
-      : "select id, password_hash, disabled_at from users where lower(username) = $1",
+      ? `select ${CREDENTIAL_COLUMNS} from users where lower(email) = $1`
+      : `select ${CREDENTIAL_COLUMNS} from users where lower(username) = $1`,
     [value],
   );
   const row = rows[0];
   return row
-    ? { id: row.id, passwordHash: row.password_hash, disabledAt: row.disabled_at }
+    ? {
+      id: row.id, passwordHash: row.password_hash, disabledAt: row.disabled_at,
+      awaitingVerification: row.awaiting, email: row.email,
+    }
     : null;
 }
 
@@ -149,7 +167,12 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const rows = await query<{ id: string; email: string; must_change_password: boolean }>(
       `select u.id, coalesce(u.email, u.username) as email, u.must_change_password
          from sessions s join users u on u.id = s.user_id
-        where s.id = $1 and s.expires_at > now() and u.disabled_at is null`,
+        where s.id = $1 and s.expires_at > now() and u.disabled_at is null
+          -- An account that has not proved its address resolves to nobody, for
+          -- the same reason a disabled one does: refusing at the single point
+          -- everything already asks "who is this" leaves no route to miss.
+          -- Sign-in checks the same condition, so no session can be made either.
+          and (not u.verification_required or u.email_verified_at is not null)`,
       [token],
     );
     const row = rows[0];

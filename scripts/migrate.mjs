@@ -120,8 +120,21 @@ try {
     // Accepting the free early-access terms is recorded at sign-up. Existing
     // accounts get null and are never asked — signing in is unchanged.
     ["users", "terms_accepted_at", "alter table users add column terms_accepted_at timestamptz"],
-    // Structure for a verification step that does not exist yet. Stays null.
     ["users", "email_verified_at", "alter table users add column email_verified_at timestamptz"],
+    /*
+     * Email verification, for new registrations only.
+     *
+     * `default false` IS the grandfathering rule, and the reason there is no
+     * backfill here. Every account that already exists takes false, so it keeps
+     * its place in the fifty, signs in exactly as before, and is never asked to
+     * prove anything. Nothing is written to their rows at all.
+     *
+     * Deliberately NOT done: setting email_verified_at = now() on existing
+     * accounts. That would have recorded a verification that never happened,
+     * turning a convenient fiction into data later code would trust.
+     */
+    ["users", "verification_required",
+     "alter table users add column verification_required boolean not null default false"],
     // Asked for at sign-up from now on. Existing accounts keep nulls and are
     // never locked out for it.
     ["profiles", "first_name", "alter table profiles add column first_name text"],
@@ -351,6 +364,23 @@ try {
         created_at    timestamptz not null default now(),
         updated_at    timestamptz not null default now()
       )`, "create index feedback_status_idx on feedback (status, created_at desc)"],
+    /*
+     * Verification links. Only the hash of the token is kept, so a copy of this
+     * table is not a set of working links; the address is kept beside it so a
+     * link proves the address it was posted to.
+     */
+    ["email_verifications", `
+      create table email_verifications (
+        id          uuid primary key default gen_random_uuid(),
+        user_id     uuid not null references users on delete cascade,
+        token_hash  text not null,
+        email       text not null,
+        expires_at  timestamptz not null,
+        consumed_at timestamptz,
+        created_at  timestamptz not null default now()
+      )`,
+     "create unique index email_verifications_hash_idx on email_verifications (token_hash);" +
+     "create index email_verifications_user_idx on email_verifications (user_id, created_at desc)"],
     ["admin_audit_log", `
       create table admin_audit_log (
         id           bigserial primary key,

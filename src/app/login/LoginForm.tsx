@@ -48,6 +48,39 @@ export default function LoginForm() {
    * body had been rendered in whatever language the request was made in.
    */
   const [full, setFull] = useState(false);
+  /**
+   * An account that exists but has not proved its address yet. Same reasoning
+   * as `full`: flags and values, never the server's prose, so every word on
+   * screen follows the language toggle.
+   *
+   * `pending.sent` false means the account was created but the message did not
+   * go out — a provider hiccup, not the user's problem, and the screen leads
+   * with the resend button instead of "check your inbox".
+   */
+  const [pending, setPending] = useState<null | { email: string; sent: boolean }>(null);
+  /** Offered after a sign-in refused for want of verification. */
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [resendNote, setResendNote] = useState<string | null>(null);
+
+  const resend = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/auth/verify/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: pending?.email ?? identifier }),
+      });
+      const data = await res.json().catch(() => null);
+      // Deliberately the same note whatever happened — see the route: it does
+      // not reveal whether an account exists.
+      setResendNote(data?.sent ?? t.verify.resendSent);
+      if (pending) setPending({ ...pending, sent: true });
+    } catch {
+      setResendNote(t.verify.sendFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async () => {
     if (busy || !identifier.trim() || !password) return;
@@ -57,7 +90,7 @@ export default function LoginForm() {
     if (mode === "signup" && password !== confirm) {
       setError(t.login.passwordMismatch); return;
     }
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setNeedsVerify(false); setResendNote(null);
     try {
       const res = await fetch(`/api/auth/${mode === "signup" ? "signup" : "signin"}`, {
         method: "POST",
@@ -72,7 +105,18 @@ export default function LoginForm() {
       // The programme being full is not the user's mistake, so it is shown as
       // its own message rather than as a red validation error.
       if (res.status === 409 && data?.full) { setFull(true); return; }
+      // Signing in was refused only because the address is unproved. Not a red
+      // error: the account is fine, and the one useful action is another link.
+      if (res.status === 403 && data?.verifyPending) { setNeedsVerify(true); return; }
       if (!res.ok) throw new Error(data?.error || t.login.genericError);
+      /*
+       * Registered, but not signed in — there is no session to go to /today
+       * with, because the account holds no place until the link is clicked.
+       */
+      if (data?.pending) {
+        setPending({ email: data.email ?? identifier, sent: data.sent !== false });
+        return;
+      }
       router.push("/today");
       router.refresh();
     } catch (e) {
@@ -81,6 +125,51 @@ export default function LoginForm() {
       setBusy(false);
     }
   };
+
+  /*
+   * The account exists and is waiting on its inbox. This replaces the form
+   * rather than sitting under it: there is nothing left to fill in, and leaving
+   * a filled-out sign-up form on screen invites people to press it again.
+   */
+  if (pending) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="card p-7 w-full" style={{ maxWidth: 400 }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="eyebrow">{t.appName}</div>
+            <LanguageToggle />
+          </div>
+          <h1 className="display mt-1" style={{ fontSize: 24, lineHeight: 1.2 }}>
+            {t.verify.sentTitle}
+          </h1>
+          <p className="mt-3" style={{ fontSize: 14, lineHeight: 1.6 }}>
+            {pending.sent ? t.verify.sentBody(pending.email) : t.verify.sendFailed}
+          </p>
+          {pending.sent && (
+            <p className="muted mt-2" style={{ fontSize: 13, lineHeight: 1.55 }}>
+              {t.verify.sentHint}
+            </p>
+          )}
+          {resendNote && (
+            <p className="mt-3" role="status" style={{ fontSize: 13, lineHeight: 1.55 }}>
+              {resendNote}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2 mt-5">
+            <button className={pending.sent ? "btn" : "btn btn-primary"}
+              onClick={resend} disabled={busy}>
+              {busy ? t.verify.resending : t.verify.resend}
+            </button>
+            <button className="btn btn-quiet" onClick={() => {
+              setPending(null); setMode("signin"); setPassword(""); setConfirm("");
+            }}>
+              {t.verify.backToSignIn}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (full) {
     return (
@@ -196,6 +285,24 @@ export default function LoginForm() {
               onChange={(e) => { setAccepted(e.target.checked); setError(null); }} />
             <span>{t.earlyAccess.agree}</span>
           </label>
+        )}
+
+        {/*
+          * Not styled as an error. The password was right; the account simply
+          * has one step left, and the button that finishes it is right here.
+          */}
+        {needsVerify && (
+          <div className="flat p-3 mt-3" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+            <div>{t.errors.verifyPending}</div>
+            {resendNote
+              ? <div className="muted mt-2" role="status">{resendNote}</div>
+              : (
+                <button className="btn mt-2" style={{ padding: "4px 12px" }}
+                  onClick={resend} disabled={busy}>
+                  {busy ? t.verify.resending : t.verify.resend}
+                </button>
+              )}
+          </div>
         )}
 
         {error && (

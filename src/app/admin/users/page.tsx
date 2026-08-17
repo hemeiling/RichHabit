@@ -1,5 +1,7 @@
 import { requireAdminPage } from "@/lib/admin";
 import { currentCapacity } from "@/lib/db/capacity";
+import { transport } from "@/lib/email/send";
+import { capacity } from "@/lib/env";
 import { adminUserIds, adminUsers } from "@/lib/analytics/queries";
 import type {
   KindFilter, RoleFilter, SourceFilter, StatusFilter, UserSort,
@@ -20,7 +22,7 @@ const SORTS: [UserSort, string][] = [
 ];
 const ROLES: [RoleFilter, string][] = [["all", "All"], ["user", "User"], ["admin", "Admin"]];
 const STATUSES: [StatusFilter, string][] =
-  [["all", "All"], ["active", "Active"], ["disabled", "Disabled"]];
+  [["all", "All"], ["active", "Active"], ["pending", "Pending"], ["disabled", "Disabled"]];
 const KINDS: [KindFilter, string][] =
   [["all", "All"], ["email", "Email"], ["username", "Username"]];
 /**
@@ -53,6 +55,8 @@ export default async function Users({ searchParams }: {
   const result = await adminUsers({ ...filters, page, pageSize: 50 });
   const allMatchingIds = await adminUserIds(filters);
   const seats = await currentCapacity();
+  const verificationOn = capacity.requireEmailVerification;
+  const mailReady = transport() !== null;
 
   /** A link that keeps every current filter and changes one thing. */
   const href = (patch: Record<string, string | number>) => {
@@ -115,6 +119,28 @@ export default async function Users({ searchParams }: {
                 Active non-admin accounts. Admins do not use a spot; a disabled account
                 releases one.
               </div>
+              {seats.pending > 0 && (
+                <div className="mt-1.5" style={{ fontSize: 12.5 }}>
+                  <a href={href({ status: "pending" })} style={{ textDecoration: "underline" }}>
+                    {seats.pending} awaiting email confirmation
+                  </a>
+                  <span className="faint">
+                    {" "}— these take no spot until they confirm.
+                  </span>
+                </div>
+              )}
+              {/*
+                * Worth saying out loud on this screen. With verification
+                * required and no transport configured, every new registration
+                * would sit pending forever with nothing sent, and the only
+                * visible symptom would be sign-ups that never arrive.
+                */}
+              {verificationOn && !mailReady && (
+                <div className="mt-1.5" style={{ fontSize: 12.5, color: "var(--warn)" }}>
+                  Email verification is required but no mail provider is configured —
+                  set RESEND_API_KEY and MAIL_FROM, or new accounts cannot be confirmed.
+                </div>
+              )}
             </>
           )}
         </div>

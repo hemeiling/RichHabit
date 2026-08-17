@@ -87,11 +87,16 @@ create table users (
   -- that predate them, and on accounts an admin created; nobody is asked again.
   terms_accepted_at timestamptz,
   /*
-   * Structure for a verification step that does not exist yet: this app has no
-   * mail transport, so nothing is sent and this stays null. `capacity.ts` reads
-   * it only when REQUIRE_EMAIL_VERIFICATION is on, so adding a provider later
-   * needs no change to the account model.
+   * Whether THIS account must prove its address, decided once when it is made
+   * from REQUIRE_EMAIL_VERIFICATION and then never re-read from the
+   * environment. That is what grandfathers everyone who registered before
+   * verification existed: they hold false, keep their place, and sign in
+   * unchanged no matter how the flag is set later. Accounts an admin creates
+   * also hold false — the admin is the vouching party.
    */
+  verification_required boolean not null default false,
+  -- When the address was actually proved. Null on accounts that were never
+  -- asked; `verification_required` is what says whether that matters.
   email_verified_at timestamptz,
   created_at    timestamptz not null default now(),
   -- An account nobody can name is an account nobody can sign in to.
@@ -101,6 +106,28 @@ create table users (
 create unique index users_email_idx on users (lower(email));
 -- Usernames are compared lowercased, so uniqueness has to be too.
 create unique index users_username_idx on users (lower(username));
+
+/*
+ * Email verification links.
+ *
+ * Only the SHA-256 of the token is kept, for the same reason the password is
+ * hashed: whoever reads a backup of this table learns nothing they can click.
+ * The address is stored alongside so a link proves the address it was sent to,
+ * not merely "some address this account had at some point" — changing the email
+ * after the mail went out cannot be laundered into a verified one.
+ */
+create table email_verifications (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users on delete cascade,
+  token_hash  text not null,
+  email       text not null,
+  expires_at  timestamptz not null,
+  -- Single use. Set the moment the link is redeemed, in the same transaction.
+  consumed_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+create unique index email_verifications_hash_idx on email_verifications (token_hash);
+create index email_verifications_user_idx on email_verifications (user_id, created_at desc);
 
 -- Opaque session tokens. The cookie carries the id; nothing is signed into it,
 -- so revoking a session is a delete rather than a key rotation.

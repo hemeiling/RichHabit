@@ -763,8 +763,34 @@ export const zh: Dict = {
     ],
   },
 
+  verify: {
+    title: "确认你的邮箱",
+    intro: "点击下面的按钮确认这个邮箱地址，即可启用你的账户。",
+    confirm: "确认邮箱",
+    confirming: "确认中…",
+    doneTitle: "邮箱已确认",
+    problemTitle: "这个链接无法使用",
+    ok: "你的邮箱已确认，账户已启用，现在可以登录了。",
+    already: "这个邮箱已经确认过了，可以直接登录。",
+    expired: "这个链接已过期。请用邮箱和密码登录，我们会给你发送新的链接。",
+    invalid: "这个链接无效。它可能已经被使用过，或者该邮箱已通过其他方式确认。",
+    fullStillValid: "你的链接仍然有效——等有名额空出来时，再点一次确认就可以了。",
+    signIn: "登录",
+    backToSignIn: "返回登录",
+    tryAgain: "重试",
+
+    sentTitle: "请查收邮件",
+    sentBody: (email: string) => `我们已向 ${email} 发送了确认链接，打开它即可启用账户。`,
+    sentHint: "链接在 24 小时内有效。如果没有收到，请查看垃圾邮件文件夹。",
+    sendFailed: "确认邮件暂时发送失败，请重新发送一次。",
+    resend: "重新发送",
+    resending: "发送中…",
+    resendSent: "如果该账户正在等待确认，新的链接已经在路上了。",
+  },
+
   errors: {
     nameRequired: "请填写你的姓和名。",
+    verifyPending: "请先确认你的邮箱地址再登录——确认链接已发送到你的邮箱。",
     passwordTooSimple: "这个密码太容易被猜到，请换一个。",
 
     serviceUnavailable: "暂时无法连接到数据库，请稍后再试。",

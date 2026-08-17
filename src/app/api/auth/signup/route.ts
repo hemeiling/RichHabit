@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { MAX_PASSWORD, MIN_PASSWORD, createSession, hashPassword } from "@/lib/auth";
 import { withReservedSlot } from "@/lib/db/capacity";
-import { isTestInstance } from "@/lib/env";
+import { transaction } from "@/lib/db/pool";
+import { sendVerification } from "@/lib/email/verify";
+import { capacity, isTestInstance } from "@/lib/env";
 import { checkUsername, isPlausibleEmail, normaliseEmail, normaliseUsername } from "@/lib/identity";
 import { passwordProblems } from "@/lib/password";
 import { getDict, getLocale } from "@/lib/i18n/server";
@@ -60,22 +62,40 @@ export async function POST(request: Request) {
 
   const passwordHash = await hashPassword(password);
 
+  /*
+   * With verification on, an account is created but takes no place: it reserves
+   * its email and username, and nothing more. Clicking the link is what
+   * consumes one of the fifty — see lib/email/verify.ts, which does that count
+   * behind the same lock this route uses.
+   *
+   * `verification_required` is written from the flag here, once. Nothing reads
+   * the flag again for this account afterwards, which is what leaves every
+   * existing user untouched by it.
+   */
+  const mustVerify = capacity.requireEmailVerification;
+
+  const create = async (q: Parameters<Parameters<typeof withReservedSlot>[0]>[0]) => {
+    const rows = await q<{ id: string }>(
+      `insert into users (email, username, password_hash, created_via, terms_accepted_at,
+                          verification_required)
+       values ($1, $2, $3, $4, now(), $5) returning id`,
+      [email, username, passwordHash, isTestInstance ? "test" : "self_signup", mustVerify],
+    );
+    const id = rows[0].id;
+    // seedAccount creates the profile row; the names go on straight after, so
+    // there is one definition of what a new account starts with.
+    await seedAccount(q, id, locale);
+    await q("update profiles set first_name = $2, last_name = $3 where id = $1",
+      [id, firstName, lastName]);
+    return id;
+  };
+
   let userId: string | null;
   try {
-    userId = await withReservedSlot(async (q) => {
-      const rows = await q<{ id: string }>(
-        `insert into users (email, username, password_hash, created_via, terms_accepted_at)
-         values ($1, $2, $3, $4, now()) returning id`,
-        [email, username, passwordHash, isTestInstance ? "test" : "self_signup"],
-      );
-      const id = rows[0].id;
-      // seedAccount creates the profile row; the names go on straight after, so
-      // there is one definition of what a new account starts with.
-      await seedAccount(q, id, locale);
-      await q("update profiles set first_name = $2, last_name = $3 where id = $1",
-        [id, firstName, lastName]);
-      return id;
-    });
+    // A pending account needs no place, so it does not queue behind the
+    // capacity lock and cannot be refused for being full. It is refused at the
+    // link instead, where the place is actually taken.
+    userId = mustVerify ? await transaction(create) : await withReservedSlot(create);
   } catch (e) {
     if (e instanceof Error && /users_email_idx/.test(e.message)) {
       return NextResponse.json({ error: msg.emailTaken }, { status: 409 });
@@ -99,6 +119,28 @@ export async function POST(request: Request) {
     }, { status: 409 });
   }
 
-  await createSession(userId);
-  return NextResponse.json({ ok: true });
+  if (!mustVerify) {
+    await createSession(userId);
+    return NextResponse.json({ ok: true });
+  }
+
+  /*
+   * No session. A pending account is not signed in, and the middleware and
+   * `getSessionUser` both refuse it anyway — there is nothing to be half-inside
+   * the app with.
+   *
+   * A send that fails does not delete the account. The address and username are
+   * legitimately reserved by someone who did register, and destroying that on a
+   * transient provider error would hand their username to the next person to
+   * try. The screen offers to send it again instead.
+   */
+  let sent = true;
+  try {
+    await sendVerification(userId, email, locale);
+  } catch (e) {
+    console.error("[signup] verification email", e);
+    sent = false;
+  }
+
+  return NextResponse.json({ ok: true, pending: true, email, sent });
 }

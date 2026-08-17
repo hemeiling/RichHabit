@@ -800,8 +800,37 @@ export const en = {
     ],
   },
 
+  /** Confirming an email address: the page, and the screen shown after signing up. */
+  verify: {
+    title: "Confirm your email",
+    intro: "Press the button below to confirm this address and activate your account.",
+    confirm: "Confirm my email",
+    confirming: "Confirming…",
+    doneTitle: "Email confirmed",
+    problemTitle: "This link didn't work",
+    ok: "Your email is confirmed and your account is active. You can sign in now.",
+    already: "This address is already confirmed. You can sign in.",
+    expired: "This link has expired. Sign in with your email and password and we'll send a new one.",
+    invalid: "This link is not valid. It may already have been used, or the address may have been confirmed another way.",
+    fullStillValid: "Your link is still valid — press confirm again and it will work as soon as a spot opens up.",
+    signIn: "Sign in",
+    backToSignIn: "Back to sign in",
+    tryAgain: "Try again",
+
+    // The screen that replaces the sign-up form once an account is pending.
+    sentTitle: "Check your email",
+    sentBody: (email: string) =>
+      `We've sent a confirmation link to ${email}. Open it to activate your account.`,
+    sentHint: "The link works for 24 hours. If it isn't there, check your spam folder.",
+    sendFailed: "We couldn't send the confirmation email just now. Try sending it again.",
+    resend: "Send it again",
+    resending: "Sending…",
+    resendSent: "If that account is waiting to be confirmed, a new link is on its way.",
+  },
+
   errors: {
     nameRequired: "Enter your first and last name.",
+    verifyPending: "Confirm your email address before signing in — check your inbox for the link.",
     passwordTooSimple: "That password is too easy to guess — choose another.",
 
     serviceUnavailable: "The service can't reach its database right now. Try again in a moment.",

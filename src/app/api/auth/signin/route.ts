@@ -58,6 +58,20 @@ export async function POST(request: Request) {
   if (user.disabledAt) {
     return NextResponse.json({ error: msg.accountDisabled }, { status: 403 });
   }
+  /*
+   * Registered, but the address was never proved. Also told plainly, and for
+   * the same reason: they have just proved they own the account, and the one
+   * thing they need to know is that a message is waiting for them.
+   *
+   * `verifyPending` lets the form offer to send it again, which is the only
+   * action that helps here.
+   */
+  if (user.awaitingVerification) {
+    return NextResponse.json(
+      { error: msg.verifyPending, verifyPending: true },
+      { status: 403 },
+    );
+  }
 
   clearThrottle(`${ip}:${identifier}`);
   await createSession(user.id);

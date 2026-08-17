@@ -20,3 +20,7 @@ next-env.d.ts
 .pgdata-deploy/
 .pgdata-old/
 .next-prod/
+
+# Messages written by MAIL_OUTBOX_DIR when no provider is configured. They
+# contain live confirmation links, so they must never be committed.
+.mail-outbox/

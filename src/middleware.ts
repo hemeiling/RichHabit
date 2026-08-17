@@ -11,6 +11,9 @@ const PUBLIC_PATHS = [
   // The early-access terms are linked from the sign-in card, so they have to be
   // readable before anyone has an account.
   "/terms",
+  // Confirming an address happens before there is any session at all — the
+  // token in the URL is the credential, and it is checked server-side.
+  "/verify",
 ];
 
 /**

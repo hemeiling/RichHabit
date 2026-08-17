@@ -102,13 +102,58 @@ export const capacity = {
    */
   limit: num("EARLY_ACCESS_USER_LIMIT", 50),
   /**
-   * Structure for later. There is no mail provider in this application, so
-   * nothing is sent and nothing can be verified yet; with this false, an
-   * account counts from the moment it is created. When a provider arrives,
-   * turning this on makes a slot depend on `users.email_verified_at` without
-   * anything else being redesigned.
+   * Whether a **newly registered** account must prove its address before it
+   * becomes active and takes a place.
+   *
+   * This is read at sign-up only, and stamped onto the account as
+   * `users.verification_required`. It is deliberately not consulted when
+   * counting or when signing in: the account carries its own answer, so
+   * existing accounts are unaffected by this flag and turning it off and on
+   * again cannot retroactively lock anyone out.
    */
   requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === "true",
+  /** How long a verification link stays usable. */
+  verifyTtlHours: num("VERIFY_LINK_TTL_HOURS", 24),
+  /** The shortest gap between two verification emails to the same account. */
+  resendGapSeconds: num("VERIFY_RESEND_GAP_SECONDS", 60),
+};
+
+// ──────────────────────────────── outgoing mail ──────────────────────────────
+
+/**
+ * Where a link in an email has to point. There is no request to infer it from
+ * when mail is sent from a background path, and inferring it from the `Host`
+ * header would let a forged header rewrite the link in someone else's email —
+ * so it is configuration, and verification refuses to send without it.
+ */
+export function appUrl(): string {
+  const raw = str("APP_URL", "") || str("RENDER_EXTERNAL_URL", "");
+  if (!raw) {
+    throw new Error(
+      "APP_URL is not set. It is the public origin of this deployment, " +
+      "e.g. https://richhabit.onrender.com — verification links are built from it.",
+    );
+  }
+  return raw.replace(/\/+$/, "");
+}
+
+export const mail = {
+  /**
+   * Absent means no provider is configured. Nothing throws for it: the
+   * application runs perfectly well with mail switched off, and every path
+   * that needs mail says so at the point of use.
+   */
+  resendApiKey: process.env.RESEND_API_KEY?.trim() || null,
+  /** The From header, e.g. `RichHabit <info@rosalytics.com>`. */
+  from: str("MAIL_FROM", ""),
+  /** Optional; where a reply goes if it differs from the sender. */
+  replyTo: str("MAIL_REPLY_TO", "") || null,
+  /**
+   * Development and tests write messages here as JSON instead of sending them,
+   * which is what makes the whole flow testable without a provider — and means
+   * a misconfigured production cannot silently fall back to sending nothing.
+   */
+  outboxDir: str("MAIL_OUTBOX_DIR", "") || null,
 };
 
 // ─────────────────────────────── analytics ───────────────────────────────────

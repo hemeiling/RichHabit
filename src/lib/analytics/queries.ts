@@ -373,6 +373,12 @@ export interface AdminUserRow {
   firstName: string | null;
   lastName: string | null;
   emailVerifiedAt: string | null;
+  /**
+   * Whether this account was ever asked to prove its address. False on every
+   * account that predates verification, which is why they read as active rather
+   * than as forever-unverified.
+   */
+  verificationRequired: boolean;
   /** 'self_signup' | 'admin' | 'test', or null on rows that predate the column. */
   createdVia: string | null;
   role: string; createdAt: string;
@@ -386,7 +392,7 @@ export interface AdminUserRow {
 
 export type UserSort = "active" | "least_active" | "newest" | "oldest" | "last_active";
 export type RoleFilter = "all" | "user" | "admin";
-export type StatusFilter = "all" | "active" | "disabled";
+export type StatusFilter = "all" | "active" | "pending" | "disabled";
 export type KindFilter = "all" | "email" | "username";
 /** Only ever from `created_via`, never inferred from what an address looks like. */
 export type SourceFilter = "all" | "real" | "test" | "unclassified";
@@ -442,7 +448,16 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
     + " or p.display_name ilike '%' || $1 || '%')",
   ];
   if (role !== "all") where.push(`u.role = '${role === "admin" ? "admin" : "user"}'::user_role`);
-  if (status === "active") where.push("u.disabled_at is null");
+  // "Active" means active, not merely not-disabled: an account waiting on its
+  // confirmation link is neither, and has its own filter.
+  if (status === "active") {
+    where.push("u.disabled_at is null");
+    where.push("(not u.verification_required or u.email_verified_at is not null)");
+  }
+  if (status === "pending") {
+    where.push("u.disabled_at is null");
+    where.push("u.verification_required and u.email_verified_at is null");
+  }
   if (status === "disabled") where.push("u.disabled_at is not null");
   if (kind === "email") where.push("u.email is not null");
   if (kind === "username") where.push("u.email is null and u.username is not null");
@@ -460,7 +475,8 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
   const rows = await query<Record<string, any>>(`
     select u.id, coalesce(u.email, u.username) as identifier,
            u.email as address, u.username, p.display_name,
-           p.first_name, p.last_name, u.email_verified_at, u.created_via,
+           p.first_name, p.last_name, u.email_verified_at, u.verification_required,
+           u.created_via,
            u.role::text as role, u.created_at, u.disabled_at,
            ev.first_active, ev.last_active, coalesce(ev.active_days, 0) as active_days,
            coalesce(s.sessions, 0) as sessions,
@@ -491,6 +507,7 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
       username: r.username ?? null, displayName: r.display_name ?? null,
       firstName: r.first_name ?? null, lastName: r.last_name ?? null,
       emailVerifiedAt: r.email_verified_at ?? null,
+      verificationRequired: r.verification_required === true,
       createdVia: r.created_via ?? null, role: r.role,
       createdAt: r.created_at, disabledAt: r.disabled_at ?? null,
       firstActive: r.first_active, lastActive: r.last_active,

@@ -167,6 +167,57 @@ confirmation, and requires accepting the terms. Username and email are each
 unique, and either signs you in. Accounts created before those fields existed
 keep their nulls and are never locked out.
 
+### Email verification, for new registrations only
+
+Off by default. `REQUIRE_EMAIL_VERIFICATION=true` makes a **new** registration
+create a *pending* account: it reserves the email and username, receives a
+confirmation link, and takes **no place** in the fifty. Clicking the link is
+what activates the account and consumes the place.
+
+**Existing accounts are untouched, and not by convention — by construction.**
+Whether verification applies is stamped on the account as
+`users.verification_required` when it is created, and never re-read from the
+environment. Every account that predates the feature takes the column default of
+`false`, so it keeps its place, signs in with the password it already had, and
+is never asked for anything. Turning the flag off and on again cannot
+retroactively lock anyone out.
+
+The migration deliberately does **not** backfill `email_verified_at = now()` on
+existing rows. That would record a verification that never happened, and later
+code would have no way to tell the fiction from the fact.
+
+**Confirming can be refused, and that is the point.** A pending account occupies
+nothing, so the last place can legitimately go to somebody else while a link
+sits unread in an inbox. Redemption runs inside `withCapacityLock` — the same
+`pg_advisory_xact_lock`, the same predicate, the same transaction that a sign-up
+uses — and answers 409 rather than letting the platform reach 51. The token is
+left unconsumed, so the identical link works the moment a place frees up.
+
+Verified with six simultaneous confirmations against one free place, four times
+over: **exactly one winner each round, five 409s, and the count never read
+above the limit.**
+
+Other decisions worth knowing:
+
+- **The link is redeemed by POST, from a button.** Corporate mail filters and
+  link-preview bots fetch every URL in a message before the recipient sees it. A
+  GET that activated the account would be spent by a scanner, and the person
+  would click a dead link.
+- **Only the SHA-256 of the token is stored.** A copy of the table is not a set
+  of working links.
+- **Resending answers identically whether or not the account exists**, and mail
+  only ever goes to the address already on the account — so it cannot be used to
+  enumerate accounts or to post RichHabit mail at a stranger. Rate-limited per
+  caller and per account.
+- **Mail has one provider and one deliberate alternative.** `MAIL_OUTBOX_DIR`
+  writes the real composed message to a file instead of sending it, which is how
+  the whole flow is driven end to end in tests with no provider, no domain and
+  no network. A missing transport raises at the point of sending; it never
+  silently does nothing.
+
+Admin → Users shows pending accounts separately, filters on them, and warns if
+verification is required while no mail provider is configured.
+
 ### Free early access, and accepting it
 
 The sign-in card carries the free early-access notice at its foot — quiet, small

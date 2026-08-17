@@ -28,6 +28,14 @@ const SOURCE_LABEL: Record<string, string> = {
 
 const date = (v: string | null) => (v ? new Date(v).toISOString().slice(0, 10) : "—");
 
+/**
+ * Registered, but the address is unproved and the account is therefore inert.
+ * Reads the account's own flag rather than the environment, so accounts from
+ * before verification existed never show as pending.
+ */
+const pendingVerification = (u: AdminUserRow) =>
+  u.verificationRequired && !u.emailVerifiedAt;
+
 /** First and last name where the sign-up form asked for them; otherwise nothing. */
 const fullName = (u: AdminUserRow) =>
   [u.firstName, u.lastName].filter(Boolean).join(" ") || u.displayName || null;
@@ -219,14 +227,28 @@ export default function UsersTable({
                   </td>
                   <td className="muted" style={{ padding: "8px 10px" }}>{u.username ?? "—"}</td>
                   <td className="muted" style={{ padding: "8px 10px" }}>{u.address ?? "—"}</td>
+                  {/*
+                    * Three states, not two. A pending account is neither active
+                    * nor disabled: it exists, holds its username, and occupies
+                    * none of the fifty until its address is confirmed.
+                    */}
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap",
-                    color: u.disabledAt ? "var(--warn)" : undefined }}>
-                    {u.disabledAt ? "disabled" : "active"}
+                    color: u.disabledAt ? "var(--warn)"
+                      : pendingVerification(u) ? "var(--accent)" : undefined }}>
+                    {u.disabledAt ? "disabled"
+                      : pendingVerification(u) ? "pending" : "active"}
                   </td>
                   <td className="muted num" style={{ padding: "8px 10px" }}>{date(u.createdAt)}</td>
                   <td style={{ padding: "8px 10px", color: ROLE_STYLE[u.role] }}>{u.role}</td>
+                  {/*
+                    * "not asked" is the honest answer for a grandfathered
+                    * account: nobody ever sent them a link, so "no" would read
+                    * as a failure on their part rather than on ours.
+                    */}
                   <td className="muted" style={{ padding: "8px 10px" }}>
-                    {u.address == null ? "—" : u.emailVerifiedAt ? "yes" : "not yet"}
+                    {u.emailVerifiedAt ? "yes"
+                      : u.address == null ? "—"
+                        : u.verificationRequired ? "not yet" : "not asked"}
                   </td>
                   <td className="muted" style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
                     {u.createdVia ? SOURCE_LABEL[u.createdVia] ?? u.createdVia : "unclassified"}
