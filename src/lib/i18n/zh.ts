@@ -23,6 +23,7 @@ export const zh: Dict = {
     habits: "习惯",
     week: "本周",
     insights: "洞察",
+    community: "社区",
     more: "更多",
     mainNavigation: "主导航",
     openMenu: "打开菜单",
@@ -34,6 +35,7 @@ export const zh: Dict = {
     "/habits": "我的习惯",
     "/week": "七天清单",
     "/insights": "洞察",
+    "/community": "社区进步",
     "/more": "更多",
     "/more/refine": "调整我的习惯",
     "/more/awareness": "习惯觉察",
@@ -532,7 +534,6 @@ export const zh: Dict = {
 
   community: {
     title: "社区进步",
-    linkNote: "看看大家本月的进展",
     liveRanking: "实时排名",
     monthNames: ["1月", "2月", "3月", "4月", "5月", "6月",
       "7月", "8月", "9月", "10月", "11月", "12月"],

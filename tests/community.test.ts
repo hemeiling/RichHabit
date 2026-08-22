@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { displayName, monthToDate, previousMonth, wholeMonth } from "../src/lib/community";
+import {
+  RANKS_ON_LEADERBOARD, displayName, monthToDate, previousMonth, wholeMonth,
+} from "../src/lib/community";
+import { OCCUPIES_A_SLOT } from "../src/lib/db/capacity";
 
 /**
  * The leaderboard's two risks are privacy and drift.
@@ -92,5 +95,28 @@ describe("the monthly window", () => {
   it("steps back across a year boundary", () => {
     expect(previousMonth("2026-09")).toBe("2026-08");
     expect(previousMonth("2026-01")).toBe("2025-12");
+  });
+});
+
+/**
+ * Two rules that look similar and must not merge.
+ *
+ * "Does this account use one of the fifty early-access places" and "is this a
+ * person building habits" are different questions. An admin is staff, so it
+ * answers no to the first — but an admin with habits answers yes to the
+ * second, and conflating them turns a permissions role into an exclusion from
+ * your own progress.
+ */
+describe("ranking eligibility is not capacity eligibility", () => {
+  it("keeps admins out of the fifty early-access places", () => {
+    expect(OCCUPIES_A_SLOT).toMatch(/role\s*<>\s*'admin'/);
+  });
+
+  it("does not exclude admins from the leaderboard", () => {
+    expect(RANKS_ON_LEADERBOARD).not.toMatch(/admin/);
+  });
+
+  it("still excludes accounts that cannot sign in", () => {
+    expect(RANKS_ON_LEADERBOARD).toMatch(/disabled_at is null/);
   });
 });

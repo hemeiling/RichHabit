@@ -37,6 +37,9 @@ export const en = {
     habits: "Habits",
     week: "Week",
     insights: "Insights",
+    /* Sits after the four personal views and before settings: it is the one
+       screen that looks outward, and the sidebar reads inward-to-outward. */
+    community: "Community",
     more: "More",
     /** The sidebar's own labels: the landmark, the drawer, the account block. */
     mainNavigation: "Main navigation",
@@ -49,6 +52,7 @@ export const en = {
     "/habits": "My habits",
     "/week": "Rich habits checklist",
     "/insights": "Analytics",
+    "/community": "Community Progress",
     "/more": "More",
     "/more/refine": "Refine my habits",
     "/more/awareness": "Habit awareness",
@@ -566,7 +570,6 @@ export const en = {
    */
   community: {
     title: "Community Progress",
-    linkNote: "How the group is doing this month",
     /* Named "live" because it is: the board is recomputed from habit records
        on every visit, so it moves as people tick things off during the day
        and starts fresh on the 1st. */

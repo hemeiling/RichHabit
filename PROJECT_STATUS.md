@@ -49,8 +49,12 @@ A live, month-to-date leaderboard at **Settings → Community Progress**
 - **Unweighted for everyone.** `weighted_score` is a per-user preference, so
   honouring it would rank people by rules that differ between them. The screen
   says so, because the figure can differ from the weighted one elsewhere.
-- **Eligibility:** active, non-admin, and with at least one scheduled check-in
-  this month. **Admins never rank.**
+- **Eligibility:** any active account with at least one scheduled check-in this
+  month — **admins included**. `RANKS_ON_LEADERBOARD` in `src/lib/community.ts`
+  is deliberately a different rule from `OCCUPIES_A_SLOT` in
+  `src/lib/db/capacity.ts`: the latter still exempts admins, so they consume
+  none of the fifty early-access places. Admin governs permissions and
+  capacity, never whether someone appears in their own progress.
 - **Nothing is stored to serve it.** Recomputed from `habit_completions` on
   every visit behind a 60-second cache, so the order moves as people tick
   habits off and starts fresh on the 1st with no reset step.

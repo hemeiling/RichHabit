@@ -20,6 +20,18 @@ const TABS = [
   { href: "/habits", key: "habits", path: "M5 7h14 M5 12h14 M5 17h9" },
   { href: "/week", key: "week", path: "M4 6h16v13H4z M4 11h16 M9 6v13 M14 6v13" },
   { href: "/insights", key: "insights", path: "M5 19V10 M10 19V5 M15 19v-6 M20 19v-9" },
+  /*
+   * Two figures, the nearer one whole and the further one partial. Drawn in the
+   * same open-stroke language as its neighbours rather than a filled glyph, and
+   * placed after the four personal views because it is the only outward-looking
+   * screen — the order reads from "my day" to "everyone".
+   *
+   * It is `/community`, not `/more/community`: the sidebar marks an item active
+   * when the path starts with its href, so living under /more would light up
+   * More at the same time and the highlight would lie about where you are.
+   */
+  { href: "/community", key: "community",
+    path: "M9 11a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4 M3 20v-1.2A4.8 4.8 0 0 1 7.8 14h2.4a4.8 4.8 0 0 1 4.8 4.8V20 M16.2 5.1a3.2 3.2 0 0 1 0 5.8 M17.6 14.3A4.8 4.8 0 0 1 21 18.8V20" },
   { href: "/more", key: "more", path: "M5 12h.01 M12 12h.01 M19 12h.01" },
 ] as const;
 

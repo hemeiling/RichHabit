@@ -57,6 +57,26 @@ export interface CommunitySnapshot {
   me: { rank: number; pct: number; name: string } | null;
 }
 
+/**
+ * Who appears on the board, as its own named rule rather than a condition
+ * buried in a query.
+ *
+ * Deliberately NOT the same rule as `OCCUPIES_A_SLOT` in db/capacity.ts, and
+ * the difference is the point. That one answers "does this account consume one
+ * of the fifty early-access places", and exempts admins because an admin is
+ * staff rather than a member. This one answers "is this a person building
+ * habits", and an admin building habits is exactly that.
+ *
+ * Conflating the two is how a role meant to grant permissions quietly becomes
+ * a role that removes you from your own progress. A disabled account is still
+ * excluded: it cannot sign in, so it is not participating in anything.
+ *
+ * Someone with nothing scheduled this month is filtered later, on their score
+ * rather than on their row — no schedule means no percentage, which is not the
+ * same as zero effort.
+ */
+export const RANKS_ON_LEADERBOARD = "u.disabled_at is null";
+
 const TOP_N = 10;
 /* The board is live, but not per-request: a minute of staleness is invisible
    to someone reading a ranking and saves recomputing every member's score for
@@ -116,16 +136,13 @@ let cache: { at: number; snapshot: Omit<CommunitySnapshot, "me" | "top"> & { all
 async function computeAll(window = monthToDate()) {
   const { month, dates } = window;
 
-  /* Admins are excluded from ranking, and disabled accounts with them. Both
-     are decided by the database columns that already govern access, not by a
-     second notion of who counts. */
   /* Only the id, the public name and the account age are read. `profiles` is
      not joined at all, so a real name cannot reach this code path even by
      accident. */
   const users = await query<Row>(
     `select u.id, u.username, u.created_at
        from users u
-      where u.disabled_at is null and u.role <> 'admin'`,
+      where ${RANKS_ON_LEADERBOARD}`,
   );
 
   const scored: (CommunityEntry & { id: string; createdAt: string })[] = [];

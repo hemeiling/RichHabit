@@ -167,21 +167,9 @@ export default function More({ account }: { account: AccountSummary }) {
         )}
       </section>
 
-      {/* Its own row rather than an entry in LINKS: those are all personal
-          tools, and this is the one screen that looks outward. */}
-      <section className="card px-5 py-2">
-        <div className="divide">
-          <Link href="/more/community"
-            className="w-full text-left py-4 flex items-center justify-between gap-3">
-            <span>
-              <span className="block" style={{ fontSize: 15.5, fontWeight: 500 }}>{t.community.title}</span>
-              <span className="faint block mt-0.5" style={{ fontSize: 13 }}>{t.community.linkNote}</span>
-            </span>
-            <span className="faint" style={{ fontSize: 18 }}>›</span>
-          </Link>
-        </div>
-      </section>
-
+      {/* Community Progress used to be listed here. It is a top-level item in
+          the sidebar now, and a second route to the same screen would only
+          make the navigation harder to hold in your head. */}
       <section className="card px-5 py-2">
         <div className="divide">
           {LINKS.map((l) => (
