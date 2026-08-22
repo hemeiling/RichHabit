@@ -124,8 +124,59 @@ function SidebarAccount({ email, onNavigate }: { email: string; onNavigate: () =
   );
 }
 
-function Chrome({ email, children }: { email: string; children: React.ReactNode }) {
-  const { state, actions, loading, saving, error, dismissError } = useHabits();
+/**
+ * Says, unmissably, that this page is reading the development database.
+ *
+ * Only ever rendered when that is true, so on the deployed app it does not
+ * exist at all — there is no "production" counterpart to misread, and no way
+ * for the two to be confused by a badge that is merely the wrong colour. Its
+ * absence is the signal that you are on real data.
+ */
+function LocalDbBadge() {
+  return (
+    <span
+      title="This page is reading the local development database, not production"
+      style={{
+        flex: "none", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em",
+        textTransform: "uppercase", padding: "3px 8px", borderRadius: 999,
+        background: "var(--warn-soft)", color: "var(--warn)",
+        border: "1px solid var(--warn)", whiteSpace: "nowrap",
+      }}
+    >
+      Local DB
+    </span>
+  );
+}
+
+/**
+ * Shown in place of the app when the account could not be read.
+ *
+ * Deliberately in place of, not above. The screens render `emptyState()` until
+ * a load succeeds, so leaving them on screen means a broken account and a brand
+ * new one look identical — 0/0 habits, nothing scheduled, an empty board — and
+ * the only person who can tell the difference is the one reading the logs. A
+ * production outage has already been mistaken for lost data this way.
+ */
+function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const t = useT();
+  return (
+    <div className="card p-5" role="alert"
+      style={{ borderColor: "var(--warn)", background: "var(--warn-soft)" }}>
+      <div className="display" style={{ fontSize: 19 }}>{t.errors.loadFailedTitle}</div>
+      <p className="mt-2" style={{ fontSize: 14, lineHeight: 1.55 }}>
+        {t.errors.loadFailedBody}
+      </p>
+      {/* The underlying message, because "something went wrong" is not
+          something anybody can act on or report. */}
+      <p className="faint mt-2" style={{ fontSize: 12.5, overflowWrap: "anywhere" }}>{message}</p>
+      <button className="btn btn-primary mt-3" onClick={onRetry}>{t.errors.loadFailedRetry}</button>
+    </div>
+  );
+}
+
+function Chrome({ email, localDb, children }:
+  { email: string; localDb: boolean; children: React.ReactNode }) {
+  const { state, actions, loading, saving, error, loadFailed, reload, dismissError } = useHabits();
   const t = useT();
   const pathname = usePathname();
   const router = useRouter();
@@ -169,6 +220,9 @@ function Chrome({ email, children }: { email: string; children: React.ReactNode 
             <span className="display" style={{
               fontSize: 21, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>{t.titles[pathname] ?? t.appName}</span>
+            {/* Beside the page title, where the eye already is, rather than in
+                a corner that gets skipped. */}
+            {localDb && <LocalDbBadge />}
           </div>
           <div className="flex items-center gap-2" style={{ flex: "none" }}>
             <span className="eyebrow" style={{ opacity: saving ? 1 : 0, transition: "opacity .2s" }}>{t.common.saving}</span>
@@ -181,7 +235,7 @@ function Chrome({ email, children }: { email: string; children: React.ReactNode 
         </div>
       </header>
 
-      {error && (
+      {error && !loadFailed && (
         <div className="mx-auto px-4 sm:px-6 pt-3" style={{ maxWidth: 780 }}>
           <div className="card p-3 flex items-center justify-between gap-3"
             style={{ borderColor: "var(--warn)", background: "var(--warn-soft)", fontSize: 13.5 }}>
@@ -205,7 +259,11 @@ function Chrome({ email, children }: { email: string; children: React.ReactNode 
       <main className="mx-auto px-4 sm:px-6 py-5 fade-in"
         style={{ maxWidth: RAIL_ROUTES.has(pathname) ? 1240 : 780, paddingBottom: 40 }}
         key={pathname}>
-        {loading ? <div className="eyebrow py-10 text-center">{t.common.loading}</div> : children}
+        {loading
+          ? <div className="eyebrow py-10 text-center">{t.common.loading}</div>
+          : loadFailed
+            ? <LoadFailed message={error ?? ""} onRetry={reload} />
+            : children}
       </main>
       </div>
     </div>
@@ -213,12 +271,15 @@ function Chrome({ email, children }: { email: string; children: React.ReactNode 
 }
 
 export default function AppShell({
-  userId, email, locale, children,
-}: { userId: string; email: string; locale: Locale; children: React.ReactNode }) {
+  userId, email, locale, localDb, children,
+}: {
+  userId: string; email: string; locale: Locale; localDb: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
-        <Chrome email={email}>{children}</Chrome>
+        <Chrome email={email} localDb={localDb}>{children}</Chrome>
       </HabitsProvider>
     </LocaleProvider>
   );

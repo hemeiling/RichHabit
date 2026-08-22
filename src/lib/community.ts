@@ -78,9 +78,17 @@ export interface CommunitySnapshot {
 export const RANKS_ON_LEADERBOARD = "u.disabled_at is null";
 
 const TOP_N = 10;
-/* The board is live, but not per-request: a minute of staleness is invisible
-   to someone reading a ranking and saves recomputing every member's score for
-   each visitor. Ticking a habit therefore shows up within the minute. */
+/*
+ * A minute of staleness is invisible when it is someone *else's* score moving,
+ * and it saves recomputing every member for each visitor. It is not invisible
+ * when it is your own: tick a habit, look at the board, and a number that has
+ * not moved reads as a broken feature rather than a cached one.
+ *
+ * So the two cases are separated. This is the backstop that eventually picks
+ * up other people's progress; your own is refreshed on demand — see
+ * `markMemberStale`, which is why ticking a habit shows up immediately without
+ * recomputing anybody else.
+ */
 const CACHE_MS = 60_000;
 
 /** Every date from the 1st of the current month up to today, inclusive. */
@@ -131,7 +139,67 @@ interface Row {
   id: string; username: string | null; created_at: string;
 }
 
-let cache: { at: number; snapshot: Omit<CommunitySnapshot, "me" | "top"> & { all: (CommunityEntry & { id: string })[] } } | null = null;
+type Scored = CommunityEntry & { id: string; createdAt: string };
+
+type Cached = Omit<CommunitySnapshot, "me" | "top"> & { all: Scored[] };
+
+let cache: { at: number; snapshot: Cached } | null = null;
+
+/*
+ * Members whose score is known to be out of date, to be recomputed the next
+ * time anybody reads the board.
+ *
+ * Marking is deliberately not recomputing. Ticking a habit is the hottest
+ * write in the app, and making it wait on a state load and a re-sort would
+ * charge every completion for a screen the user may not be looking at. Adding
+ * an id to a set costs nothing, and someone working down a list of ten habits
+ * pays for one recompute on their next look rather than ten.
+ */
+const staleMembers = new Set<string>();
+
+/**
+ * Says that a member's score has changed. Cheap enough to call from any write
+ * that could move a number: it touches no database and allocates nothing.
+ */
+export function markMemberStale(userId: string) {
+  staleMembers.add(userId);
+}
+
+/**
+ * Brings the marked members up to date in place, leaving everyone else alone.
+ *
+ * The board is re-ranked afterwards because one person's score moving can
+ * change other people's places — you passing someone moves them down, and a
+ * board where your rank improved but theirs did not is incoherent. Re-ranking
+ * is a sort of a few dozen rows; it is the state loads that cost, and there is
+ * exactly one of those per marked member.
+ */
+async function refreshStale(snapshot: Cached) {
+  if (staleMembers.size === 0) return snapshot;
+
+  const ids = [...staleMembers];
+  staleMembers.clear();
+
+  const rows = await query<Row>(
+    `select u.id, u.username, u.created_at
+       from users u
+      where ${RANKS_ON_LEADERBOARD} and u.id = any($1::uuid[])`, [ids]);
+
+  const { dates } = monthToDate();
+  const byId = new Map(snapshot.all.map((e) => [e.id, e]));
+
+  for (const id of ids) {
+    const row = rows.find((r) => r.id === id);
+    // Gone, or no longer eligible: drop them rather than leave a stale row.
+    if (!row) { byId.delete(id); continue; }
+    const entry = await scoreMember(row, dates);
+    // Null means nothing is scheduled for them this month any more, which is
+    // not a zero — so they leave the board rather than sink to the bottom.
+    if (entry) byId.set(id, entry); else byId.delete(id);
+  }
+
+  return { ...snapshot, updatedAt: new Date().toISOString(), ...ranked([...byId.values()]) };
+}
 
 async function computeAll(window = monthToDate()) {
   const { month, dates } = window;
@@ -145,34 +213,70 @@ async function computeAll(window = monthToDate()) {
       where ${RANKS_ON_LEADERBOARD}`,
   );
 
-  const scored: (CommunityEntry & { id: string; createdAt: string })[] = [];
+  const scored: Scored[] = [];
   for (const u of users) {
-    let state: AppState;
-    try { state = await loadState(u.id); } catch { continue; }
-    // The same scoring the app uses, with weighting forced off so every
-    // member is measured the same way.
-    const unweighted: AppState = { ...state, prefs: { ...state.prefs, weighted: false } };
-    const score = rangeScore(unweighted, dates);
+    const entry = await scoreMember(u, dates);
     // A null percentage means nothing was ever scheduled this month. That is
-    // not zero effort, so they are not ranked as though it were.
-    if (score.pct === null) continue;
-    scored.push({
-      id: u.id, rank: 0, name: displayName(u), pct: score.pct,
-      isMe: false, createdAt: String(u.created_at),
-    });
+    // not zero effort, so they are not ranked as though it were. It is not the
+    // same as a failure — that throws.
+    if (entry) scored.push(entry);
   }
-
-  /* Ties broken by account age, oldest first. Any deterministic rule would
-     do; the point is that a refresh must not reshuffle equal scores. */
-  scored.sort((a, b) => b.pct - a.pct || a.createdAt.localeCompare(b.createdAt));
-  scored.forEach((e, i) => { e.rank = i + 1; });
 
   return {
     month,
     updatedAt: new Date().toISOString(),
-    activeUsers: scored.length,
-    all: scored.map(({ createdAt, ...e }) => e),
+    ...ranked(scored),
   };
+}
+
+/**
+ * One member's figure, by the same route the rest of the app takes.
+ *
+ * Pulled out of the loop so that refreshing one person costs one state load
+ * rather than everybody's — and so there is only one definition of the number,
+ * whether it is computed for the whole board or for you alone. Two code paths
+ * here would be two answers to "what is my completeness".
+ */
+async function scoreMember(u: Row, dates: string[]): Promise<Scored | null> {
+  /*
+   * A failure to read a member is deliberately NOT caught here.
+   *
+   * It used to be — `catch { continue; }`, so that one odd account could not
+   * take the whole board down. What that actually bought was the opposite: when
+   * a migration had not been applied and every `loadState` threw, all eleven
+   * members were skipped and the board rendered a calm, confident
+   * "0 · Active users". A total outage presented as a valid empty leaderboard,
+   * and it stayed that way until somebody thought to check the database.
+   *
+   * A ranking that silently omits people is worse than one that admits it is
+   * broken, so this throws and /api/community answers 500. The page already
+   * knows how to say it is unavailable, and the rail panel already renders
+   * nothing rather than a wrong number.
+   */
+  const state: AppState = await loadState(u.id);
+  // The same scoring the app uses, with weighting forced off so every member
+  // is measured the same way.
+  const unweighted: AppState = { ...state, prefs: { ...state.prefs, weighted: false } };
+  const score = rangeScore(unweighted, dates);
+  if (score.pct === null) return null;
+  return {
+    id: u.id, rank: 0, name: displayName(u), pct: score.pct,
+    isMe: false, createdAt: String(u.created_at),
+  };
+}
+
+/**
+ * Places, and the count that goes with them.
+ *
+ * Ties broken by account age, oldest first. Any deterministic rule would do;
+ * the point is that a refresh must not reshuffle equal scores — including a
+ * refresh caused by one member's score being recomputed on its own.
+ */
+function ranked(scored: Scored[]) {
+  const all = [...scored].sort(
+    (a, b) => b.pct - a.pct || a.createdAt.localeCompare(b.createdAt));
+  all.forEach((e, i) => { e.rank = i + 1; });
+  return { activeUsers: all.length, all };
 }
 
 /**
@@ -203,9 +307,16 @@ export async function communitySnapshot(meId: string): Promise<CommunitySnapshot
   if (!cache || Date.now() - cache.at > CACHE_MS) {
     const snapshot = await computeAll();
     cache = { at: Date.now(), snapshot };
+    /* A full recompute has just scored everybody, so nothing is outstanding.
+       Clearing here stops a mark made mid-compute from causing a pointless
+       second pass over someone who was already counted. */
+    staleMembers.clear();
     /* Closing the previous month is best-effort: a history record failing to
        write must never stop today's board from rendering. */
     archiveMonth(previousMonth(snapshot.month)).catch(() => {});
+  } else if (staleMembers.size > 0) {
+    // Somebody ticked something since the last look. Rescore just them.
+    cache = { at: cache.at, snapshot: await refreshStale(cache.snapshot) };
   }
   const { month, updatedAt, activeUsers, all } = cache.snapshot;
 
@@ -219,4 +330,4 @@ export async function communitySnapshot(meId: string): Promise<CommunitySnapshot
 }
 
 /** Exposed for tests; also lets an admin action drop a stale snapshot. */
-export function clearCommunityCache() { cache = null; }
+export function clearCommunityCache() { cache = null; staleMembers.clear(); }

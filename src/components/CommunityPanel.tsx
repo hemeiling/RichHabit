@@ -55,7 +55,9 @@ export default function CommunityPanel() {
             </span>
           </span>
           <span className="text-right">
-            <span className="faint block" style={{ fontSize: 11 }}>{t.community.myCompleteness}</span>
+            {/* The short form: this sits a few inches from Today's dial, and the
+                two are different measurements. The label is what keeps them apart. */}
+            <span className="faint block" style={{ fontSize: 11 }}>{t.community.monthToDate}</span>
             <span className="display" style={{ fontSize: 19 }}>{data.me.pct}%</span>
           </span>
         </div>
@@ -75,7 +77,8 @@ export default function CommunityPanel() {
               {/* A long username truncates rather than pushing the percentage
                   out of a 300px column. */}
               <span style={{ fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {e.isMe ? t.community.you : e.name}
+                {e.name}
+                {e.isMe && <span className="faint" style={{ marginLeft: 5 }}>{t.community.youTag}</span>}
               </span>
             </span>
             <span className="num" style={{ fontSize: 13.5, flex: "none" }}>{e.pct}%</span>

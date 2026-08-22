@@ -578,14 +578,22 @@ export const en = {
     view: "View Community",
     monthNames: ["January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"],
-    myCompleteness: "My completeness",
+    /* Says the window in the label itself. Today's dial and this figure are
+       different measurements over different spans, and side by side on the
+       Today page the smaller number reads as a stale copy of the bigger one
+       unless the label rules it out. */
+    myCompleteness: "Month-to-date completeness",
+    /** The same thing, short enough for the 300px rail on Today. */
+    monthToDate: "Month to date",
     myRank: "My ranking",
     activeUsers: "Active users",
-    you: "You",
+    /* Appended to the real username rather than replacing it, so you can see
+       how you appear to everyone else while still finding your own row. */
+    youTag: "(You)",
     month: "Month",
     updated: "Last updated",
     rankOf: (rank: number, total: number) => `#${rank} of ${total}`,
-    basis: "Completed check-ins out of those scheduled so far this month",
+    basis: "Completed check-ins out of those scheduled so far this month — not today's score",
     /* Said plainly because the number can differ from the weighted one on
        their own screens, and an unexplained discrepancy reads as a bug. */
     unweightedNote: "Everyone is measured unweighted, so the comparison is like for like",
@@ -905,6 +913,12 @@ export const en = {
     coachUnavailable: "The AI coach isn't switched on for this app yet.",
     coachEmpty: "The coach didn't return anything. Try asking again.",
     questionTooLong: "That question is too long.",
+    /* An account that would not load, said plainly. Never "no habits yet":
+       the whole point is that a failure must not read as an empty account. */
+    loadFailedReason: "The server could not read your account from the database.",
+    loadFailedRetry: "Try again",
+    loadFailedTitle: "We couldn't load your account",
+    loadFailedBody: "Your habits and history are safe — this device just couldn't read them. This is usually temporary. Try again, and if it keeps happening please send feedback.",
   },
 
   ui: {

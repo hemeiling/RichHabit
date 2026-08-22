@@ -88,7 +88,12 @@ export default function Community() {
               style={e.isMe ? { fontWeight: 600 } : undefined}>
               <span className="flex items-center gap-3">
                 <span className="faint" style={{ fontSize: 13, minWidth: 26 }}>#{e.rank}</span>
-                <span style={{ fontSize: 15 }}>{e.isMe ? t.community.you : e.name}</span>
+                {/* The username always shows, marked rather than replaced, so
+                    you can read your own row exactly as everyone else reads it. */}
+                <span style={{ fontSize: 15 }}>
+                  {e.name}
+                  {e.isMe && <span className="faint" style={{ marginLeft: 6 }}>{t.community.youTag}</span>}
+                </span>
               </span>
               <span style={{ fontSize: 15 }}>{e.pct}%</span>
             </div>
@@ -104,7 +109,10 @@ export default function Community() {
           <div className="py-3.5 flex items-center justify-between gap-3" style={{ fontWeight: 600 }}>
             <span className="flex items-center gap-3">
               <span className="faint" style={{ fontSize: 13, minWidth: 26 }}>#{meOutsideTop.rank}</span>
-              <span style={{ fontSize: 15 }}>{t.community.you}</span>
+              <span style={{ fontSize: 15 }}>
+                {meOutsideTop.name}
+                <span className="faint" style={{ marginLeft: 6 }}>{t.community.youTag}</span>
+              </span>
             </span>
             <span style={{ fontSize: 15 }}>{meOutsideTop.pct}%</span>
           </div>

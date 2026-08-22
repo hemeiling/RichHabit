@@ -12,5 +12,5 @@ export async function GET() {
     const state = await loadState(userId);
     await trackEvent({ userId, event: "app_opened", page: "/" });
     return state;
-  });
+  }, (t) => t.errors.loadFailedReason);
 }

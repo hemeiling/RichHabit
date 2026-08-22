@@ -48,6 +48,16 @@ interface Ctx {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  /*
+   * True when the account could not be read at all, as distinct from a write
+   * that failed. The difference matters more than it looks: `state` is
+   * `emptyState()` until the first load succeeds, so a failed load leaves a
+   * fully-rendered app showing zero habits, zero goals and an empty board —
+   * indistinguishable from a new account. That is exactly how a missing table
+   * in production came to look like a wiped account. A failed *write* is not
+   * the same thing: the data on screen is real, so the screen should stay.
+   */
+  loadFailed: boolean;
   dismissError: () => void;
   /** Re-read the account, for rows the server created rather than the client. */
   reload: () => Promise<void>;
@@ -80,11 +90,13 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
   const [error, setError] = useState<string | null>(null);
   const debounced = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  const [loadFailed, setLoadFailed] = useState(false);
+
   useEffect(() => {
     let alive = true;
     db.loadAll()
-      .then((s) => { if (alive) setState(s); })
-      .catch((e: Error) => { if (alive) setError(e.message); })
+      .then((s) => { if (alive) { setState(s); setLoadFailed(false); } })
+      .catch((e: Error) => { if (alive) { setError(e.message); setLoadFailed(true); } })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [userId]);
@@ -98,8 +110,10 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
     try {
       setState(await db.loadAll());
       setError(null);
+      setLoadFailed(false);
     } catch (e) {
       setError((e as Error).message);
+      setLoadFailed(true);
     }
   }, []);
 
@@ -356,7 +370,7 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
 
   return (
     <HabitsContext.Provider
-      value={{ state, actions, loading, saving: pending > 0, error, reload,
+      value={{ state, actions, loading, saving: pending > 0, error, loadFailed, reload,
         dismissError: () => setError(null) }}
     >
       {children}

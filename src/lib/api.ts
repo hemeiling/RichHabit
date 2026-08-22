@@ -15,6 +15,13 @@ export { ApiError, check, isUuid } from "@/lib/http";
  */
 export async function withUser(
   fn: (userId: string) => Promise<unknown>,
+  /*
+   * What to say when something unexpected breaks. Defaults to the write
+   * wording because most routes are writes; read routes pass their own, since
+   * "Something went wrong saving that" on a page that was only ever reading
+   * sends the reader looking for the change they did not make.
+   */
+  onFailure?: (d: ReturnType<typeof getDict>) => string,
 ): Promise<NextResponse> {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: getDict().errors.notSignedIn }, { status: 401 });
@@ -30,7 +37,9 @@ export async function withUser(
     // caller nothing — raw Postgres errors name columns, constraints and
     // sometimes values, and the store puts `error.message` on screen.
     console.error("[api]", e);
-    return NextResponse.json({ error: getDict().errors.saveFailed }, { status: 500 });
+    const dict = getDict();
+    return NextResponse.json(
+      { error: onFailure ? onFailure(dict) : dict.errors.saveFailed }, { status: 500 });
   }
 }
 
