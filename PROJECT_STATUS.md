@@ -1,7 +1,7 @@
 # RichHabit — project status
 
 **Persistent handoff checkpoint.** Read this first when resuming; it is kept
-current at each milestone. Last updated at the Community Progress milestone.
+current at each milestone. Last updated at the rolling-priorities milestone.
 
 ---
 
@@ -263,6 +263,36 @@ Resend account was created with — useful for Step 5.
 ---
 
 ## Pending Neon migration
+
+### Rolling priorities — required before or with the next deploy
+
+The commit that makes unfinished priorities carry forward adds a `priorities`
+table and rebuilds every existing day note into it. **The application reads
+that table on every page load, so a deploy of this commit without the migration
+leaves the app unable to load state.** Run `db:deploy` first, or immediately
+after pushing:
+
+```
+RH_ALLOW_REMOTE=1 DATABASE_URL='<Neon connection string>' npm run db:deploy
+```
+
+What it does, all additive:
+
+- creates `priorities`;
+- reads every row of `day_priorities` and rebuilds it as records, folding a
+  line retyped across several mornings into the one task it always was, and
+  splitting it again where it was finished and later written afresh;
+- **leaves `day_priorities` exactly as it stands.** Nothing is dropped,
+  truncated or rewritten, so the original notes remain and this is reversible.
+
+It prints what it did, including how many priorities will start carrying
+forward and how many accounts will open Today with more than five lines — that
+last one only happens where history put them there, and every line is still
+shown.
+
+Re-running is safe: it sees the table is already populated and leaves it alone.
+
+### Earlier
 
 Checked directly against production on 2026-08-16. Production is at **9 active
 non-admin accounts + 1 admin = 10 total**, comfortably under the 50 cap.

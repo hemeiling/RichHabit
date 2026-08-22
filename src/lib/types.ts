@@ -164,13 +164,37 @@ export interface DayJournal {
   reflection: string;
 }
 
-/** One line on the day's post-it. */
-export interface DayPriority {
+/**
+ * One line on the post-it.
+ *
+ * A record with an identity, not a string in a day's list, because it can
+ * outlive the day it was written on. That identity is the whole of the
+ * rollover: an unfinished priority appears again the next morning as *the
+ * same* priority — one row, one creation date, one completion date when it
+ * finally arrives. The alternative, copying the text forward into each new
+ * day, is what produces the note that says "call the bank" three times and
+ * then disagrees with itself about whether you called them.
+ */
+export interface Priority {
+  id: string;
   text: string;
-  done: boolean;
+  /** The day it was first written. Never changes, however far it rolls. */
+  createdOn: string;
+  /**
+   * The day it was actually ticked, not the day it was written and not the day
+   * it stopped rolling — those are the same thing here, which is the point.
+   * Null while it is still open.
+   */
+  completedOn: string | null;
 }
 
-/** Deliberately small: a post-it, not a backlog. */
+/**
+ * Deliberately small: a post-it, not a backlog.
+ *
+ * It caps what you may *add* to a day, not what may be *shown* on one. Once
+ * priorities roll forward, history can carry a note past five on its own, and
+ * every line that got there is still shown — see `canAdd` in lib/priorities.
+ */
 export const MAX_PRIORITIES = 5;
 
 export interface AppState {
@@ -184,8 +208,13 @@ export interface AppState {
   journal: Record<string, DayJournal>;
   /** A reflection on a whole month, keyed 'YYYY-MM'. */
   monthlyReflections: Record<string, string>;
-  /** The day's post-it, by local date. Private user content. */
-  priorities: Record<string, DayPriority[]>;
+  /**
+   * The post-it. A flat list, not a map by day: an open priority belongs to no
+   * single day, and which day it shows on is derived rather than stored — see
+   * `prioritiesOn` in lib/priorities. Ordered as the user arranged it.
+   * Private user content.
+   */
+  priorities: Priority[];
   awareness: AwarenessEntry[];
   stacks: Stack[];
   metrics: Record<string, DayMetrics>;
@@ -202,7 +231,7 @@ export const SPENDING_CATEGORIES = [
 
 export const emptyState = (): AppState => ({
   habits: [], goals: [], completions: {}, journal: {}, monthlyReflections: {},
-  priorities: {},
+  priorities: [],
   awareness: [], stacks: [], metrics: {}, reviews: [], spending: [],
   prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en" },
 });

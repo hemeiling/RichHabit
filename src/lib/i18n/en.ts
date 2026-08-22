@@ -824,6 +824,9 @@ export const en = {
     remove: (text: string) => `Remove "${text}"`,
     moveUp: (n: number) => `Move item ${n} up`,
     moveDown: (n: number) => `Move item ${n} down`,
+    carriedFrom: (date: string) => `from ${date}`,
+    overflowing:
+      "These carried over from earlier days. Finish or remove one to add another.",
   },
   /**
    * The free early-access notice. Shown on the sign-in card so it is read

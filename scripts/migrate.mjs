@@ -66,6 +66,14 @@ const UNIT_ALIASES = {
 const client = await connect({ what: "migrate the schema" });
 let changed = 0;
 
+async function tableExists(table) {
+  const { rows } = await client.query(
+    `select 1 from information_schema.tables
+      where table_schema = 'public' and table_name = $1`, [table],
+  );
+  return rows.length > 0;
+}
+
 async function columnExists(table, column) {
   const { rows } = await client.query(
     `select 1 from information_schema.columns
@@ -526,6 +534,159 @@ try {
         [key, aliases],
       );
       if (rowCount) { console.log(`  goals → ${key}: ${rowCount}`); changed += rowCount; }
+    }
+  }
+
+
+  // ---- 6b. the priorities table --------------------------------------------
+  // Created here rather than with the analytics tables above because the step
+  // that follows fills it, and the two have to stay next to each other: a
+  // database that gains the table without the conversion would show everyone
+  // an empty post-it and look like it had eaten their notes.
+  if (!(await tableExists("priorities"))) {
+    await client.query(`
+      create table priorities (
+        id           uuid primary key default gen_random_uuid(),
+        user_id      uuid not null references users on delete cascade,
+        body         text not null check (length(body) between 1 and 200),
+        created_on   date not null,
+        completed_on date,
+        sort_order   int  not null default 0,
+        created_at   timestamptz not null default now(),
+        updated_at   timestamptz not null default now(),
+        check (completed_on is null or completed_on >= created_on)
+      )`);
+    await client.query(
+      "create index priorities_user_order on priorities (user_id, sort_order, created_on)");
+    await client.query(
+      "create index priorities_user_open on priorities (user_id) where completed_on is null");
+    console.log("  created priorities");
+    changed++;
+  }
+
+  // ---- 7. priorities become records, so unfinished ones can carry forward ---
+  /*
+   * Priorities used to be a jsonb array per user per day: [{text, done}, ...].
+   * Nothing in that shape has an identity, so "this one is still unfinished,
+   * show it again tomorrow" could only have meant copying the text into the
+   * next day's array - two rows claiming to be one task, drifting apart the
+   * moment one is ticked. They are rows now, with the day written and the day
+   * finished, and which days they appear on is derived from those two dates.
+   *
+   * This rebuilds those rows from every note anyone has ever written, so the
+   * rollover reaches backwards: an item left unfinished last March is open
+   * today, as the same record, still dated last March.
+   *
+   * Reconstruction, per user, per distinct line of text, walking days forward:
+   *
+   *   - the first day the line appears opens a record, and that day is its
+   *     creation date - the original, not the day this migration ran;
+   *   - the first day it appears ticked closes that record, and that day is
+   *     its completion date - the real one, as recorded at the time;
+   *   - if the same words are written again after being finished, that starts
+   *     a new record. Someone who does "call the bank" in March and writes it
+   *     again in July means a second task, not a resurrection of the first;
+   *   - a record still open at the end stays open, and rolls forward.
+   *
+   * Repeated text has to be folded together like this rather than converted
+   * row by row. Before now the only way to keep a task in view was to retype
+   * it each morning, so the same words on nine consecutive days is one task
+   * written nine times - converting each occurrence separately would put nine
+   * identical lines on Today, which is exactly the duplication this feature
+   * exists to remove.
+   *
+   * day_priorities is read and left exactly as it stands. Nothing is dropped
+   * or rewritten, so this is reversible and the original notes stay on disk.
+   */
+  if (await tableExists("day_priorities") && await tableExists("priorities")) {
+    const { rows: already } = await client.query("select 1 from priorities limit 1");
+    if (already.length > 0) {
+      console.log("  priorities: already converted, left alone");
+    } else {
+      const { rows: notes } = await client.query(
+        `select user_id, to_char(on_date, 'YYYY-MM-DD') as on_date, items
+           from day_priorities order by user_id, on_date`);
+
+      // user + normalised text -> the record currently open for it
+      const open = new Map();
+      const records = [];
+      let sameDayRepeats = 0;
+
+      for (const note of notes) {
+        const items = Array.isArray(note.items) ? note.items : [];
+        const seenToday = new Map();
+
+        for (const [i, it] of items.entries()) {
+          const text = String(it?.text ?? "").trim();
+          if (!text) continue;
+          const key = `${note.user_id} ${text.toLowerCase()}`;
+          const done = it?.done === true;
+
+          // The same words twice in one day is one line, ticked if either was.
+          if (seenToday.has(key)) {
+            sameDayRepeats++;
+            if (done) seenToday.set(key, true);
+            continue;
+          }
+          seenToday.set(key, done);
+
+          let rec = open.get(key);
+          if (!rec) {
+            rec = {
+              userId: note.user_id, text, createdOn: note.on_date,
+              completedOn: null, order: i, day: note.on_date,
+            };
+            open.set(key, rec);
+            records.push(rec);
+          }
+          // Its place in the list is the one it held on the most recent day.
+          rec.order = i;
+          rec.day = note.on_date;
+        }
+
+        // Closed after the whole day is read, so a line ticked in a later
+        // duplicate still counts as done on this day.
+        for (const [key, done] of seenToday) {
+          if (!done) continue;
+          const rec = open.get(key);
+          if (rec) { rec.completedOn = note.on_date; open.delete(key); }
+        }
+      }
+
+      // Ordered so each user's list reads oldest first, then as last arranged.
+      records.sort((a, b) =>
+        a.userId.localeCompare(b.userId) || a.day.localeCompare(b.day) || a.order - b.order);
+
+      const nextSort = new Map();
+      for (const r of records) {
+        const n = nextSort.get(r.userId) ?? 0;
+        nextSort.set(r.userId, n + 1);
+        await client.query(
+          `insert into priorities (user_id, body, created_on, completed_on, sort_order)
+           values ($1, $2, $3::date, $4::date, $5)`,
+          [r.userId, r.text.slice(0, 200), r.createdOn, r.completedOn, n]);
+      }
+
+      if (records.length) {
+        const stillOpen = records.filter((r) => r.completedOn === null).length;
+        console.log(`  priorities: ${notes.length} day note(s) rebuilt as ${records.length} record(s)`);
+        console.log(`  priorities: ${stillOpen} unfinished, now carrying forward to Today`);
+        if (sameDayRepeats) {
+          console.log(`  priorities: ${sameDayRepeats} repeat(s) of one line within a single day folded`);
+        }
+        // Who will notice, and how many. A note over five can only come from
+        // history, and it is the one outcome worth seeing before users do.
+        const { rows: over } = await client.query(
+          `select count(*) as n from (
+             select user_id from priorities where completed_on is null
+              group by user_id having count(*) > 5) x`);
+        if (Number(over[0].n) > 0) {
+          console.log(`  priorities: ${over[0].n} account(s) will open Today with more than five`);
+        }
+        changed += records.length;
+      } else {
+        console.log("  priorities: no notes to convert");
+      }
     }
   }
 

@@ -775,6 +775,8 @@ export const zh: Dict = {
     remove: (text: string) => `删除「${text}」`,
     moveUp: (n: number) => `第 ${n} 条上移`,
     moveDown: (n: number) => `第 ${n} 条下移`,
+    carriedFrom: (date: string) => `来自 ${date}`,
+    overflowing: "这些是从前几天延续过来的。完成或删除一项后才能再添加。",
   },
   earlyAccess: {
     title: "免费早期体验",

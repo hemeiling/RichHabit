@@ -337,19 +337,43 @@ create table day_notes (
 -- start. Same shape, different question — collapsing them would make both
 -- vaguer.
 --
--- `items` is jsonb rather than rows because this is a value, not a set of
--- entities: at most five tiny items, always read and written as a whole, and
--- ordered by the user. A row per item would mean a sort_order column and a
--- rewrite of it on every reorder, for a sticky note.
-create table day_priorities (
-  user_id  uuid not null references users on delete cascade,
-  on_date  date not null,
-  -- [{"text": "…", "done": false}, …] in the user's own order.
-  items    jsonb not null default '[]'::jsonb
-           check (jsonb_array_length(items) <= 5),
-  updated_at timestamptz not null default now(),
-  primary key (user_id, on_date)
+-- The post-it, as records rather than as a note per day.
+--
+-- It used to be one jsonb array per user per day, on the reasoning that five
+-- tiny ordered items are always read and written together and a row each would
+-- buy nothing but a sort_order column. That held exactly as long as an item
+-- belonged to one day.
+--
+-- It does not any more: an unfinished priority carries forward until it is
+-- finished. Under the old shape "carrying forward" could only mean copying the
+-- text into tomorrow's array, which is two rows claiming to be one task —
+-- they drift the moment one is ticked, and the creation date of the original
+-- is lost the first time it moves. So a priority is a row now, with an id it
+-- keeps, the day it was written, and the day it was actually finished.
+--
+-- Which days it appears on is derived from those two dates, never stored: see
+-- prioritiesOn() in src/lib/priorities.ts. There is no rollover job and no
+-- carried-over flag, because nothing is ever moved.
+create table priorities (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references users on delete cascade,
+  body         text not null check (length(body) between 1 and 200),
+  -- The day it was first written, in the user's local dates. Never rewritten.
+  created_on   date not null,
+  -- The day it was ticked. Null means still open, which is what makes it roll.
+  completed_on date,
+  -- The user's arrangement, as with habits. Ties broken by creation.
+  sort_order   int  not null default 0,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  -- Nothing can be finished before it was written.
+  check (completed_on is null or completed_on >= created_on)
 );
+
+-- Every read is "this user's, oldest arrangement first"; the partial index is
+-- for the common one, which is the open ones.
+create index priorities_user_order on priorities (user_id, sort_order, created_on);
+create index priorities_user_open  on priorities (user_id) where completed_on is null;
 
 -- A reflection on a whole month, written from the Insights review. Kept apart
 -- from the daily journal: it is about the month, not about a day, and it is

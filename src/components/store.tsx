@@ -1,10 +1,10 @@
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as db from "@/lib/db";
-import { isDone } from "@/lib/habits";
+import { isDone, uid } from "@/lib/habits";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayJournal, DayMetrics, DayPriority, Goal, Habit, Prefs,
+  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, Prefs, Priority,
   SpendingRecord,
   Stack, WeeklyReview,
 } from "@/lib/types";
@@ -22,8 +22,15 @@ interface Actions {
   /** The day's gratitude journal. Auto-saved; nothing to click. */
   setJournal: (date: string, entry: DayJournal) => void;
   setMonthlyReflection: (month: string, body: string) => void;
-  /** The day's post-it. Auto-saved, like the journal. */
-  setPriorities: (date: string, items: DayPriority[]) => void;
+  /**
+   * The post-it. A call per record rather than one "save the day", because an
+   * open priority is not owned by a day — see lib/priorities.
+   */
+  addPriority: (date: string, text: string) => void;
+  /** `date` is the day on screen: the day the completion is recorded against. */
+  setPriorityDone: (id: string, done: boolean, date: string) => void;
+  deletePriority: (id: string) => void;
+  reorderPriorities: (ids: string[]) => void;
   saveAwareness: (e: AwarenessEntry) => void;
   deleteAwareness: (id: string) => void;
   saveStack: (k: Stack) => void;
@@ -225,10 +232,52 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
         entry.reflection),
     ),
 
-    setPriorities: (date, items) => runDebounced(
-      `priorities:${date}`,
-      (s) => ({ ...s, priorities: { ...s.priorities, [date]: items } }),
-      () => db.savePriorities(date, items.filter((i) => i.text.trim())),
+    /*
+     * Not debounced, unlike the journal. Each of these is a discrete act on one
+     * record — a line written, ticked, struck out — rather than a field being
+     * typed into, and the id has to reach the server before the next tap on the
+     * same row can. Ticking is what stops a priority rolling forward, so it is
+     * also the one write here that must not be lost.
+     */
+    addPriority: (date, text) => {
+      const id = uid();
+      run(
+        (s) => ({
+          ...s,
+          priorities: [...s.priorities, { id, text, createdOn: date, completedOn: null }],
+        }),
+        () => db.addPriority(id, text, date),
+      );
+    },
+
+    setPriorityDone: (id, done, date) => run(
+      (s) => ({
+        ...s,
+        priorities: s.priorities.map((p) =>
+          (p.id === id ? { ...p, completedOn: done ? date : null } : p)),
+      }),
+      () => db.setPriorityDone(id, done, date),
+    ),
+
+    deletePriority: (id) => run(
+      (s) => ({ ...s, priorities: s.priorities.filter((p) => p.id !== id) }),
+      () => db.deletePriority(id),
+    ),
+
+    reorderPriorities: (ids) => run(
+      (s) => {
+        // The ids are the visible subset of one day; everything not on screen
+        // keeps its place, so reordering today cannot shuffle a past day.
+        const rank = new Map(ids.map((id, i) => [id, i]));
+        const moving = s.priorities.filter((p) => rank.has(p.id));
+        moving.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+        const queue = moving[Symbol.iterator]();
+        return {
+          ...s,
+          priorities: s.priorities.map((p) => (rank.has(p.id) ? queue.next().value! : p)),
+        };
+      },
+      () => db.reorderPriorities(ids),
     ),
 
     setMonthlyReflection: (month, body) => runDebounced(

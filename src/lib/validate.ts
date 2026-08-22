@@ -136,23 +136,30 @@ export function parseJournal(b: any) {
 export const MAX_PRIORITY_LENGTH = 200;
 
 /**
- * The day's post-it. Bounded at five, because the point of the feature is that
- * it cannot become a task manager.
+ * A new line on the post-it.
+ *
+ * The five-item cap is not checked here. It is a rule about what a *day* holds,
+ * and a day's contents are now derived from dates rather than sent by the
+ * client — so the server would have to recompute the day to enforce it, and
+ * `addPriority` does exactly that before inserting. Here we only check that the
+ * line is a line.
  */
-export function parsePriorities(b: any) {
-  const raw = Array.isArray(b?.items) ? b.items : [];
-  if (raw.length > MAX_PRIORITIES) {
-    throw new ApiError(`A day can hold at most ${MAX_PRIORITIES} priorities`);
-  }
-  const items = raw
-    .map((it: any) => ({
-      text: check.text(it?.text, "text", MAX_PRIORITY_LENGTH).trim(),
-      done: it?.done === true,
-    }))
-    // An empty line is a line someone has not written yet, not an error.
-    .filter((it: { text: string }) => it.text);
+export function parseNewPriority(b: any) {
+  const text = check.text(b?.text, "text", MAX_PRIORITY_LENGTH).trim();
+  if (!text) throw new ApiError("A priority needs some words");
+  return { id: check.uuid(b?.id, "id"), text, date: check.date(b?.date, "date") };
+}
 
-  return { date: check.date(b?.date, "date"), items };
+/**
+ * Ticking or un-ticking. `date` is the day being looked at, which is the day
+ * the completion is recorded against — see `setPriorityDone`.
+ */
+export function parsePriorityDone(b: any) {
+  return {
+    id: check.uuid(b?.id, "id"),
+    done: b?.done === true,
+    date: check.date(b?.date, "date"),
+  };
 }
 
 export function parseMonthlyReflection(b: any) {

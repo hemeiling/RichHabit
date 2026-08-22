@@ -30,6 +30,9 @@ async function send(path: string, init: RequestInit): Promise<any> {
 const post = (path: string, payload: unknown) =>
   send(path, { method: "POST", body: JSON.stringify(payload) });
 
+const patch = (path: string, payload: unknown) =>
+  send(path, { method: "PATCH", body: JSON.stringify(payload) });
+
 const remove = (path: string, id: string) =>
   send(`${path}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
 
@@ -48,8 +51,13 @@ export const setCompletion = (
 export const saveGoal = (g: Goal) => post("/api/goals", g);
 export const deleteGoal = (id: string) => remove("/api/goals", id);
 
-export const savePriorities = (date: string, items: { text: string; done: boolean }[]) =>
-  post("/api/priorities", { date, items });
+export const addPriority = (id: string, text: string, date: string) =>
+  post("/api/priorities", { id, text, date });
+/** `date` is the day on screen, which is the day a completion is recorded on. */
+export const setPriorityDone = (id: string, done: boolean, date: string) =>
+  patch("/api/priorities", { id, done, date });
+export const reorderPriorities = (ids: string[]) => patch("/api/priorities", { ids });
+export const deletePriority = (id: string) => remove("/api/priorities", id);
 export const saveJournal = (date: string, gratitude: string[], reflection: string) =>
   post("/api/notes", { date, gratitude, reflection });
 export const saveMonthlyReflection = (month: string, body: string) =>

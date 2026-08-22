@@ -1,8 +1,10 @@
 import { ApiError } from "@/lib/http";
 import { query, transaction } from "@/lib/db/pool";
-import { emptyState, isNumericTracking } from "@/lib/types";
+import { canAdd } from "@/lib/priorities";
+import { MAX_PRIORITIES, emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Priority, SpendingRecord, Stack,
+  WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -30,7 +32,8 @@ type Q = typeof query;
  *
  * `null` owner means the row does not exist yet, which is a create and fine.
  */
-type Owned = "habits" | "goals" | "habit_stacks" | "habit_awareness_entries";
+type Owned = "habits" | "goals" | "habit_stacks" | "habit_awareness_entries"
+  | "priorities";
 
 async function assertOwns(q: Q, table: Owned, id: string, userId: string) {
   const rows = await q<{ user_id: string }>(
@@ -66,7 +69,8 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select * from habit_completions where user_id = $1", [userId]),
       query("select * from day_notes where user_id = $1", [userId]),
       query("select month, body from monthly_reflections where user_id = $1", [userId]),
-      query("select on_date, items from day_priorities where user_id = $1", [userId]),
+      query(`select id, body, created_on, completed_on from priorities
+              where user_id = $1 order by sort_order, created_on, created_at`, [userId]),
       query("select * from habit_awareness_entries where user_id = $1", [userId]),
       query("select * from habit_stacks where user_id = $1", [userId]),
       query("select * from daily_metrics where user_id = $1", [userId]),
@@ -164,11 +168,15 @@ export async function loadState(userId: string): Promise<AppState> {
     };
   });
   reflections.forEach((r: any) => { state.monthlyReflections[r.month] = r.body ?? ""; });
-  priorities.forEach((p: any) => {
-    state.priorities[p.on_date] = Array.isArray(p.items)
-      ? p.items.map((it: any) => ({ text: String(it?.text ?? ""), done: it?.done === true }))
-      : [];
-  });
+  // The pool returns `date` as 'YYYY-MM-DD' (pool.ts, OID 1082), which is what
+  // the rest of the app compares local days as — and it compares correctly as
+  // a plain string, which is why the rollover rule can be two comparisons.
+  state.priorities = priorities.map((p: any): Priority => ({
+    id: p.id,
+    text: p.body,
+    createdOn: p.created_on,
+    completedOn: p.completed_on ?? null,
+  }));
 
   state.awareness = awareness.map((a: any): AwarenessEntry => ({
     id: a.id, time: a.at_time?.slice(0, 5) ?? "", activity: a.activity,
@@ -306,22 +314,103 @@ export async function deleteGoal(userId: string, id: string) {
 }
 
 /**
- * The day's post-it. An empty day removes the row rather than storing `[]`, so
- * a day with nothing on it leaves no trace.
+ * The post-it, one record at a time.
+ *
+ * There is no "save the day's list" any more, and that is the point: an open
+ * priority is not owned by a day, so writing a day wholesale is exactly the
+ * operation that would have to invent a second copy of it.
  */
-export async function savePriorities(
-  userId: string, date: string, items: { text: string; done: boolean }[],
-) {
-  if (items.length === 0) {
-    await query("delete from day_priorities where user_id = $1 and on_date = $2", [userId, date]);
-    return;
+export async function addPriority(
+  userId: string, id: string, text: string, date: string,
+): Promise<void> {
+  /*
+   * The cap is enforced here and not in the parser, because it is a fact about
+   * the day rather than about the request, and the client no longer sends the
+   * day. `canAdd` is the same function the button uses — the rule for which
+   * priorities are on a day is subtle enough that a second copy of it in SQL
+   * would eventually disagree with the first, and the disagreement would show
+   * up as a form that refuses a line it is offering to take.
+   */
+  const rows = await query<{ created_on: string; completed_on: string | null }>(
+    "select created_on, completed_on from priorities where user_id = $1", [userId]);
+  const onDay = rows.map((r) => ({
+    id: "", text: "", createdOn: r.created_on, completedOn: r.completed_on ?? null,
+  }));
+  if (!canAdd(onDay, date)) {
+    throw new ApiError(`A day can hold at most ${MAX_PRIORITIES} priorities`);
   }
+
+  // Appended, so a new line lands under whatever rolled in rather than on top
+  // of it. `coalesce` covers the first priority an account ever writes.
   await query(
-    `insert into day_priorities (user_id, on_date, items) values ($1,$2,$3::jsonb)
-     on conflict (user_id, on_date) do update set
-       items = excluded.items, updated_at = now()`,
-    [userId, date, JSON.stringify(items)],
+    `insert into priorities (id, user_id, body, created_on, sort_order)
+     values ($1, $2, $3, $4::date,
+             (select coalesce(max(sort_order), 0) + 1 from priorities where user_id = $2))`,
+    [id, userId, text, date],
   );
+}
+
+/**
+ * Ticks a priority, or un-ticks it.
+ *
+ * The completion date is the day being looked at, not `today` — if you are
+ * working through Tuesday's note on Tuesday evening, Tuesday is when you did
+ * it. Un-ticking clears the date and the priority starts rolling again.
+ *
+ * Writing `completed_on` is the only thing that stops the rollover, so this is
+ * also the whole of "stop carrying it forward".
+ */
+export async function setPriorityDone(
+  userId: string, id: string, done: boolean, date: string,
+): Promise<void> {
+  await assertRef(query, "priorities", id, userId);
+  await query(
+    `update priorities set completed_on = $3::date, updated_at = now()
+      where id = $1 and user_id = $2`,
+    [id, userId, done ? date : null],
+  );
+}
+
+/**
+ * Removes a priority outright.
+ *
+ * A hard delete, deliberately. The × on a post-it means "this does not belong
+ * here" — someone who strikes a line out and then finds it still listed on
+ * last Tuesday would rightly call that a bug, and nothing else in the app
+ * reads priorities, so there is no history to protect by keeping the row.
+ */
+export async function deletePriority(userId: string, id: string): Promise<void> {
+  await assertRef(query, "priorities", id, userId);
+  await query("delete from priorities where id = $1 and user_id = $2", [id, userId]);
+}
+
+/**
+ * The user's arrangement.
+ *
+ * `ids` are one day's worth — the lines that were on screen — but sort_order is
+ * a property of the account, so numbering just those 0..n would collide with
+ * whatever the rest already hold. Instead the moved lines are dropped back into
+ * the slots they occupied within the full list, and the whole list is renumbered
+ * from there. Reordering today therefore cannot reshuffle a day you are not
+ * looking at, and the numbers stay dense.
+ */
+export async function reorderPriorities(userId: string, ids: string[]): Promise<void> {
+  await transaction(async (q) => {
+    const rows = await q<{ id: string }>(
+      `select id from priorities where user_id = $1
+        order by sort_order, created_on, created_at`, [userId]);
+
+    const moving = new Set(ids);
+    const wanted = ids[Symbol.iterator]();
+    // Ids that are not this user's are silently ignored rather than 404'd: the
+    // only way to send one is a stale tab, and there is nothing to tell.
+    const order = rows.map((r) => (moving.has(r.id) ? wanted.next().value ?? r.id : r.id));
+
+    for (const [i, id] of order.entries()) {
+      await q(`update priorities set sort_order = $3, updated_at = now()
+                where id = $1 and user_id = $2`, [id, userId, i]);
+    }
+  });
 }
 
 export async function saveMonthlyReflection(userId: string, month: string, body: string) {
