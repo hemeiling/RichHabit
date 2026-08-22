@@ -170,6 +170,17 @@ body {
     /* Follows you down a long habit list rather than scrolling away. */
     position: sticky;
     top: 16px;
+    /*
+     * A sticky element taller than the viewport can never show its own
+     * bottom: it pins at the top and the last thing in it — here, the way
+     * through to the full board — sits permanently below the fold. The panel
+     * measures ~370px and fits a 620px window, so this is not doing anything
+     * today; it earns its place at high browser zoom, where the effective
+     * viewport is a fraction of the real one and that is exactly the reader
+     * least able to work around a stranded control.
+     */
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
   }
 }
 

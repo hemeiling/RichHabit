@@ -55,6 +55,11 @@ export default function UsersTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  /* The row whose role is being changed, and its own error slot — a failure
+     here belongs beside the question that caused it, not in the bulk-action
+     banner at the top of the page. */
+  const [roleFor, setRoleFor] = useState<AdminUserRow | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
   const [result, setResult] = useState<null | {
     requested: number; deleted: number;
@@ -65,6 +70,35 @@ export default function UsersTable({
 
   const visibleIds = useMemo(() => rows.map((r) => r.id), [rows]);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  /**
+   * Promote or demote one account.
+   *
+   * The same endpoint the detail page uses, so both routes into this action
+   * get the same refusals: you cannot demote yourself, you cannot remove the
+   * last active admin, and a demotion that would exceed the fifty places is
+   * declined. Every one of those is decided by the server — this component
+   * only asks.
+   */
+  const changeRole = async (row: AdminUserRow, next: "user" | "admin") => {
+    setBusy("role");
+    setRoleError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "role", role: next }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+      setRoleFor(null);
+      router.refresh();
+    } catch (e) {
+      setRoleError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const selectedRows = useMemo(
     () => rows.filter((r) => selected.has(r.id)),
     [rows, selected],
@@ -239,7 +273,32 @@ export default function UsersTable({
                       : pendingVerification(u) ? "pending" : "active"}
                   </td>
                   <td className="muted num" style={{ padding: "8px 10px" }}>{date(u.createdAt)}</td>
-                  <td style={{ padding: "8px 10px", color: ROLE_STYLE[u.role] }}>{u.role}</td>
+                  {/*
+                    * The role reads as text and behaves as a control: a chip
+                    * you click, rather than a select dropped into every row.
+                    * Forty rows of dropdowns is a table you can change by
+                    * mis-scrolling, and this is the one column where a slip
+                    * hands somebody the ability to delete every account.
+                    *
+                    * Your own row stays plain text. The server refuses
+                    * self-demotion, and a control that always fails is worse
+                    * than no control at all.
+                    */}
+                  <td style={{ padding: "8px 10px" }}>
+                    {u.id === currentAdminId ? (
+                      <span style={{ color: ROLE_STYLE[u.role] }}>
+                        {u.role}<span className="faint"> · you</span>
+                      </span>
+                    ) : (
+                      <button className="chip" data-on={u.role === "admin"}
+                        style={{ padding: "3px 10px", fontSize: 12.5 }}
+                        disabled={!!busy}
+                        title={u.role === "admin" ? "Remove admin" : "Make admin"}
+                        onClick={() => { setRoleFor(u); setRoleError(null); }}>
+                        {u.role}
+                      </button>
+                    )}
+                  </td>
                   {/*
                     * "not asked" is the honest answer for a grandfathered
                     * account: nobody ever sent them a link, so "no" would read
@@ -263,6 +322,49 @@ export default function UsersTable({
           </table>
         </div>
       </div>
+
+      {roleFor && (
+        <div className="sheet-wrap" role="dialog" aria-modal="true" aria-label="Change role">
+          <div className="scrim" onClick={() => !busy && setRoleFor(null)} />
+          <div className="sheet">
+            <h2 className="display" style={{ fontSize: 21 }}>
+              {roleFor.role === "admin" ? "Remove admin?" : "Make this account an admin?"}
+            </h2>
+            <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.55 }}>
+              {roleFor.role === "admin" ? (
+                <>
+                  <b>{roleFor.email}</b> loses access to these admin screens. They keep
+                  every habit, completion, goal, journal entry and spending record, and
+                  carry on appearing in Community Progress — and they begin taking one of
+                  the fifty early-access places.
+                </>
+              ) : (
+                <>
+                  <b>{roleFor.email}</b> gains access to every account in this system,
+                  including the ability to disable and delete them. Their own habits and
+                  history are untouched, and they stop taking one of the fifty
+                  early-access places.
+                </>
+              )}
+            </p>
+            {roleError && (
+              <p className="mt-3" role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>
+                {roleError}
+              </p>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button className="btn" disabled={!!busy} onClick={() => setRoleFor(null)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" disabled={!!busy}
+                onClick={() => changeRole(roleFor, roleFor.role === "admin" ? "user" : "admin")}>
+                {busy === "role" ? "Working…"
+                  : roleFor.role === "admin" ? "Yes, remove admin" : "Yes, make admin"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirming && (
         <div className="sheet-wrap" role="dialog" aria-modal="true" aria-label="Delete accounts">
