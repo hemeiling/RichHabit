@@ -22,6 +22,7 @@ export default function AccountActions({
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingRole, setConfirmingRole] = useState(false);
   const [typed, setTyped] = useState("");
 
   const call = async (action: string, body: Record<string, unknown> = {}) => {
@@ -78,12 +79,50 @@ export default function AccountActions({
           <button className="btn" disabled={!!busy} onClick={() => call("reset_password")}>
             {busy === "reset_password" ? "Working…" : "Reset password"}
           </button>
-          <button className="btn" disabled={!!busy || isSelf}
+          {/* Confirmed rather than immediate. Every other control here is
+              either reversible in a click or already asks; a privilege change
+              was the one action that granted or removed access to every
+              account in the system on a single tap. */}
+          <button className="btn" disabled={!!busy || isSelf || confirmingRole}
             title={isSelf ? "You cannot change your own role" : undefined}
-            onClick={() => call("role", { role: role === "admin" ? "user" : "admin" })}>
-            {busy === "role" ? "Working…" : role === "admin" ? "Demote to user" : "Make admin"}
+            onClick={() => { setConfirmingRole(true); setError(null); }}>
+            {role === "admin" ? "Demote to user" : "Make admin"}
           </button>
         </div>
+
+        {confirmingRole && (
+          <div className="flat p-3.5 mt-3">
+            <p style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+              {role === "admin" ? (
+                <>
+                  Remove admin from <b>{email}</b>? They keep every habit, completion,
+                  goal, journal entry and spending record, and carry on appearing in
+                  Community Progress. They lose these admin screens, and begin taking
+                  one of the fifty early-access places.
+                </>
+              ) : (
+                <>
+                  Make <b>{email}</b> an admin? They gain access to every account in
+                  this system, including disabling and deleting them. Their own habits
+                  and history are untouched, and they stop taking one of the fifty
+                  early-access places.
+                </>
+              )}
+            </p>
+            <div className="flex gap-2 mt-3">
+              <button className="btn" disabled={!!busy}
+                onClick={() => setConfirmingRole(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={!!busy}
+                onClick={async () => {
+                  await call("role", { role: role === "admin" ? "user" : "admin" });
+                  setConfirmingRole(false);
+                }}>
+                {busy === "role" ? "Working…"
+                  : role === "admin" ? "Yes, remove admin" : "Yes, make admin"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {password && (
           <div className="flat p-3.5 mt-3">

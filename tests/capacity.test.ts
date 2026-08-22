@@ -136,3 +136,72 @@ describe("the sign-up form's new fields are named in both languages", () => {
     expect(zh.errors.usernameTaken).toMatch(/[一-鿿]/);
   });
 });
+
+/**
+ * Role changes and the fifty places.
+ *
+ * A promotion frees a place and a demotion takes one, because `OCCUPIES_A_SLOT`
+ * exempts admins. That coupling is why `setRole` has to consult capacity at
+ * all, and why its last-admin check has to be atomic: counting admins and
+ * writing the new role as two steps lets two simultaneous demotions each see
+ * one admin remaining and leave none.
+ */
+describe("changing a role is a capacity event", () => {
+  it("holds the lock before counting, rather than lazily", async () => {
+    const src = await import("node:fs")
+      .then((fs) => fs.readFileSync("src/lib/db/capacity.ts", "utf8"));
+    const fn = src.slice(src.indexOf("export async function withRoleLock"));
+    const lock = fn.indexOf("pg_advisory_xact_lock");
+    const count = fn.indexOf("count(*)");
+    expect(lock).toBeGreaterThan(-1);
+    // The lock must be taken unconditionally, before any counting — the
+    // capacity helper takes it lazily, which is correct there and not here.
+    expect(lock).toBeLessThan(count);
+  });
+
+  it("reuses the capacity lock rather than introducing a second one", async () => {
+    const src = await import("node:fs")
+      .then((fs) => fs.readFileSync("src/lib/db/capacity.ts", "utf8"));
+    // Two locks taken in different orders by different callers is how
+    // deadlocks are made; one key means that cannot happen.
+    expect(src.match(/pg_advisory_xact_lock\(\$1\)/g)?.length).toBeGreaterThan(0);
+    expect(src.match(/^const \w*LOCK = /gm)?.length ?? 0).toBe(1);
+  });
+});
+
+describe("setRole's refusals", () => {
+  const read = async () => (await import("node:fs"))
+    .readFileSync("src/lib/admin/users.ts", "utf8");
+  const body = async () => {
+    const src = await read();
+    const i = src.indexOf("export async function setRole");
+    return src.slice(i, src.indexOf("\n}", i));
+  };
+
+  it("refuses to remove your own admin role", async () => {
+    expect(await body()).toMatch(/cannot remove your own admin role/);
+  });
+
+  it("re-counts admins inside the lock, not before it", async () => {
+    const fn = await body();
+    expect(fn).toContain("withRoleLock");
+    const lock = fn.indexOf("withRoleLock");
+    const count = fn.indexOf("role = 'admin' and disabled_at is null");
+    expect(count).toBeGreaterThan(lock);
+  });
+
+  it("checks capacity when demoting, since that takes a place", async () => {
+    const fn = await body();
+    expect(fn).toContain("roomFor(1)");
+    expect(fn).toMatch(/Early access is full/);
+  });
+
+  it("writes one column and nothing else", async () => {
+    const fn = await body();
+    const writes = fn.match(/update \w+ set [^"]*/g) ?? [];
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toContain("update users set role");
+    // No deletion of anything the person owns.
+    expect(fn).not.toMatch(/delete from (habits|habit_completions|goals|day_notes|spending)/);
+  });
+});

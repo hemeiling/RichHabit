@@ -7,7 +7,7 @@ import {
 import { hashPassword } from "@/lib/auth";
 import { isTestInstance } from "@/lib/env";
 import { query, transaction } from "@/lib/db/pool";
-import { withCapacityFor } from "@/lib/db/capacity";
+import { withCapacityFor, withRoleLock } from "@/lib/db/capacity";
 import { seedAccount } from "@/lib/seed";
 import type { AdminUser } from "@/lib/admin";
 import type { Locale } from "@/lib/i18n";
@@ -326,6 +326,28 @@ export async function setDisabled(admin: AdminUser, id: string, disabled: boolea
     { id: target.id, email: target.email });
 }
 
+/**
+ * Promotes or demotes an account.
+ *
+ * Writes one column. Habits, schedules, completions, goals, journal entries,
+ * spending and preferences all hang off the account id, which does not change,
+ * so nothing a person has built is touched by becoming an admin or ceasing to
+ * be one. Their Community ranking is unaffected for the same reason — it is
+ * recomputed from completions, and admins rank like everyone else.
+ *
+ * Three refusals, and they are enforced here rather than in the interface,
+ * because a hidden button is a courtesy and not a rule:
+ *
+ *   · you cannot remove your own admin role — the one mistake with no undo
+ *     from inside the app
+ *   · you cannot remove the last active admin
+ *   · a demotion that would exceed the early-access limit is refused, since an
+ *     admin who becomes a user starts occupying one of the fifty places
+ *
+ * The middle one is why this runs under a lock. The count and the write have
+ * to be one step: checked separately, two simultaneous demotions each see one
+ * other admin remaining, both commit, and nobody can administer anything.
+ */
 export async function setRole(admin: AdminUser, id: string, role: "user" | "admin") {
   const target = await loadTarget(id);
   if (target.role === role) return;
@@ -333,11 +355,34 @@ export async function setRole(admin: AdminUser, id: string, role: "user" | "admi
   if (target.id === admin.id && role === "user") {
     throw new ApiError("You cannot remove your own admin role", 409);
   }
-  if (role === "user" && target.role === "admin" && await otherActiveAdmins(target.id) === 0) {
+
+  const problem = await withRoleLock(async (q, roomFor) => {
+    if (role === "user") {
+      // Re-counted inside the lock; the pre-flight check above is only for the
+      // self-demotion case, which cannot race with anything.
+      const rows = await q<{ n: string }>(
+        "select count(*) as n from users where role = 'admin' and disabled_at is null and id <> $1",
+        [target.id]);
+      if (Number(rows[0].n) === 0) return "last_admin" as const;
+
+      // Only a demotion of an account that can actually sign in adds to the
+      // count; a disabled one occupies no place either way.
+      const takesASlot = target.disabled_at === null;
+      if (takesASlot && !(await roomFor(1))) return "full" as const;
+    }
+    await q("update users set role = $2::user_role where id = $1", [id, role]);
+    return null;
+  });
+
+  if (problem === "last_admin") {
     throw new ApiError("This is the last active admin — promote another one first", 409);
   }
+  if (problem === "full") {
+    throw new ApiError(
+      "Early access is full, and demoting this admin would take one of the fifty "
+      + "places. Disable another account first, or raise EARLY_ACCESS_USER_LIMIT.", 409);
+  }
 
-  await query("update users set role = $2::user_role where id = $1", [id, role]);
   await audit(admin, "user_role_changed", { id: target.id, email: target.email },
     { from: target.role, to: role });
 }

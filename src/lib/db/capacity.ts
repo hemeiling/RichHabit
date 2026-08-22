@@ -78,6 +78,37 @@ export async function currentCapacity(): Promise<Capacity> {
 const CAPACITY_LOCK = 8_243_119;
 
 /**
+ * Runs `fn` inside a transaction holding the capacity lock, taken up front
+ * rather than lazily.
+ *
+ * Role changes need it for a reason ordinary capacity checks do not: demoting
+ * an admin has to count the remaining admins and write the new role as one
+ * indivisible step. Counting first and writing after is a race — two admins
+ * demoted at the same moment each see "one other admin remains", both proceed,
+ * and the system is left with none.
+ *
+ * It reuses the capacity lock rather than adding a second one. Demotion
+ * genuinely touches both concerns, since an admin who becomes a user starts
+ * occupying one of the fifty places, and two locks acquired in different
+ * orders by different callers is how deadlocks are made. At this scale the
+ * extra serialisation costs nothing.
+ */
+export async function withRoleLock<T>(
+  fn: (q: typeof query, roomFor: (n: number) => Promise<boolean>) => Promise<T>,
+): Promise<T> {
+  return transaction(async (q) => {
+    await q("select pg_advisory_xact_lock($1)", [CAPACITY_LOCK]);
+    const roomFor = async (n: number) => {
+      if (capacity.limit <= 0 || n <= 0) return true;
+      const rows = await q<{ n: string }>(
+        `select count(*) as n from users where ${OCCUPIES_A_SLOT}`);
+      return Number(rows[0].n) + n <= capacity.limit;
+    };
+    return fn(q, roomFor);
+  });
+}
+
+/**
  * Runs `fn` inside one transaction holding the capacity lock, handing it a way
  * to ask whether there is room for `n` more.
  *
