@@ -38,7 +38,7 @@ const FIXTURE = '^[a-z0-9-]+-[0-9]{13}@example\\.com$';
 loadEnv();
 assertLocalDatabase(process.env.DATABASE_URL ?? "", "prune accounts");
 
-const client = await connect();
+const client = await connect({ what: "prune accounts" });
 try {
   const { rows } = await client.query(
     `select u.id, u.email, u.role::text as role, u.created_at,

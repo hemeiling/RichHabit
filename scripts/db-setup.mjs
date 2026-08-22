@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ROOT, connect } from "./lib.mjs";
 
-const client = await connect();
+const client = await connect({ what: "create the schema" });
 
 try {
   const { rows } = await client.query(

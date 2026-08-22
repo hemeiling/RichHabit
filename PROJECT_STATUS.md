@@ -96,11 +96,31 @@ additive only — created `community_month_scores`, filled 9 NULL usernames. No
 habit, completion, goal, journal or spending row was read or written, and no
 existing username was overwritten.
 
-**`assertLocalDatabase()` exists in `scripts/lib.mjs` and would have stopped
-it, but only `prune-test-accounts.mjs` calls it.** `migrate.mjs`,
-`db-setup.mjs`, `set-password.mjs` and `grant-admin.mjs` do not. Wiring it into
-those four is the single highest-value follow-up. Never parse `.env` by hand —
-use `loadEnv()`.
+### Database safety guards — fixed
+
+`assertLocalDatabase()` already existed but only `prune-test-accounts.mjs`
+called it, so the other four scripts connected straight past it. Rather than
+add the call in four places — which the next script would forget — the guard
+now lives inside **`connect()`**, so every db script is protected by default:
+
+- **Refuses any non-local database** unless `RH_ALLOW_REMOTE=1`, printing the
+  host and database it declined and the exact command to use if you mean it.
+- **Always announces the target** (`→ host/database`, plus `** REMOTE **`).
+  The destination used to be invisible, which is how the wrong one goes
+  unnoticed.
+- Each caller names its action, so the refusal reads "Refusing to migrate the
+  schema" rather than something generic.
+
+**The documented production command in `render.yaml` now requires the flag:**
+
+    RH_ALLOW_REMOTE=1 DATABASE_URL='postgresql://…' npm run db:deploy
+
+Verified three ways: refused against Neon with no flag, proceeded against
+127.0.0.1:5433, and the override let a non-local host through. Nothing in Neon
+was touched by any of it.
+
+Never parse `.env` by hand — use `loadEnv()`. The incident's root cause was a
+hand-rolled regex matching a commented-out line.
 
 **Local development currently points at production Neon.** Line 6 of
 `.env.local` is the local dev database (127.0.0.1:5433) and is commented out.

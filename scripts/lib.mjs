@@ -60,30 +60,60 @@ export function resolveSsl(url) {
   return host.includes(".") ? on : false;
 }
 
+/** Host and database, for saying out loud which one is about to be written to. */
+export function describeTarget(connectionString) {
+  try {
+    const u = new URL(connectionString);
+    return { host: u.hostname, database: u.pathname.slice(1) || "(default)" };
+  } catch { return { host: "unknown", database: "unknown" }; }
+}
+
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "::1", ""];
+export const isLocalDatabase = (connectionString) =>
+  LOCAL_HOSTS.includes(describeTarget(connectionString).host);
+
 /**
- * Refuses to run a destructive script against anything but a local database.
+ * Refuses to run against anything but a local database.
  *
- * `npm run db:prune` deletes accounts. `loadEnv()` reads `.env.local`, and the
- * whole point of production is that its connection string is convenient to have
- * lying around — so the one thing standing between a tidy-up and deleting real
- * people is a guard that does not depend on remembering. `RH_ALLOW_REMOTE=1`
- * overrides it, deliberately awkwardly.
+ * `loadEnv()` reads `.env.local`, and the whole point of production is that its
+ * connection string is convenient to have lying around — so the one thing
+ * standing between a routine script and real people's data is a guard that does
+ * not depend on remembering. `RH_ALLOW_REMOTE=1` overrides it, deliberately
+ * awkwardly.
+ *
+ * This existed before and was called by exactly one script. The other four
+ * connected straight through it, and a migration duly ran against production
+ * while believed to be local — the connection string had been read from a
+ * COMMENTED-OUT line by a hand-rolled regex, so nothing ever said otherwise.
+ * Hence `connect()` now applies this by default: a guard you have to opt into
+ * is one a new script will forget.
  */
 export function assertLocalDatabase(connectionString, what) {
   if (process.env.RH_ALLOW_REMOTE === "1") return;
-  let host = "";
-  try { host = new URL(connectionString).hostname; } catch { host = "unknown"; }
-  if (["localhost", "127.0.0.1", "::1", ""].includes(host)) return;
+  if (isLocalDatabase(connectionString)) return;
+  const { host, database } = describeTarget(connectionString);
   console.error(
-    `Refusing to ${what} against "${host}", which is not a local database.\n` +
-    "This script deletes accounts and everything they own.\n" +
-    "If you really mean it, re-run with RH_ALLOW_REMOTE=1.",
+    `\nRefusing to ${what}.\n\n` +
+    `  target : ${host}\n` +
+    `  database: ${database}\n\n` +
+    "That is not a local database, so it is probably real people's data.\n" +
+    "If you genuinely mean it — a production migration, say — be explicit:\n\n" +
+    `  RH_ALLOW_REMOTE=1 DATABASE_URL='postgresql://…' npm run <script>\n`,
   );
   process.exit(1);
 }
 
-/** A connected client, or a clear message about what is missing. */
-export async function connect() {
+/**
+ * A connected client, or a clear message about what is missing.
+ *
+ * Always announces the target before doing anything. The destination used to be
+ * invisible, which is how the wrong one goes unnoticed: an operator who can see
+ * `neon.tech` in the output has a chance to stop, and one who cannot does not.
+ *
+ * `allowRemote` is for scripts that are read-only or that legitimately run
+ * against production; everything else is refused unless RH_ALLOW_REMOTE=1.
+ */
+export async function connect({ allowRemote = false, what = "run this script" } = {}) {
   loadEnv();
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -94,6 +124,12 @@ export async function connect() {
     );
     process.exit(1);
   }
+  if (!allowRemote) assertLocalDatabase(connectionString, what);
+
+  const { host, database } = describeTarget(connectionString);
+  const remote = !isLocalDatabase(connectionString);
+  console.log(`  → ${host}/${database}${remote ? "   ** REMOTE **" : ""}`);
+
   const client = new pg.Client({ connectionString, ssl: resolveSsl(connectionString) });
   await client.connect();
   return client;

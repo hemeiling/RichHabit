@@ -22,7 +22,15 @@
 # `preDeployCommand` needs a paid instance, so on the free plan the schema is
 # applied from your own machine against the same connection string:
 #
+#     RH_ALLOW_REMOTE=1 \
 #     DATABASE_URL='postgresql://…neon.tech/neondb?sslmode=require' npm run db:deploy
+#
+# `RH_ALLOW_REMOTE=1` is required, and that is the point: every db script now
+# refuses a non-local database without it, and prints the host it is about to
+# write to. Migrating production should be something you say out loud — the
+# alternative is doing it by accident, which has happened here: a connection
+# string was read from a commented-out line and nothing in the output named
+# the target.
 #
 # Run it once before the first deploy, and again after any deploy whose commit
 # changes db/schema.sql. It is `db:setup && db:migrate`, both idempotent.

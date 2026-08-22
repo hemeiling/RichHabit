@@ -18,7 +18,7 @@ const revoke = args.includes("--revoke");
 const list = args.includes("--list");
 const email = (args.find((a) => !a.startsWith("--")) ?? process.env.ADMIN_EMAIL ?? "").toLowerCase() || undefined;
 
-const client = await connect();
+const client = await connect({ what: "change an account's role" });
 
 try {
   if (list) {

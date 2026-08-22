@@ -63,7 +63,7 @@ const UNIT_ALIASES = {
   hr: ["hr", "小时", "hr/小时"],
 };
 
-const client = await connect();
+const client = await connect({ what: "migrate the schema" });
 let changed = 0;
 
 async function columnExists(table, column) {

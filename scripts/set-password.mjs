@@ -69,7 +69,7 @@ const salt = randomBytes(16);
 const key = await scrypt(password, salt, KEY_LEN);
 const hash = `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
 
-const client = await connect();
+const client = await connect({ what: "set an account password" });
 try {
   const { rows } = await client.query(
     "update users set password_hash = $1 where lower(email) = $2 returning email",
