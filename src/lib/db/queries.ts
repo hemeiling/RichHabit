@@ -476,6 +476,8 @@ export async function savePrefs(userId: string, p: Prefs) {
  */
 export interface AccountSummary {
   email: string;
+  /** The public name. Null only on an account the backfill has not reached. */
+  username: string | null;
   createdAt: string;
   isAdmin: boolean;
   activeHabits: number;
@@ -485,6 +487,7 @@ export interface AccountSummary {
 export async function loadAccount(userId: string): Promise<AccountSummary | null> {
   const rows = await query<any>(
     `select coalesce(u.email, u.username) as email,
+            u.username,
             u.created_at,
             u.role = 'admin' as is_admin,
             (select count(*) from habits h
@@ -498,6 +501,7 @@ export async function loadAccount(userId: string): Promise<AccountSummary | null
   if (!r) return null;
   return {
     email: r.email,
+    username: r.username ?? null,
     // The full instant, not a calendar date: the server has no idea what
     // timezone the reader is in, so the browser decides which day it was.
     createdAt: new Date(r.created_at).toISOString(),

@@ -1,7 +1,7 @@
 # RichHabit — project status
 
 **Persistent handoff checkpoint.** Read this first when resuming; it is kept
-current at each milestone. Last updated at commit `0487b54`.
+current at each milestone. Last updated at the Community Progress milestone.
 
 ---
 
@@ -30,9 +30,80 @@ email-verification implementation — it is finished, tested and merged.**
 
 ## Current state
 
-**Commit `0487b54`** — "Add email verification for new registrations only".
-Pushed to `origin/main`. Working tree clean. Preceded by `432c673` (the 50-user
-cap) and `28a1ec2` (RichHabit rebrand).
+**Community Progress, password confirmation and usernames** — this milestone.
+Preceded by `0487b54` (email verification), `432c673` (the 50-user cap) and
+`28a1ec2` (the RichHabit rebrand).
+
+### Community Progress / 社区进步 — new
+
+A live, month-to-date leaderboard at **Settings → Community Progress**
+(`/more/community`), headed "**August · Live Ranking / 8月 · 实时排名**".
+
+- **One definition of completion, not two.** The board calls the app's own
+  `rangeScore()` / `isScheduled()` per user rather than reimplementing the
+  rule in SQL. That is deliberate and worth not undoing: a `times`-per-week
+  habit stays scheduled until the week's target is met, so it is
+  path-dependent and cannot be expressed as `completed ÷ scheduled`; days with
+  nothing scheduled are skipped rather than scored zero. A SQL rewrite would
+  be a second definition that could disagree with a user's own analytics.
+- **Unweighted for everyone.** `weighted_score` is a per-user preference, so
+  honouring it would rank people by rules that differ between them. The screen
+  says so, because the figure can differ from the weighted one elsewhere.
+- **Eligibility:** active, non-admin, and with at least one scheduled check-in
+  this month. **Admins never rank.**
+- **Nothing is stored to serve it.** Recomputed from `habit_completions` on
+  every visit behind a 60-second cache, so the order moves as people tick
+  habits off and starts fresh on the 1st with no reset step.
+- `community_month_scores` archives a finished month the first time anyone
+  opens the new one — insert-only, `on conflict do nothing`, never read to
+  build a live ranking. Losing every row would cost history and change no
+  present number.
+- **Privacy:** the board shows the **username and nothing else**.
+  `displayName()` accepts only a username, so a real name or an email cannot
+  reach it structurally; a test locks that shape in. `profiles` is not even
+  joined.
+
+### Usernames — every account now has one
+
+- **The 9 grandfathered accounts were given generated defaults**
+  `richhabituser01`–`richhabituser09` (the admin holds `01`). Derived from a
+  counter, never from an email or a real name.
+- **Backfilled with `where username is null`.** The two self-chosen names in
+  production — `claire` and `emma` — were not touched, and all 11 are unique.
+  Login was unaffected: all 9 have emails and could always sign in by email.
+- **`claire` is intentionally username-only** (a family account with no email
+  address). The `users_identified` constraint supports this. Do not "fix" it
+  by adding an email.
+- Editable at **Settings → Username / 用户名**. Uniqueness is enforced by the
+  database (`users_username_idx` on `lower(username)`), not a read-then-write
+  check. Renaming writes one column: the account uuid everything else
+  references is untouched, so habits, history, score and rank cannot move.
+
+### Change password — completed
+
+The API and page already existed and were already safe. Added the missing
+**confirm-new-password** field with match validation, and an entry at
+**Settings → Change password**. The forced-change flow is unchanged: it still
+redirects there and still lands on Today; only a user who arrived deliberately
+gets a back link.
+
+### ⚠️ Incident during this milestone — read before running any script
+
+`npm run db:migrate` was run against **production Neon** while believed to be
+local. Cause: `.env.local` line 6 is a commented-out local URL and line 33 is
+the live Neon one; a hand-rolled regex matched the commented line. Effects were
+additive only — created `community_month_scores`, filled 9 NULL usernames. No
+habit, completion, goal, journal or spending row was read or written, and no
+existing username was overwritten.
+
+**`assertLocalDatabase()` exists in `scripts/lib.mjs` and would have stopped
+it, but only `prune-test-accounts.mjs` calls it.** `migrate.mjs`,
+`db-setup.mjs`, `set-password.mjs` and `grant-admin.mjs` do not. Wiring it into
+those four is the single highest-value follow-up. Never parse `.env` by hand —
+use `loadEnv()`.
+
+**Local development currently points at production Neon.** Line 6 of
+`.env.local` is the local dev database (127.0.0.1:5433) and is commented out.
 
 ### 50-user early-access cap — implemented and tested
 

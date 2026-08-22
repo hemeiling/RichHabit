@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useHabits } from "@/components/store";
 import LanguageToggle from "@/components/LanguageToggle";
@@ -27,6 +27,45 @@ export default function More({ account }: { account: AccountSummary }) {
   const { signOut, busy, failed } = useSignOut();
   const [confirming, setConfirming] = useState(false);
 
+  /* The username field is seeded from the server and edited locally. Only the
+     one column is written; the account id everything else hangs off is never
+     touched, so a rename cannot cost anyone their history or their place. */
+  const [username, setUsername] = useState(account.username ?? "");
+  const [savingName, setSavingName] = useState(false);
+  const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const saveUsername = async () => {
+    setSavingName(true);
+    setNameMsg(null);
+    try {
+      const res = await fetch("/api/account/username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || t.errors.saveFailed);
+      // Echo what the server stored: it normalises, so what was typed and
+      // what is now the name are not always the same string.
+      setUsername(data.username);
+      setNameMsg({ ok: true, text: t.more.usernameSaved });
+    } catch (e) {
+      setNameMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  /* Confirmation of a password change, which happens on another page. The
+     marker is stripped from the URL once read, so a refresh or a shared link
+     does not keep announcing something that already happened. */
+  const [changed, setChanged] = useState(false);
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has("changed")) return;
+    setChanged(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
+
   const exportData = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -39,6 +78,12 @@ export default function More({ account }: { account: AccountSummary }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {changed && (
+        <p className="card p-3.5" role="status"
+          style={{ fontSize: 14, color: "var(--ok, var(--fg))" }}>
+          {t.setup.changed}
+        </p>
+      )}
       {/* Account, at the top: who you are signed in as should not need scrolling for. */}
       <section className="card p-5">
         <div className="eyebrow mb-3">{t.more.account}</div>
@@ -74,6 +119,41 @@ export default function More({ account }: { account: AccountSummary }) {
           </div>
         </div>
 
+        <div className="mt-4">
+          <label className="faint block" style={{ fontSize: 12.5 }} htmlFor="username">
+            {t.more.username}
+          </label>
+          <div className="flex gap-2 mt-1">
+            <input id="username" className="input flex-1" value={username}
+              onChange={(e) => { setUsername(e.target.value); setNameMsg(null); }}
+              autoComplete="username" spellCheck={false} />
+            <button className="btn" type="button"
+              disabled={savingName || !username.trim() || username.trim() === (account.username ?? "")}
+              onClick={saveUsername}>
+              {savingName ? t.common.savingEllipsis : t.more.usernameSave}
+            </button>
+          </div>
+          <p className="faint mt-1.5" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+            {t.more.usernameHint}
+          </p>
+          {nameMsg && (
+            <p className="mt-1.5" role="status"
+              style={{ fontSize: 12.5, color: nameMsg.ok ? "var(--ok, var(--fg))" : "var(--warn)" }}>
+              {nameMsg.text}
+            </p>
+          )}
+        </div>
+
+        {/* The same page the forced-change flow uses, reached deliberately
+            rather than by redirect. One password form, one API route. */}
+        <Link href="/change-password" className="flat p-3.5 flex items-center justify-between gap-3 mt-3">
+          <span>
+            <span className="block" style={{ fontSize: 14.5 }}>{t.more.changePassword}</span>
+            <span className="faint block mt-0.5" style={{ fontSize: 12.5 }}>{t.more.changePasswordNote}</span>
+          </span>
+          <span className="faint" style={{ fontSize: 18 }}>›</span>
+        </Link>
+
         {/* Rendered from the role in the database, never from anything the
             client claims — and /admin re-checks it and 404s regardless. */}
         {account.isAdmin && (
@@ -85,6 +165,21 @@ export default function More({ account }: { account: AccountSummary }) {
             <span className="faint" style={{ fontSize: 18 }}>›</span>
           </Link>
         )}
+      </section>
+
+      {/* Its own row rather than an entry in LINKS: those are all personal
+          tools, and this is the one screen that looks outward. */}
+      <section className="card px-5 py-2">
+        <div className="divide">
+          <Link href="/more/community"
+            className="w-full text-left py-4 flex items-center justify-between gap-3">
+            <span>
+              <span className="block" style={{ fontSize: 15.5, fontWeight: 500 }}>{t.community.title}</span>
+              <span className="faint block mt-0.5" style={{ fontSize: 13 }}>{t.community.linkNote}</span>
+            </span>
+            <span className="faint" style={{ fontSize: 18 }}>›</span>
+          </Link>
+        </div>
       </section>
 
       <section className="card px-5 py-2">

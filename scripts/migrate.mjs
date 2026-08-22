@@ -392,6 +392,26 @@ try {
         details      jsonb not null default '{}'::jsonb,
         created_at   timestamptz not null default now()
       )`, "create index admin_audit_log_created_idx on admin_audit_log (created_at desc)"],
+    /*
+     * Community Progress keeps a finished copy of each month once that month
+     * is over, so a past ranking can still be looked at after the live board
+     * has moved on to the new one.
+     *
+     * It is a record, not a source: the live board is always recomputed from
+     * habit_completions, and nothing here is ever read to produce a current
+     * ranking. Deleting every row would cost the history and change no
+     * present number. The habit data it was derived from is never touched.
+     */
+    ["community_month_scores", `
+      create table community_month_scores (
+        month      text not null,
+        user_id    uuid not null references users on delete cascade,
+        rank       int not null,
+        pct        int not null,
+        name       text not null,
+        created_at timestamptz not null default now(),
+        primary key (month, user_id)
+      )`, "create index community_month_scores_month_idx on community_month_scores (month, rank)"],
   ]) {
     const { rows } = await client.query(
       `select 1 from information_schema.tables
@@ -401,6 +421,44 @@ try {
     if (extra) await client.query(extra);
     console.log(`  created ${table}`);
     changed++;
+  }
+
+  /*
+   * ---- Usernames for accounts that predate them --------------------------
+   *
+   * Community Progress shows usernames and nothing else, so an account
+   * without one could not appear on the board. Sign-up has required a
+   * username for a while; accounts made before that have none.
+   *
+   * Generated from a counter, never from the person: an email or a real name
+   * turned into a public handle is exactly the exposure the board is meant to
+   * avoid. Lowercase because that is what `checkUsername` accepts and what
+   * `users_username_idx` uniquely indexes — the same rule a user typing their
+   * own would face.
+   *
+   * Only ever fills a NULL. `where username is null` means a username someone
+   * chose can never be overwritten by this, no matter how often it runs, and
+   * nothing but that one column is written.
+   */
+  {
+    const { rows: pending } = await client.query(
+      "select id from users where username is null order by created_at, id");
+    if (pending.length) {
+      const { rows: taken } = await client.query(
+        "select lower(username) as u from users where username is not null");
+      const used = new Set(taken.map((r) => r.u));
+      let n = 0;
+      for (const u of pending) {
+        let name;
+        do { n++; name = `richhabituser${String(n).padStart(2, "0")}`; } while (used.has(name));
+        used.add(name);
+        // Guarded again in SQL: if a username appeared between the read above
+        // and this write, the row is left exactly as it is.
+        const { rowCount } = await client.query(
+          "update users set username = $2 where id = $1 and username is null", [u.id, name]);
+        if (rowCount) { console.log(`  username → ${name}`); changed++; }
+      }
+    }
   }
 
   /*

@@ -589,6 +589,26 @@ create table admin_audit_log (
 );
 create index admin_audit_log_created_idx on admin_audit_log (created_at desc);
 
+-- ========================= community month scores ===========================
+-- A finished copy of each month's Community Progress board, written once that
+-- month is over so a past ranking survives the live board moving on.
+--
+-- A record, not a source. The live board is always recomputed from
+-- habit_completions; nothing here is read to produce a current ranking, and
+-- losing every row would cost the history without changing a single present
+-- number. `pct` is the unweighted month-to-date score, the same rule everyone
+-- is measured by.
+create table community_month_scores (
+  month      text not null,          -- 'YYYY-MM'
+  user_id    uuid not null references users on delete cascade,
+  rank       int not null,
+  pct        int not null,
+  name       text not null,          -- the display name as shown then
+  created_at timestamptz not null default now(),
+  primary key (month, user_id)
+);
+create index community_month_scores_month_idx on community_month_scores (month, rank);
+
 -- ================================= feedback =================================
 -- Feedback from users to whoever runs Rich Habits, about Rich Habits. It is not
 -- habit tracking, not coaching and not reflection: nothing here is ever shown

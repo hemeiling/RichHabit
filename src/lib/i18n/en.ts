@@ -533,6 +533,14 @@ export const en = {
     daysRecorded: "Days recorded",
     adminLink: "Product analytics",
     adminNote: "Admin only",
+    changePassword: "Change password",
+    changePasswordNote: "Choose a new one for signing in",
+    username: "Username",
+    /* Said explicitly because a rename looks risky from the outside: people
+       hesitate over anything that might cost them their streak. */
+    usernameHint: "The only name shown on Community Progress. Changing it keeps all your habits, history and ranking.",
+    usernameSave: "Save",
+    usernameSaved: "Username updated.",
     yourData: "Your data",
     yourDataHint: "A full copy of everything in this account, as JSON.",
     exportJson: "Export JSON",
@@ -549,6 +557,36 @@ export const en = {
     signOutFailed: "Couldn't sign out — check your connection and try again.",
     footer: "Awareness → grade → select → track → review.",
     footerTwo: "Missing a day is data, not failure.",
+  },
+
+  /**
+   * §Community. Company, not competition — the wording stays away from
+   * winning, beating and losing, and nobody is ever described relative to
+   * the person above them.
+   */
+  community: {
+    title: "Community Progress",
+    linkNote: "How the group is doing this month",
+    /* Named "live" because it is: the board is recomputed from habit records
+       on every visit, so it moves as people tick things off during the day
+       and starts fresh on the 1st. */
+    liveRanking: "Live Ranking",
+    monthNames: ["January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"],
+    myCompleteness: "My completeness",
+    myRank: "My ranking",
+    activeUsers: "Active users",
+    you: "You",
+    month: "Month",
+    updated: "Last updated",
+    rankOf: (rank: number, total: number) => `#${rank} of ${total}`,
+    basis: "Completed check-ins out of those scheduled so far this month",
+    /* Said plainly because the number can differ from the weighted one on
+       their own screens, and an unexplained discrepancy reads as a bug. */
+    unweightedNote: "Everyone is measured unweighted, so the comparison is like for like",
+    noneScheduled: "You have no scheduled check-ins yet this month, so there is nothing to compare yet. Add or schedule a habit and you will appear here.",
+    empty: "No one has scheduled check-ins this month yet.",
+    unavailable: "Community progress is unavailable right now.",
   },
 
   goals: {
@@ -696,6 +734,13 @@ export const en = {
     changeForced: "An administrator issued you a temporary password. Choose your own to carry on —",
     currentPassword: "Current password",
     newPassword: "New password",
+    confirmPassword: "Confirm new password",
+    /* Checked in the browser only. The server never needs the confirmation —
+       it exists to catch a typo before it becomes a password nobody knows,
+       which is an interface job rather than an API contract. */
+    mismatch: "The two new passwords do not match.",
+    changed: "Password changed.",
+    backToSettings: "Back to Settings",
   },
   /** §Feedback. From a user of Rich Habits, to whoever runs it, about the app. */
   feedback: {
