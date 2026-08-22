@@ -38,12 +38,62 @@ export const isProduction = process.env.NODE_ENV === "production";
 
 // ─────────────────────────────── database ────────────────────────────────────
 
-/** Required. Throws where it is used, not where it is imported. */
+const LOCAL_DB_HOSTS = ["localhost", "127.0.0.1", "::1", ""];
+
+/**
+ * True for a database on this machine. Unparseable counts as NOT local, so a
+ * malformed string is refused rather than waved through.
+ *
+ * IPv6 hosts arrive bracketed — `postgres://u@[::1]:5432/db` — and `URL`
+ * reports the hostname with the brackets still on, so they are stripped before
+ * comparing. Without that, the one form of localhost a developer is least
+ * likely to suspect gets treated as production.
+ */
+export function isLocalDatabase(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+    return LOCAL_DB_HOSTS.includes(host);
+  } catch { return false; }
+}
+
+/**
+ * Required. Throws where it is used, not where it is imported.
+ *
+ * ## Why development refuses a remote database
+ *
+ * `.env.local` is read by `npm run dev` and holds whatever connection string is
+ * convenient — which, on a small project, is production's. Nothing then
+ * distinguishes "I am building a feature" from "I am editing real people's
+ * habits": the same click writes to the same rows, and the only signal is a
+ * hostname nobody reads.
+ *
+ * So in development a non-local database is refused outright. Production is
+ * untouched, because the check is skipped when NODE_ENV is production — Render
+ * sets that, and the deployed app must obviously reach Neon.
+ *
+ * `RH_ALLOW_REMOTE=1` overrides it, the same flag the db scripts use, so there
+ * is one concept to remember rather than two. Reaching for it is a deliberate
+ * act, which is the entire point.
+ */
 export function databaseUrl(): string {
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
       "DATABASE_URL is not set. Copy .env.example to .env.local and point it at your Postgres.",
+    );
+  }
+  if (!isProduction && process.env.RH_ALLOW_REMOTE !== "1" && !isLocalDatabase(url)) {
+    let host = "unknown";
+    try { host = new URL(url).hostname; } catch { /* keep "unknown" */ }
+    throw new Error(
+      `Refusing to run in development against "${host}", which is not a local database.\n\n` +
+      "That is very likely production, and a click in a dev server would edit real\n" +
+      "people's data. Start a local Postgres and point at it:\n\n" +
+      "  npm run db:dev        # PGlite on 127.0.0.1:5433, no install needed\n" +
+      "  npm run db:deploy     # create the schema in it\n\n" +
+      "then set DATABASE_URL in .env.local to the local one (line 6 of the file).\n\n" +
+      "If you genuinely need dev pointed at a remote database, say so explicitly:\n" +
+      "  RH_ALLOW_REMOTE=1 npm run dev\n",
     );
   }
   return url;

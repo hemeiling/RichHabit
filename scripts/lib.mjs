@@ -64,7 +64,10 @@ export function resolveSsl(url) {
 export function describeTarget(connectionString) {
   try {
     const u = new URL(connectionString);
-    return { host: u.hostname, database: u.pathname.slice(1) || "(default)" };
+    // IPv6 hosts arrive bracketed and `URL` keeps the brackets, so `[::1]`
+    // would not match a plain "::1" — the least suspected form of localhost
+    // reading as production.
+    return { host: u.hostname.replace(/^\[|\]$/g, ""), database: u.pathname.slice(1) || "(default)" };
   } catch { return { host: "unknown", database: "unknown" }; }
 }
 

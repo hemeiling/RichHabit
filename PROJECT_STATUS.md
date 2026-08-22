@@ -122,8 +122,29 @@ was touched by any of it.
 Never parse `.env` by hand — use `loadEnv()`. The incident's root cause was a
 hand-rolled regex matching a commented-out line.
 
-**Local development currently points at production Neon.** Line 6 of
-`.env.local` is the local dev database (127.0.0.1:5433) and is commented out.
+### Local development is now separated from production — fixed
+
+`.env.local` had production Neon active and the local database commented out,
+so `npm run dev` read and wrote real users' rows. Two changes:
+
+1. **`.env.local` swapped** — the local PGlite database (127.0.0.1:5433) is
+   active; Neon's string is kept in the file but commented, with the command
+   to use it deliberately. A timestamped `.env.local.bak.*` was left beside it.
+2. **`databaseUrl()` refuses a remote database in development** —
+   `src/lib/env.ts`, mirroring the script guard so there is one concept, not
+   two. The error names the host and gives the two commands that fix it.
+   **Skipped entirely when `NODE_ENV=production`**, so the deployed app is
+   untouched; `tests/db-target.test.ts` pins that, because a guard that fired
+   in production would be a worse failure than the one it prevents.
+
+Development database, from nothing:
+
+    npm run db:dev        # PGlite on 127.0.0.1:5433, no install, data in .pgdata/
+    npm run db:deploy     # schema into it
+    npm run dev
+
+`RH_ALLOW_REMOTE=1` is the single escape hatch for both the app and the
+scripts.
 
 ### 50-user early-access cap — implemented and tested
 
