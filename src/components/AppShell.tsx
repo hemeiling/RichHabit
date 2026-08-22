@@ -36,6 +36,13 @@ const TABS = [
 ] as const;
 
 /**
+ * Pages that carry a side rail, and therefore a wider shell. Kept beside TABS
+ * so the two facts about a route — where it sits in the nav and how wide it
+ * runs — are read in one place.
+ */
+const RAIL_ROUTES = new Set(["/today"]);
+
+/**
  * Keeps the language in three places agreed: React state (what you see), the
  * cookie (what the server reads on the next request) and the account (what
  * follows you to another device).
@@ -149,8 +156,10 @@ function Chrome({ email, children }: { email: string; children: React.ReactNode 
         position: "sticky", top: 0, zIndex: 20, background: "var(--bg)",
         borderBottom: "1px solid var(--line)",
       }}>
+        {/* Tracks the content width, or the page title would sit 230px left of
+            the column it titles. */}
         <div className="mx-auto px-4 sm:px-6 flex items-center justify-between"
-          style={{ maxWidth: 780, height: 56 }}>
+          style={{ maxWidth: RAIL_ROUTES.has(pathname) ? 1240 : 780, height: 56 }}>
           <div className="flex items-center gap-2.5 min-w-0">
             <SidebarToggle onClick={() => setMenuOpen(true)} label={t.nav.openMenu} />
             {isSubPage && (
@@ -182,8 +191,20 @@ function Chrome({ email, children }: { email: string; children: React.ReactNode 
         </div>
       )}
 
+      {/*
+        * 780px is a reading measure, and it is the right one for the
+        * form-shaped pages: a settings field or a goal description set 1200px
+        * wide is harder to read, not better used.
+        *
+        * Today is not that shape. It is a list you work down with room to
+        * spare, so it gets a wider shell and a second column beside it. The
+        * width is per-page rather than global for exactly that reason — the
+        * empty space on Today was worth reclaiming; the empty space beside a
+        * text field was doing a job.
+        */}
       <main className="mx-auto px-4 sm:px-6 py-5 fade-in"
-        style={{ maxWidth: 780, paddingBottom: 40 }} key={pathname}>
+        style={{ maxWidth: RAIL_ROUTES.has(pathname) ? 1240 : 780, paddingBottom: 40 }}
+        key={pathname}>
         {loading ? <div className="eyebrow py-10 text-center">{t.common.loading}</div> : children}
       </main>
       </div>

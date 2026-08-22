@@ -15,6 +15,7 @@
   /* Declared once: the sidebar's width and the inset of the content beside it
      have to agree, and they are set in different rules. */
   --sidebar-w: 244px;
+  --rail-w: 300px;
 }
 
 [data-theme="dark"] {
@@ -135,6 +136,41 @@ body {
   .sidebar { transform: none; visibility: visible; }
   .sidebar-scrim, .sidebar-only-mobile { display: none; }
   .with-sidebar { padding-left: var(--sidebar-w); }
+}
+
+/* ------------------------------- the side rail ------------------------------
+ * A second column for pages that have something worth glancing at while you
+ * work — currently Today, alongside Community Progress.
+ *
+ * One column by default and two only when there is genuinely room. The
+ * threshold is 1280px rather than the 900px that brings in the sidebar,
+ * because at 900 the content area is 656px and splitting it would leave both
+ * halves too narrow to be worth having. At 1280 the main column still clears
+ * 660px with the rail beside it.
+ *
+ * Below the threshold this is a plain block container, so the rail simply
+ * follows the main content down the page in document order. Nothing is
+ * hidden, nothing repositions with absolute coordinates, and the phone layout
+ * is the one you get by not asking for the desktop one.
+ */
+.with-rail { display: block; }
+.with-rail > .rail { margin-top: 16px; }
+
+@media (min-width: 1280px) {
+  .with-rail {
+    display: grid;
+    /* minmax(0,…) so a long habit name shrinks the column instead of
+       overflowing it — the default `auto` minimum would refuse to shrink. */
+    grid-template-columns: minmax(0, 1fr) var(--rail-w);
+    gap: 24px;
+    align-items: start;
+  }
+  .with-rail > .rail {
+    margin-top: 0;
+    /* Follows you down a long habit list rather than scrolling away. */
+    position: sticky;
+    top: 16px;
+  }
 }
 
 /* --------------------------- reordering a habit ---------------------------- */

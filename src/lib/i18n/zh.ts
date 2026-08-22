@@ -535,6 +535,7 @@ export const zh: Dict = {
   community: {
     title: "社区进步",
     liveRanking: "实时排名",
+    view: "查看社区",
     monthNames: ["1月", "2月", "3月", "4月", "5月", "6月",
       "7月", "8月", "9月", "10月", "11月", "12月"],
     myCompleteness: "我的习惯完成度",

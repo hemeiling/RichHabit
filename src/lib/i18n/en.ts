@@ -574,6 +574,8 @@ export const en = {
        on every visit, so it moves as people tick things off during the day
        and starts fresh on the 1st. */
     liveRanking: "Live Ranking",
+    /** The rail's way through to the full board. */
+    view: "View Community",
     monthNames: ["January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"],
     myCompleteness: "My completeness",

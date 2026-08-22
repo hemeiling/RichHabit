@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import AddHabit from "@/components/AddHabit";
+import CommunityPanel from "@/components/CommunityPanel";
 import GratitudeJournal from "@/components/GratitudeJournal";
 import Priorities from "@/components/Priorities";
 import HabitEditor from "@/components/HabitEditor";
@@ -284,7 +285,14 @@ export default function Today() {
   }));
 
   return (
-    <div className="flex flex-col gap-4">
+    /*
+     * Two columns on a wide screen, one below 1280px — see `.with-rail` in
+     * globals.css. The rail is second in the document, so when it collapses it
+     * lands beneath the day's habits rather than above them: on a phone the
+     * first thing you should see is what you have to do, not how you compare.
+     */
+    <div className="with-rail">
+      <div className="flex flex-col gap-4">
       <section className="card p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -444,6 +452,11 @@ export default function Today() {
       {/* The day's journal, at the bottom where it was. Navigating to another
           day shows that day's entry — nothing is overwritten. */}
       <GratitudeJournal date={date} />
+      </div>
+
+      <aside className="rail">
+        <CommunityPanel />
+      </aside>
     </div>
   );
 }
