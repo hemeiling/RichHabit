@@ -31,6 +31,29 @@ export type DbReason =
   | "DATABASE_URL is not a valid URL"
   | "unknown";
 
+/**
+ * True when the failure was "the schema in front of this code is older than the
+ * code": 42P01 undefined_table, or 42703 undefined_column.
+ *
+ * On the free plan migrations are applied by hand against the database, so a
+ * deploy can land minutes or hours before its migration does — that has
+ * happened, and it turned every account into an apparently empty one because a
+ * single missing table failed the whole state read.
+ *
+ * So a *new* module is allowed to be missing. It reports itself unavailable
+ * rather than empty, and everything that existed before it still loads. The
+ * column case is the same situation one release later: adding a field to an
+ * existing table puts the writes ahead of the schema in exactly the same way,
+ * and it should read as "not deployed yet" rather than as a save that failed
+ * for unknowable reasons.
+ *
+ * Applied only where a module has opted in. Everywhere else these still throw.
+ */
+export const isSchemaBehind = (e: unknown) => {
+  const code = (e as { code?: string } | null)?.code;
+  return code === "42P01" || code === "42703";
+};
+
 /** The shape of what DATABASE_URL points at. Never the value. */
 export function describeTarget(connectionString: string | undefined): DbTarget {
   if (!connectionString) return "not set";

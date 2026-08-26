@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useHabits } from "@/components/store";
 import { Field, Sheet } from "@/components/ui";
 import { uid } from "@/lib/habits";
-import { addMonths, monthGrid, monthOf, todayISO } from "@/lib/dates";
+import { addMonths, monthFirst, monthGrid, monthOf, todayISO } from "@/lib/dates";
 import { dateRangeFor, monthTitleFor, prettyDateFor } from "@/lib/i18n";
 import { useLocale, useT } from "@/lib/i18n/context";
 import {
@@ -30,9 +30,13 @@ import type { ImportantDate } from "@/lib/types";
 
 /** How many bars one day cell can show before it says "+n" instead. */
 const MAX_LANES = 3;
-/** How many upcoming events fit in the rail before the list offers the rest. */
+/**
+ * How many upcoming events fit in the rail before the list offers the rest.
+ * Expanding then shows *everything* — the button names the number it is about
+ * to reveal, and a list that quietly stopped at twenty would be a cap nobody
+ * was told about.
+ */
 const UPCOMING = 5;
-const UPCOMING_EXPANDED = 20;
 
 /**
  * Today, kept honest without polling.
@@ -77,7 +81,18 @@ const blankEvent = (date: string): ImportantDate => ({
 
 /* ------------------------------ the calendar ------------------------------ */
 
-function MonthGrid({
+/**
+ * Memoised, and not as a reflex.
+ *
+ * Today re-renders on every tick of a habit — the store hands out a new state
+ * object each time — and a month grid formats a date per cell for its label:
+ * 84 across the two months, 168 in bilingual mode, measured at 3-4ms on a
+ * laptop and several times that on a phone. None of it can have changed
+ * because a habit was ticked, so none of it should be redone. `onPickDay` is
+ * wrapped in `useCallback` below to make this hold; the language still repaints
+ * it, because that arrives through context rather than through props.
+ */
+const MonthGrid = memo(function MonthGrid({
   month, events, today, onPickDay,
 }: {
   month: string; events: ImportantDate[]; today: string;
@@ -141,7 +156,7 @@ function MonthGrid({
       })}
     </div>
   );
-}
+});
 
 function Bar({ bar }: { bar: EventBar }) {
   const hex = colorHex(bar.event.color);
@@ -310,11 +325,12 @@ function EventEditor({
 /* -------------------------------- the day --------------------------------- */
 
 /**
- * What is on one day, when there is more than one thing.
+ * What is on one day.
  *
- * A day with nothing on it goes straight to the editor, and a day with a single
- * event opens that event — this only exists for the case where a choice has to
- * be made, which is the only case where a list is faster than a guess.
+ * Shown for any day that has something on it, whether that is one thing or
+ * five, and it always offers to add another — which is the point. A day with
+ * nothing on it skips this and opens a new event directly, because there is
+ * nothing to choose between.
  */
 function DaySheet({
   date, events, onPick, onAdd, onClose,
@@ -370,26 +386,37 @@ export default function ImportantDates() {
   const base = addMonths(monthOf(today), offset);
   const months = [base, addMonths(base, 1)];
 
-  const upcoming = useMemo(
-    () => upcomingEvents(events, today, expanded ? UPCOMING_EXPANDED : UPCOMING),
-    [events, today, expanded],
-  );
-  const upcomingTotal = useMemo(
-    () => upcomingEvents(events, today, Number.MAX_SAFE_INTEGER).length,
-    [events, today],
-  );
+  const all = useMemo(() => upcomingEvents(events, today, Number.MAX_SAFE_INTEGER), [events, today]);
+  const upcoming = expanded ? all : all.slice(0, UPCOMING);
 
   /**
-   * One tap from a day to the thing you meant: an empty day is a new event on
-   * that day, a day with one event is that event, and only a day with a choice
-   * on it shows a list. No screen changes and nothing navigates.
+   * One rule for tapping a day: an empty day is a new event on it, and a day
+   * with anything on it shows what that is.
+   *
+   * The obvious shortcut — open the single event directly when there is only
+   * one — was there and is deliberately gone. It saved a tap and cost a way
+   * out: a day already holding one event had no path to a second, because
+   * every tap on it landed in the existing event's editor. Editing in one tap
+   * is what the upcoming list is for.
    */
-  const pickDay = (date: string) => {
-    const on = eventsOn(events, date);
-    if (on.length === 0) setEditing({ event: blankEvent(date), isNew: true });
-    else if (on.length === 1) setEditing({ event: on[0], isNew: false });
-    else setDay(date);
-  };
+  const pickDay = useCallback((date: string) => {
+    if (eventsOn(events, date).length === 0) {
+      setEditing({ event: blankEvent(date), isNew: true });
+    } else {
+      setDay(date);
+    }
+  }, [events]);
+
+  /**
+   * Where "+ Add an event" starts.
+   *
+   * Today, while today is on screen — which is the common case and the obvious
+   * answer. Once someone has navigated to March, though, an event dated today
+   * would be created outside the calendar they are looking at, so it starts on
+   * the 1st of the first month in view instead.
+   */
+  const addFrom = monthOf(today) === base || monthOf(today) === months[1]
+    ? today : monthFirst(base);
 
   const close = () => { setEditing(null); setDay(null); };
 
@@ -463,18 +490,18 @@ export default function ImportantDates() {
 
             {/* The rail stays compact by default; the rest is one tap away
                 rather than gone. */}
-            {upcomingTotal > UPCOMING && (
+            {all.length > UPCOMING && (
               <button className="btn btn-quiet mt-1" style={{ padding: "3px 8px", fontSize: 11.5 }}
                 onClick={() => setExpanded((v) => !v)}>
                 {expanded
                   ? t.importantDates.showFewer
-                  : t.importantDates.showMore(upcomingTotal - UPCOMING)}
+                  : t.importantDates.showMore(all.length - UPCOMING)}
               </button>
             )}
           </div>
 
           <button className="btn w-full mt-3" style={{ padding: "6px 12px", fontSize: 12.5 }}
-            onClick={() => setEditing({ event: blankEvent(today), isNew: true })}>
+            onClick={() => setEditing({ event: blankEvent(addFrom), isNew: true })}>
             + {t.importantDates.add}
           </button>
         </>
@@ -492,6 +519,7 @@ export default function ImportantDates() {
 
       {editing && (
         <EventEditor
+          key={editing.event.id}
           event={editing.event}
           isNew={editing.isNew}
           onSave={actions.saveImportantDate}

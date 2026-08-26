@@ -54,9 +54,14 @@ backwards and forwards without limit.
   Square ends mean "carries on past this row", round ends mean it really starts
   or ends there. Three lanes are drawn per row; a busier day says "+n" and its
   full list is one tap away.
-- **Editing is one sheet.** An empty day opens a new event, a day with one
-  event opens that event, a day with several lists them. Changing dates updates
-  the row — the id is the identity — so a moved event never becomes two.
+- **Editing is one sheet.** An empty day opens a new event; a day with anything
+  on it shows what that is, and always offers to add another. Changing dates
+  updates the row — the id is the identity — so a moved event never becomes
+  two. One-tap editing lives in the upcoming list.
+- **The calendar is memoised.** Today re-renders on every habit tick, and a
+  month grid formats a date per cell for its label — 84 across the two months,
+  168 bilingual, measured at 3-4ms. A tick now causes no DOM change in the
+  panel at all.
 - **Private.** Never in Community Progress, never in another user's view, never
   read by an admin screen, and not a habit or a schedule. The analytics event
   carries a span in days and two booleans; no title, note or colour.
@@ -307,7 +312,8 @@ below, **deploying the code before the migration is safe** — that was a
 deliberate design requirement after the last time production code arrived
 ahead of its schema:
 
-- `loadState` treats a missing `important_dates` as *unavailable*, not empty.
+- `loadState` treats a schema older than the code — a missing table (42P01) or
+  a missing column (42703) — as *unavailable*, not empty.
   Every other part of the account loads exactly as before, and the panel says
   "Important dates aren't switched on yet…" in the reader's language instead of
   showing an empty calendar. An empty calendar and a missing table must never

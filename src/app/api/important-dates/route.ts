@@ -1,6 +1,7 @@
 import { ApiError, body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
-import { deleteImportantDate, isMissingTable, saveImportantDate } from "@/lib/db/queries";
+import { isSchemaBehind } from "@/lib/db/diagnose";
+import { deleteImportantDate, saveImportantDate } from "@/lib/db/queries";
 import { getDict } from "@/lib/i18n/server";
 import { eventLength } from "@/lib/importantDates";
 import { parseImportantDate } from "@/lib/validate";
@@ -28,8 +29,8 @@ import { parseImportantDate } from "@/lib/validate";
  * for unknowable reasons.
  */
 function orNotDeployed(e: unknown): unknown {
-  if (!isMissingTable(e)) return e;
-  console.error("[api] important_dates is missing — run npm run db:migrate");
+  if (!isSchemaBehind(e)) return e;
+  console.error("[api] important_dates is behind this build — run npm run db:migrate");
   return new ApiError(getDict().importantDates.unavailable, 503);
 }
 

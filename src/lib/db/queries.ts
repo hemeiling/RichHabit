@@ -1,4 +1,5 @@
 import { ApiError } from "@/lib/http";
+import { isSchemaBehind } from "@/lib/db/diagnose";
 import { query, transaction } from "@/lib/db/pool";
 import { canAdd } from "@/lib/priorities";
 import { MAX_PRIORITIES, emptyState, isNumericTracking } from "@/lib/types";
@@ -57,21 +58,6 @@ async function assertRef(q: Q, table: Owned, id: string, userId: string) {
 }
 
 /**
- * True for Postgres 42P01, "undefined_table".
- *
- * It means one thing here: the schema in front of this code is older than the
- * code. On the free plan migrations are applied by hand against the database,
- * so a deploy can land minutes or hours before its migration does — that has
- * happened, and it turned every account into an apparently empty one because a
- * single missing table failed the whole state read.
- *
- * So a *new* module is allowed to be missing. It reports itself unavailable
- * rather than empty, and everything that existed before it still loads.
- */
-export const isMissingTable = (e: unknown) =>
-  (e as { code?: string } | null)?.code === "42P01";
-
-/**
  * A read whose table may not have been created yet.
  *
  * Returns the rows, or nothing plus the module's key for `state.unavailable`.
@@ -85,7 +71,7 @@ async function optionalRead<T>(
   try {
     return { rows: await query<T>(sql, params), missing: null };
   } catch (e) {
-    if (!isMissingTable(e)) throw e;
+    if (!isSchemaBehind(e)) throw e;
     console.warn(`[db] ${module}: table not created yet — run npm run db:migrate`);
     return { rows: [], missing: module };
   }

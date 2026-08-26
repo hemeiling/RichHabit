@@ -8,6 +8,7 @@ import {
   layoutWeek, layoutWeekCapped, overlaps, pastEvents, upcomingEvents, withEnd, withStart,
 } from "../src/lib/importantDates";
 import { parseImportantDate } from "../src/lib/validate";
+import { isSchemaBehind } from "../src/lib/db/diagnose";
 import { LOCALES, dateRangeFor, dict, monthTitleFor } from "../src/lib/i18n";
 import { emptyState } from "../src/lib/types";
 import type { ImportantDate } from "../src/lib/types";
@@ -390,6 +391,29 @@ describe("the request parser", () => {
   it("takes exactly one day short of the cap", () => {
     const long = parseImportantDate({ ...good, startDate: "2026-01-01", endDate: "2026-12-31" });
     expect(eventLength(long)).toBeLessThanOrEqual(MAX_EVENT_DAYS);
+  });
+});
+
+/**
+ * The deployment rule, pinned. The panel is allowed to report itself
+ * unavailable when the schema is older than the code; it is not allowed to
+ * swallow anything else, because everything else means something is wrong.
+ */
+describe("a schema older than the code", () => {
+  it("recognises a table that is not there yet", () => {
+    expect(isSchemaBehind({ code: "42P01" })).toBe(true);
+  });
+
+  it("recognises a column that is not there yet", () => {
+    expect(isSchemaBehind({ code: "42703" })).toBe(true);
+  });
+
+  it("is not an excuse for any other failure", () => {
+    for (const code of ["28P01", "53300", "3D000", "23505", "ECONNREFUSED", "", undefined]) {
+      expect(isSchemaBehind({ code }), String(code)).toBe(false);
+    }
+    expect(isSchemaBehind(null)).toBe(false);
+    expect(isSchemaBehind(new Error("boom"))).toBe(false);
   });
 });
 
