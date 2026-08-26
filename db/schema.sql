@@ -509,6 +509,46 @@ create table spending_records (
 );
 create index spending_user_date_idx on spending_records (user_id, spent_on desc);
 
+-- §26. Important Dates — the small calendar beside Today.
+--
+-- The dates one person considers important: a trip, a customer visit, a
+-- deadline, a family occasion. Deliberately not a diary: whole days only, no
+-- times, no attendees, no recurrence, no reminders.
+--
+-- Two dates and nothing else describe when it happens. Which days it occupies
+-- is derived by comparing them, never stored per day, so a range crossing a
+-- month, a quarter or a year is the same row as any other — the same reasoning
+-- that lets `priorities` roll forward with no rollover job.
+--
+-- Private user content, like the journal and the post-it. Nothing here is read
+-- by Community Progress, by another account, or by an admin screen.
+create table important_dates (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users on delete cascade,
+  -- The user's own words, never translated and never rewritten.
+  title      text not null check (length(title) between 1 and 120),
+  starts_on  date not null,
+  -- Inclusive, and equal to starts_on for a single-day event, so every reader
+  -- handles one shape.
+  ends_on    date not null,
+  note       text check (note is null or length(note) <= 500),
+  -- A palette key ('blue') or a colour the user picked ('#3E76C4'). Keys are
+  -- stored rather than their hexes so the palette can be retuned later without
+  -- rewriting anyone's rows. See src/lib/importantDates.ts.
+  color      text not null default 'blue'
+             check (color ~ '^(#[0-9a-fA-F]{6}|[a-z]{2,12})$'),
+  -- An optional English key, translated on render, as with spending categories.
+  -- Unconstrained on purpose: adding a kind should not need a migration.
+  kind       text not null default 'none',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- Nothing can end before it starts.
+  check (ends_on >= starts_on)
+);
+-- Every read is "this account's, in date order"; a range query against the
+-- displayed months uses the same index.
+create index important_dates_user_range on important_dates (user_id, starts_on, ends_on);
+
 -- --------------------------- updated_at trigger ----------------------------
 create or replace function touch_updated_at() returns trigger
 language plpgsql as $$

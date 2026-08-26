@@ -837,6 +837,80 @@ export const en = {
       "These carried over from earlier days. Finish or remove one to add another.",
   },
   /**
+   * §26. The small calendar in Today's rail. System wording only — an event's
+   * title and note are the user's own words and are never touched.
+   */
+  importantDates: {
+    title: "Important dates",
+    /** The two-month window, and the way back to it. */
+    previousMonths: "Earlier months",
+    nextMonths: "Later months",
+    backToNow: "Today",
+    monthGrid: (month: string) => `${month}, calendar`,
+    dayLabel: (date: string, n: number) =>
+      (n === 0 ? date : `${date}, ${n} ${n === 1 ? "event" : "events"}`),
+    /** More events on one day than the grid can draw. */
+    moreOnDay: (n: number) => `+${n}`,
+
+    empty: "Nothing marked yet. Pick a day to note a trip, a deadline or an occasion.",
+    unavailable:
+      "Important dates aren't switched on yet — this account's database is still being updated. Nothing else is affected.",
+
+    upcoming: "Upcoming",
+    nothingUpcoming: "Nothing coming up.",
+    showMore: (n: number) => `Show ${n} more`,
+    showFewer: "Show fewer",
+    onNow: "On now",
+    todayTag: "Today",
+
+    dayTitle: (date: string) => date,
+    newTitle: "New important date",
+    editTitle: "Important date",
+    add: "Add an event",
+    addOn: (date: string) => `Add an event on ${date}`,
+    open: (title: string) => `Open "${title}"`,
+
+    eventTitle: "What is it?",
+    titlePlaceholder: "Battery Show — Detroit",
+    start: "Starts",
+    end: "Ends",
+    spansDays: "Runs over several days",
+    length: (n: number) => (n === 1 ? "1 day" : `${n} days`),
+    colour: "Colour",
+    colourNamed: (name: string) => `Colour: ${name}`,
+    customColour: "Custom colour",
+    kind: "Type",
+    kinds: {
+      none: "None",
+      travel: "Travel",
+      work: "Work",
+      personal: "Personal",
+      deadline: "Deadline",
+    },
+    colours: {
+      teal: "Teal",
+      blue: "Blue",
+      violet: "Violet",
+      rose: "Rose",
+      amber: "Amber",
+      clay: "Clay",
+      green: "Green",
+      slate: "Slate",
+    },
+    note: "Note",
+    notePlaceholder: "Flight at 07:40, hotel booked",
+    deleteEvent: "Delete",
+    confirmDelete: "Delete this event? This cannot be undone.",
+
+    /** Mirrors `eventProblem` in lib/importantDates — one rule, two languages. */
+    problems: {
+      titleRequired: "Give it a name so you know what it is.",
+      endBeforeStart: "The end date can't be before the start date.",
+      tooLong: "That's longer than a year — worth splitting into separate dates.",
+    },
+  },
+
+  /**
    * The free early-access notice. Shown on the sign-in card so it is read
    * before anyone is inside, and accepted explicitly when creating an account.
    */

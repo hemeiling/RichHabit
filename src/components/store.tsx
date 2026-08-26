@@ -4,7 +4,7 @@ import * as db from "@/lib/db";
 import { isDone, uid } from "@/lib/habits";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, Prefs, Priority,
+  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority,
   SpendingRecord,
   Stack, WeeklyReview,
 } from "@/lib/types";
@@ -39,6 +39,9 @@ interface Actions {
   saveReview: (r: WeeklyReview) => void;
   saveSpending: (r: SpendingRecord) => void;
   deleteSpending: (id: string) => void;
+  /** §26. Create and edit are one call: the id is the event's identity. */
+  saveImportantDate: (e: ImportantDate) => void;
+  deleteImportantDate: (id: string) => void;
   setPrefs: (p: Partial<Prefs>) => void;
 }
 
@@ -360,6 +363,27 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
     deleteSpending: (id) => run(
       (s) => ({ ...s, spending: s.spending.filter((r) => r.id !== id) }),
       () => db.deleteSpending(id),
+    ),
+
+    /*
+     * §26. Editing an existing date replaces it in place rather than appending,
+     * which is what stops "change the dates" from reading as "make another
+     * one". The list is kept in date order locally so the calendar and the
+     * upcoming list do not reshuffle between the save and the next load.
+     */
+    saveImportantDate: (e) => run(
+      (s) => ({
+        ...s,
+        importantDates: s.importantDates.some((x) => x.id === e.id)
+          ? s.importantDates.map((x) => (x.id === e.id ? e : x))
+          : [...s.importantDates, e],
+      }),
+      () => db.saveImportantDate(e),
+    ),
+
+    deleteImportantDate: (id) => run(
+      (s) => ({ ...s, importantDates: s.importantDates.filter((e) => e.id !== id) }),
+      () => db.deleteImportantDate(id),
     ),
 
     setPrefs: (p) => {

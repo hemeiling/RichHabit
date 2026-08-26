@@ -1,6 +1,7 @@
 "use client";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, SpendingRecord,
+  Stack, WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -77,6 +78,13 @@ export const saveReview = (r: WeeklyReview) => post("/api/reviews", r);
 
 export const saveSpending = (r: SpendingRecord) => post("/api/spending", r);
 export const deleteSpending = (id: string) => remove("/api/spending", id);
+
+/**
+ * §26. One call for create and for edit: the id is the identity, so changing an
+ * event's dates updates the row rather than adding a second one.
+ */
+export const saveImportantDate = (e: ImportantDate) => post("/api/important-dates", e);
+export const deleteImportantDate = (id: string) => remove("/api/important-dates", id);
 
 export const savePrefs = (p: Prefs) => post("/api/prefs", p);
 

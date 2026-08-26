@@ -72,6 +72,7 @@ src/
     dates.ts        Date maths. Weeks run Sunday to Saturday.
     types.ts        The client-side shape of everything.
     habits.ts       The engine: scheduling, scoring, streaks, stats. Pure functions, no I/O.
+    importantDates.ts  The Important Dates calendar: ranges, lanes, colours. Pure functions.
     coach.ts        Context builder for the AI coach + data-only suggestions.
     i18n/           en.ts, zh.ts, locale resolution, the LocaleProvider.
     analytics/      config.ts (every threshold), track.ts, queries.ts.
@@ -88,6 +89,7 @@ src/
   components/
     store.tsx       Loads state once, applies changes optimistically, rolls back on failure.
     ui.tsx          Sheet, Field, Segmented, ScoreDial, Heatmap, Spark, Bars.
+    ImportantDates.tsx  Today's right-rail calendar: two months, ranges, upcoming.
     Sidebar.tsx     The navigation, shared by the app and admin. Holds no strings.
     PasswordField.tsx  Password input + show/hide, used by all four password fields.
     AppShell.tsx    Sidebar, header, theme, save indicator, error banner.
@@ -101,14 +103,15 @@ src/
     api/health/     Liveness + a real database round-trip, for Render
     api/state/      The whole account in one read
     api/*/          One route per resource: habits, completions, goals, notes,
-                    awareness, stacks, metrics, reviews, spending, prefs
+                    awareness, stacks, metrics, reviews, spending, prefs,
+                    important-dates
     (app)/more/refine  Behaviours to change, and the backlog they wait in
     api/coach/      The AI coach, against the OpenAI Responses API
   middleware.ts     Cookie presence only; validity is decided against the database
 db/schema.sql
 docker-compose.yml   Local Postgres, schema applied on first boot
 render.yaml          Blueprint: web service + database
-tests/               habits · validate · throttle · coach
+tests/               habits · validate · throttle · coach · important-dates
 ```
 
 ### Two decisions worth knowing about
@@ -891,8 +894,9 @@ Every screen is wired to the database, and there are no buttons that do nothing.
 Today · My habits (create, edit, pause, delete) · seven-day phase checklist · analytics with a
 17-week heatmap, per-habit trends and a sleep/next-day correlation · health metrics with week,
 month and year trends · goals with supporting habits and progress · habit awareness log with
-grading · habit stacking · spending awareness · weekly review, stored per week · light and dark ·
-mobile-first.
+grading · habit stacking · spending awareness · important dates, a two-month calendar of the
+trips, deadlines and occasions you mark yourself · weekly review, stored per week · light and
+dark · mobile-first.
 
 Not built, deliberately: Apple Health. `daily_metrics.source` marks where synced rows would come
 from and metrics write through a single function, so a sync job can fill the same rows later.

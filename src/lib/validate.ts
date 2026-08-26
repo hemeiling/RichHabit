@@ -1,9 +1,14 @@
 import { ApiError, check, isUuid } from "@/lib/http";
+import {
+  DEFAULT_EVENT_COLOR, EVENT_KINDS, MAX_EVENT_DAYS, MAX_EVENT_NOTE, MAX_EVENT_TITLE,
+  eventProblem, isEventColor,
+} from "@/lib/importantDates";
 import { isTemplateWording } from "@/lib/templates";
 import { SPENDING_CATEGORIES } from "@/lib/types";
 import { MAX_PRIORITIES } from "@/lib/types";
 import type {
-  AwarenessEntry, DayMetrics, Goal, Habit, Prefs, SpendingRecord, Stack, WeeklyReview,
+  AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, SpendingRecord, Stack,
+  WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -246,6 +251,38 @@ export function parseSpending(b: any): SpendingRecord {
     planned: b?.planned !== false,
     notes: check.text(b?.notes, "notes", 500),
   };
+}
+
+/**
+ * An important date.
+ *
+ * The rule about which ranges are usable lives in `eventProblem`, so the editor
+ * and this parser cannot drift apart — a form that offered something the server
+ * refused would be the same class of bug as a client-side role check.
+ *
+ * A missing end date means a single-day event rather than an error: that is
+ * what the quick-add path sends, and it is unambiguous.
+ */
+export function parseImportantDate(b: any): ImportantDate {
+  const event: ImportantDate = {
+    id: check.uuid(b?.id, "id"),
+    title: check.text(b?.title, "title", MAX_EVENT_TITLE).trim(),
+    startDate: check.date(b?.startDate, "startDate"),
+    endDate: check.date(b?.endDate ?? b?.startDate, "endDate"),
+    note: check.text(b?.note, "note", MAX_EVENT_NOTE),
+    // An unrecognised colour falls back rather than failing: the event and its
+    // dates are what matter, and a client sending a colour this build does not
+    // know about is a version skew, not an attack.
+    color: isEventColor(b?.color) ? b.color : DEFAULT_EVENT_COLOR,
+    kind: check.oneOf(b?.kind || "none", EVENT_KINDS, "kind"),
+  };
+
+  switch (eventProblem(event)) {
+    case "titleRequired": throw new ApiError("An important date needs a title");
+    case "endBeforeStart": throw new ApiError("The end date cannot be before the start date");
+    case "tooLong": throw new ApiError(`An event can span at most ${MAX_EVENT_DAYS} days`);
+    default: return event;
+  }
 }
 
 export function parsePrefs(b: any): Prefs {

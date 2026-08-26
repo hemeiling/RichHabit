@@ -146,6 +146,33 @@ export interface SpendingRecord {
   notes: string;
 }
 
+/**
+ * §26. A date the user personally considers important: a trip, a customer
+ * visit, a deadline, a family occasion.
+ *
+ * Whole days, never times — this is a calendar you glance at beside today's
+ * habits, not a diary. A single-day event has `startDate === endDate`, so
+ * everything that reads it can treat one shape; which days it occupies is
+ * derived by comparison rather than stored, exactly as with a `Priority`, so a
+ * range crossing a month or a year needs no special case.
+ *
+ * Private user content. It is never shown to another user, never scored, never
+ * part of Community Progress, and never read by an admin screen.
+ */
+export interface ImportantDate {
+  id: string;
+  /** The user's own words. Never translated, never rewritten. */
+  title: string;
+  startDate: string;       // YYYY-MM-DD
+  /** Inclusive. Equal to startDate for a single-day event. */
+  endDate: string;         // YYYY-MM-DD
+  note: string;
+  /** A palette key, or a '#rrggbb' the user picked. See lib/importantDates. */
+  color: string;
+  /** An optional English key, translated on render. "none" when unset. */
+  kind: string;
+}
+
 export interface Prefs {
   theme: "light" | "dark";
   weighted: boolean;
@@ -215,12 +242,28 @@ export interface AppState {
    * Private user content.
    */
   priorities: Priority[];
+  /**
+   * The user's own calendar of important dates. Private, like the journal and
+   * the post-it: nothing here reaches Community Progress or an admin screen.
+   */
+  importantDates: ImportantDate[];
   awareness: AwarenessEntry[];
   stacks: Stack[];
   metrics: Record<string, DayMetrics>;
   reviews: WeeklyReview[];
   spending: SpendingRecord[];
   prefs: Prefs;
+  /**
+   * Modules the database could not answer for, by key.
+   *
+   * The app has already learned once what an empty array means when it is not
+   * true: a table that was missing in production rendered as an account with
+   * nothing in it. So a read that is allowed to survive a missing table (see
+   * `loadState`) must say so, and the screen that would have shown the data
+   * says "not available yet" instead of "you have none". Empty in every normal
+   * case, including a brand-new account.
+   */
+  unavailable: string[];
 }
 
 /** §27. The suggested set. Stored as these keys; translated on render. */
@@ -231,7 +274,7 @@ export const SPENDING_CATEGORIES = [
 
 export const emptyState = (): AppState => ({
   habits: [], goals: [], completions: {}, journal: {}, monthlyReflections: {},
-  priorities: [],
-  awareness: [], stacks: [], metrics: {}, reviews: [], spending: [],
+  priorities: [], importantDates: [],
+  awareness: [], stacks: [], metrics: {}, reviews: [], spending: [], unavailable: [],
   prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en" },
 });

@@ -30,9 +30,45 @@ email-verification implementation — it is finished, tested and merged.**
 
 ## Current state
 
-**Community Progress, password confirmation and usernames** — this milestone.
-Preceded by `0487b54` (email verification), `432c673` (the 50-user cap) and
-`28a1ec2` (the RichHabit rebrand).
+**Important Dates / 重要日程** — this milestone. Preceded by the rolling
+priorities, the Today two-column layout and the admin role work.
+
+### Important Dates — new
+
+A small private calendar in Today's right rail, under Community Progress: the
+trips, customer visits, deadlines and family occasions someone marks
+themselves. Two months by default (this one and the next), navigable
+backwards and forwards without limit.
+
+- **Two dates and nothing else.** `important_dates` stores a title, a start, an
+  inclusive end, a colour, an optional note and an optional kind. Which days an
+  event occupies is derived by comparing the two dates — never stored per day —
+  so a range crossing a month, a quarter or a year is the same row as any
+  other. The same reasoning as the rolling post-it: nothing is ever copied.
+- **The default window is an offset from today, not a stored month**, so it
+  rolls forward on its own. A tab left open overnight re-checks the date when
+  the window regains focus; nothing polls.
+- **A range is one element.** Each week row lays its events into lanes
+  (`layoutWeek`), so a five-day trip is a single bar spanning five columns and
+  keeps its line across the week — not five marks that happen to be adjacent.
+  Square ends mean "carries on past this row", round ends mean it really starts
+  or ends there. Three lanes are drawn per row; a busier day says "+n" and its
+  full list is one tap away.
+- **Editing is one sheet.** An empty day opens a new event, a day with one
+  event opens that event, a day with several lists them. Changing dates updates
+  the row — the id is the identity — so a moved event never becomes two.
+- **Private.** Never in Community Progress, never in another user's view, never
+  read by an admin screen, and not a habit or a schedule. The analytics event
+  carries a span in days and two booleans; no title, note or colour.
+- **Deployable before its migration.** See below — this is the part worth not
+  undoing.
+
+
+### Earlier milestones
+
+**Community Progress, password confirmation and usernames.** Preceded by
+`0487b54` (email verification), `432c673` (the 50-user cap) and `28a1ec2` (the
+RichHabit rebrand).
 
 ### Community Progress / 社区进步 — new
 
@@ -263,6 +299,35 @@ Resend account was created with — useful for Step 5.
 ---
 
 ## Pending Neon migration
+
+### Important Dates — run when convenient, NOT a release blocker
+
+The commit adds an `important_dates` table. Unlike the priorities migration
+below, **deploying the code before the migration is safe** — that was a
+deliberate design requirement after the last time production code arrived
+ahead of its schema:
+
+- `loadState` treats a missing `important_dates` as *unavailable*, not empty.
+  Every other part of the account loads exactly as before, and the panel says
+  "Important dates aren't switched on yet…" in the reader's language instead of
+  showing an empty calendar. An empty calendar and a missing table must never
+  look the same.
+- A write answers **503** with the same sentence, not a 500.
+- Nothing else queries the table.
+
+Verified by dropping the table against a running instance: Today rendered all
+ten habits, the panel explained itself, a save came back 503, `db:migrate`
+recreated the table, and the next save succeeded with no restart.
+
+To switch it on:
+
+```
+RH_ALLOW_REMOTE=1 DATABASE_URL='<Neon connection string>' npm run db:migrate
+```
+
+Purely additive — one `create table` and one index, no backfill, no existing
+row read or written. Idempotent: running it twice does nothing the second time.
+
 
 ### Rolling priorities — required before or with the next deploy
 

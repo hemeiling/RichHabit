@@ -75,6 +75,15 @@ export const FEATURES = {
   // How many priorities someone set and how many they finished — never a word
   // of what they were.
   priorities: { label: "Daily priorities", events: ["priorities_set"] },
+  /*
+   * §26. How many people keep a calendar of important dates, and how often
+   * they touch it. The events carry a span in days and two booleans — never a
+   * title, a note or a colour.
+   */
+  importantDates: {
+    label: "Important dates",
+    events: ["important_date_saved", "important_date_deleted"],
+  },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

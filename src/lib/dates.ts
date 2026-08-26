@@ -40,3 +40,48 @@ export const instantDate = (iso: string, tag = "en-US") =>
   new Date(iso).toLocaleDateString(tag, { year: "numeric", month: "long", day: "numeric" });
 export const rangeBack = (endISO: string, n: number) =>
   Array.from({ length: n }, (_, i) => addDays(endISO, -(n - 1 - i)));
+
+/* ------------------------------- months ------------------------------------
+ * Calendar months as 'YYYY-MM' strings, for the same reason days are
+ * 'YYYY-MM-DD': they compare, sort and key correctly as plain text, and no
+ * Date object crosses a timezone boundary on the way.
+ */
+export const monthOf = (s: string) => s.slice(0, 7);
+export const thisMonth = () => monthOf(todayISO());
+/** First day of a month, as a date. */
+export const monthFirst = (month: string) => `${month}-01`;
+/** `n` months on (or back), clamped by the calendar rather than by 30-day maths. */
+export const addMonths = (month: string, n: number) => {
+  const [y, m] = month.split("-").map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${String(Math.floor(total / 12)).padStart(4, "0")}-${pad((total % 12) + 1)}`;
+};
+/** How many months from `a` to `b`; negative when `b` is earlier. */
+export const monthsBetween = (a: string, b: string) => {
+  const [ay, am] = a.split("-").map(Number);
+  const [by, bm] = b.split("-").map(Number);
+  return (by * 12 + bm) - (ay * 12 + am);
+};
+export const daysInMonth = (month: string) => {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m, 0).getDate();   // day 0 of the next month
+};
+
+/**
+ * A month as whole weeks, Sunday to Saturday — the same week the rest of the
+ * app uses (`weekStart`). Always begins on or before the 1st and ends on or
+ * after the last day, so the grid is rectangular and days from the neighbouring
+ * months are real dates rather than blanks: an event that runs from the 29th of
+ * one month into the 2nd of the next is then drawable in both grids.
+ */
+export const monthGrid = (month: string): string[][] => {
+  const first = monthFirst(month);
+  const start = addDays(first, -dow(first));
+  const last = `${month}-${pad(daysInMonth(month))}`;
+  const end = addDays(last, 6 - dow(last));
+  const weeks: string[][] = [];
+  for (let d = start; d <= end; d = addDays(d, 7)) {
+    weeks.push(Array.from({ length: 7 }, (_, i) => addDays(d, i)));
+  }
+  return weeks;
+};

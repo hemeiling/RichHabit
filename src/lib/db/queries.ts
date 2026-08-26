@@ -3,8 +3,8 @@ import { query, transaction } from "@/lib/db/pool";
 import { canAdd } from "@/lib/priorities";
 import { MAX_PRIORITIES, emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, Prefs, Priority, SpendingRecord, Stack,
-  WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority,
+  SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -33,7 +33,7 @@ type Q = typeof query;
  * `null` owner means the row does not exist yet, which is a create and fine.
  */
 type Owned = "habits" | "goals" | "habit_stacks" | "habit_awareness_entries"
-  | "priorities";
+  | "priorities" | "important_dates";
 
 async function assertOwns(q: Q, table: Owned, id: string, userId: string) {
   const rows = await q<{ user_id: string }>(
@@ -56,11 +56,46 @@ async function assertRef(q: Q, table: Owned, id: string, userId: string) {
   if (!(await assertOwns(q, table, id, userId))) throw new ApiError("Not found", 404);
 }
 
+/**
+ * True for Postgres 42P01, "undefined_table".
+ *
+ * It means one thing here: the schema in front of this code is older than the
+ * code. On the free plan migrations are applied by hand against the database,
+ * so a deploy can land minutes or hours before its migration does — that has
+ * happened, and it turned every account into an apparently empty one because a
+ * single missing table failed the whole state read.
+ *
+ * So a *new* module is allowed to be missing. It reports itself unavailable
+ * rather than empty, and everything that existed before it still loads.
+ */
+export const isMissingTable = (e: unknown) =>
+  (e as { code?: string } | null)?.code === "42P01";
+
+/**
+ * A read whose table may not have been created yet.
+ *
+ * Returns the rows, or nothing plus the module's key for `state.unavailable`.
+ * Deliberately narrow: only a missing table is survivable. A syntax error, a
+ * permissions problem or a dead connection still throws, because those are not
+ * "this feature is not deployed yet", they are "something is wrong".
+ */
+async function optionalRead<T>(
+  module: string, sql: string, params: unknown[],
+): Promise<{ rows: T[]; missing: string | null }> {
+  try {
+    return { rows: await query<T>(sql, params), missing: null };
+  } catch (e) {
+    if (!isMissingTable(e)) throw e;
+    console.warn(`[db] ${module}: table not created yet — run npm run db:migrate`);
+    return { rows: [], missing: module };
+  }
+}
+
 // ------------------------------- read --------------------------------------
 
 export async function loadState(userId: string): Promise<AppState> {
   const [habits, schedules, goalLinks, goals, completions, notes, reflections, priorities,
-    awareness, stacks, metrics, reviews, spending, prefs] =
+    importantDates, awareness, stacks, metrics, reviews, spending, prefs] =
     await Promise.all([
       query("select * from habits where user_id = $1 order by sort_order, created_at", [userId]),
       query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
@@ -71,6 +106,16 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select month, body from monthly_reflections where user_id = $1", [userId]),
       query(`select id, body, created_on, completed_on from priorities
               where user_id = $1 order by sort_order, created_on, created_at`, [userId]),
+      /*
+       * §26. Bounded like spending, and for the same reason: the panel shows
+       * the months around now, and an account that has been kept for years
+       * should not send a decade of dates on every load. Newest first, so the
+       * window is always the useful end — and the limit is far above any
+       * plausible personal calendar, so in practice it drops nothing.
+       */
+      optionalRead<any>("importantDates",
+        `select * from important_dates where user_id = $1
+          order by starts_on desc, ends_on desc limit 1000`, [userId]),
       query("select * from habit_awareness_entries where user_id = $1", [userId]),
       query("select * from habit_stacks where user_id = $1", [userId]),
       query("select * from daily_metrics where user_id = $1", [userId]),
@@ -176,6 +221,22 @@ export async function loadState(userId: string): Promise<AppState> {
     text: p.body,
     createdOn: p.created_on,
     completedOn: p.completed_on ?? null,
+  }));
+
+  /*
+   * §26. Private, and unavailable is not the same as empty — see AppState. The
+   * ordering the app reads them in is `compareEvents`; this only has to be
+   * deterministic.
+   */
+  if (importantDates.missing) state.unavailable.push(importantDates.missing);
+  state.importantDates = importantDates.rows.map((d: any): ImportantDate => ({
+    id: d.id,
+    title: d.title,
+    startDate: d.starts_on,
+    endDate: d.ends_on,
+    note: d.note ?? "",
+    color: d.color ?? "blue",
+    kind: d.kind ?? "none",
   }));
 
   state.awareness = awareness.map((a: any): AwarenessEntry => ({
@@ -541,6 +602,42 @@ export async function saveSpending(userId: string, r: SpendingRecord) {
 
 export async function deleteSpending(userId: string, id: string) {
   await query("delete from spending_records where id = $1 and user_id = $2", [id, userId]);
+}
+
+/**
+ * §26. An important date, created or edited.
+ *
+ * One upsert, so changing an event's dates moves the event rather than leaving
+ * a second copy behind — the id the client generated is the identity, and it
+ * does not change when the range does. Ownership is established before the
+ * write, like every other upsert here: the `where` in the `do update` branch
+ * protects an existing row, and `assertOwns` protects against inserting under
+ * an id that belongs to somebody else.
+ */
+export async function saveImportantDate(userId: string, e: ImportantDate) {
+  await assertOwns(query, "important_dates", e.id, userId);
+  await query(
+    `insert into important_dates (id, user_id, title, starts_on, ends_on, note, color, kind)
+     values ($1,$2,$3,$4::date,$5::date,$6,$7,$8)
+     on conflict (id) do update set
+       title = excluded.title, starts_on = excluded.starts_on, ends_on = excluded.ends_on,
+       note = excluded.note, color = excluded.color, kind = excluded.kind,
+       updated_at = now()
+     where important_dates.user_id = $2`,
+    [e.id, userId, e.title, e.startDate, e.endDate, e.note || null, e.color, e.kind],
+  );
+}
+
+/**
+ * A hard delete, like a priority and unlike a habit.
+ *
+ * Nothing else in the app reads these rows — they are not scored, not
+ * correlated and not part of any history — so there is no record to protect by
+ * keeping one. Removing a date the user says is not important means removing
+ * it.
+ */
+export async function deleteImportantDate(userId: string, id: string) {
+  await query("delete from important_dates where id = $1 and user_id = $2", [id, userId]);
 }
 
 export async function savePrefs(userId: string, p: Prefs) {

@@ -152,6 +152,14 @@ body {
  * follows the main content down the page in document order. Nothing is
  * hidden, nothing repositions with absolute coordinates, and the phone layout
  * is the one you get by not asking for the desktop one.
+ *
+ * The rail used to be sticky, with its own scrollbar once it outgrew the
+ * viewport. That worked while it held one short panel. With the calendar under
+ * Community Progress it is around 1,250px — taller than a laptop window — and
+ * pinning it put the upcoming events and "Add an event" permanently below the
+ * fold, reachable only by scrolling *inside* the column. One scrollbar and a
+ * column that scrolls with the page is the better trade: everything in the
+ * rail can be reached the ordinary way.
  */
 .with-rail { display: block; }
 .with-rail > .rail { margin-top: 16px; }
@@ -165,23 +173,7 @@ body {
     gap: 24px;
     align-items: start;
   }
-  .with-rail > .rail {
-    margin-top: 0;
-    /* Follows you down a long habit list rather than scrolling away. */
-    position: sticky;
-    top: 16px;
-    /*
-     * A sticky element taller than the viewport can never show its own
-     * bottom: it pins at the top and the last thing in it — here, the way
-     * through to the full board — sits permanently below the fold. The panel
-     * measures ~370px and fits a 620px window, so this is not doing anything
-     * today; it earns its place at high browser zoom, where the effective
-     * viewport is a fraction of the real one and that is exactly the reader
-     * least able to work around a stranded control.
-     */
-    max-height: calc(100vh - 32px);
-    overflow-y: auto;
-  }
+  .with-rail > .rail { margin-top: 0; }
 }
 
 /* --------------------------- reordering a habit ---------------------------- */
@@ -204,26 +196,7 @@ body {
 .habit-row[data-over="true"] { box-shadow: inset 0 2px 0 -1px var(--accent); }
 
 .sheet-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
-@media (min-width: 640px) { /* --------------------------- reordering a habit ---------------------------- */
-/*
- * The handle is not part of the resting state of a row. Today is a checklist
- * first, and a permanent grip beside every habit is exactly the clutter this
- * screen is supposed to avoid — so it appears on hover, and only where there is
- * a pointer to hover with. On a touch screen reordering lives in the ⋯ menu,
- * which is also the keyboard path.
- */
-.drag-handle { opacity: 0; transition: opacity .12s ease; width: 10px; }
-@media (hover: hover) and (pointer: fine) {
-  .habit-row:hover .drag-handle,
-  .habit-row:focus-within .drag-handle { opacity: .55; }
-}
-@media not all and (hover: hover) {
-  .drag-handle { display: none; }
-}
-.habit-row[data-dragging="true"] { opacity: .4; }
-.habit-row[data-over="true"] { box-shadow: inset 0 2px 0 -1px var(--accent); }
-
-.sheet-wrap { align-items: center; } }
+@media (min-width: 640px) { .sheet-wrap { align-items: center; } }
 .scrim { position: absolute; inset: 0; background: rgba(10,10,12,.45); backdrop-filter: blur(2px); }
 .sheet {
   position: relative; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto;
@@ -231,6 +204,91 @@ body {
   border-radius: 24px 24px 0 0; padding: 20px;
 }
 @media (min-width: 640px) { .sheet { border-radius: 24px; } }
+
+/* --------------------------- important dates ------------------------------- */
+/*
+ * §26. A month is two grids sharing one set of columns: the day numbers, and
+ * the event bars underneath them. They are separate rows rather than one cell
+ * per day because a multi-day event has to be a single element spanning several
+ * columns — that is what makes five days read as one trip instead of five
+ * marks, and it is what keeps an event on the same line all week.
+ *
+ * One month per column in the 300px rail, two side by side wherever the panel
+ * is wider — which is what a phone or a tablet gives it once the rail has
+ * collapsed into the page. `auto-fit` rather than a breakpoint, so the panel
+ * fits its container and not a guess about the device.
+ */
+.cal-months { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 14px; }
+.cal-caption {
+  font-size: 12px; font-weight: 600; letter-spacing: -0.01em;
+  text-align: center; padding-bottom: 4px;
+}
+.cal-row { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-head {
+  font-size: 9.5px; text-align: center; color: var(--faint);
+  padding-bottom: 2px; letter-spacing: .04em;
+}
+.cal-day {
+  position: relative;
+  min-height: 26px; padding: 3px 0 2px;
+  border: 1px solid transparent; border-radius: 8px; background: none;
+  font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink);
+  cursor: pointer; transition: background .12s ease;
+}
+.cal-day:hover { background: var(--raise); }
+/* Days borrowed from the neighbouring months to square off the grid. Present,
+   clickable and clearly not this month. */
+.cal-day[data-outside] { color: var(--faint); }
+.cal-day[data-today] {
+  background: var(--accent-soft); border-color: var(--accent-soft);
+  color: var(--accent); font-weight: 600;
+}
+.cal-more {
+  position: absolute; right: 2px; top: 1px;
+  font-size: 8.5px; line-height: 1; color: var(--faint);
+}
+/* The gap below is larger than the one above, so a bar reads as belonging to
+   the row of numbers it sits under rather than the one beneath it. */
+.cal-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px 0; margin: 1px 0 5px; }
+/* A whisker of inset on each end. A range is one element, so it stays
+   continuous across its own days; two different events in neighbouring columns
+   get a visible gap instead of reading as one long bar. */
+.cal-bar { display: block; height: 5px; min-width: 4px; margin: 0 1.5px; }
+
+/* A colour is a colour: the swatch shows the value, and the ring shows the
+   choice, so neither depends on the theme being light or dark. */
+.swatch {
+  width: 22px; height: 22px; border-radius: 999px; border: none; padding: 0;
+  cursor: pointer; box-shadow: 0 0 0 1px var(--line) inset;
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.swatch:hover { transform: scale(1.08); }
+.swatch[data-on] { box-shadow: 0 0 0 2px var(--surface) inset, 0 0 0 2px var(--ink); }
+.swatch-custom {
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  background: conic-gradient(#C4577F, #C08A2E, #5A9142, #2F8F7A, #3E76C4, #7A62C9, #C4577F);
+}
+/* The native picker is the control; the circle above is what you see. */
+.swatch-custom input[type="color"] {
+  opacity: 0; width: 100%; height: 100%; border: none; padding: 0; cursor: pointer;
+}
+
+.event-row {
+  display: flex; align-items: flex-start; gap: 8px; width: 100%;
+  padding: 6px 2px; background: none; border: none; text-align: left; cursor: pointer;
+  border-radius: 8px; color: inherit;
+}
+.event-row:hover { background: var(--raise); }
+.event-dot { width: 8px; height: 8px; border-radius: 3px; flex: none; margin-top: 5px; }
+/*
+ * Date and title on one line where there is room, stacked where there is not.
+ * `flex-wrap` rather than a breakpoint: the same row sits in a 300px rail and
+ * in a full-width panel on a tablet, and it is the panel's width that decides,
+ * not the device's.
+ */
+.event-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 9px; min-width: 0; }
+.event-when { flex: none; }
+.event-what { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .divide > * + * { border-top: 1px solid var(--line-soft); }
 input[type="range"] { accent-color: var(--accent); }

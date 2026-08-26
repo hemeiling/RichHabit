@@ -322,6 +322,41 @@ try {
     changed++;
   }
 
+  /*
+   * ---- 4b. important dates -------------------------------------------------
+   *
+   * §26. The small calendar on Today. Create-only: there is nothing to
+   * convert, nothing to backfill and nothing existing to rewrite.
+   *
+   * The application is written so this table may legitimately be absent —
+   * `loadState` reports the module as unavailable instead of failing the whole
+   * account read, and a write answers 503 with a sentence saying so. That is
+   * deliberate: on the free plan the schema is applied by hand, so code can
+   * reach production before the migration does, and the last time a table was
+   * missing in production every account rendered as empty.
+   */
+  if (!(await tableExists("important_dates"))) {
+    await client.query(`
+      create table important_dates (
+        id         uuid primary key default gen_random_uuid(),
+        user_id    uuid not null references users on delete cascade,
+        title      text not null check (length(title) between 1 and 120),
+        starts_on  date not null,
+        ends_on    date not null,
+        note       text check (note is null or length(note) <= 500),
+        color      text not null default 'blue'
+                   check (color ~ '^(#[0-9a-fA-F]{6}|[a-z]{2,12})$'),
+        kind       text not null default 'none',
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        check (ends_on >= starts_on)
+      )`);
+    await client.query(
+      "create index important_dates_user_range on important_dates (user_id, starts_on, ends_on)");
+    console.log("  created important_dates");
+    changed++;
+  }
+
   // ---- 5. admin account management ------------------------------------------
   for (const [table, ddl, extra] of [
     ["user_invites", `

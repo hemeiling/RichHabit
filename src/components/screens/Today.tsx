@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import AddHabit from "@/components/AddHabit";
 import CommunityPanel from "@/components/CommunityPanel";
+import ImportantDates from "@/components/ImportantDates";
 import GratitudeJournal from "@/components/GratitudeJournal";
 import Priorities from "@/components/Priorities";
 import HabitEditor from "@/components/HabitEditor";
@@ -454,8 +455,16 @@ export default function Today() {
       <GratitudeJournal date={date} />
       </div>
 
-      <aside className="rail">
+      {/*
+        * The rail, in the order you look at it: how the group is doing, then
+        * what is coming up. Below 1280px it collapses into the page under the
+        * day's habits — see `.with-rail` — so on a phone the calendar sits at
+        * the bottom, where a glance at next month belongs relative to today's
+        * checklist.
+        */}
+      <aside className="rail flex flex-col gap-4">
         <CommunityPanel />
+        <ImportantDates />
       </aside>
     </div>
   );
