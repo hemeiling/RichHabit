@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   addMonths, daysInMonth, monthGrid, monthOf, monthsBetween,
 } from "../src/lib/dates";
+import fs from "node:fs";
 import {
-  DEFAULT_EVENT_COLOR, EVENT_COLORS, MAX_EVENT_DAYS,
+  DEFAULT_EVENT_COLOR, EVENT_COLORS, MAX_EVENT_DAYS, MAX_EVENT_NOTE,
   colorHex, compareEvents, covers, eventLength, eventProblem, eventsOn, isEventColor,
   layoutWeek, layoutWeekCapped, overlaps, pastEvents, upcomingEvents, withEnd, withStart,
 } from "../src/lib/importantDates";
 import { parseImportantDate } from "../src/lib/validate";
-import { isSchemaBehind } from "../src/lib/db/diagnose";
+import { isSchemaBehind, violatedConstraint } from "../src/lib/db/diagnose";
 import { LOCALES, dateRangeFor, dict, monthTitleFor } from "../src/lib/i18n";
 import { emptyState } from "../src/lib/types";
 import type { ImportantDate } from "../src/lib/types";
@@ -385,7 +386,7 @@ describe("the request parser", () => {
 
   it("bounds the title and the note", () => {
     expect(() => parseImportantDate({ ...good, title: "x".repeat(200) })).toThrow(/too long/i);
-    expect(() => parseImportantDate({ ...good, note: "x".repeat(600) })).toThrow(/too long/i);
+    expect(() => parseImportantDate({ ...good, note: "x".repeat(MAX_EVENT_NOTE + 1) })).toThrow(/too long/i);
   });
 
   it("takes exactly one day short of the cap", () => {
@@ -414,6 +415,85 @@ describe("a schema older than the code", () => {
     }
     expect(isSchemaBehind(null)).toBe(false);
     expect(isSchemaBehind(new Error("boom"))).toBe(false);
+  });
+});
+
+/**
+ * The note is where an event is actually written down: flights, an address, an
+ * agenda somebody emailed over. What matters is that it is long enough to hold
+ * that, that nothing is silently cut, and that the browser, the parser and the
+ * database all believe the same number.
+ */
+describe("the note", () => {
+  const good = {
+    id: ID, title: "Battery Show", startDate: "2026-09-09", endDate: "2026-09-11",
+    color: "teal", kind: "travel",
+  };
+
+  it("holds long-form text, not a sentence", () => {
+    expect(MAX_EVENT_NOTE).toBeGreaterThanOrEqual(5000);
+  });
+
+  it("accepts a note right up to the limit", () => {
+    const note = "x".repeat(MAX_EVENT_NOTE);
+    expect(parseImportantDate({ ...good, note }).note).toHaveLength(MAX_EVENT_NOTE);
+  });
+
+  it("never truncates what it accepts", () => {
+    const note = ["Flight AA123 07:40", "", "Hotel: 41 Wabash Ave", "  indented line"].join("\n");
+    expect(parseImportantDate({ ...good, note }).note).toBe(note);
+  });
+
+  it("keeps line breaks, blank lines and leading spaces exactly as pasted", () => {
+    const pasted = "Day 1\n\n  09:00 keynote\n  12:30 lunch\r\nDay 2\n\tbooth setup";
+    expect(parseImportantDate({ ...good, note: pasted }).note).toBe(pasted);
+  });
+
+  it("refuses rather than trimming when it is over", () => {
+    expect(() => parseImportantDate({ ...good, note: "x".repeat(MAX_EVENT_NOTE + 1) }))
+      .toThrow(/too long/i);
+  });
+
+  it("reports an over-long note as a problem the editor can show", () => {
+    const base = { title: "x", startDate: "2026-09-09", endDate: "2026-09-09" };
+    expect(eventProblem({ ...base, note: "x".repeat(MAX_EVENT_NOTE) })).toBeNull();
+    expect(eventProblem({ ...base, note: "x".repeat(MAX_EVENT_NOTE + 1) })).toBe("noteTooLong");
+    expect(eventProblem(base)).toBeNull();          // absent note is fine
+  });
+
+  it("has a translation for that problem in every language", () => {
+    for (const locale of LOCALES) {
+      expect(dict(locale).importantDates.problems.noteTooLong).toBeTruthy();
+      expect(dict(locale).importantDates.noteNotWidened).toBeTruthy();
+      expect(dict(locale).importantDates.noteLength(9500, MAX_EVENT_NOTE)).toContain("9,500");
+    }
+  });
+
+  /*
+   * The one that would actually have bitten: a limit raised in TypeScript and
+   * left at 500 in SQL is a save that passes validation and then fails in the
+   * database. Both files are read here so they cannot drift apart.
+   */
+  it("agrees with the database constraint, in the schema and in the migration", () => {
+    const schema = fs.readFileSync("db/schema.sql", "utf8");
+    const migration = fs.readFileSync("scripts/migrate.mjs", "utf8");
+    /* Every expression of the limit, not just the first: the migration states
+       it twice — once creating the table and once widening it — and a fresh
+       database taking the old number would be a silent inconsistency. */
+    const limits = (text: string) =>
+      [...text.matchAll(/length\(note\)\s*<=\s*(\d+)/g)].map((m) => Number(m[1]));
+    expect(limits(schema), "db/schema.sql must constrain important_dates.note").not.toEqual([]);
+    expect(limits(schema).every((n) => n === MAX_EVENT_NOTE)).toBe(true);
+    expect(migration).toContain("important_dates_note_check");
+    expect(limits(migration), "scripts/migrate.mjs").not.toEqual([]);
+    expect(limits(migration).every((n) => n === MAX_EVENT_NOTE)).toBe(true);
+  });
+
+  it("recognises the database refusing a note that is too long for it", () => {
+    expect(violatedConstraint({ code: "23514", constraint: "important_dates_note_check" }))
+      .toBe("important_dates_note_check");
+    expect(violatedConstraint({ code: "23505", constraint: "users_pkey" })).toBeNull();
+    expect(violatedConstraint(new Error("nope"))).toBeNull();
   });
 });
 

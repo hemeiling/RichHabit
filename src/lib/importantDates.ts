@@ -73,7 +73,20 @@ export type EventKind = (typeof EVENT_KINDS)[number];
 /* ------------------------------- limits ----------------------------------- */
 
 export const MAX_EVENT_TITLE = 120;
-export const MAX_EVENT_NOTE = 500;
+/**
+ * Long-form on purpose.
+ *
+ * A note started life as one line about a trip and is in practice where the
+ * trip itself gets written down: the flight times, the hotel address, the
+ * agenda, what to bring, the instructions somebody emailed. 500 characters
+ * turned every one of those into a decision about what to leave out.
+ *
+ * 10,000 is the same ceiling the journal reflection, the monthly reflection and
+ * every weekly-review field already use, so the app has one answer to "how much
+ * text may a person write" rather than five. Line breaks are kept exactly as
+ * typed or pasted; nothing is trimmed but the ends.
+ */
+export const MAX_EVENT_NOTE = 10_000;
 /**
  * A little over a year. Not an opinion about how long something may last: a
  * range paints every day it covers, and a ten-year "event" would flood every
@@ -217,14 +230,23 @@ export function layoutWeekCapped(
  * the request parser so the form can never offer something the server refuses.
  * Returns a key the dictionaries translate, or null when the event is fine.
  */
-export type EventProblem = "titleRequired" | "endBeforeStart" | "tooLong";
+export type EventProblem = "titleRequired" | "endBeforeStart" | "tooLong" | "noteTooLong";
 
 export function eventProblem(e: {
-  title: string; startDate: string; endDate: string;
+  title: string; startDate: string; endDate: string; note?: string;
 }): EventProblem | null {
   if (!e.title.trim()) return "titleRequired";
   if (e.endDate < e.startDate) return "endBeforeStart";
   if (daysBetween(e.startDate, e.endDate) + 1 > MAX_EVENT_DAYS) return "tooLong";
+  /*
+   * Checked here rather than capped by the textarea's `maxLength`. A cap looks
+   * tidier and is worse: pasting a 12,000-character agenda into a capped box
+   * silently keeps the first 10,000 and drops the rest, and the person only
+   * finds out later that the return flight is missing. Telling them the note is
+   * too long leaves every character on screen and the decision about what to
+   * cut with the person who knows which part matters.
+   */
+  if ((e.note ?? "").length > MAX_EVENT_NOTE) return "noteTooLong";
   return null;
 }
 

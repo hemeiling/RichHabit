@@ -62,6 +62,15 @@ backwards and forwards without limit.
   month grid formats a date per cell for its label — 84 across the two months,
   168 bilingual, measured at 3-4ms. A tick now causes no DOM change in the
   panel at all.
+- **The note holds 10,000 characters**, the same ceiling the journal and the
+  weekly review use, because it is where a trip actually gets written down —
+  flights, an address, the agenda someone emailed. Stored as plain text with
+  line breaks exactly as pasted. The field grows as it is typed and then scrolls
+  inside itself, and the sheet's action row is pinned so Save cannot end up
+  below the fold — that last part applies to every sheet in the app.
+- **Nothing is ever silently truncated.** The textarea has no `maxLength`: a
+  paste that is too long stays on screen and the editor says so, rather than
+  keeping the first 10,000 characters and dropping the return flight.
 - **Private.** Never in Community Progress, never in another user's view, never
   read by an admin screen, and not a habit or a schedule. The analytics event
   carries a span in days and two booleans; no title, note or colour.
@@ -333,6 +342,26 @@ RH_ALLOW_REMOTE=1 DATABASE_URL='<Neon connection string>' npm run db:migrate
 
 Purely additive — one `create table` and one index, no backfill, no existing
 row read or written. Idempotent: running it twice does nothing the second time.
+
+**Applied to production on 2026-08-26.** Verified by census before and after:
+27 tables where there were 26, every row count unchanged, md5 digests over all
+habits and all completions identical, all 11 accounts present with their
+history untouched.
+
+### Longer notes — run BEFORE deploying the commit that raises the limit
+
+The same `npm run db:migrate` also widens `important_dates.note` from 500 to
+10,000 characters. Widening a CHECK is as safe as a schema change gets: every
+existing row already satisfies the looser rule, nothing is scanned or
+rewritten, and code that still caps itself at 500 keeps working against it. So
+it can be run at any time, and there is no reason to wait.
+
+Order matters in one direction only: deploying the *code* first, before this
+runs, leaves a window where a note over 500 characters is refused by the
+database. The app handles that window honestly rather than with a 500 — the
+route recognises `important_dates_note_check` and answers 503 with "Longer
+notes aren't switched on yet… nothing was saved and nothing was cut" — but
+running the migration first avoids the window entirely.
 
 
 ### Rolling priorities — required before or with the next deploy

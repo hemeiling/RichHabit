@@ -1,7 +1,7 @@
 "use client";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useHabits } from "@/components/store";
-import { Field, Sheet } from "@/components/ui";
+import { Field, GrowingTextarea, Sheet } from "@/components/ui";
 import { uid } from "@/lib/habits";
 import { addMonths, monthFirst, monthGrid, monthOf, todayISO } from "@/lib/dates";
 import { dateRangeFor, monthTitleFor, prettyDateFor } from "@/lib/i18n";
@@ -302,13 +302,30 @@ function EventEditor({
         </div>
       </Field>
 
+      {/*
+        * The note is where the event actually gets written down — flights, an
+        * address, an agenda, whatever was emailed over. It grows as it is
+        * typed or pasted and then scrolls inside itself, so the dialog stays a
+        * dialog. No `maxLength`: see `eventProblem`.
+        */}
       <Field label={`${t.importantDates.note} · ${t.common.optional}`}>
-        <textarea
-          className="textarea" rows={2} maxLength={MAX_EVENT_NOTE}
+        <GrowingTextarea
+          rows={3}
+          maxHeight="38vh"
           placeholder={t.importantDates.notePlaceholder}
           value={draft.note}
-          onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+          onChange={(note) => setDraft({ ...draft, note })}
         />
+        {/* Silent until it is nearly relevant. A counter under every note would
+            be pressure to be brief, which is the opposite of the point. */}
+        {draft.note.length > MAX_EVENT_NOTE * 0.9 && (
+          <div className="faint num mt-1" style={{
+            fontSize: 12,
+            color: draft.note.length > MAX_EVENT_NOTE ? "var(--warn)" : undefined,
+          }}>
+            {t.importantDates.noteLength(draft.note.length, MAX_EVENT_NOTE)}
+          </div>
+        )}
       </Field>
 
       {/* Shown once saving has been attempted, so an unfinished form is not
@@ -352,6 +369,8 @@ function DaySheet({
               <span className="faint num block" style={{ fontSize: 12 }}>
                 {dateRangeFor(e.startDate, e.endDate, locale)}
                 {kindLabel(e.kind, t) && ` · ${kindLabel(e.kind, t)}`}
+                {/* Which of the day's events is the one with the details in it. */}
+                {e.note.trim() && ` · ${t.importantDates.hasNote}`}
               </span>
             </span>
           </button>

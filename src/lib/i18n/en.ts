@@ -855,6 +855,9 @@ export const en = {
     empty: "Nothing marked yet. Pick a day to note a trip, a deadline or an occasion.",
     unavailable:
       "Important dates aren't switched on yet — this account's database is still being updated. Nothing else is affected.",
+    /** The window between deploying longer notes and migrating the column. */
+    noteNotWidened:
+      "Longer notes aren't switched on yet — the database update hasn't been applied. Nothing was saved and nothing was cut; shorten the note for now, or try again shortly.",
 
     upcoming: "Upcoming",
     nothingUpcoming: "Nothing coming up.",
@@ -898,7 +901,11 @@ export const en = {
       slate: "Slate",
     },
     note: "Note",
-    notePlaceholder: "Flight at 07:40, hotel booked",
+    notePlaceholder: "Flight at 07:40, hotel booked. Paste an agenda, an address, anything you'll want on the day.",
+    /** Only shown as the limit comes into view. */
+    noteLength: (n: number, max: number) => `${n.toLocaleString()} / ${max.toLocaleString()}`,
+    /** In a list, so you can tell which event has the details in it. */
+    hasNote: "Note",
     deleteEvent: "Delete",
     confirmDelete: "Delete this event? This cannot be undone.",
 
@@ -907,6 +914,7 @@ export const en = {
       titleRequired: "Give it a name so you know what it is.",
       endBeforeStart: "The end date can't be before the start date.",
       tooLong: "That's longer than a year — worth splitting into separate dates.",
+      noteTooLong: "That note is longer than the field can hold. Nothing has been cut — shorten it and it will save.",
     },
   },
 

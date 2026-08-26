@@ -531,7 +531,11 @@ create table important_dates (
   -- Inclusive, and equal to starts_on for a single-day event, so every reader
   -- handles one shape.
   ends_on    date not null,
-  note       text check (note is null or length(note) <= 500),
+  -- Long-form. The same ceiling day_notes, monthly_reflections and
+  -- weekly_reviews use for user prose: this is where a trip's flights, address
+  -- and agenda actually get written down. Kept as plain text with the line
+  -- breaks exactly as pasted.
+  note       text check (note is null or length(note) <= 10000),
   -- A palette key ('blue') or a colour the user picked ('#3E76C4'). Keys are
   -- stored rather than their hexes so the palette can be retuned later without
   -- rewriting anyone's rows. See src/lib/importantDates.ts.

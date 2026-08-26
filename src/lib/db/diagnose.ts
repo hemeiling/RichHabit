@@ -54,6 +54,19 @@ export const isSchemaBehind = (e: unknown) => {
   return code === "42P01" || code === "42703";
 };
 
+/**
+ * The name of the CHECK constraint a write violated, or null.
+ *
+ * Postgres 23514 carries the constraint's name, which is the difference between
+ * "something went wrong saving that" and a sentence someone can act on. Used
+ * for the one case the app can genuinely be ahead of: a limit widened in the
+ * code before the migration that widens it in the database has been applied.
+ */
+export const violatedConstraint = (e: unknown): string | null => {
+  const err = e as { code?: string; constraint?: string } | null;
+  return err?.code === "23514" ? err.constraint ?? "" : null;
+};
+
 /** The shape of what DATABASE_URL points at. Never the value. */
 export function describeTarget(connectionString: string | undefined): DbTarget {
   if (!connectionString) return "not set";

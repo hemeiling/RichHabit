@@ -790,6 +790,7 @@ export const zh: Dict = {
 
     empty: "还没有标记任何日程。点一个日期，记下出差、截止日或重要场合。",
     unavailable: "重要日程功能尚未启用——这个账户的数据库还在更新中。其他内容不受影响。",
+    noteNotWidened: "长备注功能尚未启用——数据库更新还没有应用。内容没有保存，也没有被截断；可以先精简一些，或稍后再试。",
 
     upcoming: "即将到来",
     nothingUpcoming: "近期没有安排。",
@@ -833,7 +834,9 @@ export const zh: Dict = {
       slate: "石灰",
     },
     note: "备注",
-    notePlaceholder: "07:40 的航班，酒店已订",
+    notePlaceholder: "07:40 的航班，酒店已订。可以粘贴行程、地址，以及当天需要用到的任何内容。",
+    noteLength: (n: number, max: number) => `${n.toLocaleString()} / ${max.toLocaleString()}`,
+    hasNote: "备注",
     deleteEvent: "删除",
     confirmDelete: "确定删除这个日程吗？删除后无法恢复。",
 
@@ -841,6 +844,7 @@ export const zh: Dict = {
       titleRequired: "写个名字，以后才知道这是什么。",
       endBeforeStart: "结束日期不能早于开始日期。",
       tooLong: "超过一年了——建议拆成几个日程。",
+      noteTooLong: "备注超出了字段上限。内容没有被截断——精简一下就能保存。",
     },
   },
 

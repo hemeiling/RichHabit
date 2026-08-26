@@ -281,6 +281,9 @@ export function parseImportantDate(b: any): ImportantDate {
     case "titleRequired": throw new ApiError("An important date needs a title");
     case "endBeforeStart": throw new ApiError("The end date cannot be before the start date");
     case "tooLong": throw new ApiError(`An event can span at most ${MAX_EVENT_DAYS} days`);
+    // Unreachable in practice — `check.text` above enforces the same constant
+    // and throws first. Kept so the two can never disagree silently.
+    case "noteTooLong": throw new ApiError(`A note can be at most ${MAX_EVENT_NOTE} characters`);
     default: return event;
   }
 }

@@ -67,6 +67,20 @@ body {
   padding: 10px 12px; font-size: 15px; font-family: inherit; color: var(--ink); outline: none;
 }
 .input:focus, .select:focus, .textarea:focus { border-color: var(--accent); }
+/*
+ * A field that grows with its content. The JS sets an explicit height from the
+ * content; this caps it and hands the overflow to the field's own scrollbar, so
+ * a 10,000-character agenda cannot push a dialog's Save button off the screen.
+ * `pre-wrap` is the textarea default and is stated here because it is load
+ * bearing: pasted line breaks are kept exactly as they arrived.
+ */
+.textarea-grow {
+  max-height: var(--grow-max, 40vh);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  resize: none;              /* the height is managed; a drag handle fights it */
+  line-height: 1.5;
+}
 .select { appearance: none; }
 
 .chip {
@@ -204,6 +218,27 @@ body {
   border-radius: 24px 24px 0 0; padding: 20px;
 }
 @media (min-width: 640px) { .sheet { border-radius: 24px; } }
+/*
+ * The action row, always reachable. `.sheet` is the scroll container, so this
+ * sticks to its bottom edge: the negative margin cancels the sheet's own
+ * padding so it reaches the edge, and the padding puts the space back inside.
+ * The shadow only reads as anything when content is passing underneath.
+ */
+.sheet-actions {
+  position: sticky;
+  /*
+   * -20px, not 0: sticky positions against the scroll container's *padding*
+   * box, so `bottom: 0` parks the row 20px short of the sheet's edge and the
+   * content underneath shows through that strip. Offsetting by the sheet's own
+   * padding puts the row's opaque edge where the sheet's edge is.
+   */
+  bottom: -20px;
+  z-index: 1;
+  background: var(--surface);
+  margin: 20px -20px -20px;
+  padding: 12px 20px 20px;
+  box-shadow: 0 -10px 14px -10px rgba(0, 0, 0, .14);
+}
 
 /* --------------------------- important dates ------------------------------- */
 /*

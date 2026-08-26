@@ -343,7 +343,7 @@ try {
         title      text not null check (length(title) between 1 and 120),
         starts_on  date not null,
         ends_on    date not null,
-        note       text check (note is null or length(note) <= 500),
+        note       text check (note is null or length(note) <= 10000),
         color      text not null default 'blue'
                    check (color ~ '^(#[0-9a-fA-F]{6}|[a-z]{2,12})$'),
         kind       text not null default 'none',
@@ -355,6 +355,41 @@ try {
       "create index important_dates_user_range on important_dates (user_id, starts_on, ends_on)");
     console.log("  created important_dates");
     changed++;
+  }
+
+  /*
+   * ---- 4c. important dates: room for a real note ---------------------------
+   *
+   * The note started at 500 characters, which is a sentence about a trip. It is
+   * where the trip gets written down — flights, an address, an agenda someone
+   * emailed over — so it is now 10,000, the same ceiling the journal and the
+   * weekly review already use.
+   *
+   * Widening a CHECK is as safe as a schema change gets: every existing row
+   * already satisfies the looser rule, so nothing is scanned, rewritten or
+   * rejected, and older code that still caps itself at 500 keeps working
+   * untouched against it. Nothing is read or written here but the constraint.
+   *
+   * Idempotent by inspecting the definition rather than by name: a database
+   * created from the current schema.sql already has the 10,000 form and is left
+   * alone.
+   */
+  if (await tableExists("important_dates")) {
+    const { rows: [note] } = await client.query(
+      `select pg_get_constraintdef(oid) as def from pg_constraint
+        where conrelid = 'important_dates'::regclass and conname = 'important_dates_note_check'`,
+    );
+    if (!note || !note.def.includes("10000")) {
+      if (note) {
+        await client.query("alter table important_dates drop constraint important_dates_note_check");
+      }
+      await client.query(
+        `alter table important_dates add constraint important_dates_note_check
+           check (note is null or length(note) <= 10000)`,
+      );
+      console.log("  important_dates.note may now hold 10,000 characters");
+      changed++;
+    }
   }
 
   // ---- 5. admin account management ------------------------------------------

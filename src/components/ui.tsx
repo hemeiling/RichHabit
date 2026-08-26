@@ -45,7 +45,13 @@ export function Sheet({
           <button className="btn btn-quiet" onClick={onClose}>{t.common.close}</button>
         </div>
         {children}
-        {footer && <div className="mt-5 flex gap-2 justify-end">{footer}</div>}
+        {/*
+          * Pinned to the bottom of the sheet rather than sitting at the end of
+          * its content. A form long enough to scroll — an important date with a
+          * pasted agenda in it, say — otherwise puts Save below the fold on a
+          * phone, which reads as "this dialog has no way out".
+          */}
+        {footer && <div className="sheet-actions flex gap-2 justify-end">{footer}</div>}
       </div>
     </div>
   ), document.body);
@@ -60,6 +66,50 @@ export function Field({
       {children}
       {hint && <div className="faint mt-1" style={{ fontSize: 12 }}>{hint}</div>}
     </label>
+  );
+}
+
+/**
+ * A textarea that is as tall as what is in it, up to a point.
+ *
+ * Long-form fields have two bad default states: a two-row box you write a page
+ * into through a letterbox, and a box that grows until the dialog is taller than
+ * the screen and its Save button is somewhere below the fold. This grows with
+ * the text and then stops, scrolling inside itself — the cap is CSS
+ * (`--grow-max`), so the height the browser settles on is never larger than the
+ * space the layout can spare.
+ *
+ * Deliberately no `maxLength`: capping the field truncates a long paste in
+ * silence. Callers validate instead, and say so.
+ */
+export function GrowingTextarea({
+  value, onChange, maxHeight = "40vh", ...rest
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  /** Any CSS length. Past this the field scrolls rather than growing. */
+  maxHeight?: string;
+} & Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange" | "style">) {
+  const ref = React.useRef<HTMLTextAreaElement>(null);
+
+  // Measured after paint, and after every change: `scrollHeight` is only the
+  // content's height once the element has been laid out at height:auto.
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value, maxHeight]);
+
+  return (
+    <textarea
+      {...rest}
+      ref={ref}
+      className={`textarea textarea-grow ${rest.className ?? ""}`}
+      style={{ ["--grow-max" as string]: maxHeight }}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
 
