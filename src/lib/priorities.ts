@@ -1,4 +1,3 @@
-import { MAX_PRIORITIES } from "@/lib/types";
 import type { Priority } from "@/lib/types";
 
 /**
@@ -50,16 +49,3 @@ export function carriedFrom(p: Priority, date: string): string | null {
   return p.createdOn < date ? p.createdOn : null;
 }
 
-/**
- * Whether another line can be added to `date`'s note.
- *
- * The cap is about what you take on, so it counts what is actually on the note
- * — anything that rolled in included. History can push a note past five on its
- * own: three unfinished on Monday and three more written Tuesday is six by
- * Wednesday. When that happens all six are still shown. Hiding the sixth would
- * mean quietly dropping something the user wrote, and a rollover that loses
- * items is worse than no rollover. What the cap stops is adding a seventh.
- */
-export function canAdd(all: Priority[], date: string): boolean {
-  return prioritiesOn(all, date).length < MAX_PRIORITIES;
-}

@@ -826,15 +826,22 @@ export const en = {
     empty: "The few things that matter most today.",
     placeholder: "Finish the project review",
     add: "Add",
-    full: "Five is the limit — this is a post-it, not a to-do list.",
+    /** What the day holds, rather than progress towards a limit. */
+    count: (done: number, total: number) =>
+      `${done} completed · ${total} ${total === 1 ? "priority" : "priorities"}`,
     check: (text: string) => `Mark "${text}" done`,
     uncheck: (text: string) => `Mark "${text}" not done`,
     remove: (text: string) => `Remove "${text}"`,
     moveUp: (n: number) => `Move item ${n} up`,
     moveDown: (n: number) => `Move item ${n} down`,
     carriedFrom: (date: string) => `from ${date}`,
-    overflowing:
-      "These carried over from earlier days. Finish or remove one to add another.",
+    /*
+     * Guidance, not a rule. Shown once the list has grown, and phrased so that
+     * a long list reads as something to work with rather than a mistake — the
+     * lines are there because they were not finished, which is information, not
+     * a failure.
+     */
+    focusHint: "Longer than a post-it. Move the two or three that really matter to the top — the rest will keep.",
   },
   /**
    * §26. The small calendar in Today's rail. System wording only — an event's

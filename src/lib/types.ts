@@ -215,14 +215,19 @@ export interface Priority {
   completedOn: string | null;
 }
 
-/**
- * Deliberately small: a post-it, not a backlog.
+/*
+ * There is deliberately no cap on how many priorities a day may hold.
  *
- * It caps what you may *add* to a day, not what may be *shown* on one. Once
- * priorities roll forward, history can carry a note past five on its own, and
- * every line that got there is still shown — see `canAdd` in lib/priorities.
+ * There was one — five — from when a priority belonged to the day it was
+ * written on. Rolling them forward made it incoherent: an unfinished line
+ * arrives on its own, so a day could already hold six before anybody typed
+ * anything, and the form would then refuse a seventh while showing all six.
+ * A limit that history can walk straight past is not a limit, it is a
+ * confusing message.
+ *
+ * Focus is still the point, and the screen still says so — as guidance, in
+ * `t.priorities.focusHint`, rather than as a refusal.
  */
-export const MAX_PRIORITIES = 5;
 
 export interface AppState {
   habits: Habit[];

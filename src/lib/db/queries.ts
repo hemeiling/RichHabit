@@ -1,8 +1,7 @@
 import { ApiError } from "@/lib/http";
 import { isSchemaBehind } from "@/lib/db/diagnose";
 import { query, transaction } from "@/lib/db/pool";
-import { canAdd } from "@/lib/priorities";
-import { MAX_PRIORITIES, emptyState, isNumericTracking } from "@/lib/types";
+import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority,
   SpendingRecord, Stack, WeeklyReview,
@@ -371,24 +370,17 @@ export async function addPriority(
   userId: string, id: string, text: string, date: string,
 ): Promise<void> {
   /*
-   * The cap is enforced here and not in the parser, because it is a fact about
-   * the day rather than about the request, and the client no longer sends the
-   * day. `canAdd` is the same function the button uses — the rule for which
-   * priorities are on a day is subtle enough that a second copy of it in SQL
-   * would eventually disagree with the first, and the disagreement would show
-   * up as a form that refuses a line it is offering to take.
+   * No count check, and no read before the write.
+   *
+   * There used to be both: the day was rebuilt from every one of the account's
+   * priorities so a five-item cap could be enforced. The cap is gone — a day
+   * that unfinished lines roll into can hold six before anyone types anything,
+   * so refusing a seventh was never a rule the feature could keep — and with it
+   * goes a full-table read on every line somebody writes.
+   *
+   * Appended, so a new line lands under whatever rolled in rather than on top
+   * of it. `coalesce` covers the first priority an account ever writes.
    */
-  const rows = await query<{ created_on: string; completed_on: string | null }>(
-    "select created_on, completed_on from priorities where user_id = $1", [userId]);
-  const onDay = rows.map((r) => ({
-    id: "", text: "", createdOn: r.created_on, completedOn: r.completed_on ?? null,
-  }));
-  if (!canAdd(onDay, date)) {
-    throw new ApiError(`A day can hold at most ${MAX_PRIORITIES} priorities`);
-  }
-
-  // Appended, so a new line lands under whatever rolled in rather than on top
-  // of it. `coalesce` covers the first priority an account ever writes.
   await query(
     `insert into priorities (id, user_id, body, created_on, sort_order)
      values ($1, $2, $3, $4::date,

@@ -4,16 +4,19 @@ import { useHabits } from "@/components/store";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { shortDateFor } from "@/lib/i18n";
 import { moveWithin } from "@/lib/habits";
-import { canAdd, carriedFrom, doneOn, prioritiesOn } from "@/lib/priorities";
-import { MAX_PRIORITIES } from "@/lib/types";
+import { carriedFrom, doneOn, prioritiesOn } from "@/lib/priorities";
 
 /**
  * The day's post-it: the few things that matter most today.
  *
- * A sticky note, not a to-do application. Five lines at most, no tags, no
- * subtasks, no screen of its own — the cap is the feature, because "what are
- * the most important things today" stops being a useful question the moment
- * the answer can be twelve items long.
+ * A sticky note, not a to-do application: no tags, no subtasks, no screen of
+ * its own. It used to cap the list at five, on the reasoning that "what are the
+ * most important things today" stops being useful when the answer is twelve
+ * items long. The reasoning still holds; the cap did not. Once unfinished lines
+ * roll forward, a day can hold six before anybody types anything — so the limit
+ * refused a seventh while showing all six, which is not a rule, it is a
+ * confusing message. The nudge toward focus stays, as words rather than as a
+ * refusal.
  *
  * It sits above the habit sections because it is written at the start of the
  * day, and it pairs with the starter habit "choose your top three priorities":
@@ -36,7 +39,7 @@ export default function Priorities({ date }: { date: string }) {
 
   const add = () => {
     const text = draft.trim();
-    if (!text || !canAdd(state.priorities, date)) return;
+    if (!text) return;
     actions.addPriority(date, text);
     setDraft("");
   };
@@ -51,14 +54,22 @@ export default function Priorities({ date }: { date: string }) {
   };
 
   const done = items.filter((p) => doneOn(p, date)).length;
-  const room = canAdd(state.priorities, date);
+  /** Where the list stops being a post-it and the gentle nudge is worth saying. */
+  const long = items.length > 5;
 
   return (
-    <section className="card p-5">
+    <section className="card p-5" aria-labelledby="todays-priorities-title">
       <div className="flex items-baseline justify-between gap-3">
-        <div className="eyebrow">📌 {t.priorities.title}</div>
+        <div className="eyebrow" id="todays-priorities-title">📌 {t.priorities.title}</div>
+        {/*
+          * What the day actually holds, rather than progress towards a cap.
+          * Not an `eyebrow`: that upper-cases its text, and "0 COMPLETED · 12
+          * PRIORITIES" shouts a running total that is meant to be glanceable.
+          */}
         {items.length > 0 && (
-          <span className="eyebrow">{t.common.of(done, items.length)}</span>
+          <span className="faint num" style={{ fontSize: 12.5, textAlign: "right", flex: "none" }}>
+            {t.priorities.count(done, items.length)}
+          </span>
         )}
       </div>
 
@@ -108,8 +119,9 @@ export default function Priorities({ date }: { date: string }) {
                   </span>
                 )}
               </span>
-              {/* Up/down rather than dragging: five items, and it works with a
-                  keyboard and a thumb without any of the machinery. */}
+              {/* Up/down rather than dragging: it works with a keyboard and a
+                  thumb without any of the machinery, and a long list moves a
+                  line one step at a time rather than needing a drag across it. */}
               <span className="flex items-center" style={{ flex: "none" }}>
                 <button className="btn btn-quiet" style={{ padding: "1px 6px", fontSize: 13 }}
                   disabled={i === 0} aria-label={t.priorities.moveUp(i + 1)}
@@ -126,23 +138,19 @@ export default function Priorities({ date }: { date: string }) {
         })}
       </div>
 
-      {/* The field disappears at the cap rather than erroring — the limit is
-          the point, and a form that cannot be over-filled needs no message.
-          Past the cap the wording changes, because "five is the limit" printed
-          under six items reads as a bug rather than a rule: history can carry a
-          note over five on its own, and when it has, that is what to say. */}
-      {room ? (
-        <div className="flex gap-2 mt-2.5">
-          <input className="input" value={draft} placeholder={t.priorities.placeholder}
-            aria-label={t.priorities.add} maxLength={200}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()} />
-          <button className="btn" style={{ flex: "none" }} disabled={!draft.trim()}
-            onClick={add}>{t.priorities.add}</button>
-        </div>
-      ) : (
-        <p className="faint mt-2.5" style={{ fontSize: 12.5 }}>
-          {items.length > MAX_PRIORITIES ? t.priorities.overflowing : t.priorities.full}
+      {/* Always available. Nothing the person can write is refused, and a list
+          that has grown gets a word of guidance rather than a closed door. */}
+      <div className="flex gap-2 mt-2.5">
+        <input className="input" value={draft} placeholder={t.priorities.placeholder}
+          aria-label={t.priorities.add} maxLength={200}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()} />
+        <button className="btn" style={{ flex: "none" }} disabled={!draft.trim()}
+          onClick={add}>{t.priorities.add}</button>
+      </div>
+      {long && (
+        <p className="faint mt-2" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+          {t.priorities.focusHint}
         </p>
       )}
     </section>

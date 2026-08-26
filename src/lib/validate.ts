@@ -5,7 +5,6 @@ import {
 } from "@/lib/importantDates";
 import { isTemplateWording } from "@/lib/templates";
 import { SPENDING_CATEGORIES } from "@/lib/types";
-import { MAX_PRIORITIES } from "@/lib/types";
 import type {
   AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, SpendingRecord, Stack,
   WeeklyReview,
@@ -143,11 +142,9 @@ export const MAX_PRIORITY_LENGTH = 200;
 /**
  * A new line on the post-it.
  *
- * The five-item cap is not checked here. It is a rule about what a *day* holds,
- * and a day's contents are now derived from dates rather than sent by the
- * client — so the server would have to recompute the day to enforce it, and
- * `addPriority` does exactly that before inserting. Here we only check that the
- * line is a line.
+ * There is no count to check: a day holds as many priorities as the person has,
+ * and unfinished ones arrive on their own. All this has to establish is that
+ * the line is a line.
  */
 export function parseNewPriority(b: any) {
   const text = check.text(b?.text, "text", MAX_PRIORITY_LENGTH).trim();

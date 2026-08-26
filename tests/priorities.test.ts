@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseNewPriority, parsePriorityDone } from "../src/lib/validate";
-import { canAdd, carriedFrom, doneOn, prioritiesOn } from "../src/lib/priorities";
-import { MAX_PRIORITIES, emptyState } from "../src/lib/types";
+import { carriedFrom, doneOn, prioritiesOn } from "../src/lib/priorities";
+import { emptyState } from "../src/lib/types";
 import type { Priority } from "../src/lib/types";
 import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
@@ -100,37 +100,54 @@ describe("saying where a line came from", () => {
   });
 });
 
-describe("the cap", () => {
-  /** The cap is the feature: it stops being a post-it at about six. */
-  it("stops a sixth being added to a day", () => {
-    const five = Array.from({ length: MAX_PRIORITIES }, () => p("2026-08-15"));
-    expect(canAdd(five, "2026-08-15")).toBe(false);
-    expect(canAdd(five.slice(1), "2026-08-15")).toBe(true);
-  });
-
-  it("counts what rolled in, not just what was written today", () => {
-    const rolled = Array.from({ length: MAX_PRIORITIES }, () => p("2026-08-01"));
-    expect(canAdd(rolled, "2026-08-20")).toBe(false);
-  });
-
-  it("does not count lines already finished", () => {
-    const done = Array.from({ length: MAX_PRIORITIES }, () => p("2026-08-01", "2026-08-02"));
-    expect(canAdd(done, "2026-08-20")).toBe(true);
-  });
-
+describe("no cap", () => {
   /*
-   * History can push a day past the cap without anyone adding anything: three
-   * left unfinished on Monday and three more written Tuesday is six by
-   * Wednesday. Every one is still shown — dropping the sixth would lose
-   * something the user wrote, which is worse than an over-full note.
+   * There used to be a five-item limit. Rolling priorities forward made it
+   * incoherent — a day can hold six before anybody types anything — so it is
+   * gone, and what replaces it is nothing: every line the person has is on the
+   * day it belongs on, in the order they put it in.
    */
-  it("still shows every line when history has pushed a day over the cap", () => {
+  it("puts every line on the day, however many there are", () => {
+    const twelve = Array.from({ length: 12 }, () => p("2026-08-15"));
+    expect(prioritiesOn(twelve, "2026-08-15")).toHaveLength(12);
+  });
+
+  it("rolls all of them forward, not the first five", () => {
+    const nine = Array.from({ length: 9 }, () => p("2026-08-01"));
+    expect(prioritiesOn(nine, "2026-08-20")).toHaveLength(9);
+    expect(prioritiesOn(nine, "2027-01-01")).toHaveLength(9);
+  });
+
+  it("lets what rolled in and what was written today sit together", () => {
     const all = [
-      ...Array.from({ length: 3 }, () => p("2026-08-17")),
-      ...Array.from({ length: 3 }, () => p("2026-08-18")),
+      ...Array.from({ length: 4 }, () => p("2026-08-17")),
+      ...Array.from({ length: 4 }, () => p("2026-08-18")),
+      ...Array.from({ length: 3 }, () => p("2026-08-19")),
     ];
-    expect(prioritiesOn(all, "2026-08-19")).toHaveLength(6);
-    expect(canAdd(all, "2026-08-19")).toBe(false);
+    const day = prioritiesOn(all, "2026-08-19");
+    expect(day).toHaveLength(11);
+    // Carried lines still say where they came from; today's do not.
+    expect(day.filter((x) => carriedFrom(x, "2026-08-19") !== null)).toHaveLength(8);
+  });
+
+  it("keeps the user's order rather than sorting a long list", () => {
+    const all = ["c", "a", "b", "e", "d", "f", "g"].map((t) => p("2026-08-15", null, t));
+    expect(prioritiesOn(all, "2026-08-15").map((x) => x.text))
+      .toEqual(["c", "a", "b", "e", "d", "f", "g"]);
+  });
+
+  it("still drops a line from the day it was finished on", () => {
+    const all = Array.from({ length: 8 }, (_, i) =>
+      p("2026-08-01", i < 3 ? "2026-08-02" : null));
+    expect(prioritiesOn(all, "2026-08-02")).toHaveLength(8);   // finished today still shows
+    expect(prioritiesOn(all, "2026-08-03")).toHaveLength(5);   // and is gone tomorrow
+  });
+
+  it("has no cap left to import", async () => {
+    const types = await import("../src/lib/types");
+    const lib = await import("../src/lib/priorities");
+    expect("MAX_PRIORITIES" in types).toBe(false);
+    expect("canAdd" in lib).toBe(false);
   });
 });
 
@@ -179,17 +196,34 @@ describe("bilingual", () => {
     expect(zh.priorities.add).toBe("添加");
   });
 
-  it("says the limit in both, in the same friendly terms", () => {
-    expect(en.priorities.full).toMatch(/post-it/i);
-    expect(zh.priorities.full).toMatch(/便利贴/);
+  /*
+   * The counter says what the day holds. It must never read as progress
+   * towards a limit, which is what "1 / 5" said and what the cap's removal is
+   * meant to stop saying.
+   */
+  it("counts what is there, in both languages", () => {
+    expect(en.priorities.count(1, 8)).toBe("1 completed · 8 priorities");
+    expect(en.priorities.count(0, 1)).toBe("0 completed · 1 priority");
+    expect(zh.priorities.count(1, 8)).toBe("已完成 1 · 共 8 项");
+    for (const dict of [en, zh]) {
+      expect(dict.priorities.count(2, 11)).toContain("11");
+      expect(dict.priorities.count(2, 11)).not.toMatch(/\/\s*5\b/);
+    }
+  });
+
+  /* Guidance about focus, never a refusal. */
+  it("encourages focus without forbidding anything, in both", () => {
+    for (const [dict, forbidding] of [[en, /limit|maximum|cannot|can't|only five/i],
+      [zh, /上限|最多|不能|不可/]] as const) {
+      expect(dict.priorities.focusHint).toBeTruthy();
+      expect(dict.priorities.focusHint).not.toMatch(forbidding);
+    }
   });
 
   /* A line that arrives on its own has to say why, in either language. */
   it("explains a carried-over line in both", () => {
     expect(en.priorities.carriedFrom("Aug 12")).toContain("Aug 12");
     expect(zh.priorities.carriedFrom("8月12日")).toContain("8月12日");
-    expect(en.priorities.overflowing).toMatch(/carried over/i);
-    expect(zh.priorities.overflowing).toMatch(/延续/);
   });
 
   it("labels every control for a screen reader, in both", () => {
