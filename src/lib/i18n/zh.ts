@@ -486,6 +486,7 @@ export const zh: Dict = {
   },
 
   more: {
+    prefsNotDeployed: "该设置尚未启用——这个账户的数据库还在更新中。设置没有被更改，请稍后再试。",
     links: {
       refine: { label: "调整我的习惯", note: "说出想改变什么，再决定追踪哪些" },
       awareness: { label: "习惯觉察", note: "先如实记录一天，再给它打分" },

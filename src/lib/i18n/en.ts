@@ -511,6 +511,8 @@ export const en = {
   },
 
   more: {
+    /** The window between a deploy and the migration that follows it. */
+    prefsNotDeployed: "That setting isn't available yet — this account's database is still being updated. Nothing was changed; try again shortly.",
     links: {
       refine: { label: "Refine my habits", note: "Name what to change, then choose what to track" },
       awareness: { label: "Habit awareness", note: "Log a normal day, then grade it" },
