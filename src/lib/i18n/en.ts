@@ -889,8 +889,8 @@ export const en = {
   importantDates: {
     title: "Important dates",
     /** The two-month window, and the way back to it. */
-    previousMonths: "Earlier months",
-    nextMonths: "Later months",
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
     backToNow: "Today",
     monthGrid: (month: string) => `${month}, calendar`,
     dayLabel: (date: string, n: number) =>

@@ -253,7 +253,6 @@ body {
  * collapsed into the page. `auto-fit` rather than a breakpoint, so the panel
  * fits its container and not a guess about the device.
  */
-.cal-months { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: 14px; }
 .cal-caption {
   font-size: 12px; font-weight: 600; letter-spacing: -0.01em;
   text-align: center; padding-bottom: 4px;
@@ -265,9 +264,12 @@ body {
 }
 .cal-day {
   position: relative;
-  min-height: 26px; padding: 3px 0 2px;
+  /* Roomier than it was: showing one month rather than two freed the height,
+     and it buys a larger tap target and a more legible number in the 300px
+     rail. The panel is still far shorter than the two-month version. */
+  min-height: 30px; padding: 4px 0 3px;
   border: 1px solid transparent; border-radius: 8px; background: none;
-  font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink);
+  font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink);
   cursor: pointer; transition: background .12s ease;
 }
 .cal-day:hover { background: var(--raise); }

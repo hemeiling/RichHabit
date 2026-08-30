@@ -803,8 +803,8 @@ export const zh: Dict = {
   },
   importantDates: {
     title: "重要日程",
-    previousMonths: "上两个月",
-    nextMonths: "下两个月",
+    previousMonth: "上一个月",
+    nextMonth: "下一个月",
     backToNow: "回到本月",
     monthGrid: (month: string) => `${month} 日历`,
     dayLabel: (date: string, n: number) => (n === 0 ? date : `${date}，${n} 项日程`),

@@ -19,11 +19,13 @@ import type { ImportantDate } from "@/lib/types";
  * §26. Important Dates — the trips, deadlines and occasions this person cares
  * about, beside the day they are working through.
  *
- * Deliberately small. Two months by default because that is the horizon a
- * person actually plans against, navigation for everything beyond it, and no
- * times, invitations, recurrence or reminders — a calendar you glance at, not
- * one you administer. Everything here is private: nothing reaches Community
- * Progress, another account, or an admin screen.
+ * Deliberately small. One month at a time — it showed two, and the second was
+ * costing more vertical space than it earned: what people actually scan for is
+ * what is coming up, and that list is not limited to the month on screen. The
+ * arrows reach any month, forwards or back, so nothing is out of reach; there
+ * are just no times, invitations, recurrence or reminders. A calendar you
+ * glance at, not one you administer. Everything here is private: nothing
+ * reaches Community Progress, another account, or an admin screen.
  *
  * The rules live in lib/importantDates.ts. This file is the interaction.
  */
@@ -86,8 +88,8 @@ const blankEvent = (date: string): ImportantDate => ({
  *
  * Today re-renders on every tick of a habit — the store hands out a new state
  * object each time — and a month grid formats a date per cell for its label:
- * 84 across the two months, 168 in bilingual mode, measured at 3-4ms on a
- * laptop and several times that on a phone. None of it can have changed
+ * 42 across the month, 84 in bilingual mode, measured at 3-4ms for twice that
+ * on a laptop and several times more on a phone. None of it can have changed
  * because a habit was ticked, so none of it should be redone. `onPickDay` is
  * wrapped in `useCallback` below to make this hold; the language still repaints
  * it, because that arrives through context rather than through props.
@@ -390,10 +392,9 @@ export default function ImportantDates() {
   const today = useToday();
 
   /**
-   * The window is an offset from the current month, never an absolute month.
-   * That is the whole of the automatic rollover: when the date changes, "two
-   * months from now" changes with it, and a panel left on its default needs no
-   * correcting.
+   * The month is an offset from the current one, never an absolute month. That
+   * is the whole of the automatic rollover: when the date changes, "this month"
+   * changes with it, and a panel left on its default needs no correcting.
    */
   const [offset, setOffset] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -402,8 +403,7 @@ export default function ImportantDates() {
 
   const events = state.importantDates;
   const unavailable = state.unavailable.includes("importantDates");
-  const base = addMonths(monthOf(today), offset);
-  const months = [base, addMonths(base, 1)];
+  const month = addMonths(monthOf(today), offset);
 
   const all = useMemo(() => upcomingEvents(events, today, Number.MAX_SAFE_INTEGER), [events, today]);
   const upcoming = expanded ? all : all.slice(0, UPCOMING);
@@ -434,8 +434,7 @@ export default function ImportantDates() {
    * would be created outside the calendar they are looking at, so it starts on
    * the 1st of the first month in view instead.
    */
-  const addFrom = monthOf(today) === base || monthOf(today) === months[1]
-    ? today : monthFirst(base);
+  const addFrom = monthOf(today) === month ? today : monthFirst(month);
 
   const close = () => { setEditing(null); setDay(null); };
 
@@ -447,12 +446,12 @@ export default function ImportantDates() {
         </div>
         <div className="flex items-center gap-0.5" style={{ flex: "none" }}>
           <button className="btn btn-quiet" style={{ padding: "3px 8px", fontSize: 14 }}
-            onClick={() => setOffset((n) => n - 1)} aria-label={t.importantDates.previousMonths}>‹</button>
+            onClick={() => setOffset((n) => n - 1)} aria-label={t.importantDates.previousMonth}>‹</button>
           <button className="btn btn-quiet" style={{ padding: "3px 8px", fontSize: 11.5 }}
             onClick={() => setOffset(0)} disabled={offset === 0}
             aria-label={t.importantDates.backToNow}>{t.importantDates.backToNow}</button>
           <button className="btn btn-quiet" style={{ padding: "3px 8px", fontSize: 14 }}
-            onClick={() => setOffset((n) => n + 1)} aria-label={t.importantDates.nextMonths}>›</button>
+            onClick={() => setOffset((n) => n + 1)} aria-label={t.importantDates.nextMonth}>›</button>
         </div>
       </div>
 
@@ -471,11 +470,8 @@ export default function ImportantDates() {
           {/* One column in the 300px rail, two wherever the panel is wider —
               which is what a phone or a tablet gives it once the rail has
               collapsed into the page. No breakpoint to keep in step. */}
-          <div className="cal-months mt-3">
-            {months.map((month) => (
-              <MonthGrid key={month} month={month} events={events} today={today}
-                onPickDay={pickDay} />
-            ))}
+          <div className="mt-3">
+            <MonthGrid month={month} events={events} today={today} onPickDay={pickDay} />
           </div>
 
           <div className="mt-3">

@@ -2,7 +2,7 @@
 
 > Last updated: 2026-08-30
 > Branch: main
-> Latest verified commit: `2a82a0e`
+> Latest verified commit: `26635ed`
 > Production: healthy, but **behind main** — three commits await a manual deploy
 
 ## 1. Current Production State
@@ -29,6 +29,7 @@
 - [x] Multi-day events
 - [x] Custom colors
 - [x] Long notes (10,000 characters)
+- [x] Single-month view (was two)
 - [ ] Yearly recurrence
 - [ ] Expired-event filtering
 
@@ -51,6 +52,8 @@
 | Progress / Community panel + opt-out | `43dd323` | Done | Yes | **No** |
 | Honest message before a pending migration | `4a8ccef` | None needed | Yes | **No** |
 | Status record of the migration | `2a82a0e` | — | Yes | **No** |
+| Handoff rewrite + local-only `.env.local` | `5cfdfc8` | — | Yes | **No** |
+| Important Dates: one month, not two | `26635ed` | None needed | Yes | **No** |
 
 Deploy order does not matter for any of these: the migration is already applied
 and the code tolerates its absence anyway.
@@ -121,7 +124,10 @@ Most recent verification (2026-08-30, on `2a82a0e`):
 - **Typecheck:** clean
 - **Lint:** clean
 - **Build:** compiles
-- **Browser/E2E:** 33 checks on the Progress panel (default view, chart against
+- **Browser/E2E:** 39 checks on the single-month Important Dates panel
+  (navigation across six months, multi-day and cross-month rendering, upcoming
+  beyond the visible month, create/edit/delete, bilingual, 390px); 33 on the
+  Progress panel (default view, chart against
   a real month, switching, opt-out and back in, invisibility from a second
   account, the setting in More, English / 中文 / 双语, 390px); 42 on priorities
   beyond five; 147 across every sheet at three viewport sizes.
