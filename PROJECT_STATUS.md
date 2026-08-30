@@ -419,6 +419,60 @@ dropped, backfilled or rewritten; existing rows take
 
 ---
 
+## Incident: the working copy disappeared (2026-08-30)
+
+`/Users/meilinghe/Downloads/rich-habits/` was found holding nothing but a stale
+`.next/` directory — no `src/`, no `.git`, no `package.json`. The outer
+`Downloads/CLAUDE.md` was gone too. Nothing had been moved elsewhere on disk and
+the Trash was empty; the folder's timestamp put it around 21:13 on 2026-08-26.
+The cause is unknown and was not established.
+
+**Nothing of consequence was lost.**
+
+- **GitHub was intact**: `origin/main` at `950e746`, every commit present. The
+  checkout was restored with `git clone` and `npm ci`; typecheck, lint and 377
+  tests all passed on the restored tree.
+- **Production was untouched**: Neon healthy, both Important Dates migrations
+  applied, real users' data verified by census, the deployed build still
+  serving. Nothing about this incident reached production.
+- **Only gitignored files were unrecoverable**: `.env.local`, the stale
+  `.env.local.bak.*` holding a production Neon string, `node_modules`, and the
+  local development database.
+
+### The local development database
+
+Its PGlite process (pid 59415) was still running from the deleted directory, so
+it was treated as the last live copy and left running while its contents were
+read over the wire. PGlite reads pages from the data directory on demand rather
+than holding the database in memory, so with that directory gone only relations
+still reachable in the process could be read: `goals` 6, `goal_habits` 20,
+`habit_completions` 16, `analytics_events` 3179, `admin_audit_log` 199. The
+first unreadable relation raised an internal error (`could not open file
+"base/5/16857"`) that took the connection down, and the server then refused
+every further connection.
+
+That content was local dev data — a couple of hand-made accounts and some
+clicked completions, all reproducible from `db/schema.sql` plus sign-up
+seeding — so it was let go rather than pursued further. Real users exist only
+in Neon.
+
+### What replaced it
+
+A clean local database (`npm run db:dev` then `npm run db:deploy`): 27 tables,
+all readable, `important_dates` present with the 10,000-character note
+constraint, `priorities` with no count cap.
+
+`.env.local` was recreated with **the local connection only**. The previous copy
+also carried a commented-out production Neon string, and a commented-out line in
+that file is exactly what once caused a migration to run against production by
+accident. Production is migrated explicitly instead:
+
+```
+RH_ALLOW_REMOTE=1 DATABASE_URL='<Neon direct string>' npm run db:migrate
+```
+
+---
+
 ## Other outstanding items
 
 - **Owner action, security:** rotate the OpenAI key that appeared in an earlier
