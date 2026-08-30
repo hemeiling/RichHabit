@@ -464,8 +464,23 @@ appears exactly as before and nothing is backfilled.
 - The control sits both on the card, where the consequence is visible, and in
   More → Preferences, where people look for privacy settings.
 
-**Migration required before deploying this:** `npm run db:migrate` adds the
-column. Additive, idempotent, no backfill.
+**Migration applied to production on 2026-08-30.** Verified by census either
+side of it: no row counts changed, no tables added or removed, and the digests
+over habits, schedules, completions, goals, journals, priorities, accounts,
+important dates and the other preference columns were all identical afterwards.
+The column landed as `boolean not null default true`, and all 11 accounts read
+as visible — i.e. the board behaves exactly as it did before. A second run
+reported "Nothing to do; already up to date."
+
+Rehearsed locally first, including the case that matters for ordering: with the
+column dropped, the current code still loads every account, still computes the
+board, and still reads everyone as visible. Only *saving* a preference needs the
+column, and that now answers 503 with a sentence rather than "something went
+wrong saving that" (`4a8ccef`).
+
+**Awaiting deployment.** `950e746`, `43dd323` and `4a8ccef` are pushed and not
+yet live; Render does not auto-deploy and the trigger is manual. Production
+verification of the panel is pending that deploy.
 
 ---
 
