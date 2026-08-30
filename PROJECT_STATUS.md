@@ -32,8 +32,14 @@
 - [x] Custom colors
 - [x] Long notes (10,000 characters)
 - [x] Single-month view (was two)
-- [ ] Yearly recurrence
-- [ ] Expired-event filtering
+- [x] Expired events drop out of Upcoming automatically (derived from the end
+      date; they stay in the calendar when you navigate back)
+- [ ] **Yearly recurrence — not started.** No field on `ImportantDate`, no
+      column, no UI. Two decisions were raised and never settled: storing the
+      rule on the original row and deriving occurrences rather than
+      materialising copies, and what a Feb 29 event should do in common years
+      (recommendation was Feb 28, so it stays in its own month).
+- [ ] Birthday shortcut / category (depends on recurrence)
 
 ### Priorities
 - [x] Automatic rollover
