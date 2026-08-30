@@ -568,6 +568,43 @@ export const en = {
    * winning, beating and losing, and nobody is ever described relative to
    * the person above them.
    */
+  /**
+   * §20. The Today rail's two views: your own month, and the board.
+   *
+   * Three percentages exist within a screen of each other and each measures
+   * something different, so each says which span it covers rather than leaving
+   * the reader to assume they should agree.
+   */
+  progress: {
+    /** The switch at the top of the card. */
+    title: "Progress",
+    mine: "My Progress",
+    community: "Community",
+    switchTo: (view: string) => `Show ${view}`,
+
+    /** The headline figure and the chart under it. */
+    monthToDate: "This month so far",
+    thisMonth: (month: string) => `${month} · day by day`,
+    todayIs: (pct: number) => `Today: ${pct}%`,
+    noneYet: "Tick a few habits and your month will start drawing itself here.",
+    tooEarly: "One more day and a line appears here.",
+    /* Says the span, because Today's dial is one day and this is the whole
+       month. Two different numbers, both correct, on the same screen. */
+    explain: "Each day's completion, across this month. Today's dial is just today.",
+    scheduledNone: "Nothing was scheduled on the greyed days.",
+    /* Shown only when the two figures in this card can actually differ —
+       i.e. when the reader weights their own habits by priority and the
+       board does not. Silent otherwise, because then there is nothing to
+       reconcile. */
+    weightedNote: "Yours counts priority weighting. The board measures everyone unweighted.",
+
+    /** The privacy control, in the card and in settings. */
+    showMe: "Show me in Community ranking",
+    showMeHint: "Off means your name, percentage and rank are not shown to anyone else, and you are not counted in the participants. Your own habits, history and progress are unaffected.",
+    hidden: "You are not shown on the board.",
+    hiddenHint: "Turn the setting above back on whenever you like — nothing is lost while you are hidden.",
+  },
+
   community: {
     title: "Community Progress",
     /* Named "live" because it is: the board is recomputed from habit records

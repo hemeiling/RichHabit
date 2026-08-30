@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import AddHabit from "@/components/AddHabit";
-import CommunityPanel from "@/components/CommunityPanel";
+import ProgressPanel from "@/components/ProgressPanel";
 import ImportantDates from "@/components/ImportantDates";
 import GratitudeJournal from "@/components/GratitudeJournal";
 import Priorities from "@/components/Priorities";
@@ -456,14 +456,14 @@ export default function Today() {
       </div>
 
       {/*
-        * The rail, in the order you look at it: how the group is doing, then
-        * what is coming up. Below 1280px it collapses into the page under the
+        * The rail, in the order you look at it: how your own month is going —
+        * with the group one tap behind it — then what is coming up. Below 1280px it collapses into the page under the
         * day's habits — see `.with-rail` — so on a phone the calendar sits at
         * the bottom, where a glance at next month belongs relative to today's
         * checklist.
         */}
       <aside className="rail flex flex-col gap-4">
-        <CommunityPanel />
+        <ProgressPanel />
         <ImportantDates />
       </aside>
     </div>

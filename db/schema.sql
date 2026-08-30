@@ -161,6 +161,13 @@ create table user_preferences (
   -- a duplicated set of rows anywhere. 'both' renders every label twice over.
   locale        text not null default 'en' check (locale in ('en','zh','both')),
   week_starts_on smallint not null default 0 check (week_starts_on between 0 and 6),
+  -- §19/§20. Whether this account is shown to other people on the Community
+  -- board. Default true, which is what everyone was before the setting existed.
+  -- Opting out removes them from the ranking and the participant count and
+  -- nothing else: their own habits, history and analytics are untouched, and
+  -- the board is recomputed from completions on every read, so opting back in
+  -- restores their place with nothing to rebuild.
+  community_visible boolean not null default true,
   updated_at    timestamptz not null default now()
 );
 

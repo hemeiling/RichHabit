@@ -532,6 +532,27 @@ export const zh: Dict = {
     footerTwo: "漏掉一天是数据，不是失败。",
   },
 
+  progress: {
+    title: "进展",
+    mine: "我的进步",
+    community: "社区",
+    switchTo: (view: string) => `切换到${view}`,
+
+    monthToDate: "本月截至今日",
+    thisMonth: (month: string) => `${month} · 每日完成度`,
+    todayIs: (pct: number) => `今天：${pct}%`,
+    noneYet: "先完成几个习惯，这里就会画出你这个月的曲线。",
+    tooEarly: "再记录一天，这里就会出现曲线。",
+    explain: "本月每天的完成度。今日页的圆环只代表今天。",
+    scheduledNone: "灰色的日期当天没有安排。",
+    weightedNote: "你的数字计入了优先级权重；排行榜对所有人都不计权重。",
+
+    showMe: "在社区排名中显示我",
+    showMeHint: "关闭后，其他人看不到你的用户名、百分比和排名，你也不计入参与人数。你自己的习惯、历史和进度不受影响。",
+    hidden: "你当前不显示在排行榜上。",
+    hiddenHint: "随时可以重新打开，隐藏期间不会丢失任何数据。",
+  },
+
   community: {
     title: "社区进步",
     liveRanking: "实时排名",

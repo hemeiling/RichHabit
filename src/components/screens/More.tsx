@@ -212,6 +212,18 @@ export default function More({ account }: { account: AccountSummary }) {
           <Segmented<boolean> value={state.prefs.weighted} onChange={(v) => actions.setPrefs({ weighted: v })} small
             options={[{ value: true, label: t.more.on }, { value: false, label: t.more.off }]} />
         </div>
+        {/* The same setting as the one on Today's Progress card — one
+            preference, reachable both where its effect is visible and where
+            people look for privacy controls. */}
+        <div className="flex items-center justify-between py-2 gap-3">
+          <div>
+            <div style={{ fontSize: 15 }}>{t.progress.showMe}</div>
+            <div className="faint" style={{ fontSize: 12.5 }}>{t.progress.showMeHint}</div>
+          </div>
+          <Segmented<boolean> value={state.prefs.communityVisible}
+            onChange={(v) => actions.setPrefs({ communityVisible: v })} small
+            options={[{ value: true, label: t.more.on }, { value: false, label: t.more.off }]} />
+        </div>
       </section>
 
       <section className="card p-5">

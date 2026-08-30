@@ -419,6 +419,56 @@ dropped, backfilled or rewritten; existing rows take
 
 ---
 
+### Progress / Community panel — new
+
+Today's rail card leads with the reader's own month instead of the leaderboard.
+
+- **Two views, one card.** Tabs at the top; **My Progress is the default**,
+  because "how am I doing?" was previously answered with "here is where you
+  rank" — a comparison, before anybody had seen their own month. The Community
+  view is the existing board, reading the same `/api/community`, unchanged.
+- **The chart is derived, not stored, and not a second scoring rule.** It calls
+  `dayScore` per day and `rangeScore` for the month — the same functions Today's
+  dial and Insights use, over state the browser already holds, so there is no
+  extra request and no way for the card to disagree with the dial above it.
+  `monthSoFar()` defines the window once, so the line and the figure always
+  cover the same days and the month rolls over on its own.
+- **Gaps stay gaps.** A day with nothing scheduled has no completion rate, which
+  is not zero; the line breaks rather than sloping through it (`lib/trend.ts`,
+  unit-tested — the first version was a clever one-liner that silently drew
+  nothing).
+- **Three percentages, each labelled.** Today's dial is one day; "this month so
+  far" is the month; the board is the month measured unweighted for everyone. A
+  note reconciling the reader's weighted figure with the board's appears only
+  when weighting is on, i.e. only when the two can actually differ.
+
+### Community opt-out — new, and enforced on the server
+
+`user_preferences.community_visible`, default true, so every existing account
+appears exactly as before and nothing is backfilled.
+
+- **Enforced in `scoreMember`**, which is the one function both the full board
+  and the single-member refresh pass through. An opted-out member is dropped
+  before a snapshot exists, so their username, percentage and rank are never
+  sent to another browser, and `activeUsers` does not count them because it is
+  counted from the ranked list.
+- **It survives the column not existing yet**: preferences are read with
+  `select *`, so an un-migrated database yields visible and the board behaves as
+  it always did. The code can ship ahead of its migration without hiding anyone.
+- **The cache cannot outlive the decision.** The board is cached for a minute,
+  so `/api/prefs` marks the member stale; the next read re-scores them and
+  re-ranks everyone. Verified across two accounts: opting out removed the name,
+  the percentage and the participant count immediately, and opting back in
+  restored the place with the percentage intact.
+- Their own habits, history, analytics and My Progress are untouched throughout.
+- The control sits both on the card, where the consequence is visible, and in
+  More → Preferences, where people look for privacy settings.
+
+**Migration required before deploying this:** `npm run db:migrate` adds the
+column. Additive, idempotent, no backfill.
+
+---
+
 ## Incident: the working copy disappeared (2026-08-30)
 
 `/Users/meilinghe/Downloads/rich-habits/` was found holding nothing but a stale

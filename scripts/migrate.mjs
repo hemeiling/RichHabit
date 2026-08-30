@@ -150,6 +150,13 @@ try {
     ["users", "created_via",
      "alter table users add column created_via text " +
      "check (created_via in ('self_signup','admin','test'))"],
+    /*
+     * §19/§20. Opting out of the Community board. `default true` is the whole
+     * of the grandfathering: every existing account keeps appearing exactly as
+     * it does now, and nothing is backfilled or rewritten.
+     */
+    ["user_preferences", "community_visible",
+     "alter table user_preferences add column community_visible boolean not null default true"],
   ]) {
     if (await columnExists(table, column)) continue;
 

@@ -259,6 +259,13 @@ export async function loadState(userId: string): Promise<AppState> {
       weighted: prefs[0].weighted_score,
       goalWeight: prefs[0].goal_weight == null ? null : Number(prefs[0].goal_weight),
       locale: prefs[0].locale ?? "en",
+      /*
+       * `select *` above, so a database that has not had the column added yet
+       * yields undefined here and the account reads as visible — which is what
+       * it was before the setting existed. The code can therefore ship ahead of
+       * its migration without hiding anybody.
+       */
+      communityVisible: prefs[0].community_visible !== false,
     };
   }
   return state;
@@ -620,12 +627,14 @@ export async function deleteImportantDate(userId: string, id: string) {
 
 export async function savePrefs(userId: string, p: Prefs) {
   await query(
-    `insert into user_preferences (user_id, theme, weighted_score, goal_weight, locale)
-     values ($1,$2,$3,$4,$5)
+    `insert into user_preferences (user_id, theme, weighted_score, goal_weight, locale,
+                                   community_visible)
+     values ($1,$2,$3,$4,$5,$6)
      on conflict (user_id) do update set
        theme = excluded.theme, weighted_score = excluded.weighted_score,
-       goal_weight = excluded.goal_weight, locale = excluded.locale`,
-    [userId, p.theme, p.weighted, p.goalWeight, p.locale],
+       goal_weight = excluded.goal_weight, locale = excluded.locale,
+       community_visible = excluded.community_visible`,
+    [userId, p.theme, p.weighted, p.goalWeight, p.locale, p.communityVisible],
   );
 }
 

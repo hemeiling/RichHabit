@@ -254,6 +254,31 @@ async function scoreMember(u: Row, dates: string[]): Promise<Scored | null> {
    * nothing rather than a wrong number.
    */
   const state: AppState = await loadState(u.id);
+
+  /*
+   * §19/§20. Opting out, enforced here rather than in the query that lists
+   * members — which is deliberate for three reasons.
+   *
+   * It is one place. Both paths into the board come through this function: the
+   * full recompute and the refresh of a single stale member. A `where` clause
+   * would have to be repeated in two queries that could then disagree, and
+   * `refreshStale` already knows what to do with a null — it removes them.
+   *
+   * It is server-side, which is the requirement. Nothing about the decision
+   * reaches the browser: an opted-out member is gone before a snapshot exists,
+   * so their username, percentage and rank are not merely hidden by the client,
+   * they were never sent to it, and they are absent from `activeUsers` because
+   * that is counted from the ranked list.
+   *
+   * And it survives the column not being there yet. `loadState` reads
+   * preferences with `select *`, so an un-migrated database yields `true` here
+   * and the board behaves exactly as it did before the setting existed.
+   *
+   * Their own data is untouched by any of this — the state was just read in
+   * full, and it is only this ranking that they leave.
+   */
+  if (state.prefs.communityVisible === false) return null;
+
   // The same scoring the app uses, with weighting forced off so every member
   // is measured the same way.
   const unweighted: AppState = { ...state, prefs: { ...state.prefs, weighted: false } };

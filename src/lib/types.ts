@@ -178,6 +178,16 @@ export interface Prefs {
   weighted: boolean;
   goalWeight: number | null;
   locale: Locale;
+  /**
+   * §19/§20. Whether this account appears to other people on the Community
+   * board. Opting out hides the username, the percentage and the rank from
+   * everyone else and removes them from the participant count; it changes
+   * nothing about their own habits, history, analytics or My Progress, and
+   * opting back in restores their place with nothing lost — the board is
+   * recomputed from completions every time, so there is no stored ranking to
+   * rebuild. Enforced on the server, in `scoreMember`.
+   */
+  communityVisible: boolean;
 }
 
 /**
@@ -281,5 +291,5 @@ export const emptyState = (): AppState => ({
   habits: [], goals: [], completions: {}, journal: {}, monthlyReflections: {},
   priorities: [], importantDates: [],
   awareness: [], stacks: [], metrics: {}, reviews: [], spending: [], unavailable: [],
-  prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en" },
+  prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en", communityVisible: true },
 });

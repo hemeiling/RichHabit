@@ -291,6 +291,9 @@ export function parsePrefs(b: any): Prefs {
     weighted: b?.weighted !== false,
     goalWeight: check.numberOrNull(b?.goalWeight, "goalWeight"),
     locale: check.oneOf(b?.locale ?? "en", LOCALES, "locale"),
+    // Visible unless explicitly turned off, so a client that has never heard of
+    // the setting cannot accidentally hide somebody.
+    communityVisible: b?.communityVisible !== false,
   };
 }
 

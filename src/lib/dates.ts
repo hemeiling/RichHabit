@@ -85,3 +85,16 @@ export const monthGrid = (month: string): string[][] => {
   }
   return weeks;
 };
+
+/**
+ * The days of `date`'s month up to and including it.
+ *
+ * What "this month so far" means, in one place: the month-to-date chart plots
+ * these days and the month-to-date figure scores exactly them, so the line and
+ * the number can never cover different spans. Derived from the date rather than
+ * stored, so the window rolls into the next month on its own — on the 1st it is
+ * a single day, which is why the chart says there is not enough to draw yet.
+ */
+export const monthSoFar = (date: string): string[] =>
+  Array.from({ length: Number(date.slice(8, 10)) },
+    (_, i) => `${monthOf(date)}-${pad(i + 1)}`);
