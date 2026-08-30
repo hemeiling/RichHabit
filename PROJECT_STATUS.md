@@ -2,8 +2,8 @@
 
 > Last updated: 2026-08-30
 > Branch: main
-> Latest verified commit: `26635ed`
-> Production: healthy, but **behind main** — three commits await a manual deploy
+> Latest verified commit: `7b10c5d`
+> Production: healthy, but **behind main** — six commits await a manual deploy
 
 ## 1. Current Production State
 
@@ -12,8 +12,10 @@
   through the pooler). The connection string lives only in Render's environment
   variables and is pasted on the command line for migrations — never in a file.
 - **Current deployed commit:** `adbfb73`. Confirmed by build fingerprint: the
-  live stylesheet carries `cal-months` and `textarea-grow` but not
-  `todays-priorities-title` or `progress-panel-title`.
+  live stylesheet carries `textarea-grow` but not `todays-priorities-title` or
+  `progress-panel-title`. Once the pending deploy lands, both of those appear
+  and `cal-months` disappears — that rule is now the quickest way to tell which
+  build is serving.
 - **Last production migration:** `user_preferences.community_visible`, applied
   2026-08-30.
 - **Production health:** `/api/health` → `ok`, `db: up`. 11 accounts, 120
@@ -25,7 +27,7 @@
 ## 2. Work Completed
 
 ### Important Dates
-- [x] Two-month calendar
+- [x] Month calendar with navigation
 - [x] Multi-day events
 - [x] Custom colors
 - [x] Long notes (10,000 characters)
@@ -53,7 +55,7 @@
 | Honest message before a pending migration | `4a8ccef` | None needed | Yes | **No** |
 | Status record of the migration | `2a82a0e` | — | Yes | **No** |
 | Handoff rewrite + local-only `.env.local` | `5cfdfc8` | — | Yes | **No** |
-| Important Dates: one month, not two | `26635ed` | None needed | Yes | **No** |
+| Important Dates: one month, not two | `7b10c5d` | None needed | Yes | **No** |
 
 Deploy order does not matter for any of these: the migration is already applied
 and the code tolerates its absence anyway.
@@ -81,15 +83,16 @@ file.
 
 ## 5. Current Work in Progress
 
-Nothing half-finished. The last change was configuration hygiene: `.env.local`
-was returned to local-only after production credentials were temporarily placed
-in it to run the migration.
+Nothing half-finished. The last change simplified the Important Dates panel to
+a single month; before that, configuration hygiene returned `.env.local` to
+local-only after production credentials were temporarily placed in it to run the
+migration.
 
 Files most recently involved:
+- `src/components/ImportantDates.tsx` — one month, navigable to any other
 - `src/components/ProgressPanel.tsx` — the two-view rail card
 - `src/lib/community.ts` — `scoreMember` enforces the opt-out
 - `src/lib/trend.ts` — splitting a series into drawable runs
-- `src/app/api/prefs/route.ts` — cache invalidation and the pre-migration message
 - `.env.local` — local database only (gitignored)
 
 ## 6. Open Issues / Decisions
@@ -118,7 +121,7 @@ Files most recently involved:
 
 ## 7. Verification
 
-Most recent verification (2026-08-30, on `2a82a0e`):
+Most recent verification (2026-08-30, on `7b10c5d`):
 
 - **Unit tests:** 400 passing, 24 files
 - **Typecheck:** clean
@@ -141,7 +144,7 @@ Most recent verification (2026-08-30, on `2a82a0e`):
 **Start here next session:**
 
 1. Owner: rotate the OpenAI API key.
-2. Owner: Render → Manual Deploy → Deploy latest commit (`2a82a0e`).
+2. Owner: Render → Manual Deploy → Deploy latest commit.
 3. Run the unauthenticated production checks
    (`node live-verify.mjs https://richhabit.onrender.com`), then the signed-in
    checklist using the designated production test account — never a
