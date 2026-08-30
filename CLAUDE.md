@@ -1,6 +1,34 @@
 # Rich Habits --- Claude Engineering Instructions
-## CRITICAL: Production User Data Protection
 
+
+## Project Continuity
+
+`PROJECT_STATUS.md` is the authoritative handoff document for the current state of this project.
+
+At the beginning of every new session or substantial task:
+
+1. Read `CLAUDE.md`.
+2. Read `PROJECT_STATUS.md`.
+3. Inspect the current Git status and recent commits when relevant.
+4. Use these to determine what is complete, what is deployed, what is pending, and where work stopped.
+5. Do not assume that previously discussed work was deployed merely because it was implemented or committed.
+
+Before ending substantial work:
+
+1. Update `PROJECT_STATUS.md`.
+2. Record what was completed.
+3. Record the latest relevant commit(s).
+4. Record whether each change is committed, pushed, migrated, and deployed.
+5. Record any required production/database actions that remain.
+6. Record verification performed and important results.
+7. Record unresolved bugs, risks, or decisions.
+8. Record the exact recommended next step.
+
+Keep `PROJECT_STATUS.md` concise and current. Replace stale status information rather than endlessly appending session logs.
+
+The goal is that another senior developer—or a new Claude session—can read `CLAUDE.md` and `PROJECT_STATUS.md` and continue safely without relying on conversation history.
+
+## CRITICAL: Production User Data Protection
 User-created data must survive all application updates and deployments.
 
 NEVER delete, reset, overwrite, reseed, or recreate production user data as part of:
