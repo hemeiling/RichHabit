@@ -2,8 +2,8 @@
 
 > Last updated: 2026-08-30
 > Branch: main
-> Latest verified commit: `7b10c5d`
-> Production: healthy, but **behind main** — six commits await a manual deploy
+> Latest verified commit: `6d7638a`
+> Production: healthy and **up to date with `main`** (deployed 2026-08-30)
 
 ## 1. Current Production State
 
@@ -11,11 +11,12 @@
 - **Production database:** Neon (direct endpoint for schema work; the app runs
   through the pooler). The connection string lives only in Render's environment
   variables and is pasted on the command line for migrations — never in a file.
-- **Current deployed commit:** `adbfb73`. Confirmed by build fingerprint: the
-  live stylesheet carries `textarea-grow` but not `todays-priorities-title` or
-  `progress-panel-title`. Once the pending deploy lands, both of those appear
-  and `cal-months` disappears — that rule is now the quickest way to tell which
-  build is serving.
+- **Current deployed commit:** `7b10c5d` or later, verified 2026-08-30. The
+  live `.cal-day` rule is byte-identical to a local build of the current source
+  (`min-height:30px`), and `.cal-months` is absent — that class only disappeared
+  in `7b10c5d`, so every commit through it is live. Comparing one CSS rule
+  against a local build is the quickest reliable way to tell which build is
+  serving.
 - **Last production migration:** `user_preferences.community_visible`, applied
   2026-08-30.
 - **Production health:** `/api/health` → `ok`, `db: up`. 11 accounts, 120
@@ -54,17 +55,13 @@
 
 ## 3. Implemented but Not Yet Deployed
 
-| Feature | Commit | Migration | Pushed | Production |
-|---|---|---|---|---|
-| Priorities beyond five | `950e746` | None needed | Yes | **No** |
-| Progress / Community panel + opt-out | `43dd323` | Done | Yes | **No** |
-| Honest message before a pending migration | `4a8ccef` | None needed | Yes | **No** |
-| Status record of the migration | `2a82a0e` | — | Yes | **No** |
-| Handoff rewrite + local-only `.env.local` | `5cfdfc8` | — | Yes | **No** |
-| Important Dates: one month, not two | `7b10c5d` | None needed | Yes | **No** |
+Nothing. Everything through `7b10c5d` is live; `f8f5633` and `6d7638a` are
+documentation only.
 
-Deploy order does not matter for any of these: the migration is already applied
-and the code tolerates its absence anyway.
+Deployed 2026-08-30: priorities beyond five (`950e746`), the Progress /
+Community panel with the server-side opt-out (`43dd323`), the honest message
+before a pending migration (`4a8ccef`), and the single-month Important Dates
+panel (`7b10c5d`).
 
 ## 4. Database / Migration Status
 
@@ -118,6 +115,11 @@ Files most recently involved:
   the `send` subdomain, never the root. Then verify in Resend, set
   `RESEND_API_KEY` / `MAIL_FROM` / `APP_URL` in the Render dashboard, test a
   real send while verification stays OFF, and only then enable it.
+- **Yearly recurrence is not built**, and two decisions are open: store the rule
+  on the original row and derive occurrences (recommended) rather than
+  materialising copies; and what a Feb 29 event does in a common year
+  (recommendation: Feb 28, so it stays in its own month). A birthday shortcut
+  depends on it.
 - Render free tier sleeps after ~15 minutes idle, and Neon suspends too, so the
   first request after a quiet spell is slow. Expected, not a fault.
 - On 2026-08-30 the local working copy vanished from disk (cause never
@@ -140,23 +142,31 @@ Most recent verification (2026-08-30, on `7b10c5d`):
   a real month, switching, opt-out and back in, invisibility from a second
   account, the setting in More, English / 中文 / 双语, 390px); 42 on priorities
   beyond five; 147 across every sheet at three viewport sizes.
-- **Production verification:** migration verified by before/after census. The
-  panel itself is **not yet verified in production** because it is not yet
-  deployed. Unauthenticated checks pass: health, and every API route refusing an
-  unauthenticated caller.
+- **Production verification (2026-08-30, post-deploy):** health `ok` / `db: up`;
+  every data route refuses an unauthenticated caller; every protected page
+  redirects; `/admin` is not exposed. Build confirmed by CSS rule comparison
+  against a local build. **No migration is required** — the only schema change
+  since the previous deployed build was `community_visible` (`43dd323`), applied
+  and censused on 2026-08-30, and nothing since touches `db/schema.sql` or
+  `scripts/migrate.mjs`.
+- **Not verified in production:** everything requiring a signed-in session —
+  the one-month panel on screen, month navigation, Upcoming ordering, the
+  Progress/Community tabs, opt-out across two accounts, priorities beyond five,
+  bilingual and mobile. These are all green locally and need either the
+  designated production test account or a manual pass. No production account was
+  created for testing.
 
 ## 8. Next Step
 
 **Start here next session:**
 
-1. Owner: rotate the OpenAI API key.
-2. Owner: Render → Manual Deploy → Deploy latest commit.
-3. Run the unauthenticated production checks
-   (`node live-verify.mjs https://richhabit.onrender.com`), then the signed-in
-   checklist using the designated production test account — never a
-   newly-created one.
-4. Update section 1 with the newly deployed commit and section 7 with the
-   production verification result.
+1. Owner: rotate the OpenAI API key — still outstanding.
+2. Signed-in production pass, either by the owner or with the designated test
+   account: the single-month panel and its navigation, Upcoming ordering across
+   months, the Progress/Community tabs and the opt-out seen from a second
+   account, priorities beyond five, and one mobile/bilingual look.
+3. Then the next feature: **yearly recurrence for Important Dates**, which is
+   not started. Settle the two open questions first (see section 6).
 
 Do not begin unrelated implementation until the current deployment/migration
 state has been verified.
