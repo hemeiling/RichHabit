@@ -58,6 +58,8 @@ export const addPriority = (id: string, text: string, date: string) =>
 export const setPriorityDone = (id: string, done: boolean, date: string) =>
   patch("/api/priorities", { id, done, date });
 export const reorderPriorities = (ids: string[]) => patch("/api/priorities", { ids });
+export const updatePriorityLayout = (layout: { id: string; category: string; sortOrder: number }[]) =>
+  patch("/api/priorities", { layout });
 export const deletePriority = (id: string) => remove("/api/priorities", id);
 export const saveJournal = (date: string, gratitude: string[], reflection: string) =>
   post("/api/notes", { date, gratitude, reflection });

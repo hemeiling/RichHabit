@@ -10,7 +10,7 @@ const ID = "11111111-1111-4111-8111-111111111111";
 
 let n = 0;
 const p = (createdOn: string, completedOn: string | null = null, text = `item ${++n}`): Priority =>
-  ({ id: `${n}`, text, createdOn, completedOn });
+  ({ id: `${n}`, text, createdOn, completedOn, category: "unsorted", sortOrder: 0 });
 
 describe("what is on a given day", () => {
   it("shows a line on the day it was written", () => {
@@ -186,6 +186,21 @@ describe("what the server accepts", () => {
 describe("the state shape", () => {
   it("starts empty rather than undefined", () => {
     expect(emptyState().priorities).toEqual([]);
+  });
+
+  it("defaults a legacy priority to the unsorted quadrant", () => {
+    const legacy = { ...p("2026-08-10"), category: undefined } as any;
+    expect(legacy.category ?? "unsorted").toBe("unsorted");
+  });
+
+  it("keeps category order stable inside a quadrant", () => {
+    const all = [
+      { ...p("2026-08-10", null, "a"), category: "urgent_important", sortOrder: 1 },
+      { ...p("2026-08-10", null, "b"), category: "urgent_important", sortOrder: 0 },
+      { ...p("2026-08-10", null, "c"), category: "unsorted", sortOrder: 0 },
+    ];
+    const urgent = all.filter((x) => x.category === "urgent_important").sort((a, b) => a.sortOrder - b.sortOrder);
+    expect(urgent.map((x) => x.text)).toEqual(["b", "a"]);
   });
 });
 

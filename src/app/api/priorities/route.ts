@@ -1,7 +1,7 @@
 import { body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
 import {
-  addPriority, deletePriority, reorderPriorities, setPriorityDone,
+  addPriority, deletePriority, reorderPriorities, savePriorityLayout, setPriorityDone,
 } from "@/lib/db/queries";
 import { parseNewPriority, parsePriorityDone } from "@/lib/validate";
 
@@ -28,6 +28,15 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   return withUser(async (userId) => {
     const b: any = await body(request);
+
+    if (Array.isArray(b?.layout)) {
+      await savePriorityLayout(userId, b.layout.map((v: any) => ({
+        id: String(v?.id),
+        category: String(v?.category ?? "unsorted"),
+        sortOrder: Number(v?.sortOrder ?? 0),
+      })));
+      return;
+    }
 
     if (Array.isArray(b?.ids)) {
       await reorderPriorities(userId, b.ids.map((v: unknown) => String(v)));

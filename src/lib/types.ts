@@ -212,6 +212,22 @@ export interface DayJournal {
  * day, is what produces the note that says "call the bank" three times and
  * then disagrees with itself about whether you called them.
  */
+export const PRIORITY_CATEGORIES = [
+  "unsorted",
+  "urgent_important",
+  "urgent_not_important",
+  "important_not_urgent",
+  "not_important_not_urgent",
+] as const;
+export type PriorityCategory = (typeof PRIORITY_CATEGORIES)[number];
+export const DEFAULT_PRIORITY_CATEGORY: PriorityCategory = "unsorted";
+
+export function normalizePriorityCategory(value: unknown): PriorityCategory {
+  return typeof value === "string" && PRIORITY_CATEGORIES.includes(value as PriorityCategory)
+    ? (value as PriorityCategory)
+    : DEFAULT_PRIORITY_CATEGORY;
+}
+
 export interface Priority {
   id: string;
   text: string;
@@ -223,6 +239,8 @@ export interface Priority {
    * Null while it is still open.
    */
   completedOn: string | null;
+  category: PriorityCategory;
+  sortOrder: number;
 }
 
 /*

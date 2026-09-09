@@ -6,6 +6,7 @@ import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority,
   SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
+import { DEFAULT_PRIORITY_CATEGORY, normalizePriorityCategory } from "@/lib/types";
 
 /**
  * The only place that knows SQL. Server-only: every function takes the user id
@@ -89,8 +90,9 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select * from habit_completions where user_id = $1", [userId]),
       query("select * from day_notes where user_id = $1", [userId]),
       query("select month, body from monthly_reflections where user_id = $1", [userId]),
-      query(`select id, body, created_on, completed_on from priorities
-              where user_id = $1 order by sort_order, created_on, created_at`, [userId]),
+      optionalRead<any>("priorities",
+        `select id, body, created_on, completed_on, category, sort_order from priorities
+          where user_id = $1 order by category, sort_order, created_on, created_at`, [userId]),
       /*
        * §26. Bounded like spending, and for the same reason: the panel shows
        * the months around now, and an account that has been kept for years
@@ -201,11 +203,14 @@ export async function loadState(userId: string): Promise<AppState> {
   // The pool returns `date` as 'YYYY-MM-DD' (pool.ts, OID 1082), which is what
   // the rest of the app compares local days as — and it compares correctly as
   // a plain string, which is why the rollover rule can be two comparisons.
-  state.priorities = priorities.map((p: any): Priority => ({
+  if (priorities.missing) state.unavailable.push(priorities.missing);
+  state.priorities = priorities.rows.map((p: any): Priority => ({
     id: p.id,
     text: p.body,
     createdOn: p.created_on,
     completedOn: p.completed_on ?? null,
+    category: normalizePriorityCategory(p.category),
+    sortOrder: Number(p.sort_order ?? 0),
   }));
 
   /*
@@ -377,21 +382,14 @@ export async function addPriority(
   userId: string, id: string, text: string, date: string,
 ): Promise<void> {
   /*
-   * No count check, and no read before the write.
-   *
-   * There used to be both: the day was rebuilt from every one of the account's
-   * priorities so a five-item cap could be enforced. The cap is gone — a day
-   * that unfinished lines roll into can hold six before anyone types anything,
-   * so refusing a seventh was never a rule the feature could keep — and with it
-   * goes a full-table read on every line somebody writes.
-   *
-   * Appended, so a new line lands under whatever rolled in rather than on top
-   * of it. `coalesce` covers the first priority an account ever writes.
+   * New priorities start unsorted, so the user can decide where they belong.
+   * Existing records keep their existing category and ordering unless explicitly
+   * moved; a missing category is treated as `unsorted` on load.
    */
   await query(
-    `insert into priorities (id, user_id, body, created_on, sort_order)
-     values ($1, $2, $3, $4::date,
-             (select coalesce(max(sort_order), 0) + 1 from priorities where user_id = $2))`,
+    `insert into priorities (id, user_id, body, created_on, category, sort_order)
+     values ($1, $2, $3, $4::date, 'unsorted',
+             (select coalesce(max(sort_order), 0) + 1 from priorities where user_id = $2 and category = 'unsorted'))`,
     [id, userId, text, date],
   );
 }
@@ -444,17 +442,43 @@ export async function reorderPriorities(userId: string, ids: string[]): Promise<
   await transaction(async (q) => {
     const rows = await q<{ id: string }>(
       `select id from priorities where user_id = $1
-        order by sort_order, created_on, created_at`, [userId]);
+        order by category, sort_order, created_on, created_at`, [userId]);
 
     const moving = new Set(ids);
     const wanted = ids[Symbol.iterator]();
-    // Ids that are not this user's are silently ignored rather than 404'd: the
-    // only way to send one is a stale tab, and there is nothing to tell.
     const order = rows.map((r) => (moving.has(r.id) ? wanted.next().value ?? r.id : r.id));
 
     for (const [i, id] of order.entries()) {
       await q(`update priorities set sort_order = $3, updated_at = now()
                 where id = $1 and user_id = $2`, [id, userId, i]);
+    }
+  });
+}
+
+export async function savePriorityLayout(
+  userId: string,
+  items: { id: string; category: string; sortOrder: number }[],
+): Promise<void> {
+  if (!items.length) return;
+
+  await transaction(async (q) => {
+    const byCategory = new Map<string, { id: string; sortOrder: number }[]>();
+    for (const item of items) {
+      const category = normalizePriorityCategory(item.category);
+      const group = byCategory.get(category) ?? [];
+      group.push({ id: item.id, sortOrder: Number(item.sortOrder ?? 0) });
+      byCategory.set(category, group);
+    }
+
+    for (const [category, group] of byCategory.entries()) {
+      const ordered = [...group].sort((a, b) => a.sortOrder - b.sortOrder);
+      for (const [index, row] of ordered.entries()) {
+        await q(
+          `update priorities set category = $3, sort_order = $4, updated_at = now()
+            where id = $1 and user_id = $2`,
+          [row.id, userId, category, index],
+        );
+      }
     }
   });
 }

@@ -157,6 +157,10 @@ try {
      */
     ["user_preferences", "community_visible",
      "alter table user_preferences add column community_visible boolean not null default true"],
+    ["priorities", "category",
+     "alter table priorities add column category text not null default 'unsorted' " +
+     "check (category in ('unsorted','urgent_important','urgent_not_important'," +
+     "'important_not_urgent','not_important_not_urgent'))"],
   ]) {
     if (await columnExists(table, column)) continue;
 

@@ -369,6 +369,11 @@ create table priorities (
   created_on   date not null,
   -- The day it was ticked. Null means still open, which is what makes it roll.
   completed_on date,
+  -- A user's classification within the Eisenhower matrix. Legacy rows default to
+  -- `unsorted`, which is intentionally separate from the four quadrants.
+  category     text not null default 'unsorted'
+    check (category in ('unsorted','urgent_important','urgent_not_important',
+      'important_not_urgent','not_important_not_urgent')),
   -- The user's arrangement, as with habits. Ties broken by creation.
   sort_order   int  not null default 0,
   created_at   timestamptz not null default now(),
@@ -379,7 +384,7 @@ create table priorities (
 
 -- Every read is "this user's, oldest arrangement first"; the partial index is
 -- for the common one, which is the open ones.
-create index priorities_user_order on priorities (user_id, sort_order, created_on);
+create index priorities_user_order on priorities (user_id, category, sort_order, created_on);
 create index priorities_user_open  on priorities (user_id) where completed_on is null;
 
 -- A reflection on a whole month, written from the Insights review. Kept apart

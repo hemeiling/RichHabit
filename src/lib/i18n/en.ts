@@ -865,7 +865,8 @@ export const en = {
     empty: "The few things that matter most today.",
     placeholder: "Finish the project review",
     add: "Add",
-    /** What the day holds, rather than progress towards a limit. */
+    unsortedTitle: "Unsorted",
+    unsortedSubtitle: "Sort this into the right box",
     count: (done: number, total: number) =>
       `${done} completed · ${total} ${total === 1 ? "priority" : "priorities"}`,
     check: (text: string) => `Mark "${text}" done`,
@@ -874,6 +875,16 @@ export const en = {
     moveUp: (n: number) => `Move item ${n} up`,
     moveDown: (n: number) => `Move item ${n} down`,
     carriedFrom: (date: string) => `from ${date}`,
+    quadrants: {
+      unsorted: { title: "Unsorted", subtitle: "Sort into the right box" },
+      urgent_important: { title: "Urgent & Important", subtitle: "Do now" },
+      urgent_not_important: { title: "Urgent & Not Important", subtitle: "Delegate or handle quickly" },
+      important_not_urgent: { title: "Important & Not Urgent", subtitle: "Plan and schedule" },
+      not_important_not_urgent: { title: "Not Important & Not Urgent", subtitle: "Do later or eliminate" },
+    },
+    drag: (text: string) => `Drag "${text}" to a new quadrant`,
+    emptyQuadrant: "Drop here",
+    none: "Nothing here yet.",
     /*
      * Guidance, not a rule. Shown once the list has grown, and phrased so that
      * a long list reads as something to work with rather than a mistake — the

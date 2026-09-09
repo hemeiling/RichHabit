@@ -22,10 +22,28 @@ import type { Priority } from "@/lib/types";
  * only ever show what had been copied into that day's row.
  */
 export function prioritiesOn(all: Priority[], date: string): Priority[] {
-  // Filter only — the array arrives in the user's own order and stays in it.
-  return all.filter(
+  const categoryOrder: Record<string, number> = {
+    unsorted: 0,
+    urgent_important: 1,
+    urgent_not_important: 2,
+    important_not_urgent: 3,
+    not_important_not_urgent: 4,
+  };
+
+  const visible = all.filter(
     (p) => p.createdOn <= date && (p.completedOn === null || p.completedOn >= date),
   );
+
+  return visible
+    .map((p, index) => ({ p, index }))
+    .sort((a, b) => {
+      const diff = (categoryOrder[a.p.category] ?? 0) - (categoryOrder[b.p.category] ?? 0);
+      if (diff !== 0) return diff;
+      const orderDiff = (a.p.sortOrder ?? 0) - (b.p.sortOrder ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      return a.index - b.index;
+    })
+    .map(({ p }) => p);
 }
 
 /**

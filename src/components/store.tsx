@@ -31,6 +31,7 @@ interface Actions {
   setPriorityDone: (id: string, done: boolean, date: string) => void;
   deletePriority: (id: string) => void;
   reorderPriorities: (ids: string[]) => void;
+  updatePriorityLayout: (layout: { id: string; category: string; sortOrder: number }[]) => void;
   saveAwareness: (e: AwarenessEntry) => void;
   deleteAwareness: (id: string) => void;
   saveStack: (k: Stack) => void;
@@ -261,7 +262,14 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       run(
         (s) => ({
           ...s,
-          priorities: [...s.priorities, { id, text, createdOn: date, completedOn: null }],
+          priorities: [...s.priorities, {
+            id,
+            text,
+            createdOn: date,
+            completedOn: null,
+            category: "unsorted",
+            sortOrder: s.priorities.filter((p) => p.category === "unsorted").length,
+          }],
         }),
         () => db.addPriority(id, text, date),
       );
@@ -283,8 +291,6 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
 
     reorderPriorities: (ids) => run(
       (s) => {
-        // The ids are the visible subset of one day; everything not on screen
-        // keeps its place, so reordering today cannot shuffle a past day.
         const rank = new Map(ids.map((id, i) => [id, i]));
         const moving = s.priorities.filter((p) => rank.has(p.id));
         moving.sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
@@ -295,6 +301,25 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
         };
       },
       () => db.reorderPriorities(ids),
+    ),
+
+    updatePriorityLayout: (layout) => run(
+      (s) => {
+        const rank = new Map(layout.map((entry) => [entry.id, entry]));
+        return {
+          ...s,
+          priorities: s.priorities.map((p) => {
+            const next = rank.get(p.id);
+            if (!next) return p;
+            return {
+              ...p,
+              category: next.category as any,
+              sortOrder: Number(next.sortOrder ?? 0),
+            };
+          }),
+        };
+      },
+      () => db.updatePriorityLayout(layout),
     ),
 
     setMonthlyReflection: (month, body) => runDebounced(
