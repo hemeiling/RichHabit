@@ -1,119 +1,194 @@
 # RichHabit — Project Status
 
 > Last updated: 2026-09-09
-> Status: the `priorities.category` migration is applied to production. The
-> Priority Matrix drag-and-drop fix and the quick category control are built,
-> verified locally in a real browser, and deployed.
+> Status: `a59b118` is deployed and CLOSED as production-validated. The
+> quadrant-add iteration is built, verified locally, committed and NOT deployed.
 
-## 1. The production save failure — fixed
+## Deployed
 
-Adding a priority failed with "Something went wrong saving that." The deployed
-code wrote `priorities.category`; the production database had no such column,
-so the INSERT raised Postgres `42703`. The read path tolerates `42703` through
-`optionalRead`, which is why the list looked empty rather than broken.
+- Commit: `a59b118` "Ask what matters before deciding where it goes"
+- `origin/main` = `a59b118`; Render auto-deployed from `main`
+- Stylesheet `75a0769dfb9c2c0f.css`, sha256 `7493a68d…` — byte-identical to the
+  locally verified build
+- Strings chunk `629-b2e077beed5763d0.js` — byte-identical, and carries every
+  new string in both languages
+- `GET /api/health` → `ok: true`, database up
+- `/today` 307 and `/api/state` 401 when signed out; authorization intact
 
-Migration applied 2026-09-09 against the DIRECT Neon endpoint (no `-pooler` in
-the hostname), using the existing repository migration, unmodified:
+## Migration
 
-    RH_ALLOW_REMOTE=1 DATABASE_URL="$RH_PROD_MIGRATE_URL" npm run db:migrate
-    → added priorities.category
-    → priorities: already converted, left alone
-    Done — 1 change(s).   exit 0
+Applied to production by the Product Owner on 2026-09-09:
 
-Verified afterwards, read-only: the column is `text not null default 'unsorted'`
-with its CHECK constraint. All 32 production rows preserved, fingerprint over
-`id | body | created_on | completed_on | sort_order` identical before and after.
-No backfill was written: `normalizePriorityCategory` resolves `unsorted` to
-`important_not_urgent` at read time, so legacy lines appear under Important &
-Not Urgent without a stored value being rewritten.
+    added priorities.planned_on
+    priorities: already converted, left alone
+    Done — 1 change(s).
 
-## 2. The Priority Matrix — drag fixed, and a second way to file
+Verified afterwards, read-only, with the session set `default_transaction_read_only`:
 
-### Why drag was dead
+| Property | Value |
+| --- | --- |
+| `planned_on` | present, `date`, nullable, no default |
+| rows | 30 |
+| rows with a plan | 0 (no backfill) |
+| fingerprint | `bd0756fbeb816a2d110a4f82de1fb417` |
+| categories | `important_not_urgent`=11, `unsorted`=13, `urgent_important`=3, `not_important_not_urgent`=3 |
 
-`setDraggedId` was never called. `onDragStart` wrote to `dataTransfer` and
-nothing else, so `draggedId` stayed null, `handleDrop` returned at its first
-line, and `moveWithinCategory` was always called with `dragId === targetId`.
-Nothing could ever move. The whole card was also `draggable`, which put the
-drag in competition with the checkbox and the delete control.
+No category was rewritten and no row was backfilled. The thirteen `unsorted`
+rows are untouched.
 
-### What changed
+Honest limit: a true before-and-after fingerprint of the migration itself was
+not possible, because the Product Owner ran it while this session had no
+credential. What is verified is the schema and data as they stand now.
 
-- [src/lib/priorities.ts](src/lib/priorities.ts): `QUADRANTS` and
-  `layoutAfterMove(visible, id, toCategory, beforeId)` — one pure function that
-  answers "where does everything sit now" for every kind of move. Returns only
-  `{ id, category, sortOrder }`, densely numbered per quadrant, never `unsorted`.
-- [src/components/Priorities.tsx](src/components/Priorities.tsx): rewritten.
-  Drag lives on a grip that appears on hover on pointer devices only, matching
-  the habit rows; the card is carried as the drag image. Every card also has a
-  quiet category control that opens a menu — an anchored popover on a pointer
-  device, a bottom sheet on a phone, one component with the shape decided in
-  CSS. Arrow keys, Home/End, Escape, `aria-checked`, and a polite live region
-  announcing moves. The popover flips above the card when it would otherwise
-  open below the fold.
-- [src/app/globals.css](src/app/globals.css): matrix styles. Four muted quadrant
-  tokens, two of them the existing `--accent` and `--warn`. Colour appears only
-  as a 5px dot, once per card and once per box header. Drop states are a border
-  and an inset line, so nothing changes size while dragging.
-- [src/lib/db/queries.ts](src/lib/db/queries.ts): `savePriorityLayout` is now a
-  single `unnest` statement instead of one UPDATE per row. A drag on a 30-line
-  account was 30 round trips to Neon; it is now one. Only `category` and
-  `sort_order` are named in the statement.
-- [src/lib/i18n/en.ts](src/lib/i18n/en.ts), [src/lib/i18n/zh.ts](src/lib/i18n/zh.ts):
-  a `short` label per quadrant for the card, plus menu, empty and announcement
-  strings. Both languages.
+## What this release changed
 
-## 3. Verification
+- Quadrants reordered to Q1 top-left, Q2 top-right, Q3 bottom-left, Q4
+  bottom-right. Presentational; no stored category changed.
+- The automatic Q2 default is gone at every layer. `addPriority` takes the
+  quadrant; `parseNewPriority` rejects a create without one rather than
+  choosing. Two chips ask Important? and Urgent?, Add stays disabled until both
+  are answered, and the derived quadrant is shown before it is committed.
+- `planned_on`, offered on Q2 cards only, never set automatically. A passed day
+  on an open line shows amber and nothing else; a completed line never does.
+- One line under the heading, a nudge or an insight, never both. Every branch
+  counts what is on screen now. The once-a-day rule lives in `localStorage`.
+- Fixed the phone bottom sheet, which rendered far below the fold because
+  `.fade-in` leaves a computed identity matrix and so became the containing
+  block for `position: fixed`. Both card menus now portal to `<body>`, as
+  `Sheet` in ui.tsx already did. The bug predated this release and affected the
+  category control shipped in `c82913e`.
 
-Gates: typecheck clean; 419 tests passing across 25 files (11 new ones cover
-`layoutAfterMove`); lint clean; production build succeeds.
+## Verification
 
-Browser, driven against the local database with legacy `unsorted` rows, long
-English and long Chinese text, a carried-over line and a completed one:
+Typecheck clean, lint clean, production build succeeds, 440 tests passing.
+Locally, 31 of 31 browser checks passed across both languages, light and dark,
+at 1440px and 390px. Across a round of classifying, planning, moving and
+dragging, the fingerprint over id, text, `created_on` and `completed_on` did not
+move.
 
-- four quadrants, no Unsorted box, legacy lines under Important & Not Urgent
-- drag between quadrants, and reorder within one — both persist across reload
-- the category control moves a card, and persists across reload
-- operable from the keyboard; sheet on a phone; a tap-only move persists
-- English and Chinese, light and dark, 1440px and 390px, no sideways scrolling
-- no console or page errors
+## Production validation — COMPLETE
 
-Data preservation, proved at the column level: after dozens of drags, reorders,
-menu picks, keyboard moves and taps, the fingerprint over
-`id | body | created_on | completed_on` was byte-identical
-(`677a94741019c8d226c0ae2f8500e8b8`), while the arrangement fingerprint changed.
-Rearranging cannot touch a line's text, its id, or either of its dates.
+`a59b118` is production-validated and the release is CLOSED.
 
-Note on the harness: Playwright's `dragTo` helper does not engage Chromium's
-native HTML5 drag machinery. A real press-move-move-release does. The first
-"drag is broken" readings were the helper, not the app.
+Verified by this session, read-only: byte-exact parity on the stylesheet
+(`75a0769dfb9c2c0f.css`, sha256 `7493a68d…`) and on the strings chunk
+(`629-b2e077beed5763d0.js`), every new string present in both languages, health
+green, authorization intact, and the `planned_on` column present, nullable, with
+no row carrying a plan.
 
-## 4. State progression
-- Committed: yes
-- Pushed: yes
-- Migration applied to production: yes (2026-09-09)
-- Deployed: yes (Render auto-deploy from `main`)
-- Production verified after this release: NOT YET — see below
+Verified by the Product Owner in the signed-in UI on 2026-09-09:
 
-## 5. The one outstanding step
+- setting a planned date on a Q2 line succeeded
+- a reload preserved it
+- Clear removed it
+- a reload restored `+ Plan`
 
-Open production once Render has finished building, then:
+That exercises set, persist and clear on `planned_on` and returns the row to the
+state the migration left it in. No production priority content was changed.
 
-1. confirm the four quadrants render and the 32 lines appear
-2. add one priority and confirm it saves
-3. move one with the category control, and one by dragging
-4. reload and confirm both stayed
+## Quadrant-add iteration — BUILT, awaiting review
 
-## 6. Notes for whoever is next
+**Direct creation inside each quadrant**, complementary to the global Add row,
+which stays exactly as it is.
 
-- `.env.local` holds only the local database URL. Both Neon strings were deleted
-  on 2026-09-09, per the file's own header rule. `npm run inspect:prod` will
-  therefore fail closed until a credential is supplied on the command line.
-- Uncommitted and NOT mine: `scripts/inspect-prod-readonly.mjs` and
-  `tests/inspect-prod-readonly.test.ts` have working-tree edits that break
-  `tests/inspect-prod-readonly.test.ts` (it expects an `INSPECTION_START` log
-  line that the edited script no longer prints). Also untracked:
-  `docs/RichHabit_Solution_Architecture.md`, `docs/RichHabit_User_Manual.md`.
-  None of these were committed or deployed.
-- PGlite serves one connection at a time, so the dev server must be stopped
-  before any script can read the local database.
+- A quiet `+ Add here` / `+ 添加到这里` at the bottom of each box. Resting state
+  is that line alone — no permanent input, and certainly not four of them.
+- Clicking it reveals a compact inline input inside that quadrant: text field
+  plus Add. Enter submits. Escape closes. Clicking away closes it when empty.
+- No Important?/Urgent? questions: choosing the box IS the classification.
+  Q1 → `urgent_important`, Q2 → `important_not_urgent`,
+  Q3 → `urgent_not_important`, Q4 → `not_important_not_urgent`.
+- Collapses and clears after a successful create.
+- Must be easy to find from an empty quadrant; the current empty state should
+  carry the affordance rather than sitting beside it.
+- On a phone the input stays inside the quadrant. No modal, no bottom sheet.
+- No schema change. Reuses the category-aware `addPriority` path built in
+  `a59b118`, so a line created this way is identical to one created globally
+  except that the quadrant was already known.
+- A line added directly to Q2 gets NO `planned_on`. The existing `+ Plan`
+  action remains the only way a date is ever set.
+
+Tests to cover: each of the four boxes creating in its own category; Enter
+submits; an empty value cannot; the global flow still demands both answers; Q2
+direct creation leaves `planned_on` null; the quadrant survives a reload; and no
+horizontal overflow on a phone.
+
+Decisions (settled 2026-09-09, all four questions answered):
+
+1. New lines land at the BOTTOM of their box, keeping today's `addPriority`
+   numbering. A fresh line must not displace something deliberately ranked top.
+2. Text is never silently discarded. Empty input: clicking away or Escape
+   collapses it. Input with text: clicking away keeps it open, and Escape does
+   not discard either. After a successful Add, clear and collapse.
+3. An empty quadrant shows ONE piece of UI, not two: a centred, actionable
+   `＋ Add a priority here` / `＋ 在这里添加优先事项`, in the same quiet treatment
+   the current empty state uses. Clicking it opens the inline input.
+4. The empty quadrant stays a drop target. While a drag is in progress it
+   swaps to the existing `Drop here` / `拖到这里` and the Add affordance is
+   withdrawn, so a button never competes with the drop. It returns when the
+   drag ends.
+5. A non-empty quadrant puts the quiet `+ Add here` after the last card, so the
+   interaction reads the same in both states.
+6. The two creation models stay distinct and both remain. Global Add means "help
+   me classify this" and therefore asks both questions. Quadrant Add means "I
+   know where this belongs" and therefore asks neither.
+
+7. Escape closes while preserving the draft. No visible Cancel button; the UI
+   stays quiet. The full table:
+
+   | State | Click away | Escape |
+   | --- | --- | --- |
+   | Empty | close | close |
+   | Has text | KEEP OPEN | close, draft preserved |
+
+   Drafts are per quadrant and independent: typing in Q2, closing it, working
+   in Q1, then reopening Q2 restores the Q2 draft exactly. A successful Add
+   clears that quadrant's draft and collapses the input. Drafts are in-memory
+   only and need not survive a reload or navigation.
+
+8. When a quadrant holds a preserved draft and its input is collapsed, the
+   affordance changes from `+ Add here` to a `Continue adding…` variant, so
+   unfinished text is visible as a state without showing the text itself.
+
+9. The collapsed wording, complete. No part of a draft is ever shown while
+   collapsed.
+
+   | Quadrant | No draft | Preserved draft |
+   | --- | --- | --- |
+   | Has cards | `+ Add here` / `+ 添加到这里` | `Continue adding…` / `继续添加…` |
+   | Empty | `＋ Add a priority here` / `＋ 在这里添加优先事项` | `Continue adding…` / `继续添加…` |
+
+   While a drag is in progress an empty quadrant replaces EITHER version with
+   `Drop here` / `拖到这里`, and on drag end restores whichever of the two is
+   correct for that quadrant's draft state.
+
+   Three new strings per language: the two add affordances and the continue one.
+
+UX specification is complete. No further design decisions are outstanding.
+
+## Next follow-up — recorded, NOT implemented
+
+Legacy `unsorted` priorities should present as **Unclassified / 未分类** rather
+than resolving implicitly to Not Urgent & Important.
+
+Why: this release removed the automatic Q2 default because the app must not
+decide what matters to someone. Thirteen production rows are still *displayed*
+as though the user had chosen Q2, which is the same guess wearing the clothes of
+a decision. A row that has since been dragged or re-filed is no longer legacy,
+because the move wrote a real category — so the population is specifically rows
+nobody has ever classified.
+
+Do not implement without an explicit decision on how an unclassified line should
+behave in a four-box grid.
+
+## Notes
+- `.env.local` holds only the local `127.0.0.1` URL and `PG_POOL_MAX`. No Neon
+  string, no `-pooler`, no `RH_PROD_MIGRATE_URL`. Gitignored and untracked.
+- `npm run inspect:prod` is unusable: its read-only credential is gone, and the
+  script has uncommitted edits that also break its own test
+  (`tests/inspect-prod-readonly.test.ts`, expecting an `INSPECTION_START` log
+  line the edited script no longer prints). Both files are deliberately
+  untouched, as are `docs/RichHabit_Solution_Architecture.md` and
+  `docs/RichHabit_User_Manual.md`.
+- PGlite serves one connection at a time; stop the dev server before running any
+  script against the local database.

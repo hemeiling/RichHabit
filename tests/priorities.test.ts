@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseNewPriority, parsePriorityDone, parsePriorityPlan } from "../src/lib/validate";
 import {
-  QUADRANTS, carriedFrom, cueFor, doneOn, isPlanOverdue, layoutAfterMove, prioritiesOn,
-  quadrantFor,
+  NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, hasDraft, isPlanOverdue,
+  layoutAfterMove, prioritiesOn, quadrantAdd, quadrantFor,
 } from "../src/lib/priorities";
 import { DEFAULT_PRIORITY_CATEGORY, emptyState, normalizePriorityCategory } from "../src/lib/types";
 import type { Priority } from "../src/lib/types";
@@ -522,6 +522,113 @@ describe("the one line under the heading", () => {
       }
       expect(dict.priorities.insight.protect(6)).toContain("6");
       expect(dict.priorities.insight.mostlyUrgent()).toBeTruthy();
+    }
+  });
+});
+
+/*
+ * Adding straight into a box.
+ *
+ * The risky part is not the create — that reuses the path the global row
+ * already uses — it is the four-way table for dismissing a half-typed line.
+ * Getting it wrong means silently throwing away someone's words, so it is
+ * pinned here case by case rather than left to the component.
+ */
+describe("adding inside one quadrant", () => {
+  const open = (category: any = "urgent_important") =>
+    quadrantAdd(NO_QUADRANT_ADD, { type: "open", category });
+  const typed = (text: string, category: any = "urgent_important") =>
+    quadrantAdd(open(category), { type: "type", category, text });
+
+  it("opens the box that was asked for", () => {
+    expect(open("urgent_not_important").open).toBe("urgent_not_important");
+  });
+
+  it("keeps what is typed, per quadrant", () => {
+    const s = quadrantAdd(typed("write it down"), {
+      type: "type", category: "not_important_not_urgent", text: "other box" });
+    expect(s.drafts.urgent_important).toBe("write it down");
+    expect(s.drafts.not_important_not_urgent).toBe("other box");
+  });
+
+  // ---- the table ----------------------------------------------------------
+  it("closes an empty field when clicked away from", () => {
+    expect(quadrantAdd(open(), { type: "away" }).open).toBeNull();
+  });
+
+  it("closes an empty field on Escape", () => {
+    expect(quadrantAdd(open(), { type: "escape" }).open).toBeNull();
+  });
+
+  /* A stray click elsewhere is not a decision to abandon a sentence. */
+  it("leaves a field with words in it open when clicked away from", () => {
+    const s = quadrantAdd(typed("half a thought"), { type: "away" });
+    expect(s.open).toBe("urgent_important");
+    expect(s.drafts.urgent_important).toBe("half a thought");
+  });
+
+  it("closes on Escape but never destroys the words", () => {
+    const s = quadrantAdd(typed("half a thought"), { type: "escape" });
+    expect(s.open).toBeNull();
+    expect(s.drafts.urgent_important).toBe("half a thought");
+  });
+
+  it("gives the draft back when that quadrant is reopened", () => {
+    const closed = quadrantAdd(typed("half a thought"), { type: "escape" });
+    const again = quadrantAdd(closed, { type: "open", category: "urgent_important" });
+    expect(again.drafts.urgent_important).toBe("half a thought");
+  });
+
+  /* Working in another box must not disturb the first one's draft. */
+  it("keeps drafts apart across quadrants", () => {
+    let s = typed("q1 words", "urgent_important");
+    s = quadrantAdd(s, { type: "escape" });
+    s = quadrantAdd(s, { type: "open", category: "important_not_urgent" });
+    s = quadrantAdd(s, { type: "type", category: "important_not_urgent", text: "q2 words" });
+    s = quadrantAdd(s, { type: "escape" });
+    s = quadrantAdd(s, { type: "open", category: "urgent_important" });
+    expect(s.drafts.urgent_important).toBe("q1 words");
+    expect(s.drafts.important_not_urgent).toBe("q2 words");
+  });
+
+  it("clears only that quadrant's draft once the line is created", () => {
+    let s = typed("q1 words", "urgent_important");
+    s = quadrantAdd(s, { type: "type", category: "important_not_urgent", text: "q2 words" });
+    s = quadrantAdd(s, { type: "added" });
+    expect(s.open).toBeNull();
+    expect(s.drafts.urgent_important).toBeUndefined();
+    expect(s.drafts.important_not_urgent).toBe("q2 words");
+  });
+
+  it("treats whitespace as nothing waiting", () => {
+    const s = quadrantAdd(typed("   "), { type: "escape" });
+    expect(hasDraft(s, "urgent_important")).toBe(false);
+    expect(s.open).toBeNull();
+  });
+
+  it("ignores dismissal when nothing is open", () => {
+    expect(quadrantAdd(NO_QUADRANT_ADD, { type: "escape" })).toEqual(NO_QUADRANT_ADD);
+    expect(quadrantAdd(NO_QUADRANT_ADD, { type: "away" })).toEqual(NO_QUADRANT_ADD);
+  });
+
+  /* Choosing the box is the classification; there is nothing else to ask. */
+  it("creates in the quadrant it was opened from, in either language", () => {
+    for (const q of QUADRANTS) {
+      expect(parseNewPriority({ id: ID, text: "x", date: "2026-09-09", category: q }).category)
+        .toBe(q);
+    }
+  });
+
+  it("has three wordings for a collapsed box, in both languages", () => {
+    for (const dict of [en, zh]) {
+      expect(dict.priorities.addHere).toBeTruthy();
+      expect(dict.priorities.addFirstHere).toBeTruthy();
+      expect(dict.priorities.continueAdding).toBeTruthy();
+      // The waiting-draft wording must not be the same line as the ordinary one.
+      expect(dict.priorities.continueAdding).not.toBe(dict.priorities.addHere);
+      expect(dict.priorities.continueAdding).not.toBe(dict.priorities.addFirstHere);
+      // An empty box still has its own drop wording for the drag case.
+      expect(dict.priorities.dropHere).toBeTruthy();
     }
   });
 });

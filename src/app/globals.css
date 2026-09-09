@@ -538,3 +538,37 @@ input[type="range"] { accent-color: var(--accent); }
 
 /* The native date field inside the planning popover, at the sheet's own width. */
 .qmenu .input[type="date"] { font-size: 14px; padding: 9px 11px; }
+
+/*
+ * Adding straight into a box.
+ *
+ * Collapsed, this is one quiet line and nothing more — four permanent input
+ * boxes would turn a matrix anyone can read at a glance into a form. The empty
+ * state IS the affordance rather than sitting beside it, so an empty quadrant
+ * invites a line instead of reporting an absence.
+ */
+.qempty {
+  display: block; width: 100%;
+  border: 1px dashed var(--line); border-radius: 12px;
+  padding: 12px 10px; text-align: center;
+  font: inherit; font-size: 11.5px; color: var(--faint);
+  background: none;
+}
+/* Only the version that is a button gets a button's manners. */
+.qempty-add { cursor: pointer; transition: .14s ease; }
+.qempty-add:hover { border-color: var(--muted); color: var(--ink); background: var(--surface); }
+
+/* After the last card, at the weight of a caption rather than a control. */
+.qadd-open {
+  display: block; width: 100%; text-align: left;
+  border: 1px solid transparent; background: none; border-radius: 10px;
+  padding: 7px 9px; margin-top: 2px;
+  font: inherit; font-size: 11.5px; color: var(--faint);
+  cursor: pointer; transition: .14s ease;
+}
+.qadd-open:hover { color: var(--ink); background: var(--surface); border-color: var(--line); }
+
+.qadd { display: flex; gap: 6px; margin-top: 2px; animation: fadeIn .16s ease both; }
+/* Smaller than the global row: this sits inside a box, not under the matrix. */
+.qadd .input { font-size: 13.5px; padding: 8px 10px; border-radius: 10px; }
+.qadd .btn { padding: 7px 13px; font-size: 13px; }

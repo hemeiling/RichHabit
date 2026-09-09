@@ -5,8 +5,8 @@ import { useHabits } from "@/components/store";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { shortDateFor } from "@/lib/i18n";
 import {
-  QUADRANTS, carriedFrom, cueFor, doneOn, isPlanOverdue, layoutAfterMove, prioritiesOn,
-  quadrantFor,
+  NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, hasDraft, isPlanOverdue,
+  layoutAfterMove, prioritiesOn, quadrantAdd, quadrantFor,
 } from "@/lib/priorities";
 import { normalizePriorityCategory, type Priority, type PriorityCategory } from "@/lib/types";
 
@@ -365,6 +365,82 @@ function PriorityCard({
   );
 }
 
+/**
+ * Adding straight into one box.
+ *
+ * The second of two creation paths, and the one for "I already know where this
+ * goes". Choosing the quadrant IS the classification, so this never asks
+ * Important? or Urgent? — asking again would be asking someone to justify a
+ * decision they just made by pointing at it.
+ *
+ * Collapsed, it is one quiet line. It is a button in three wordings, or, while
+ * something is being dragged over an empty box, not a button at all: a drop
+ * target must not have to compete with something clickable sitting on top of it.
+ */
+function QuadrantAdd({
+  category, empty, dragging, open, draft, t,
+  onOpen, onType, onEscape, onSubmit,
+}: {
+  category: PriorityCategory;
+  empty: boolean;
+  dragging: boolean;
+  open: boolean;
+  draft: string;
+  t: T;
+  onOpen: () => void;
+  onType: (text: string) => void;
+  onEscape: () => void;
+  onSubmit: () => void;
+}) {
+  const fieldRef = useRef<HTMLInputElement>(null);
+  const quadrant = t.priorities.quadrants[category].title;
+
+  useEffect(() => { if (open) fieldRef.current?.focus(); }, [open]);
+
+  // While a drag is live an empty box is a landing place and nothing else.
+  if (dragging && empty) {
+    return (
+      <div className="qempty" aria-hidden="true">{t.priorities.dropHere}</div>
+    );
+  }
+
+  if (open) {
+    return (
+      <div className="qadd" data-open="true">
+        <input
+          ref={fieldRef} className="input" value={draft} maxLength={200}
+          placeholder={t.priorities.placeholder}
+          aria-label={t.priorities.addTo(quadrant)}
+          onChange={(e) => onType(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
+            // Escape closes either way; the draft outlives it. See quadrantAdd.
+            if (e.key === "Escape") { e.stopPropagation(); onEscape(); }
+          }}
+        />
+        <button className="btn" style={{ flex: "none" }}
+          disabled={!draft.trim()} onClick={onSubmit}>
+          {t.priorities.add}
+        </button>
+      </div>
+    );
+  }
+
+  const waiting = draft.trim().length > 0;
+  return (
+    <button
+      type="button"
+      className={empty ? "qempty qempty-add" : "qadd-open"}
+      aria-label={waiting ? t.priorities.continueIn(quadrant) : t.priorities.addTo(quadrant)}
+      onClick={onOpen}
+    >
+      {waiting
+        ? t.priorities.continueAdding
+        : empty ? t.priorities.addFirstHere : t.priorities.addHere}
+    </button>
+  );
+}
+
 export default function Priorities({ date }: { date: string }) {
   const { state, actions } = useHabits();
   const t = useT();
@@ -382,6 +458,8 @@ export default function Priorities({ date }: { date: string }) {
   const [planFor, setPlanFor] = useState<string | null>(null);
   const [nudgeAllowed, setNudgeAllowed] = useState(false);
   const [cueGone, setCueGone] = useState(false);
+  /* Which box's field is open, and what is waiting in each. See quadrantAdd. */
+  const [adding, setAdding] = useState(NO_QUADRANT_ADD);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCard, setOverCard] = useState<string | null>(null);
   const [overQuad, setOverQuad] = useState<PriorityCategory | null>(null);
@@ -406,6 +484,30 @@ export default function Priorities({ date }: { date: string }) {
       setNudgeAllowed(window.localStorage.getItem(NUDGE_KEY) !== date);
     } catch { setNudgeAllowed(false); }
   }, [date]);
+
+  /*
+   * A press that starts outside the open field. Empty, it collapses; with words
+   * in it, it stays exactly where it is, because a stray click is not a decision
+   * to throw away a sentence.
+   */
+  useEffect(() => {
+    if (!adding.open) return;
+    const away = (e: PointerEvent) => {
+      if ((e.target as HTMLElement)?.closest?.(".qadd")) return;
+      setAdding((s) => quadrantAdd(s, { type: "away" }));
+    };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [adding.open]);
+
+  const addHere = (category: PriorityCategory) => {
+    const text = (adding.drafts[category] ?? "").trim();
+    if (!text) return;
+    // The same call the global row makes. The only difference is that the
+    // quadrant was already known, so nothing had to be asked to learn it.
+    actions.addPriority(date, text, category);
+    setAdding((s) => quadrantAdd(s, { type: "added" }));
+  };
 
   const dismissCue = () => {
     setCueGone(true);
@@ -528,12 +630,7 @@ export default function Priorities({ date }: { date: string }) {
               </div>
 
               <div className="space-y-1.5">
-                {items.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-[var(--line)] px-2.5 py-3 text-center faint"
-                    style={{ fontSize: 11.5 }}>
-                    {dragId ? t.priorities.dropHere : t.priorities.emptyQuadrant}
-                  </div>
-                ) : items.map((item) => (
+                {items.map((item) => (
                   <PriorityCard
                     key={item.id} item={item} category={category} date={date} locale={locale} t={t}
                     dragging={dragId === item.id}
@@ -559,6 +656,19 @@ export default function Priorities({ date }: { date: string }) {
                     onDropOnCard={() => { if (dragId) move(dragId, category, item.id); endDrag(); }}
                   />
                 ))}
+
+                <QuadrantAdd
+                  category={category}
+                  empty={items.length === 0}
+                  dragging={dragId !== null}
+                  open={adding.open === category}
+                  draft={adding.drafts[category] ?? ""}
+                  t={t}
+                  onOpen={() => setAdding((s) => quadrantAdd(s, { type: "open", category }))}
+                  onType={(text) => setAdding((s) => quadrantAdd(s, { type: "type", category, text }))}
+                  onEscape={() => setAdding((s) => quadrantAdd(s, { type: "escape" }))}
+                  onSubmit={() => addHere(category)}
+                />
               </div>
             </div>
           );

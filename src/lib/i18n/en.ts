@@ -929,6 +929,20 @@ export const en = {
     movedTo: (text: string, quadrant: string) => `"${text}" moved to ${quadrant}`,
     emptyQuadrant: "Nothing here",
     dropHere: "Drop here",
+    /*
+     * Adding straight into a box. Choosing the box IS the classification, so
+     * this path never asks Important? or Urgent? — the global row is the one
+     * for "I have a thing and do not know where it goes".
+     *
+     * Three wordings, because a collapsed box is in one of three states: it has
+     * cards, it is empty, or it is holding words someone started and left. The
+     * third never shows the words themselves.
+     */
+    addHere: "+ Add here",
+    addFirstHere: "＋ Add a priority here",
+    continueAdding: "Continue adding…",
+    addTo: (quadrant: string) => `Add a priority to ${quadrant}`,
+    continueIn: (quadrant: string) => `Continue the priority you started in ${quadrant}`,
     none: "Nothing here yet.",
     /*
      * Guidance, not a rule. Shown once the list has grown, and phrased so that

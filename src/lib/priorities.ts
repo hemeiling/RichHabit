@@ -220,3 +220,80 @@ export function cueFor(
 
   return null;
 }
+
+/**
+ * The inline "add to this box" input, as a state machine.
+ *
+ * Which quadrant's field is open, and what has been typed into each. Extracted
+ * from the component because the interesting part is a table of four cases —
+ * empty or not, dismissed by key or by click — and a table is worth testing
+ * rather than reading back off a pile of handlers.
+ *
+ *   |          | click away | Escape                  |
+ *   | empty    | close      | close                   |
+ *   | has text | KEEP OPEN  | close, draft preserved  |
+ *
+ * The asymmetry is deliberate. Clicking away is often accidental, so a field
+ * with words in it stays put; Escape is a decision, so it closes — but it still
+ * cannot destroy what was typed, which is why the draft outlives the close and
+ * comes back when that quadrant is reopened.
+ *
+ * Drafts are per quadrant and independent: a sentence started in one box is
+ * still there after working in another. They are in-memory only. A reload
+ * clearing them is fine — an unsent line is a thought, not a record, and
+ * persisting it would mean writing something the user never asked to save.
+ */
+export interface QuadrantAdd {
+  /** The quadrant whose field is open, or null when all are collapsed. */
+  open: PriorityCategory | null;
+  /** What has been typed per quadrant. Absent means nothing is waiting. */
+  drafts: Partial<Record<PriorityCategory, string>>;
+}
+
+export const NO_QUADRANT_ADD: QuadrantAdd = { open: null, drafts: {} };
+
+export type QuadrantAddEvent =
+  | { type: "open"; category: PriorityCategory }
+  | { type: "type"; category: PriorityCategory; text: string }
+  | { type: "escape" }
+  | { type: "away" }
+  | { type: "added" };
+
+/** Whether a quadrant is holding unfinished words while collapsed. */
+export const hasDraft = (state: QuadrantAdd, category: PriorityCategory): boolean =>
+  (state.drafts[category] ?? "").trim().length > 0;
+
+export function quadrantAdd(state: QuadrantAdd, e: QuadrantAddEvent): QuadrantAdd {
+  switch (e.type) {
+    case "open":
+      // Reopening restores whatever was left there; nothing is cleared.
+      return { ...state, open: e.category };
+
+    case "type":
+      return { ...state, drafts: { ...state.drafts, [e.category]: e.text } };
+
+    case "escape": {
+      if (!state.open) return state;
+      if (hasDraft(state, state.open)) return { ...state, open: null };
+      const drafts = { ...state.drafts };
+      delete drafts[state.open];
+      return { open: null, drafts };
+    }
+
+    case "away": {
+      if (!state.open) return state;
+      // Words on screen are not thrown away by a stray click elsewhere.
+      if (hasDraft(state, state.open)) return state;
+      const drafts = { ...state.drafts };
+      delete drafts[state.open];
+      return { open: null, drafts };
+    }
+
+    case "added": {
+      if (!state.open) return state;
+      const drafts = { ...state.drafts };
+      delete drafts[state.open];
+      return { open: null, drafts };
+    }
+  }
+}
