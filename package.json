@@ -12,6 +12,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "inspect:prod": "node scripts/inspect-prod-readonly.mjs",
     "db:dev": "node scripts/dev-db.mjs",
     "db:setup": "node scripts/db-setup.mjs",
     "admin:grant": "node scripts/grant-admin.mjs",

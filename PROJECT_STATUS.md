@@ -1,47 +1,43 @@
 # RichHabit — Project Status
 
 > Last updated: 2026-09-09
-> Status: local verification complete; no production deploy was performed in this session.
+> Status: read-only inspection helper fixed and verified locally; no production inspection or deployment was performed because no valid rotated read-only production credential is available in this shell.
 
-## 1. Current Work
+## Before
+- Production priority count: not established yet.
+- Production unfinished count: not established yet.
+- Production schema status: not established yet.
+- Production credential status: no valid rotated `RH_PROD_READONLY_URL` currently available in this session.
 
-### Today priorities / Eisenhower matrix
-- [x] Redesigned the priority panel into a 2x2 matrix with an Unsorted bucket.
-- [x] New priorities default to the unsorted quadrant until the user explicitly classifies them.
-- [x] Existing priorities remain backward compatible and default to unsorted when they lack category metadata.
-- [x] Drag-and-drop ordering is persisted per quadrant while preserving original user sequence when sort order is equal.
-- [x] Original rollover behavior remains intact: same record ID, original creation date, same category, manual ordering within that category.
-- [x] Added the safe additive schema path for category/sort metadata without breaking older records.
+## Changes
+- [scripts/inspect-prod-readonly.mjs](scripts/inspect-prod-readonly.mjs): fixed the fail-closed privilege validation to use PostgreSQL-valid checks only; removed the invalid table-level `ALTER` privilege check.
+- [tests/inspect-prod-readonly.test.ts](tests/inspect-prod-readonly.test.ts): verified the helper accepts a safe read-only fixture, rejects a write-capable fixture, and never prints credentials.
+- [package.json](package.json): added the explicit `inspect:prod` command.
+- Local app DB config remained unchanged. No production DB or app config was switched.
 
-Relevant files:
-- [src/components/Priorities.tsx](src/components/Priorities.tsx)
-- [src/lib/priorities.ts](src/lib/priorities.ts)
-- [src/lib/types.ts](src/lib/types.ts)
-- [src/lib/db/queries.ts](src/lib/db/queries.ts)
-- [db/schema.sql](db/schema.sql)
-- [scripts/migrate.mjs](scripts/migrate.mjs)
+## Verification
+Fresh proof command:
+- `npm test -- --run tests/inspect-prod-readonly.test.ts`
+- Result: 1 file passed, 3/3 tests passed.
 
-## 2. Verification
+Additional note:
+- The helper is intentionally fail-closed and will not run without a valid, non-local `RH_PROD_READONLY_URL`.
+- No production inspection query was executed because the required credential is not presently available.
 
-Fresh proof run:
-- `npm run typecheck && npm test -- --run tests/priorities.test.ts`
-- Result: 34/34 tests passed.
+## After
+- Production priority count: not yet inspected.
+- Four-quadrant status: implemented locally, not yet deployed.
+- Previous-data status: not yet established in production.
+- Deployment status: not deployed.
+- Production verification status: not run.
 
-Additional checks:
-- `npm run lint` → passed
-- `npm run build` → passed
+## State progression
+- Implemented locally: yes
+- Committed: not yet
+- Pushed: not yet
+- Migration applied: not yet
+- Deployed: no
+- Production verified: no
 
-Notes:
-- The build shows warnings about `maxDuration` config in the coach/recommendation routes, but Next.js still completed the production build successfully. These warnings are not blocking the priority fix.
-
-## 3. Risk / Deployment Notes
-
-- The migration path is additive and non-destructive.
-- Legacy rows are treated as unsorted rather than filtered out or reset.
-- No production deployment or database write was performed in this session.
-
-## 4. Recommended Next Step
-
-1. Review the matrix in a real browser session and smoke-test the drag/drop flow with a signed-in account.
-2. If the product owner approves release, deploy with the existing additive migration and confirm the Today page still loads for older rows without masquerading as an empty account.
-3. After deployment, verify a legacy user account still shows their existing priorities and preserved ordering without data loss.
+## Safety gate
+If a valid rotated production read-only credential becomes available, the next step is to run `npm run inspect:prod` only with that credential present. No production database write or migration will be run until the baseline is established and the data-preservation conditions are confirmed.

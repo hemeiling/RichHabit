@@ -74,17 +74,16 @@ export default function Priorities({ date }: { date: string }) {
   };
 
   const groups = useMemo(() => {
-    const base: Record<PriorityCategory, Priority[]> = {
-      unsorted: allItems.filter((item) => item.category === "unsorted"),
+    const base = {
       urgent_important: allItems.filter((item) => item.category === "urgent_important"),
       urgent_not_important: allItems.filter((item) => item.category === "urgent_not_important"),
       important_not_urgent: allItems.filter((item) => item.category === "important_not_urgent"),
       not_important_not_urgent: allItems.filter((item) => item.category === "not_important_not_urgent"),
-    };
-    for (const key of Object.keys(base) as Array<keyof typeof base>) {
+    } as Record<string, Priority[]>;
+    for (const key of Object.keys(base)) {
       base[key].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     }
-    return base;
+    return base as Record<PriorityCategory, Priority[]>;
   }, [allItems]);
 
   const handleDrop = (category: PriorityCategory) => {
@@ -136,7 +135,6 @@ export default function Priorities({ date }: { date: string }) {
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         {([
-          { key: "unsorted", category: "unsorted" },
           { key: "urgent_important", category: "urgent_important" },
           { key: "urgent_not_important", category: "urgent_not_important" },
           { key: "important_not_urgent", category: "important_not_urgent" },

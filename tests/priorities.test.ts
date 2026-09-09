@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseNewPriority, parsePriorityDone } from "../src/lib/validate";
 import { carriedFrom, doneOn, prioritiesOn } from "../src/lib/priorities";
-import { emptyState } from "../src/lib/types";
+import { DEFAULT_PRIORITY_CATEGORY, emptyState, normalizePriorityCategory } from "../src/lib/types";
 import type { Priority } from "../src/lib/types";
 import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
@@ -188,16 +188,18 @@ describe("the state shape", () => {
     expect(emptyState().priorities).toEqual([]);
   });
 
-  it("defaults a legacy priority to the unsorted quadrant", () => {
+  it("defaults a legacy priority to the important & not urgent quadrant", () => {
     const legacy = { ...p("2026-08-10"), category: undefined } as any;
-    expect(legacy.category ?? "unsorted").toBe("unsorted");
+    expect(normalizePriorityCategory(legacy.category)).toBe("important_not_urgent");
+    expect(normalizePriorityCategory("unsorted")).toBe("important_not_urgent");
+    expect(DEFAULT_PRIORITY_CATEGORY).toBe("important_not_urgent");
   });
 
   it("keeps category order stable inside a quadrant", () => {
     const all = [
       { ...p("2026-08-10", null, "a"), category: "urgent_important", sortOrder: 1 },
       { ...p("2026-08-10", null, "b"), category: "urgent_important", sortOrder: 0 },
-      { ...p("2026-08-10", null, "c"), category: "unsorted", sortOrder: 0 },
+      { ...p("2026-08-10", null, "c"), category: "important_not_urgent", sortOrder: 0 },
     ];
     const urgent = all.filter((x) => x.category === "urgent_important").sort((a, b) => a.sortOrder - b.sortOrder);
     expect(urgent.map((x) => x.text)).toEqual(["b", "a"]);

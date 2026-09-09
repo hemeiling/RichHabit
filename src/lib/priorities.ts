@@ -1,4 +1,4 @@
-import type { Priority } from "@/lib/types";
+import { normalizePriorityCategory, type Priority } from "@/lib/types";
 
 /**
  * Which priorities belong on a given day, and whether each was finished by
@@ -23,11 +23,11 @@ import type { Priority } from "@/lib/types";
  */
 export function prioritiesOn(all: Priority[], date: string): Priority[] {
   const categoryOrder: Record<string, number> = {
-    unsorted: 0,
-    urgent_important: 1,
-    urgent_not_important: 2,
-    important_not_urgent: 3,
-    not_important_not_urgent: 4,
+    urgent_important: 0,
+    urgent_not_important: 1,
+    important_not_urgent: 2,
+    not_important_not_urgent: 3,
+    unsorted: 2,
   };
 
   const visible = all.filter(
@@ -35,9 +35,9 @@ export function prioritiesOn(all: Priority[], date: string): Priority[] {
   );
 
   return visible
-    .map((p, index) => ({ p, index }))
+    .map((p, index) => ({ p, index, category: normalizePriorityCategory(p.category) }))
     .sort((a, b) => {
-      const diff = (categoryOrder[a.p.category] ?? 0) - (categoryOrder[b.p.category] ?? 0);
+      const diff = (categoryOrder[a.category] ?? categoryOrder.important_not_urgent) - (categoryOrder[b.category] ?? categoryOrder.important_not_urgent);
       if (diff !== 0) return diff;
       const orderDiff = (a.p.sortOrder ?? 0) - (b.p.sortOrder ?? 0);
       if (orderDiff !== 0) return orderDiff;

@@ -213,18 +213,25 @@ export interface DayJournal {
  * then disagrees with itself about whether you called them.
  */
 export const PRIORITY_CATEGORIES = [
-  "unsorted",
   "urgent_important",
   "urgent_not_important",
   "important_not_urgent",
   "not_important_not_urgent",
+  "unsorted",
 ] as const;
 export type PriorityCategory = (typeof PRIORITY_CATEGORIES)[number];
-export const DEFAULT_PRIORITY_CATEGORY: PriorityCategory = "unsorted";
+export const DEFAULT_PRIORITY_CATEGORY: PriorityCategory = "important_not_urgent";
 
 export function normalizePriorityCategory(value: unknown): PriorityCategory {
-  return typeof value === "string" && PRIORITY_CATEGORIES.includes(value as PriorityCategory)
-    ? (value as PriorityCategory)
+  if (typeof value !== "string") return DEFAULT_PRIORITY_CATEGORY;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "" || normalized === "unsorted" || normalized === "unknown" || normalized === "legacy" || normalized === "null") {
+    return DEFAULT_PRIORITY_CATEGORY;
+  }
+
+  return PRIORITY_CATEGORIES.includes(normalized as PriorityCategory)
+    ? (normalized as PriorityCategory)
     : DEFAULT_PRIORITY_CATEGORY;
 }
 

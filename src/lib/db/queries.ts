@@ -382,14 +382,15 @@ export async function addPriority(
   userId: string, id: string, text: string, date: string,
 ): Promise<void> {
   /*
-   * New priorities start unsorted, so the user can decide where they belong.
-   * Existing records keep their existing category and ordering unless explicitly
-   * moved; a missing category is treated as `unsorted` on load.
+   * New priorities default into the compatibility bucket used by the four-way
+   * matrix. Legacy rows remain readable through normalizePriorityCategory(),
+   * and we avoid rewriting or recreating existing data while making the UI
+   * predictable again.
    */
   await query(
     `insert into priorities (id, user_id, body, created_on, category, sort_order)
-     values ($1, $2, $3, $4::date, 'unsorted',
-             (select coalesce(max(sort_order), 0) + 1 from priorities where user_id = $2 and category = 'unsorted'))`,
+     values ($1, $2, $3, $4::date, 'important_not_urgent',
+             (select coalesce(max(sort_order), 0) + 1 from priorities where user_id = $2 and category = 'important_not_urgent'))`,
     [id, userId, text, date],
   );
 }
