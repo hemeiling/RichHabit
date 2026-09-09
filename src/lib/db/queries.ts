@@ -456,32 +456,58 @@ export async function reorderPriorities(userId: string, ids: string[]): Promise<
   });
 }
 
+/**
+ * Writes an arrangement: which quadrant each priority sits in, and where.
+ *
+ * One statement, not one per row. It used to be a loop inside a transaction,
+ * which meant a single drag on an account with thirty open lines paid thirty
+ * round trips to a database that is a continent away — perceptible as lag on
+ * exactly the interaction that has to feel immediate. `unnest` turns the whole
+ * arrangement into one set of rows and joins against it, so the cost is one
+ * trip regardless of how long the list is, and it is still atomic.
+ *
+ * `category` and `sort_order` are the only columns named. Ids are matched, not
+ * written, and body, created_on and completed_on are not mentioned at all — so
+ * rearranging cannot lose a line's text or its history, whatever it is passed.
+ * The `user_id` predicate is what keeps one account out of another's rows.
+ */
 export async function savePriorityLayout(
   userId: string,
   items: { id: string; category: string; sortOrder: number }[],
 ): Promise<void> {
   if (!items.length) return;
 
-  await transaction(async (q) => {
-    const byCategory = new Map<string, { id: string; sortOrder: number }[]>();
-    for (const item of items) {
-      const category = normalizePriorityCategory(item.category);
-      const group = byCategory.get(category) ?? [];
-      group.push({ id: item.id, sortOrder: Number(item.sortOrder ?? 0) });
-      byCategory.set(category, group);
-    }
+  // Renumbered here rather than trusted from the client: the browser sends what
+  // it drew, and dense ordering within a quadrant is the server's invariant.
+  const byCategory = new Map<string, { id: string; sortOrder: number }[]>();
+  for (const item of items) {
+    const category = normalizePriorityCategory(item.category);
+    const group = byCategory.get(category) ?? [];
+    group.push({ id: item.id, sortOrder: Number(item.sortOrder ?? 0) });
+    byCategory.set(category, group);
+  }
 
-    for (const [category, group] of byCategory.entries()) {
-      const ordered = [...group].sort((a, b) => a.sortOrder - b.sortOrder);
-      for (const [index, row] of ordered.entries()) {
-        await q(
-          `update priorities set category = $3, sort_order = $4, updated_at = now()
-            where id = $1 and user_id = $2`,
-          [row.id, userId, category, index],
-        );
-      }
-    }
-  });
+  const ids: string[] = [];
+  const categories: string[] = [];
+  const orders: number[] = [];
+  for (const [category, group] of byCategory.entries()) {
+    [...group].sort((a, b) => a.sortOrder - b.sortOrder).forEach((row, index) => {
+      ids.push(row.id);
+      categories.push(category);
+      orders.push(index);
+    });
+  }
+
+  await query(
+    `update priorities as p
+        set category = v.category, sort_order = v.sort_order, updated_at = now()
+       from (select * from unnest($2::uuid[], $3::text[], $4::int[])
+               as t(id, category, sort_order)) as v
+      where p.id = v.id and p.user_id = $1
+        and (p.category is distinct from v.category
+             or p.sort_order is distinct from v.sort_order)`,
+    [userId, ids, categories, orders],
+  );
 }
 
 export async function saveMonthlyReflection(userId: string, month: string, body: string) {

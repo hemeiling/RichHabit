@@ -201,7 +201,9 @@ body {
 .drag-handle { opacity: 0; transition: opacity .12s ease; width: 10px; }
 @media (hover: hover) and (pointer: fine) {
   .habit-row:hover .drag-handle,
-  .habit-row:focus-within .drag-handle { opacity: .55; }
+  .habit-row:focus-within .drag-handle,
+  .pcard:hover .drag-handle,
+  .pcard:focus-within .drag-handle { opacity: .55; }
 }
 @media not all and (hover: hover) {
   .drag-handle { display: none; }
@@ -334,3 +336,165 @@ input[type="range"] { accent-color: var(--accent); }
 .fade-in { animation: fadeIn .28s ease both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before { transition: none !important; animation: none !important; } }
+
+/* ---------------------------- the priority matrix -------------------------- */
+/*
+ * §9. Four boxes, and a card that can move between them two ways: dragged with
+ * a pointer, or re-filed from the small control on the card itself. The second
+ * is not a fallback — it is the only one that works on a phone or from a
+ * keyboard, and it is the one most people will use.
+ *
+ * ── On colour ───────────────────────────────────────────────────────────────
+ *
+ * Four quadrants invite four bright colours and a dashboard. These are muted on
+ * purpose, and two of the four are tokens the app already has: the quadrant the
+ * method actually wants you working in gets the brand accent, and the one you
+ * are meant to drop gets the same grey as any other de-emphasised text. Urgency
+ * is warm. Nothing is saturated enough to compete with the priority's own text,
+ * which is the only thing on the card worth reading first.
+ *
+ * The dot is the whole of the colour coding: 5px, once per card, once per box
+ * header. There is no coloured border, fill or bar anywhere in the matrix.
+ */
+:root {
+  --q-urgent-important:         #A6584C;
+  --q-urgent-not-important:     var(--warn);
+  --q-important-not-urgent:     var(--accent);
+  --q-not-important-not-urgent: var(--faint);
+}
+[data-theme="dark"] {
+  --q-urgent-important: #C77E70;
+}
+
+.quad {
+  background: var(--raise); border: 1px solid var(--line-soft); border-radius: 16px;
+  padding: 12px 10px 10px;
+  transition: border-color .15s ease, background .15s ease;
+}
+/*
+ * The drop state is a border and a breath of accent, not a dashed outline or a
+ * shifted layout. Nothing here changes an element's size, so a card being
+ * dragged over four boxes in turn does not make the page move under it.
+ */
+.quad[data-over="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+.quad-dot { width: 5px; height: 5px; border-radius: 999px; flex: none; }
+
+/* The card. `--q` is set per card so one rule serves all four quadrants. */
+.pcard {
+  position: relative;
+  display: flex; align-items: flex-start; gap: 9px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+  padding: 9px 9px 8px 8px;
+  transition: box-shadow .15s ease, opacity .15s ease, border-color .15s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .pcard:hover { border-color: var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 18px -14px rgba(0,0,0,.3); }
+}
+/*
+ * The card being carried, and the card it would land above. An inset shadow
+ * rather than a real border or an inserted placeholder: it draws a line without
+ * taking up a pixel, so the list underneath never jumps while you decide.
+ */
+.pcard[data-dragging="true"] { opacity: .4; }
+.pcard[data-over="true"] { box-shadow: inset 0 2px 0 -1px var(--accent); }
+/* Settling after a drop. Deliberately brief — this is feedback, not an effect. */
+.pcard[data-settling="true"] { animation: pSettle .22s ease both; }
+@keyframes pSettle {
+  from { opacity: .5; transform: translateY(-2px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/*
+ * The category control. At rest it is metadata: no border, no fill, the same
+ * size and colour as the "from 30 Aug" beside it. It only looks like a control
+ * when you are about to use one.
+ */
+.qpill {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid transparent; background: none; border-radius: 999px;
+  padding: 1px 6px 1px 4px; margin-left: -4px;
+  font: inherit; font-size: 11.5px; line-height: 1.5; color: var(--faint);
+  cursor: pointer; transition: .13s ease; max-width: 100%;
+}
+.qpill > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qpill:hover { color: var(--ink); background: var(--raise); border-color: var(--line); }
+.qpill[aria-expanded="true"] { color: var(--ink); background: var(--raise); border-color: var(--line); }
+/*
+ * A finger is not a cursor. At rest this control is 21px tall, which is right
+ * for something that has to sit quietly under a line of text and wrong for
+ * something you tap. Where the pointer is coarse it gets real padding, and an
+ * invisible extension takes the target to roughly 45px without drawing a
+ * larger control. The extension is confined to the pill's own width, so it
+ * cannot swallow a press meant for the checkbox beside it.
+ */
+@media (pointer: coarse) {
+  .qpill { padding-top: 6px; padding-bottom: 6px; }
+  .qpill::after { content: ""; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+}
+
+/*
+ * One component, two shapes. A bottom sheet on a phone, where a 240px popover
+ * anchored to an 11px control would be unusable, and an anchored popover on a
+ * pointer device, where a full-screen sheet would be theatre. The switch is a
+ * media query, not a measured viewport, so the server and the client render the
+ * same markup and nothing moves after hydration.
+ */
+.qmenu-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; }
+.qmenu-scrim { position: absolute; inset: 0; background: rgba(10,10,12,.4); backdrop-filter: blur(2px); }
+.qmenu {
+  position: relative; width: 100%;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 20px 20px 0 0; padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 40px -20px rgba(0,0,0,.5);
+  animation: qUp .18s ease both;
+}
+@keyframes qUp { from { transform: translateY(8px); opacity: .6; } to { transform: none; opacity: 1; } }
+
+@media (min-width: 640px) {
+  .qmenu-wrap {
+    position: absolute; inset: auto; top: calc(100% + 5px); left: 0;
+    z-index: 30; display: block; width: min(258px, calc(100vw - 32px));
+  }
+  .qmenu-scrim { display: none; }
+  .qmenu {
+    border-radius: 14px; padding: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.06), 0 18px 34px -22px rgba(0,0,0,.45);
+    animation-name: qPop;
+  }
+  @keyframes qPop { from { transform: translateY(-3px); opacity: 0; } to { transform: none; opacity: 1; } }
+  /* Opened upward when the card sits too close to the bottom of the window. */
+  .qmenu-wrap[data-up="true"] { top: auto; bottom: calc(100% + 5px); }
+}
+
+.qmenu-head {
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--faint); font-weight: 500; padding: 7px 10px 6px;
+}
+.qmenu-item {
+  display: flex; align-items: flex-start; gap: 9px; width: 100%; text-align: left;
+  padding: 9px 10px; border: none; background: none; border-radius: 10px;
+  color: var(--ink); font: inherit; cursor: pointer; transition: background .12s ease;
+}
+.qmenu-item:hover { background: var(--raise); }
+.qmenu-item[aria-checked="true"] { background: var(--accent-soft); }
+.qmenu-item[aria-checked="true"] .qmenu-title { color: var(--accent); font-weight: 500; }
+.qmenu-title { font-size: 14px; line-height: 1.35; }
+.qmenu-sub { font-size: 11.5px; color: var(--faint); line-height: 1.35; margin-top: 1px; }
+
+/*
+ * Removing a line is destructive and rare, so it does not sit at full strength
+ * beside a control people press every day. Present on hover and on focus, and
+ * always present where there is no hover to depend on.
+ */
+.pcard-x {
+  flex: none; border: none; background: none; cursor: pointer; color: var(--faint);
+  padding: 0 2px; font-size: 15px; line-height: 1; border-radius: 6px;
+  transition: opacity .12s ease, color .12s ease;
+}
+.pcard-x:hover { color: var(--ink); }
+@media (hover: hover) and (pointer: fine) {
+  .pcard-x { opacity: 0; }
+  .pcard:hover .pcard-x, .pcard:focus-within .pcard-x { opacity: 1; }
+}

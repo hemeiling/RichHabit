@@ -875,15 +875,28 @@ export const en = {
     moveUp: (n: number) => `Move item ${n} up`,
     moveDown: (n: number) => `Move item ${n} down`,
     carriedFrom: (date: string) => `from ${date}`,
+    /*
+     * `short` is the word the card itself wears. The full title belongs to the
+     * box, which already says it once above the list — repeating "Important &
+     * Not Urgent" on every line would bury the priority in its own label. One
+     * or two words is enough to identify a quadrant you are already looking at,
+     * and it is what keeps the control smaller than the text it annotates.
+     */
     quadrants: {
-      unsorted: { title: "Unsorted", subtitle: "Sort into the right box" },
-      urgent_important: { title: "Urgent & Important", subtitle: "Do now" },
-      urgent_not_important: { title: "Urgent & Not Important", subtitle: "Delegate or handle quickly" },
-      important_not_urgent: { title: "Important & Not Urgent", subtitle: "Plan and schedule" },
-      not_important_not_urgent: { title: "Not Important & Not Urgent", subtitle: "Do later or eliminate" },
+      unsorted: { title: "Unsorted", subtitle: "Sort into the right box", short: "Plan" },
+      urgent_important: { title: "Urgent & Important", subtitle: "Do now", short: "Do now" },
+      urgent_not_important: { title: "Urgent & Not Important", subtitle: "Delegate or handle quickly", short: "Delegate" },
+      important_not_urgent: { title: "Important & Not Urgent", subtitle: "Plan and schedule", short: "Plan" },
+      not_important_not_urgent: { title: "Not Important & Not Urgent", subtitle: "Do later or eliminate", short: "Later" },
     },
     drag: (text: string) => `Drag "${text}" to a new quadrant`,
-    emptyQuadrant: "Drop here",
+    /** The category control, which is the way in without a mouse. */
+    setCategory: (text: string, current: string) => `Quadrant for "${text}": ${current}. Change it`,
+    categoryHeading: "Move to",
+    /** Announced, not drawn: a move made from the keyboard is silent otherwise. */
+    movedTo: (text: string, quadrant: string) => `"${text}" moved to ${quadrant}`,
+    emptyQuadrant: "Nothing here",
+    dropHere: "Drop here",
     none: "Nothing here yet.",
     /*
      * Guidance, not a rule. Shown once the list has grown, and phrased so that

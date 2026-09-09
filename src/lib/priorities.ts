@@ -1,4 +1,4 @@
-import { normalizePriorityCategory, type Priority } from "@/lib/types";
+import { normalizePriorityCategory, type Priority, type PriorityCategory } from "@/lib/types";
 
 /**
  * Which priorities belong on a given day, and whether each was finished by
@@ -67,3 +67,78 @@ export function carriedFrom(p: Priority, date: string): string | null {
   return p.createdOn < date ? p.createdOn : null;
 }
 
+
+/**
+ * The four quadrants, in reading order. `unsorted` is deliberately absent: it
+ * is a storage value from before the matrix existed, not a place on screen.
+ * `normalizePriorityCategory` resolves it to important & not urgent.
+ */
+export const QUADRANTS: PriorityCategory[] = [
+  "urgent_important",
+  "urgent_not_important",
+  "important_not_urgent",
+  "not_important_not_urgent",
+];
+
+/** One row of an arrangement: which box, and where in it. Never the text. */
+export interface PriorityLayoutEntry {
+  id: string;
+  category: PriorityCategory;
+  sortOrder: number;
+}
+
+/**
+ * The whole arrangement after moving one priority.
+ *
+ * One function for every way a priority can move — dragged to another quadrant,
+ * dropped above a sibling, or re-filed from the category control — because
+ * those are the same operation with a different destination, and three
+ * implementations of "where does everything sit now" is three chances to
+ * disagree.
+ *
+ * `beforeId` is the priority the moved one should land above, or null to put it
+ * at the end of the destination. Passing the moved priority's own id is a
+ * no-op rather than a move to the end, which is what a drag onto itself means.
+ *
+ * Returns every visible priority, each numbered densely from zero within its
+ * own quadrant. Only `category` and `sortOrder` are ever named here: the id is
+ * carried through untouched, and text, created_on and completed_on are not this
+ * function's business and are never written by the query it feeds.
+ *
+ * A legacy `unsorted` row is normalised on the way through, so the first time
+ * an account rearranges anything its rows quietly acquire the category they
+ * were already being displayed under. Nothing moves on screen when that
+ * happens, which is the point.
+ */
+export function layoutAfterMove(
+  visible: Priority[],
+  id: string,
+  toCategory: PriorityCategory,
+  beforeId: string | null = null,
+): PriorityLayoutEntry[] {
+  if (beforeId === id) return [];
+  if (!QUADRANTS.includes(toCategory)) return [];
+  if (!visible.some((p) => p.id === id)) return [];
+
+  const columns = new Map<PriorityCategory, string[]>(QUADRANTS.map((q) => [q, []]));
+
+  // The order already on screen: sort_order first, insertion order to break
+  // ties, which is the same rule `prioritiesOn` reads them back with.
+  [...visible]
+    .map((p, index) => ({ p, index, category: normalizePriorityCategory(p.category) }))
+    .sort((a, b) => (a.p.sortOrder ?? 0) - (b.p.sortOrder ?? 0) || a.index - b.index)
+    .forEach(({ p, category }) => { columns.get(category)!.push(p.id); });
+
+  for (const ids of columns.values()) {
+    const at = ids.indexOf(id);
+    if (at >= 0) ids.splice(at, 1);
+  }
+
+  const destination = columns.get(toCategory)!;
+  const at = beforeId === null ? -1 : destination.indexOf(beforeId);
+  if (at >= 0) destination.splice(at, 0, id);
+  else destination.push(id);
+
+  return QUADRANTS.flatMap((category) =>
+    columns.get(category)!.map((entryId, sortOrder) => ({ id: entryId, category, sortOrder })));
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseNewPriority, parsePriorityDone } from "../src/lib/validate";
-import { carriedFrom, doneOn, prioritiesOn } from "../src/lib/priorities";
+import { QUADRANTS, carriedFrom, doneOn, layoutAfterMove, prioritiesOn } from "../src/lib/priorities";
 import { DEFAULT_PRIORITY_CATEGORY, emptyState, normalizePriorityCategory } from "../src/lib/types";
 import type { Priority } from "../src/lib/types";
 import { en } from "../src/lib/i18n/en";
@@ -250,6 +250,121 @@ describe("bilingual", () => {
       expect(dict.priorities.remove("x")).toContain("x");
       expect(dict.priorities.moveUp(2)).toContain("2");
       expect(dict.priorities.moveDown(2)).toContain("2");
+    }
+  });
+});
+
+/*
+ * Rearranging the matrix.
+ *
+ * The rule these pin down is the one the product depends on: a priority that
+ * moves is the same priority. `layoutAfterMove` is the only place that decides
+ * where everything sits, whether the move came from a drag or from the category
+ * control, so testing it covers both interactions.
+ */
+describe("moving a priority between quadrants", () => {
+  const at = (id: string, category: string, sortOrder: number): Priority =>
+    ({ id, text: `t-${id}`, createdOn: "2026-09-01", completedOn: null,
+       category: category as Priority["category"], sortOrder });
+
+  const day = [
+    at("a", "urgent_important", 0),
+    at("b", "urgent_important", 1),
+    at("c", "important_not_urgent", 0),
+  ];
+
+  const where = (layout: { id: string; category: string; sortOrder: number }[], id: string) =>
+    layout.find((e) => e.id === id);
+
+  it("files a priority into the quadrant it was dropped on", () => {
+    const layout = layoutAfterMove(day, "c", "urgent_important", null);
+    expect(where(layout, "c")?.category).toBe("urgent_important");
+  });
+
+  it("keeps the same record: only category and order are ever named", () => {
+    const layout = layoutAfterMove(day, "c", "urgent_important", null);
+    for (const entry of layout) {
+      expect(Object.keys(entry).sort()).toEqual(["category", "id", "sortOrder"]);
+    }
+    // Every line that was on the day is still on it, under its own id.
+    expect(layout.map((e) => e.id).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("puts it at the end of the destination when nothing is named", () => {
+    const layout = layoutAfterMove(day, "c", "urgent_important", null);
+    expect(where(layout, "c")?.sortOrder).toBe(2);
+  });
+
+  it("puts it above the sibling it was dropped on", () => {
+    const layout = layoutAfterMove(day, "c", "urgent_important", "b");
+    expect(where(layout, "c")?.sortOrder).toBe(1);
+    expect(where(layout, "b")?.sortOrder).toBe(2);
+  });
+
+  it("reorders within one quadrant without changing its category", () => {
+    const layout = layoutAfterMove(day, "b", "urgent_important", "a");
+    expect(where(layout, "b")).toEqual({ id: "b", category: "urgent_important", sortOrder: 0 });
+    expect(where(layout, "a")?.sortOrder).toBe(1);
+  });
+
+  it("closes the gap in the quadrant it left", () => {
+    const layout = layoutAfterMove(day, "a", "important_not_urgent", null);
+    expect(where(layout, "b")?.sortOrder).toBe(0);
+  });
+
+  it("numbers each quadrant densely from zero", () => {
+    const layout = layoutAfterMove(day, "c", "urgent_important", null);
+    const byCategory = new Map<string, number[]>();
+    for (const e of layout) byCategory.set(e.category, [...(byCategory.get(e.category) ?? []), e.sortOrder]);
+    for (const orders of byCategory.values()) {
+      expect([...orders].sort((x, y) => x - y)).toEqual(orders.map((_, i) => i));
+    }
+  });
+
+  /* Dropping something on itself is not a move to the end of the list. */
+  it("does nothing when a line is dropped on itself", () => {
+    expect(layoutAfterMove(day, "a", "urgent_important", "a")).toEqual([]);
+  });
+
+  it("does nothing for a line that is not on the day", () => {
+    expect(layoutAfterMove(day, "zzz", "urgent_important", null)).toEqual([]);
+  });
+
+  it("does nothing for a category that is not one of the four", () => {
+    expect(layoutAfterMove(day, "a", "unsorted" as any, null)).toEqual([]);
+  });
+
+  /*
+   * The legacy rows this feature shipped on top of. They are stored `unsorted`
+   * and displayed under Important & Not Urgent; the first rearrangement writes
+   * down what was already on screen, and nothing appears to move.
+   */
+  it("resolves a legacy line into the quadrant it was already shown in", () => {
+    const legacy = [at("x", "unsorted", 0), at("y", "unsorted", 1)];
+    const layout = layoutAfterMove(legacy, "y", "urgent_important", null);
+    expect(where(layout, "x")?.category).toBe("important_not_urgent");
+  });
+
+  it("never writes a fifth category", () => {
+    const legacy = [at("x", "unsorted", 0), at("y", "unsorted", 1)];
+    const layout = layoutAfterMove(legacy, "y", "urgent_important", null);
+    expect(layout.every((e) => QUADRANTS.includes(e.category))).toBe(true);
+    expect(layout.some((e) => e.category === "unsorted")).toBe(false);
+  });
+
+  it("offers exactly four quadrants, and no unsorted box", () => {
+    expect(QUADRANTS).toHaveLength(4);
+    expect(QUADRANTS).not.toContain("unsorted");
+  });
+
+  it("names all four in both languages, with a short form for the card", () => {
+    for (const dict of [en, zh]) {
+      for (const q of QUADRANTS) {
+        expect(dict.priorities.quadrants[q].title).toBeTruthy();
+        expect(dict.priorities.quadrants[q].subtitle).toBeTruthy();
+        // Short enough to sit under the line without competing with it.
+        expect(dict.priorities.quadrants[q].short.length).toBeLessThanOrEqual(10);
+      }
     }
   });
 });
