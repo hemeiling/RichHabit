@@ -4,7 +4,7 @@ import * as db from "@/lib/db";
 import { isDone, uid } from "@/lib/habits";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority,
+  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority, PriorityCategory,
   SpendingRecord,
   Stack, WeeklyReview,
 } from "@/lib/types";
@@ -26,7 +26,8 @@ interface Actions {
    * The post-it. A call per record rather than one "save the day", because an
    * open priority is not owned by a day — see lib/priorities.
    */
-  addPriority: (date: string, text: string) => void;
+  addPriority: (date: string, text: string, category: PriorityCategory) => void;
+  setPriorityPlannedOn: (id: string, plannedOn: string | null) => void;
   /** `date` is the day on screen: the day the completion is recorded against. */
   setPriorityDone: (id: string, done: boolean, date: string) => void;
   deletePriority: (id: string) => void;
@@ -257,7 +258,7 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
      * same row can. Ticking is what stops a priority rolling forward, so it is
      * also the one write here that must not be lost.
      */
-    addPriority: (date, text) => {
+    addPriority: (date, text, category) => {
       const id = uid();
       run(
         (s) => ({
@@ -267,13 +268,27 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
             text,
             createdOn: date,
             completedOn: null,
-            category: "important_not_urgent",
-            sortOrder: s.priorities.filter((p) => p.category === "important_not_urgent").length,
+            category,
+            plannedOn: null,
+            sortOrder: s.priorities.filter((p) => p.category === category).length,
           }],
         }),
-        () => db.addPriority(id, text, date),
+        () => db.addPriority(id, text, date, category),
       );
     },
+
+    /*
+     * §8. One field. The optimistic update rewrites `plannedOn` and copies the
+     * rest of the record through untouched, so a plan cannot disturb the text,
+     * either date, the quadrant or the tick.
+     */
+    setPriorityPlannedOn: (id, plannedOn) => run(
+      (s) => ({
+        ...s,
+        priorities: s.priorities.map((p) => (p.id === id ? { ...p, plannedOn } : p)),
+      }),
+      () => db.setPriorityPlannedOn(id, plannedOn),
+    ),
 
     setPriorityDone: (id, done, date) => run(
       (s) => ({

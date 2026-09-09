@@ -452,10 +452,15 @@ input[type="range"] { accent-color: var(--accent); }
 }
 @keyframes qUp { from { transform: translateY(8px); opacity: .6; } to { transform: none; opacity: 1; } }
 
+/*
+ * Anchored rather than in place. The wrapper is portalled to <body>, so its
+ * coordinates are measured from the trigger and set inline; `data-anchored`
+ * marks the case where that has happened. The phone sheet keeps `inset: 0` and
+ * needs no measurement.
+ */
 @media (min-width: 640px) {
-  .qmenu-wrap {
-    position: absolute; inset: auto; top: calc(100% + 5px); left: 0;
-    z-index: 30; display: block; width: min(258px, calc(100vw - 32px));
+  .qmenu-wrap[data-anchored="true"] {
+    inset: auto; display: block; width: min(258px, calc(100vw - 32px));
   }
   .qmenu-scrim { display: none; }
   .qmenu {
@@ -464,8 +469,6 @@ input[type="range"] { accent-color: var(--accent); }
     animation-name: qPop;
   }
   @keyframes qPop { from { transform: translateY(-3px); opacity: 0; } to { transform: none; opacity: 1; } }
-  /* Opened upward when the card sits too close to the bottom of the window. */
-  .qmenu-wrap[data-up="true"] { top: auto; bottom: calc(100% + 5px); }
 }
 
 .qmenu-head {
@@ -498,3 +501,40 @@ input[type="range"] { accent-color: var(--accent); }
   .pcard-x { opacity: 0; }
   .pcard:hover .pcard-x, .pcard:focus-within .pcard-x { opacity: 1; }
 }
+
+/*
+ * The two questions asked of every new priority, and the one line of guidance
+ * under the heading. Both are deliberately quiet: this screen is a checklist
+ * first, and neither of these may start competing with the list itself.
+ */
+.pask {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 6px 16px; margin-top: 9px; padding-left: 2px;
+  animation: fadeIn .18s ease both;
+}
+.pask-q { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+/* Smaller than a standing chip: this is a question, not a filter bar. */
+.pask .chip { padding: 4px 11px; font-size: 12.5px; }
+/*
+ * The derived quadrant. It appears the moment both answers exist, so the rule
+ * is visible rather than something the app applies out of sight.
+ */
+.pask-derived {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--muted);
+}
+
+.pcue {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-top: 8px; padding: 9px 11px;
+  background: var(--raise); border: 1px solid var(--line-soft); border-radius: 12px;
+  font-size: 12.5px; line-height: 1.45; color: var(--muted);
+}
+.pcue-x {
+  flex: none; margin-left: auto; border: none; background: none; cursor: pointer;
+  color: var(--faint); font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 6px;
+}
+.pcue-x:hover { color: var(--ink); }
+
+/* The native date field inside the planning popover, at the sheet's own width. */
+.qmenu .input[type="date"] { font-size: 14px; padding: 9px 11px; }

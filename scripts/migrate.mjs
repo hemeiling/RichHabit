@@ -161,6 +161,12 @@ try {
      "alter table priorities add column category text not null default 'unsorted' " +
      "check (category in ('unsorted','urgent_important','urgent_not_important'," +
      "'important_not_urgent','not_important_not_urgent'))"],
+    /*
+     * The Q2 planning date. Nullable with no default and no backfill, which is
+     * the whole of the grandfathering: every existing priority takes null and
+     * reads exactly as it does now. Nothing is scheduled on anyone's behalf.
+     */
+    ["priorities", "planned_on", "alter table priorities add column planned_on date"],
   ]) {
     if (await columnExists(table, column)) continue;
 

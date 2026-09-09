@@ -52,8 +52,11 @@ export const setCompletion = (
 export const saveGoal = (g: Goal) => post("/api/goals", g);
 export const deleteGoal = (id: string) => remove("/api/goals", id);
 
-export const addPriority = (id: string, text: string, date: string) =>
-  post("/api/priorities", { id, text, date });
+export const addPriority = (id: string, text: string, date: string, category: string) =>
+  post("/api/priorities", { id, text, date, category });
+/** The Q2 planning date. Null clears it. */
+export const setPriorityPlannedOn = (id: string, plannedOn: string | null) =>
+  patch("/api/priorities", { id, plannedOn });
 /** `date` is the day on screen, which is the day a completion is recorded on. */
 export const setPriorityDone = (id: string, done: boolean, date: string) =>
   patch("/api/priorities", { id, done, date });

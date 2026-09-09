@@ -5,9 +5,10 @@ import {
 } from "@/lib/importantDates";
 import { isTemplateWording } from "@/lib/templates";
 import { SPENDING_CATEGORIES } from "@/lib/types";
+import { QUADRANTS } from "@/lib/priorities";
 import type {
-  AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, SpendingRecord, Stack,
-  WeeklyReview,
+  AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, PriorityCategory,
+  SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -149,7 +150,35 @@ export const MAX_PRIORITY_LENGTH = 200;
 export function parseNewPriority(b: any) {
   const text = check.text(b?.text, "text", MAX_PRIORITY_LENGTH).trim();
   if (!text) throw new ApiError("A priority needs some words");
-  return { id: check.uuid(b?.id, "id"), text, date: check.date(b?.date, "date") };
+  /*
+   * The quadrant is required, and there is no fallback. A missing or unknown
+   * category is a 400 rather than a quiet Q2, because "we could not tell what
+   * you meant" and "you decided this is important but not urgent" are not the
+   * same fact and must not end up stored as the same value.
+   */
+  const category = String(b?.category ?? "");
+  if (!QUADRANTS.includes(category as PriorityCategory)) {
+    throw new ApiError("A priority needs to be marked important or not, and urgent or not");
+  }
+  return {
+    id: check.uuid(b?.id, "id"), text, date: check.date(b?.date, "date"),
+    category: category as PriorityCategory,
+  };
+}
+
+/**
+ * The Q2 planning date, or null to clear it.
+ *
+ * A real date or nothing. Anything else is rejected rather than coerced, so a
+ * malformed value cannot land in the column as a surprise.
+ */
+export function parsePriorityPlan(b: any): { id: string; plannedOn: string | null } {
+  const raw = b?.plannedOn;
+  return {
+    id: check.uuid(b?.id, "id"),
+    plannedOn: raw === null || raw === undefined || raw === ""
+      ? null : check.date(raw, "plannedOn"),
+  };
 }
 
 /**

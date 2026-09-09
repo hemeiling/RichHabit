@@ -376,6 +376,16 @@ create table priorities (
       'important_not_urgent','not_important_not_urgent')),
   -- The user's arrangement, as with habits. Ties broken by creation.
   sort_order   int  not null default 0,
+  /*
+   * Covey's Q2 question — "when will I actually do this?" — and nothing more.
+   * Null is the normal state: an important, non-urgent line is perfectly valid
+   * without a day attached, and nothing here ever sets itself.
+   *
+   * Deliberately unconstrained against the other two dates. Planning something
+   * for a day already past is what happens when you miss it and mean to catch
+   * up, and a CHECK would turn that into a failed save.
+   */
+  planned_on   date,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   -- Nothing can be finished before it was written.

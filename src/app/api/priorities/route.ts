@@ -2,8 +2,9 @@ import { body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
 import {
   addPriority, deletePriority, reorderPriorities, savePriorityLayout, setPriorityDone,
+  setPriorityPlannedOn,
 } from "@/lib/db/queries";
-import { parseNewPriority, parsePriorityDone } from "@/lib/validate";
+import { parseNewPriority, parsePriorityDone, parsePriorityPlan } from "@/lib/validate";
 
 /**
  * The post-it. Private user content: what someone means to do is never read by
@@ -16,8 +17,8 @@ import { parseNewPriority, parsePriorityDone } from "@/lib/validate";
  */
 export async function POST(request: Request) {
   return withUser(async (userId) => {
-    const { id, text, date } = parseNewPriority(await body(request));
-    await addPriority(userId, id, text, date);
+    const { id, text, date, category } = parseNewPriority(await body(request));
+    await addPriority(userId, id, text, date, category);
     // That one was written, and on which day. Never a word of what it says.
     await trackEvent({
       userId, event: "priority_added", entityType: "priority", entityId: id, page: "/today",
@@ -35,6 +36,12 @@ export async function PATCH(request: Request) {
         category: String(v?.category ?? "unsorted"),
         sortOrder: Number(v?.sortOrder ?? 0),
       })));
+      return;
+    }
+
+    if ("plannedOn" in (b ?? {})) {
+      const { id, plannedOn } = parsePriorityPlan(b);
+      await setPriorityPlannedOn(userId, id, plannedOn);
       return;
     }
 

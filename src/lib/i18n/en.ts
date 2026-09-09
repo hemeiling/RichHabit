@@ -883,12 +883,44 @@ export const en = {
      * and it is what keeps the control smaller than the text it annotates.
      */
     quadrants: {
-      unsorted: { title: "Unsorted", subtitle: "Sort into the right box", short: "Plan" },
+      unsorted: { title: "Not Urgent & Important", subtitle: "Plan & protect", short: "Protect" },
       urgent_important: { title: "Urgent & Important", subtitle: "Do now", short: "Do now" },
-      urgent_not_important: { title: "Urgent & Not Important", subtitle: "Delegate or handle quickly", short: "Delegate" },
-      important_not_urgent: { title: "Important & Not Urgent", subtitle: "Plan and schedule", short: "Plan" },
-      not_important_not_urgent: { title: "Not Important & Not Urgent", subtitle: "Do later or eliminate", short: "Later" },
+      important_not_urgent: { title: "Not Urgent & Important", subtitle: "Plan & protect", short: "Protect" },
+      urgent_not_important: { title: "Urgent & Not Important", subtitle: "Delegate or reduce", short: "Delegate" },
+      not_important_not_urgent: { title: "Not Urgent & Not Important", subtitle: "Limit or eliminate", short: "Limit" },
     },
+    /*
+     * Two answers, not a form. Asked of every new line and never guessed: the
+     * app has no way to know whether something matters to you.
+     */
+    askImportant: "Important?",
+    askUrgent: "Urgent?",
+    yes: "Yes",
+    no: "No",
+    /* Covey's Q2 question, and the only scheduling this screen does. */
+    plan: "Plan",
+    planHeading: "When will you do this?",
+    planClear: "Clear",
+    planFor: (text: string) => `Plan a day for "${text}"`,
+    plannedFor: (text: string, date: string) => `"${text}" is planned for ${date}. Change it`,
+    /*
+     * One line under the heading, and only ever one. Every string here is a
+     * count of what is on screen now; nothing claims a trend, because a
+     * mutable category cannot evidence one.
+     */
+    insight: {
+      protect: (n: number) =>
+        `${n} important priorities aren't urgent yet. Consider protecting time for the most important ones.`,
+      mostlyUrgent: () =>
+        "Most of today's priorities are urgent. Consider what could be planned earlier next week.",
+    },
+    /* Questions, not verdicts. Rest and recreation can be worth the time. */
+    nudge: {
+      urgent_important: "Could this have been planned earlier?",
+      urgent_not_important: "Does this require you?",
+      not_important_not_urgent: "Is this worth your time?",
+    } as Record<string, string>,
+    dismiss: "Dismiss",
     drag: (text: string) => `Drag "${text}" to a new quadrant`,
     /** The category control, which is the way in without a mouse. */
     setCategory: (text: string, current: string) => `Quadrant for "${text}": ${current}. Change it`,

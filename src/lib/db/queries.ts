@@ -7,6 +7,7 @@ import type {
   SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 import { DEFAULT_PRIORITY_CATEGORY, normalizePriorityCategory } from "@/lib/types";
+import type { PriorityCategory } from "@/lib/types";
 
 /**
  * The only place that knows SQL. Server-only: every function takes the user id
@@ -91,7 +92,8 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select * from day_notes where user_id = $1", [userId]),
       query("select month, body from monthly_reflections where user_id = $1", [userId]),
       optionalRead<any>("priorities",
-        `select id, body, created_on, completed_on, category, sort_order from priorities
+        `select id, body, created_on, completed_on, category, planned_on, sort_order
+           from priorities
           where user_id = $1 order by category, sort_order, created_on, created_at`, [userId]),
       /*
        * §26. Bounded like spending, and for the same reason: the panel shows
@@ -210,6 +212,7 @@ export async function loadState(userId: string): Promise<AppState> {
     createdOn: p.created_on,
     completedOn: p.completed_on ?? null,
     category: normalizePriorityCategory(p.category),
+    plannedOn: p.planned_on ?? null,
     sortOrder: Number(p.sort_order ?? 0),
   }));
 
@@ -379,19 +382,43 @@ export async function deleteGoal(userId: string, id: string) {
  * operation that would have to invent a second copy of it.
  */
 export async function addPriority(
-  userId: string, id: string, text: string, date: string,
+  userId: string, id: string, text: string, date: string, category: PriorityCategory,
 ): Promise<void> {
   /*
-   * New priorities default into the compatibility bucket used by the four-way
-   * matrix. Legacy rows remain readable through normalizePriorityCategory(),
-   * and we avoid rewriting or recreating existing data while making the UI
-   * predictable again.
+   * The quadrant arrives from the two questions the user answered; there is no
+   * default here any more.
+   *
+   * It used to insert 'important_not_urgent' unconditionally, which meant every
+   * new line landed in the quadrant the method says to protect. That made Q2 the
+   * default bucket rather than a decision, and a bucket everything falls into
+   * says nothing about what matters.
+   *
+   * `planned_on` is deliberately not set. A line is scheduled because someone
+   * chose a day, never because it was filed under Q2.
    */
   await query(
     `insert into priorities (id, user_id, body, created_on, category, sort_order)
-     values ($1, $2, $3, $4::date, 'important_not_urgent',
-             (select coalesce(max(sort_order), 0) + 1 from priorities where user_id = $2 and category = 'important_not_urgent'))`,
-    [id, userId, text, date],
+     values ($1, $2, $3, $4::date, $5,
+             (select coalesce(max(sort_order), 0) + 1 from priorities
+               where user_id = $2 and category = $5))`,
+    [id, userId, text, date, category],
+  );
+}
+
+/**
+ * Sets, changes or clears the day a priority is planned for.
+ *
+ * One column, and only that column. Nothing here can reach the text, either of
+ * the other dates, the quadrant or the arrangement — so answering "when will I
+ * do this?" cannot cost a line its identity or its history. Null clears it.
+ */
+export async function setPriorityPlannedOn(
+  userId: string, id: string, plannedOn: string | null,
+): Promise<void> {
+  await query(
+    `update priorities set planned_on = $3::date, updated_at = now()
+      where id = $1 and user_id = $2`,
+    [id, userId, plannedOn],
   );
 }
 

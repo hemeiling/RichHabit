@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseNewPriority, parsePriorityDone } from "../src/lib/validate";
-import { QUADRANTS, carriedFrom, doneOn, layoutAfterMove, prioritiesOn } from "../src/lib/priorities";
+import { parseNewPriority, parsePriorityDone, parsePriorityPlan } from "../src/lib/validate";
+import {
+  QUADRANTS, carriedFrom, cueFor, doneOn, isPlanOverdue, layoutAfterMove, prioritiesOn,
+  quadrantFor,
+} from "../src/lib/priorities";
 import { DEFAULT_PRIORITY_CATEGORY, emptyState, normalizePriorityCategory } from "../src/lib/types";
 import type { Priority } from "../src/lib/types";
 import { en } from "../src/lib/i18n/en";
@@ -10,7 +13,7 @@ const ID = "11111111-1111-4111-8111-111111111111";
 
 let n = 0;
 const p = (createdOn: string, completedOn: string | null = null, text = `item ${++n}`): Priority =>
-  ({ id: `${n}`, text, createdOn, completedOn, category: "unsorted", sortOrder: 0 });
+  ({ id: `${n}`, text, createdOn, completedOn, category: "unsorted", plannedOn: null, sortOrder: 0 });
 
 describe("what is on a given day", () => {
   it("shows a line on the day it was written", () => {
@@ -152,7 +155,7 @@ describe("no cap", () => {
 });
 
 describe("what the server accepts", () => {
-  const fresh = { id: ID, date: "2026-08-15" };
+  const fresh = { id: ID, date: "2026-08-15", category: "urgent_important" };
 
   it("takes a line and trims it", () => {
     expect(parseNewPriority({ ...fresh, text: "  padded  " }).text).toBe("padded");
@@ -168,9 +171,9 @@ describe("what the server accepts", () => {
   });
 
   it("insists on a real date and a real id", () => {
-    expect(() => parseNewPriority({ id: ID, text: "x" })).toThrow();
-    expect(() => parseNewPriority({ id: ID, text: "x", date: "yesterday" })).toThrow();
-    expect(() => parseNewPriority({ id: "nope", text: "x", date: "2026-08-15" })).toThrow();
+    expect(() => parseNewPriority({ ...fresh, id: ID, text: "x", date: undefined })).toThrow();
+    expect(() => parseNewPriority({ ...fresh, text: "x", date: "yesterday" })).toThrow();
+    expect(() => parseNewPriority({ ...fresh, id: "nope", text: "x" })).toThrow();
   });
 
   it("records a completion against the day being looked at", () => {
@@ -265,7 +268,7 @@ describe("bilingual", () => {
 describe("moving a priority between quadrants", () => {
   const at = (id: string, category: string, sortOrder: number): Priority =>
     ({ id, text: `t-${id}`, createdOn: "2026-09-01", completedOn: null,
-       category: category as Priority["category"], sortOrder });
+       category: category as Priority["category"], plannedOn: null, sortOrder });
 
   const day = [
     at("a", "urgent_important", 0),
@@ -365,6 +368,160 @@ describe("moving a priority between quadrants", () => {
         // Short enough to sit under the line without competing with it.
         expect(dict.priorities.quadrants[q].short.length).toBeLessThanOrEqual(10);
       }
+    }
+  });
+});
+
+/*
+ * Classification is a decision, not a default.
+ *
+ * The bug these pin down is the one that made Q2 meaningless: every new line
+ * was filed as important-and-not-urgent whatever it was, so the quadrant the
+ * method says to protect became the quadrant everything fell into.
+ */
+describe("classifying a new priority", () => {
+  it("derives each quadrant from the two answers", () => {
+    expect(quadrantFor(true, true)).toBe("urgent_important");
+    expect(quadrantFor(true, false)).toBe("important_not_urgent");
+    expect(quadrantFor(false, true)).toBe("urgent_not_important");
+    expect(quadrantFor(false, false)).toBe("not_important_not_urgent");
+  });
+
+  it("refuses to create one without a quadrant", () => {
+    const b = { id: ID, text: "x", date: "2026-08-15" };
+    expect(() => parseNewPriority(b)).toThrow();
+    expect(() => parseNewPriority({ ...b, category: "" })).toThrow();
+    expect(() => parseNewPriority({ ...b, category: "somewhere_else" })).toThrow();
+  });
+
+  /* The old default must not survive as a fallback anywhere. */
+  it("never quietly files a new line under important & not urgent", () => {
+    const b = { id: ID, text: "x", date: "2026-08-15" };
+    expect(() => parseNewPriority(b)).toThrow();
+    expect(() => parseNewPriority({ ...b, category: "unsorted" })).toThrow();
+  });
+
+  it("carries the chosen quadrant through", () => {
+    for (const q of QUADRANTS) {
+      expect(parseNewPriority({ id: ID, text: "x", date: "2026-08-15", category: q }).category)
+        .toBe(q);
+    }
+  });
+});
+
+describe("the four boxes, in the order the method reads them", () => {
+  it("puts do, protect, delegate and limit in that order", () => {
+    expect(QUADRANTS).toEqual([
+      "urgent_important",         // top left
+      "important_not_urgent",     // top right
+      "urgent_not_important",     // bottom left
+      "not_important_not_urgent", // bottom right
+    ]);
+  });
+
+  it("names the intent of each box in both languages", () => {
+    for (const dict of [en, zh]) {
+      expect(dict.priorities.quadrants.urgent_important.subtitle).toBeTruthy();
+      expect(dict.priorities.quadrants.important_not_urgent.short).toBeTruthy();
+      // The card label and the planning verb must not be the same word.
+      expect(dict.priorities.quadrants.important_not_urgent.short)
+        .not.toBe(dict.priorities.plan);
+    }
+  });
+});
+
+describe("planning a Q2 line", () => {
+  const q2 = (plannedOn: string | null, completedOn: string | null = null): Priority =>
+    ({ id: "p", text: "read", createdOn: "2026-09-01", completedOn,
+       category: "important_not_urgent", plannedOn, sortOrder: 0 });
+
+  it("takes a real date, or nothing", () => {
+    expect(parsePriorityPlan({ id: ID, plannedOn: "2026-09-12" }).plannedOn).toBe("2026-09-12");
+    expect(parsePriorityPlan({ id: ID, plannedOn: null }).plannedOn).toBeNull();
+    expect(parsePriorityPlan({ id: ID, plannedOn: "" }).plannedOn).toBeNull();
+    expect(() => parsePriorityPlan({ id: ID, plannedOn: "next tuesday" })).toThrow();
+  });
+
+  it("is not overdue before the day arrives, nor on it", () => {
+    expect(isPlanOverdue(q2("2026-09-12"), "2026-09-10")).toBe(false);
+    expect(isPlanOverdue(q2("2026-09-12"), "2026-09-12")).toBe(false);
+  });
+
+  it("is overdue once the day has passed and it is still open", () => {
+    expect(isPlanOverdue(q2("2026-09-12"), "2026-09-13")).toBe(true);
+  });
+
+  /* Finishing late is still finishing. */
+  it("is never overdue once it is done", () => {
+    expect(isPlanOverdue(q2("2026-09-12", "2026-09-14"), "2026-09-15")).toBe(false);
+  });
+
+  it("says nothing about a line with no planned day", () => {
+    expect(isPlanOverdue(q2(null), "2030-01-01")).toBe(false);
+  });
+});
+
+describe("the one line under the heading", () => {
+  const at = (id: string, category: string, completedOn: string | null = null): Priority =>
+    ({ id, text: `t-${id}`, createdOn: "2026-09-01", completedOn,
+       category: category as Priority["category"], plannedOn: null, sortOrder: 0 });
+  const TODAY = "2026-09-09";
+
+  it("says nothing on a quiet day", () => {
+    expect(cueFor([at("a", "urgent_important")], TODAY, true)).toBeNull();
+  });
+
+  it("counts the important work that is not urgent yet", () => {
+    const items = ["a", "b", "c"].map((id) => at(id, "important_not_urgent"));
+    expect(cueFor(items, TODAY, false)).toEqual({ kind: "insight", key: "protect", count: 3 });
+  });
+
+  it("notices a day that is mostly urgent", () => {
+    const items = [at("a", "urgent_important"), at("b", "urgent_important"),
+      at("c", "urgent_not_important"), at("d", "important_not_urgent")];
+    expect(cueFor(items, TODAY, false)?.kind).toBe("insight");
+    expect((cueFor(items, TODAY, false) as any).key).toBe("mostly_urgent");
+  });
+
+  /* Legacy rows read as important & not urgent, and must count as such. */
+  it("counts a legacy line under the quadrant it is displayed in", () => {
+    const items = ["a", "b", "c"].map((id) => at(id, "unsorted"));
+    expect((cueFor(items, TODAY, false) as any).key).toBe("protect");
+  });
+
+  it("offers a nudge after an urgent, important thing is finished", () => {
+    const items = [at("a", "urgent_important", TODAY)];
+    expect(cueFor(items, TODAY, true))
+      .toEqual({ kind: "nudge", quadrant: "urgent_important" });
+  });
+
+  it("holds that nudge back once the day's one has been dismissed", () => {
+    const items = [at("a", "urgent_important", TODAY)];
+    expect(cueFor(items, TODAY, false)).toBeNull();
+  });
+
+  it("never returns a nudge and an insight together", () => {
+    const items = [at("a", "urgent_important", TODAY),
+      ...["b", "c", "d"].map((id) => at(id, "important_not_urgent"))];
+    const cue = cueFor(items, TODAY, true);
+    expect(cue?.kind).toBe("nudge");
+  });
+
+  /* Completed lines are not still on the to-do list. */
+  it("does not count finished work as outstanding", () => {
+    const items = ["a", "b", "c"].map((id) => at(id, "important_not_urgent", TODAY));
+    expect(cueFor(items, TODAY, false)).toBeNull();
+  });
+
+  it("asks each question supportively, in both languages", () => {
+    for (const dict of [en, zh]) {
+      for (const q of ["urgent_important", "urgent_not_important", "not_important_not_urgent"]) {
+        expect(dict.priorities.nudge[q]).toBeTruthy();
+        // A question, never a verdict.
+        expect(dict.priorities.nudge[q]).toMatch(/[?？]$/);
+      }
+      expect(dict.priorities.insight.protect(6)).toContain("6");
+      expect(dict.priorities.insight.mostlyUrgent()).toBeTruthy();
     }
   });
 });

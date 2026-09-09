@@ -24,10 +24,10 @@ import { normalizePriorityCategory, type Priority, type PriorityCategory } from 
 export function prioritiesOn(all: Priority[], date: string): Priority[] {
   const categoryOrder: Record<string, number> = {
     urgent_important: 0,
-    urgent_not_important: 1,
-    important_not_urgent: 2,
+    important_not_urgent: 1,
+    urgent_not_important: 2,
     not_important_not_urgent: 3,
-    unsorted: 2,
+    unsorted: 1,
   };
 
   const visible = all.filter(
@@ -74,10 +74,10 @@ export function carriedFrom(p: Priority, date: string): string | null {
  * `normalizePriorityCategory` resolves it to important & not urgent.
  */
 export const QUADRANTS: PriorityCategory[] = [
-  "urgent_important",
-  "urgent_not_important",
-  "important_not_urgent",
-  "not_important_not_urgent",
+  "urgent_important",        // top left     — do
+  "important_not_urgent",    // top right    — plan and protect
+  "urgent_not_important",    // bottom left  — delegate or reduce
+  "not_important_not_urgent",// bottom right — limit or eliminate
 ];
 
 /** One row of an arrangement: which box, and where in it. Never the text. */
@@ -141,4 +141,82 @@ export function layoutAfterMove(
 
   return QUADRANTS.flatMap((category) =>
     columns.get(category)!.map((entryId, sortOrder) => ({ id: entryId, category, sortOrder })));
+}
+
+/**
+ * The quadrant two answers imply.
+ *
+ * The whole of the classification rule, and the reason there is no default: the
+ * app never has an opinion about whether something matters to you, it only
+ * arranges the answer you gave. Importance is contextual to a person's goals in
+ * a way nothing here can infer, and urgency without a stated deadline is a
+ * guess — so both arrive as answers, or the priority is not created.
+ */
+export function quadrantFor(important: boolean, urgent: boolean): PriorityCategory {
+  if (important) return urgent ? "urgent_important" : "important_not_urgent";
+  return urgent ? "urgent_not_important" : "not_important_not_urgent";
+}
+
+/**
+ * Whether a planned day has passed while the line is still open.
+ *
+ * Completed lines are never overdue: finishing late is still finishing, and
+ * marking it in amber afterwards would be a reprimand for work already done.
+ */
+export function isPlanOverdue(p: Priority, date: string): boolean {
+  return p.plannedOn !== null && p.plannedOn < date && !doneOn(p, date);
+}
+
+/**
+ * The one line under the heading, or nothing at all.
+ *
+ * At most one thing is ever on screen, and a nudge outranks an insight because
+ * it is tied to something that just happened rather than to a standing count.
+ * `nudgeAllowed` is the once-a-day rule, decided by the caller — this stays a
+ * pure function of the day's priorities so it can be reasoned about and tested.
+ *
+ * Every branch is a count of what is on screen right now. Nothing here looks
+ * backwards, because `category` is mutable and unversioned: a claim about what
+ * used to be in which quadrant would be invention, not evidence.
+ */
+export type PriorityCue =
+  | { kind: "nudge"; quadrant: PriorityCategory }
+  | { kind: "insight"; key: "mostly_urgent" | "protect"; count: number };
+
+export function cueFor(
+  visible: Priority[], date: string, nudgeAllowed: boolean,
+): PriorityCue | null {
+  const open = visible.filter((p) => !doneOn(p, date));
+  const count = (c: PriorityCategory) =>
+    open.filter((p) => normalizePriorityCategory(p.category) === c).length;
+
+  if (nudgeAllowed) {
+    // The reflective moment worth catching: a crisis just got handled, and the
+    // question of whether it had to be a crisis is briefly a live one.
+    const finishedUrgentImportant = visible.some((p) =>
+      doneOn(p, date) && normalizePriorityCategory(p.category) === "urgent_important");
+    if (finishedUrgentImportant) return { kind: "nudge", quadrant: "urgent_important" };
+    if (count("urgent_not_important") >= 2) {
+      return { kind: "nudge", quadrant: "urgent_not_important" };
+    }
+    if (count("not_important_not_urgent") >= 2) {
+      return { kind: "nudge", quadrant: "not_important_not_urgent" };
+    }
+  }
+
+  /*
+   * Thresholds, not thresholds of virtue. Four is the point below which "most
+   * of these are urgent" describes a coincidence rather than a day, and three
+   * is the point below which "protect time for these" is advice about one
+   * errand. Both are deliberately quiet about small days.
+   */
+  const urgent = count("urgent_important") + count("urgent_not_important");
+  if (open.length >= 4 && urgent * 5 > open.length * 3) {
+    return { kind: "insight", key: "mostly_urgent", count: urgent };
+  }
+
+  const protect = count("important_not_urgent");
+  if (protect >= 3) return { kind: "insight", key: "protect", count: protect };
+
+  return null;
 }

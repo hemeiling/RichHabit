@@ -247,6 +247,13 @@ export interface Priority {
    */
   completedOn: string | null;
   category: PriorityCategory;
+  /**
+   * Covey's Q2 question, answered or not. Null is the ordinary state and is
+   * never filled in automatically; an important, non-urgent line is valid
+   * without a day. Independent of the other dates and of `category` — moving a
+   * line between quadrants neither sets nor clears it.
+   */
+  plannedOn: string | null;
   sortOrder: number;
 }
 
