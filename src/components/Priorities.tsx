@@ -1,9 +1,11 @@
 "use client";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useHabits } from "@/components/store";
+import { Sheet } from "@/components/ui";
+import { needsDeleteConfirmation } from "@/lib/accomplishments";
 import { useLocale, useT } from "@/lib/i18n/context";
-import { shortDateFor } from "@/lib/i18n";
+import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import {
   NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, hasDraft, isPlanOverdue,
   layoutAfterMove, prioritiesOn, quadrantAdd, quadrantFor,
@@ -217,7 +219,7 @@ function PlanMenu({ value, anchor, t, onPick, onClose }: {
 
 function PriorityCard({
   item, category, date, locale, t, dragging, over, settling, menuOpen, planOpen,
-  onToggle, onDelete, onSetCategory, onMenu, onPlanMenu, onSetPlan,
+  onToggle, onDelete, onRename, onSetCategory, onMenu, onPlanMenu, onSetPlan,
   onDragStart, onDragEnd, onDragOverCard, onDropOnCard,
 }: {
   item: Priority;
@@ -232,6 +234,8 @@ function PriorityCard({
   planOpen: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  /** Saves new wording for this same row; rejects if the save failed. */
+  onRename: (text: string) => Promise<void>;
   onSetCategory: (category: PriorityCategory) => void;
   onMenu: (open: boolean) => void;
   onPlanMenu: (open: boolean) => void;
@@ -254,20 +258,96 @@ function PriorityCard({
   const categoryRef = useRef<HTMLButtonElement>(null);
   const planRef = useRef<HTMLButtonElement>(null);
 
+  /*
+   * Rewording in place. Tapping the words turns them into a field with the same
+   * size and position, so there is no modal and no Edit button taking up room
+   * on every card. Only `text` is ever sent; see `setPriorityText`.
+   *
+   * The draft lives here rather than in the store, so a failed save can reopen
+   * the field with exactly what was typed.
+   */
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.text);
+  const [editError, setEditError] = useState<string | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+  const errorId = useId();
+
+  const startEdit = () => { setDraft(item.text); setEditError(null); setEditing(true); };
+  const cancelEdit = () => { setEditing(false); setEditError(null); };
+  const saveEdit = () => {
+    const text = draft.trim();
+    if (!text) { setEditError(t.priorities.editEmpty); fieldRef.current?.focus(); return; }
+    setEditing(false);
+    setEditError(null);
+    if (text === item.text) return;
+    // Closed straight away: the new words are already on screen. If the write
+    // fails, the field comes back holding the draft, which was never cleared.
+    onRename(text).catch(() => { setEditError(t.priorities.editFailed); setEditing(true); });
+  };
+
+  /* The field grows with the words, as the text it replaces did. */
+  useLayoutEffect(() => {
+    const el = fieldRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    // scrollHeight leaves out the border, and the field is border-box, so add it
+    // back or the last line is clipped by two pixels and the field scrolls.
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [draft, editing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = fieldRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editing]);
+
+  /*
+   * On a phone the keyboard covers the lower half of the screen, and the browser
+   * only guarantees the caret is visible — not Save and Cancel under it. While
+   * editing, keep the whole editor inside what can actually be seen.
+   */
+  useEffect(() => {
+    if (!editing) return;
+    const vv = window.visualViewport;
+    const keepVisible = () => {
+      const box = editorRef.current?.getBoundingClientRect();
+      if (!box) return;
+      const top = vv ? vv.offsetTop : 0;
+      const bottom = top + (vv ? vv.height : window.innerHeight);
+      if (box.bottom > bottom - 12) window.scrollBy({ top: box.bottom - bottom + 12 });
+      else if (box.top < top + 12) window.scrollBy({ top: box.top - top - 12 });
+    };
+    const settle = window.setTimeout(keepVisible, 350);
+    vv?.addEventListener("resize", keepVisible);
+    return () => { window.clearTimeout(settle); vv?.removeEventListener("resize", keepVisible); };
+  }, [editing]);
+
   return (
     <div
       ref={cardRef} className="pcard"
+      data-editing={editing || undefined}
       data-dragging={dragging || undefined}
       data-over={over || undefined}
       data-settling={settling || undefined}
-      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; onDragOverCard(); }}
-      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropOnCard(); }}
+      onDragOver={(e) => {
+        // A card being reworded is not a place to drop another one.
+        if (editing) return;
+        e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; onDragOverCard();
+      }}
+      onDrop={(e) => { if (editing) return; e.preventDefault(); e.stopPropagation(); onDropOnCard(); }}
     >
       {/* Pointer devices only, as with a habit row. Dragging the grip carries
           the whole card as the drag image, so what you pick up is what you see. */}
       <span
-        className="drag-handle faint" draggable
+        className="drag-handle faint"
+        // Off while the words are being edited: selecting text in the field
+        // must never pick the card up.
+        draggable={!editing}
         onDragStart={(e) => {
+          if (editing) { e.preventDefault(); return; }
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", item.id);
           // What you pick up is the card, not the grip. Without this the drag
@@ -301,12 +381,54 @@ function PriorityCard({
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* The line itself, and the only thing at full strength. `anywhere`
             wraps an unbroken English URL and a run of Chinese alike. */}
-        <div className="pcard-text" style={{
-          fontSize: 14.5, lineHeight: 1.4, overflowWrap: "anywhere",
-          textDecoration: checked ? "line-through" : undefined, opacity: checked ? 0.5 : 1,
-        }}>
-          {item.text}
-        </div>
+        {editing ? (
+          <div
+            ref={editorRef} className="pcard-edit"
+            onBlur={(e) => {
+              // Leaving an unchanged field closes it. Leaving a changed one does
+              // not: a stray tap elsewhere must never throw away what was typed.
+              if (editorRef.current?.contains(e.relatedTarget as Node)) return;
+              if (draft.trim() === item.text && !editError) cancelEdit();
+            }}
+          >
+            <textarea
+              ref={fieldRef} className="pcard-field" rows={1}
+              value={draft} maxLength={200} enterKeyHint="done"
+              aria-label={t.priorities.editField}
+              aria-invalid={editError ? true : undefined}
+              aria-describedby={editError ? errorId : undefined}
+              // One line, like the field it was written in. A pasted line break
+              // becomes a space rather than a second line.
+              onChange={(e) => { setDraft(e.target.value.replace(/[\r\n]+/g, " ")); if (editError) setEditError(null); }}
+              onKeyDown={(e) => {
+                // Enter while composing Chinese confirms the characters, not the edit.
+                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                if (e.key === "Enter") { e.preventDefault(); saveEdit(); }
+                if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancelEdit(); }
+              }}
+            />
+            {editError && <p id={errorId} role="alert" className="pcard-edit-error">{editError}</p>}
+            <div className="pcard-edit-actions">
+              <button type="button" className="pcard-edit-btn" onClick={cancelEdit}>{t.common.cancel}</button>
+              <button type="button" className="pcard-edit-btn" data-primary
+                disabled={!draft.trim()} onClick={saveEdit}>{t.common.save}</button>
+            </div>
+          </div>
+        ) : (
+          /* The words are the way in. Kept exactly as written in every
+             language; only the label around them is translated. */
+          <button
+            type="button" className="pcard-text pcard-title"
+            aria-label={t.priorities.editTitle(item.text)}
+            onClick={startEdit}
+            style={{
+              fontSize: 14.5, lineHeight: 1.4, overflowWrap: "anywhere",
+              textDecoration: checked ? "line-through" : undefined, opacity: checked ? 0.5 : 1,
+            }}
+          >
+            {item.text}
+          </button>
+        )}
 
         {/* Metadata and the quadrant control share a line, at the same weight:
             where it sits and where it came from are the same kind of fact. */}
@@ -466,6 +588,12 @@ export default function Priorities({ date }: { date: string }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [settling, setSettling] = useState<string | null>(null);
   const [announce, setAnnounce] = useState("");
+  /*
+   * A completed priority waiting on "are you sure". Completion made it part of
+   * the user's accomplishments, and deleting the row is permanent, so it takes
+   * a second, deliberate step. An open line is still removed in one click.
+   */
+  const [confirmDelete, setConfirmDelete] = useState<Priority | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => () => clearTimeout(settleTimer.current), []);
@@ -569,10 +697,15 @@ export default function Priorities({ date }: { date: string }) {
 
   return (
     <section className="card p-5" aria-labelledby="todays-priorities-title">
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="eyebrow" id="todays-priorities-title">📌 {t.priorities.title}</div>
+      {/* The heading alone on its line, then the day and the tally at the same
+          quiet weight. The date is supportive, not a title: with past-day
+          navigation gone it only has to say which day "today" is, and on a phone
+          it is the one place that says so without scrolling to the calendar. */}
+      <div className="eyebrow" id="todays-priorities-title">📌 {t.priorities.title}</div>
+      <div className="flex items-baseline justify-between flex-wrap" style={{ gap: "2px 12px", marginTop: 3 }}>
+        <span className="faint" style={{ fontSize: 12.5 }}>{prettyDateFor(date, locale as any)}</span>
         {total > 0 && (
-          <span className="faint num" style={{ fontSize: 12.5, textAlign: "right", flex: "none" }}>
+          <span className="faint num" style={{ fontSize: 12.5 }}>
             {t.priorities.count(done, total)}
           </span>
         )}
@@ -639,7 +772,10 @@ export default function Priorities({ date }: { date: string }) {
                     menuOpen={menuFor === item.id}
                     planOpen={planFor === item.id}
                     onToggle={() => actions.setPriorityDone(item.id, !doneOn(item, date), date)}
-                    onDelete={() => actions.deletePriority(item.id)}
+                    onDelete={() => (needsDeleteConfirmation(item, date)
+                      ? setConfirmDelete(item)
+                      : actions.deletePriority(item.id))}
+                    onRename={(text) => actions.setPriorityText(item.id, text)}
                     onMenu={(open) => setMenuFor(open ? item.id : null)}
                     onPlanMenu={(open) => setPlanFor(open ? item.id : null)}
                     onSetPlan={(plannedOn) => {
@@ -727,6 +863,28 @@ export default function Priorities({ date }: { date: string }) {
 
       {total === 0 && (
         <p className="muted mt-3" style={{ fontSize: 14, lineHeight: 1.5 }}>{t.priorities.empty}</p>
+      )}
+
+      {confirmDelete && (
+        <Sheet
+          open onClose={() => setConfirmDelete(null)} title={t.priorities.deleteDoneTitle}
+          footer={(
+            <>
+              <button className="btn" onClick={() => setConfirmDelete(null)}>{t.common.cancel}</button>
+              <button className="btn btn-danger"
+                onClick={() => { actions.deletePriority(confirmDelete.id); setConfirmDelete(null); }}>
+                {t.priorities.deleteDoneConfirm}
+              </button>
+            </>
+          )}
+        >
+          <p className="muted" style={{ fontSize: 14, lineHeight: 1.55 }}>{t.priorities.deleteDoneBody}</p>
+          {/* The line itself, exactly as written, so there is no doubt which one. */}
+          <p className="mt-3" style={{
+            fontSize: 14.5, lineHeight: 1.45, overflowWrap: "anywhere",
+            textDecoration: "line-through", opacity: 0.6,
+          }}>{confirmDelete.text}</p>
+        </Sheet>
       )}
 
       {/* A move made from the keyboard or the category control changes nothing

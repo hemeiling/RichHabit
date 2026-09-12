@@ -366,6 +366,31 @@ export const en = {
     cellLabel: (name: string, date: string) => `${name} on ${date}`,
   },
   insights: {
+    /*
+     * Completed priorities, looked back on. The titles are the user's own words,
+     * shown exactly as written; the counts are theirs alone and never shared.
+     */
+    accomplishments: {
+      title: "Accomplishments",
+      month: "Month",
+      year: "Year",
+      thisMonth: "accomplished this month",
+      inMonth: (month: string) => `accomplished in ${month}`,
+      thisYear: "accomplished this year",
+      inYear: (year: string) => `accomplished in ${year}`,
+      today: (n: number) => `Today ${n}`,
+      previousMonth: "Previous month",
+      nextMonth: "Next month",
+      previousYear: "Previous year",
+      nextYear: "Next year",
+      byDay: (n: number, month: string) => `${n} accomplished in ${month}, shown by day`,
+      byMonth: (n: number, year: string) => `${n} accomplished in ${year}, shown by month`,
+      openMonth: (month: string, n: number) => `${month}: ${n}. Show this month`,
+      chooseMonth: "Choose a month to see what you accomplished.",
+      yours: "Your accomplishments",
+      emptyMonth: (month: string) => `Nothing crossed off in ${month} yet. Completed priorities gather here.`,
+      emptyYear: (year: string) => `Nothing crossed off in ${year} yet. Completed priorities gather here.`,
+    },
     score: "Rich habit score",
     todaySuffix: "today",
     sevenDays: "7 days",
@@ -601,6 +626,11 @@ export const en = {
    * the reader to assume they should agree.
    */
   progress: {
+    /* Habits and accomplishments, side by side and never combined. */
+    habitsLabel: "habits",
+    accomplishedLabel: "accomplished",
+    stripLegend: "The small marks are accomplishments each day.",
+    myAccomplishments: (n: number) => `Accomplishments this month: ${n}`,
     /** The switch at the top of the card. */
     title: "Progress",
     mine: "My Progress",
@@ -631,6 +661,12 @@ export const en = {
   },
 
   community: {
+    /* A second, descriptive figure. It sits beside the habit percentage and
+       never feeds the ranking, so filing many small priorities earns nothing. */
+    habitsSuffix: "habits",
+    accomplishedCount: (n: number) => `${n} accomplished`,
+    myAccomplishments: "Accomplishments this month",
+    accomplishmentsNote: "Accomplishments are shown alongside and never change anyone's rank",
     title: "Community Progress",
     /* Named "live" because it is: the board is recomputed from habit records
        on every visit, so it moves as people tick things off during the day
@@ -884,6 +920,17 @@ export const en = {
   },
   /** The day's post-it. A sticky note, not a to-do application. */
   priorities: {
+    /* Asked only for a completed priority: it is history now, and deleting it
+       is permanent. An open line keeps its one-click remove. */
+    deleteDoneTitle: "Delete this accomplishment?",
+    deleteDoneBody: "This permanently removes this completed priority from your history and your accomplishment totals.",
+    deleteDoneConfirm: "Delete",
+    /* Rewording a line in place. The words are the user's; only these
+       controls around them are translated. */
+    editTitle: (text: string) => `Edit "${text}"`,
+    editField: "Priority wording",
+    editEmpty: "A priority needs some words.",
+    editFailed: "That wasn't saved. Your wording is still here, so you can try again.",
     title: "Today's priorities",
     empty: "The few things that matter most today.",
     placeholder: "Finish the project review",

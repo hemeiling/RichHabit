@@ -463,6 +463,23 @@ export async function setPriorityPlannedOn(
 }
 
 /**
+ * Rewords a priority in place.
+ *
+ * One column, `body`, on the same row. The id, both dates, the quadrant, the
+ * arrangement and the planned day are not named here, so correcting a typo
+ * cannot move a line, reopen it, or change what it counted towards. A completed
+ * priority is reworded as it stands, still completed on the same day.
+ */
+export async function setPriorityText(userId: string, id: string, text: string): Promise<void> {
+  await assertRef(query, "priorities", id, userId);
+  await query(
+    `update priorities set body = $3, updated_at = now()
+      where id = $1 and user_id = $2`,
+    [id, userId, text],
+  );
+}
+
+/**
  * Ticks a priority, or un-ticks it.
  *
  * The completion date is the day being looked at, not `today` — if you are

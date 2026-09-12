@@ -3,6 +3,7 @@ import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs,
   SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
+import type { CommunitySnapshot } from "@/lib/community";
 
 /**
  * The browser's half of data access. No SQL and no credentials live here — each
@@ -58,6 +59,8 @@ export const addPriority = (id: string, text: string, date: string, category: st
 export const setPriorityPlannedOn = (id: string, plannedOn: string | null) =>
   patch("/api/priorities", { id, plannedOn });
 /** `date` is the day on screen, which is the day a completion is recorded on. */
+export const setPriorityText = (id: string, text: string) =>
+  patch("/api/priorities", { id, text });
 export const setPriorityDone = (id: string, done: boolean, date: string) =>
   patch("/api/priorities", { id, done, date });
 export const reorderPriorities = (ids: string[]) => patch("/api/priorities", { ids });
@@ -99,6 +102,13 @@ export const deleteImportantDate = (id: string) => remove("/api/important-dates"
 export const saveIntention = (i: Intention) => post("/api/intention", i);
 
 export const savePrefs = (p: Prefs) => post("/api/prefs", p);
+
+/**
+ * Community Progress. Sent through `send` so the reader's time zone travels with
+ * it: the board's month is the reader's calendar month, the same month their own
+ * progress and accomplishments use, rather than the server's UTC month.
+ */
+export const fetchCommunity = (): Promise<CommunitySnapshot> => send("/api/community", { method: "GET" });
 
 /**
  * Asks for a replacement habit per named behaviour. Writes only `recommended`

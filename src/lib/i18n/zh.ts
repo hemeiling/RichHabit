@@ -326,6 +326,27 @@ export const zh: Dict = {
   },
 
   insights: {
+    accomplishments: {
+      title: "成果",
+      month: "月",
+      year: "年",
+      thisMonth: "本月成果",
+      inMonth: (month: string) => `${month}成果`,
+      thisYear: "今年成果",
+      inYear: (year: string) => `${year} 年成果`,
+      today: (n: number) => `今天 ${n} 项`,
+      previousMonth: "上个月",
+      nextMonth: "下个月",
+      previousYear: "上一年",
+      nextYear: "下一年",
+      byDay: (n: number, month: string) => `${month}成果 ${n} 项，按天显示`,
+      byMonth: (n: number, year: string) => `${year} 年成果 ${n} 项，按月显示`,
+      openMonth: (month: string, n: number) => `${month}：${n} 项。查看这个月`,
+      chooseMonth: "选择一个月，查看那个月的成果。",
+      yours: "你的成果",
+      emptyMonth: (month: string) => `${month}还没有成果。完成的优先事项会汇集在这里。`,
+      emptyYear: (year: string) => `${year} 年还没有成果。完成的优先事项会汇集在这里。`,
+    },
     score: "富习惯得分",
     todaySuffix: "今天",
     sevenDays: "7 天",
@@ -539,6 +560,10 @@ export const zh: Dict = {
   },
 
   progress: {
+    habitsLabel: "习惯",
+    accomplishedLabel: "成果",
+    stripLegend: "小竖线表示每天的成果。",
+    myAccomplishments: (n: number) => `本月成果：${n} 项`,
     title: "进展",
     mine: "我的进步",
     community: "社区",
@@ -560,6 +585,10 @@ export const zh: Dict = {
   },
 
   community: {
+    habitsSuffix: "习惯",
+    accomplishedCount: (n: number) => `${n} 项成果`,
+    myAccomplishments: "本月成果",
+    accomplishmentsNote: "成果只作参考，不影响任何人的排名",
     title: "社区进步",
     liveRanking: "实时排名",
     view: "查看社区",
@@ -793,6 +822,13 @@ export const zh: Dict = {
     reflectPlaceholder: "用你自己的话写。",
   },
   priorities: {
+    deleteDoneTitle: "删除这项成果？",
+    deleteDoneBody: "这项已完成的优先事项会从你的历史记录和成果统计中永久删除。",
+    deleteDoneConfirm: "删除",
+    editTitle: (text: string) => `编辑「${text}」`,
+    editField: "优先事项内容",
+    editEmpty: "请写下这项优先事项的内容。",
+    editFailed: "没有保存成功。你输入的内容还在，可以再试一次。",
     title: "今日优先事项",
     empty: "今天最重要的几件事。",
     placeholder: "完成项目复盘",

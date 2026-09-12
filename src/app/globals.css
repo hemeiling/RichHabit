@@ -52,6 +52,13 @@ body {
 
 .display { font-family: var(--display); font-weight: 400; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
+/*
+ * Large counts. The display serif draws "1" as a plain stem, so 11 reads as
+ * "ll" and 111 as "lll" once a total is set large on its own. Counts that
+ * people read as quantities use the body face instead, at a regular weight so
+ * they stay as quiet as the serif they replace.
+ */
+.count { font-family: var(--body); font-weight: 400; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .eyebrow {
   font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
   color: var(--faint); font-weight: 500;
@@ -587,6 +594,53 @@ input[type="range"] { accent-color: var(--accent); }
   transition: opacity .12s ease, color .12s ease;
 }
 .pcard-x:hover { color: var(--ink); }
+
+/*
+ * Rewording a priority in place. The words are a button that looks like words:
+ * no border, no icon, a faint wash on hover where there is a pointer to hover
+ * with. Editing swaps them for a field at the same size, with two small
+ * controls under it — Save for a phone, where Enter is not a habit.
+ */
+.pcard-title {
+  display: block; width: 100%; text-align: left; font: inherit; color: inherit;
+  background: none; border: 0; padding: 0 3px; margin: 0 -3px; border-radius: 5px;
+  cursor: text; transition: background-color .12s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .pcard-title:hover { background: color-mix(in srgb, var(--line-soft) 55%, transparent); }
+}
+.pcard-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* While editing, the × is hidden: beside a field it reads as "cancel", and on
+   an open line it would delete in one tap. */
+.pcard[data-editing="true"] .drag-handle,
+.pcard[data-editing="true"] .pcard-x { visibility: hidden; }
+.pcard-edit { display: grid; gap: 6px; }
+/* The field's border and padding are taken back out with a negative margin, so
+   the words sit exactly where they were before the tap and nothing jumps. */
+.pcard-field {
+  display: block; width: calc(100% + 8px); margin: -3px -4px; resize: none; overflow: hidden;
+  font: inherit; font-size: 14.5px; line-height: 1.4; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 8px;
+  padding: 2px 3px; box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.pcard-field:focus { outline: none; }
+.pcard-field[aria-invalid="true"] { border-color: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.pcard-edit-error { font-size: 12px; line-height: 1.4; color: var(--warn); }
+.pcard-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.pcard-edit-btn {
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+  font: inherit; font-size: 12px; line-height: 1; padding: 6px 11px; border-radius: 999px; cursor: pointer;
+}
+.pcard-edit-btn:hover { color: var(--ink); }
+/* Quiet with a pointer, where Enter is the habit; filled on touch, below. */
+.pcard-edit-btn[data-primary] { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 500; }
+.pcard-edit-btn:disabled { opacity: .45; cursor: default; }
+.pcard-edit-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A finger needs a bigger target than a pointer. */
+@media not all and (hover: hover) {
+  .pcard-edit-btn { font-size: 13px; padding: 10px 16px; }
+  .pcard-edit-btn[data-primary] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+}
 @media (hover: hover) and (pointer: fine) {
   .pcard-x { opacity: 0; }
   .pcard:hover .pcard-x, .pcard:focus-within .pcard-x { opacity: 1; }

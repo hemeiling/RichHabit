@@ -1,10 +1,11 @@
 import { body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
+import { markMemberStale } from "@/lib/community";
 import {
   addPriority, deletePriority, reorderPriorities, savePriorityLayout, setPriorityDone,
-  setPriorityPlannedOn,
+  setPriorityPlannedOn, setPriorityText,
 } from "@/lib/db/queries";
-import { parseNewPriority, parsePriorityDone, parsePriorityPlan } from "@/lib/validate";
+import { parseNewPriority, parsePriorityDone, parsePriorityPlan, parsePriorityText } from "@/lib/validate";
 
 /**
  * The post-it. Private user content: what someone means to do is never read by
@@ -50,8 +51,21 @@ export async function PATCH(request: Request) {
       return;
     }
 
+    if (typeof b?.text === "string") {
+      const { id, text } = parsePriorityText(b);
+      await setPriorityText(userId, id, text);
+      // That a line was reworded, and which. Never the words, before or after.
+      // No Community refresh: the board shows counts, and a count cannot change.
+      await trackEvent({
+        userId, event: "priority_edited", entityType: "priority", entityId: id, page: "/priorities",
+      });
+      return;
+    }
+
     const { id, done, date } = parsePriorityDone(b);
     await setPriorityDone(userId, id, done, date);
+    // Completing or reopening moves this member's accomplishment count.
+    markMemberStale(userId);
     await trackEvent({
       userId, event: done ? "priority_completed" : "priority_reopened",
       entityType: "priority", entityId: id, page: "/priorities",
@@ -63,6 +77,8 @@ export async function DELETE(request: Request) {
   return withUser(async (userId) => {
     const id = requireId(request);
     await deletePriority(userId, id);
+    // A deleted completed priority leaves the accomplishment count.
+    markMemberStale(userId);
     await trackEvent({
       userId, event: "priority_deleted", entityType: "priority", entityId: id, page: "/priorities",
     });

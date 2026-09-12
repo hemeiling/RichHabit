@@ -6,6 +6,8 @@ import { useLocale, useT } from "@/lib/i18n/context";
 import { monthTitleFor } from "@/lib/i18n";
 import { dayScore, rangeScore } from "@/lib/habits";
 import { monthOf, monthSoFar, todayISO } from "@/lib/dates";
+import { accomplishedBetween, accomplishedOn } from "@/lib/accomplishments";
+import { fetchCommunity } from "@/lib/db";
 import type { Dict } from "@/lib/i18n";
 import { pointCount, runsOf } from "@/lib/trend";
 import type { AppState } from "@/lib/types";
@@ -87,6 +89,29 @@ function MonthTrend({ points, today }: {
   );
 }
 
+/**
+ * Accomplishments per day, under the habit line and sharing only its day axis.
+ *
+ * Its own strip with its own small height, never plotted against the 0–100
+ * habit scale: a count and a percentage on one axis would make either look like
+ * a fraction of the other. Days with nothing draw nothing.
+ */
+function AccomplishmentStrip({ counts }: { counts: number[] }) {
+  const W = 268, H = 12, PAD = 3;
+  const max = Math.max(1, ...counts);
+  if (!counts.some(Boolean)) return null;
+  const x = (i: number) => PAD + (i / Math.max(1, counts.length - 1)) * (W - PAD * 2);
+  return (
+    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      aria-hidden="true" style={{ display: "block", marginTop: 3 }}>
+      {counts.map((c, i) => c > 0 && (
+        <rect key={i} x={x(i) - 1.5} y={H - (3 + (c / max) * (H - 3))} width={3}
+          height={3 + (c / max) * (H - 3)} rx={1} fill="var(--accent)" opacity={0.7} />
+      ))}
+    </svg>
+  );
+}
+
 /* ----------------------------- my own month ------------------------------- */
 
 function MyProgress({ state }: { state: AppState }) {
@@ -112,18 +137,42 @@ function MyProgress({ state }: { state: AppState }) {
   const scored = points.filter((p) => p.pct !== null);
   const todayPct = points[points.length - 1]?.pct ?? null;
 
+  /* Accomplishments over exactly the same days, by the same rule Insights and
+     Community use. */
+  const { accomplished, dayCounts } = useMemo(() => {
+    const days = monthSoFar(today);
+    return {
+      accomplished: accomplishedBetween(state.priorities, days[0], today).length,
+      dayCounts: days.map((d) => accomplishedOn(state.priorities, d).length),
+    };
+  }, [state.priorities, today]);
+
   return (
     <>
+      {/* Two dimensions of the same month, side by side and never added up:
+          how consistently habits were kept, and what was actually finished. */}
       <div className="flat p-3 mt-3">
         <span className="faint block" style={{ fontSize: 11 }}>{t.progress.monthToDate}</span>
-        <span className="display" style={{ fontSize: 26, lineHeight: 1.1 }}>
-          {mtd.pct === null ? "—" : `${mtd.pct}%`}
-        </span>
-        {todayPct !== null && (
-          <span className="faint num" style={{ fontSize: 11.5, marginLeft: 8 }}>
-            {t.progress.todayIs(todayPct)}
-          </span>
-        )}
+        <div className="grid grid-cols-2 gap-3 mt-0.5">
+          <div style={{ minWidth: 0 }}>
+            {/* Both figures in the count face, so the pair reads as one set. */}
+            <span className="count block" style={{ fontSize: 24, lineHeight: 1.15 }}>
+              {mtd.pct === null ? "—" : `${mtd.pct}%`}
+            </span>
+            <span className="faint block" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
+              {t.progress.habitsLabel}
+              {todayPct !== null && <span className="num"> · {t.progress.todayIs(todayPct)}</span>}
+            </span>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <span className="count block" style={{ fontSize: 24, lineHeight: 1.15 }}>{accomplished}</span>
+            {/* One word. Today's count lives in Insights; here it wrapped the
+                narrow rail onto a second line for a figure the strip already shows. */}
+            <span className="faint block" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
+              {t.progress.accomplishedLabel}
+            </span>
+          </div>
+        </div>
       </div>
 
       {scored.length === 0 ? (
@@ -134,6 +183,7 @@ function MyProgress({ state }: { state: AppState }) {
             {t.progress.thisMonth(monthTitleFor(month, locale))}
           </div>
           <MonthTrend points={points} today={today} />
+          <AccomplishmentStrip counts={dayCounts} />
           <div className="flex justify-between faint num" style={{ fontSize: 10.5, marginTop: 2 }}>
             <span>1</span>
             <span>{Number(today.slice(8, 10))}</span>
@@ -141,6 +191,7 @@ function MyProgress({ state }: { state: AppState }) {
           {/* The labels that stop three percentages reading as a contradiction. */}
           <p className="faint mt-2" style={{ fontSize: 11.5, lineHeight: 1.45 }}>
             {t.progress.explain}
+            {accomplished > 0 && ` ${t.progress.stripLegend}`}
             {/* Only when this card can show two different month figures: the
                 reader's own is weighted by priority, the board's never is. */}
             {state.prefs.weighted && ` ${t.progress.weightedNote}`}
@@ -167,8 +218,7 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
     let live = true;
     setData(null);
     setFailed(false);
-    fetch("/api/community")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    fetchCommunity()
       .then((d) => { if (live) setData(d); })
       // The full page is where a failure is worth reporting properly; here it
       // must simply not be mistaken for an empty board.
@@ -204,13 +254,14 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
         <div className="flat p-3 mt-3 flex items-baseline justify-between gap-2">
           <span>
             <span className="faint block" style={{ fontSize: 11 }}>{t.community.myRank}</span>
-            <span className="display" style={{ fontSize: 19 }}>
+            {/* The count face, as on the My Progress tab beside it. */}
+            <span className="count" style={{ fontSize: 18 }}>
               {t.community.rankOf(data.me.rank, data.activeUsers)}
             </span>
           </span>
           <span className="text-right">
             <span className="faint block" style={{ fontSize: 11 }}>{t.community.monthToDate}</span>
-            <span className="display" style={{ fontSize: 19 }}>{data.me.pct}%</span>
+            <span className="count" style={{ fontSize: 18 }}>{data.me.pct}%</span>
           </span>
         </div>
       ) : data ? (
@@ -218,6 +269,14 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
           {t.community.noneScheduled}
         </p>
       ) : null}
+
+      {/* Only the reader's own count here. Other members' counts live on the
+          full Community page, where there is room to keep them clearly secondary. */}
+      {visible && data?.me && (
+        <p className="faint num mt-1.5" style={{ fontSize: 11.5 }}>
+          {t.progress.myAccomplishments(data.me.accomplishments)}
+        </p>
+      )}
 
       {visible && data && (
         <>

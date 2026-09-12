@@ -32,6 +32,8 @@ interface Actions {
   addPriority: (date: string, text: string, category: PriorityCategory) => string;
   setPriorityPlannedOn: (id: string, plannedOn: string | null) => void;
   /** `date` is the day on screen: the day the completion is recorded against. */
+  /** Resolves once saved; rejects, with the old wording restored, if it was not. */
+  setPriorityText: (id: string, text: string) => Promise<void>;
   setPriorityDone: (id: string, done: boolean, date: string) => void;
   deletePriority: (id: string) => void;
   reorderPriorities: (ids: string[]) => void;
@@ -322,6 +324,41 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       }),
       () => db.setPriorityPlannedOn(id, plannedOn),
     ),
+
+    /*
+     * Rewording. Like `setPriorityPlannedOn`, one field: the optimistic update
+     * copies everything else through, so Insights and My Progress show the new
+     * words at once and nothing they count can move.
+     *
+     * Unlike the others it hands back the outcome. The card needs to know when
+     * a save failed so it can reopen the field with what the person typed,
+     * rather than leave them to type it again. The rollback touches only this
+     * line's text, and only if nothing has reworded it since.
+     */
+    setPriorityText: (id, text) => {
+      let before: string | null = null;
+      setState((s) => ({
+        ...s,
+        priorities: s.priorities.map((p) => {
+          if (p.id !== id) return p;
+          before = p.text;
+          return { ...p, text };
+        }),
+      }));
+      setPending((n) => n + 1);
+      return db.setPriorityText(id, text)
+        .then(() => { setError(null); })
+        .catch((e: Error) => {
+          setState((s) => ({
+            ...s,
+            priorities: s.priorities.map((p) =>
+              (p.id === id && p.text === text && before !== null ? { ...p, text: before } : p)),
+          }));
+          setError(`${e.message}. That change wasn't saved.`);
+          throw e;
+        })
+        .finally(() => setPending((n) => n - 1));
+    },
 
     setPriorityDone: (id, done, date) => run(
       (s) => ({

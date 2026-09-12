@@ -1,6 +1,7 @@
 import { query } from "@/lib/db/pool";
 import { loadState } from "@/lib/db/queries";
 import { rangeScore } from "@/lib/habits";
+import { accomplishedBetween } from "@/lib/accomplishments";
 import { iso, todayISO } from "@/lib/dates";
 import type { AppState } from "@/lib/types";
 
@@ -44,6 +45,12 @@ export interface CommunityEntry {
   /** A username, a display name, or an initialled form. Never an email. */
   name: string;
   pct: number;
+  /**
+   * Priorities completed in the same window. A count and nothing else: no
+   * titles, dates, quadrants or notes leave the server. Descriptive only — it
+   * never enters the ranking, which stays on `pct`.
+   */
+  accomplishments: number;
   isMe: boolean;
 }
 
@@ -54,7 +61,7 @@ export interface CommunitySnapshot {
   activeUsers: number;
   top: CommunityEntry[];
   /** Null when the signed-in user has nothing scheduled this month. */
-  me: { rank: number; pct: number; name: string } | null;
+  me: { rank: number; pct: number; name: string; accomplishments: number } | null;
 }
 
 /**
@@ -102,6 +109,41 @@ export function monthToDate(today = todayISO()): { month: string; dates: string[
   return { month, dates };
 }
 
+/**
+ * The reader's own calendar date, from the IANA time zone their browser sends.
+ *
+ * The server runs in UTC. Measuring "this month" by the server's clock meant
+ * that on the evening of September 30 in California the board had already
+ * moved to October — while the reader's own progress, computed on their device,
+ * was still on September. Every figure a person sees about their month should
+ * use the same calendar, so the board now takes the reader's.
+ *
+ * The header is untrusted input, but all it can choose is which of the dates
+ * currently in effect somewhere on Earth to use — at most a day either side of
+ * UTC — and each member's score is still computed from their own records. An
+ * unknown or missing zone falls back to the server's date, which is what the
+ * board used before.
+ *
+ * `now` is a parameter so the month boundary can be tested without a clock.
+ */
+export function viewerToday(timeZone: string | null | undefined, now = new Date()): string {
+  if (timeZone && timeZone.length <= 64) {
+    try {
+      /* en-CA formats as YYYY-MM-DD. Parts rather than the string, so no locale
+         data quirk can change the separator. */
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(now);
+      const get = (type: string) => parts.find((p) => p.type === type)?.value;
+      const date = `${get("year")}-${get("month")}-${get("day")}`;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+    } catch {
+      // An unrecognised zone name. Fall through to the server's date.
+    }
+  }
+  return iso(now);
+}
+
 /** Every date in a whole calendar month — used to close a finished month. */
 export function wholeMonth(month: string): { month: string; dates: string[] } {
   const [y, m] = month.split("-").map(Number);
@@ -143,11 +185,16 @@ type Scored = CommunityEntry & { id: string; createdAt: string };
 
 type Cached = Omit<CommunitySnapshot, "me" | "top"> & { all: Scored[] };
 
-let cache: { at: number; snapshot: Cached } | null = null;
-
 /*
- * Members whose score is known to be out of date, to be recomputed the next
- * time anybody reads the board.
+ * One cached board per reader date.
+ *
+ * Readers in different time zones can be on different days — near a month's
+ * end, in different months — and each must be measured over their own window.
+ * At any instant only two or three dates are current somewhere, so this holds a
+ * handful of entries, and expired ones are dropped whenever the board is read.
+ *
+ * Each entry keeps its own set of members whose score is known to be out of
+ * date, to be recomputed the next time anybody reads that board.
  *
  * Marking is deliberately not recomputing. Ticking a habit is the hottest
  * write in the app, and making it wait on a state load and a re-sort would
@@ -155,14 +202,16 @@ let cache: { at: number; snapshot: Cached } | null = null;
  * an id to a set costs nothing, and someone working down a list of ten habits
  * pays for one recompute on their next look rather than ten.
  */
-const staleMembers = new Set<string>();
+interface CacheEntry { at: number; snapshot: Cached; dates: string[]; stale: Set<string> }
+const cache = new Map<string, CacheEntry>();
 
 /**
  * Says that a member's score has changed. Cheap enough to call from any write
- * that could move a number: it touches no database and allocates nothing.
+ * that could move a number — a habit tick, a completed or deleted priority, a
+ * visibility change: it touches no database.
  */
 export function markMemberStale(userId: string) {
-  staleMembers.add(userId);
+  for (const entry of cache.values()) entry.stale.add(userId);
 }
 
 /**
@@ -174,18 +223,19 @@ export function markMemberStale(userId: string) {
  * is a sort of a few dozen rows; it is the state loads that cost, and there is
  * exactly one of those per marked member.
  */
-async function refreshStale(snapshot: Cached) {
-  if (staleMembers.size === 0) return snapshot;
+async function refreshStale(entry: CacheEntry) {
+  const { snapshot, dates, stale } = entry;
+  if (stale.size === 0) return snapshot;
 
-  const ids = [...staleMembers];
-  staleMembers.clear();
+  const ids = [...stale];
+  stale.clear();
 
   const rows = await query<Row>(
     `select u.id, u.username, u.created_at
        from users u
       where ${RANKS_ON_LEADERBOARD} and u.id = any($1::uuid[])`, [ids]);
 
-  const { dates } = monthToDate();
+  // The same window the board was built over, not the server's own month.
   const byId = new Map(snapshot.all.map((e) => [e.id, e]));
 
   for (const id of ids) {
@@ -284,8 +334,13 @@ async function scoreMember(u: Row, dates: string[]): Promise<Scored | null> {
   const unweighted: AppState = { ...state, prefs: { ...state.prefs, weighted: false } };
   const score = rangeScore(unweighted, dates);
   if (score.pct === null) return null;
+  /* Counted by the same rule Insights and My Progress use, over the same days.
+     Only the number is kept; the priorities themselves go no further. */
+  const accomplishments = dates.length
+    ? accomplishedBetween(state.priorities, dates[0], dates[dates.length - 1]).length
+    : 0;
   return {
-    id: u.id, rank: 0, name: displayName(u), pct: score.pct,
+    id: u.id, rank: 0, name: displayName(u), pct: score.pct, accomplishments,
     isMe: false, createdAt: String(u.created_at),
   };
 }
@@ -296,6 +351,9 @@ async function scoreMember(u: Row, dates: string[]): Promise<Scored | null> {
  * Ties broken by account age, oldest first. Any deterministic rule would do;
  * the point is that a refresh must not reshuffle equal scores — including a
  * refresh caused by one member's score being recomputed on its own.
+ *
+ * Accomplishments play no part, not even as a tiebreak. Ranking by them would
+ * reward splitting work into many small priorities.
  */
 function ranked(scored: Scored[]) {
   const all = [...scored].sort(
@@ -328,31 +386,49 @@ async function archiveMonth(month: string) {
   }
 }
 
-export async function communitySnapshot(meId: string): Promise<CommunitySnapshot> {
-  if (!cache || Date.now() - cache.at > CACHE_MS) {
-    const snapshot = await computeAll();
-    cache = { at: Date.now(), snapshot };
-    /* A full recompute has just scored everybody, so nothing is outstanding.
-       Clearing here stops a mark made mid-compute from causing a pointless
-       second pass over someone who was already counted. */
-    staleMembers.clear();
+/**
+ * The board as one reader sees it, measured over their month to date.
+ *
+ * `today` is the reader's calendar date (see `viewerToday`); it defaults to the
+ * server's date for callers that have no reader.
+ */
+export async function communitySnapshot(meId: string, today = todayISO()): Promise<CommunitySnapshot> {
+  for (const [key, e] of cache) if (Date.now() - e.at > CACHE_MS) cache.delete(key);
+
+  let entry = cache.get(today);
+  if (!entry) {
+    const window = monthToDate(today);
+    const snapshot = await computeAll(window);
+    /* A full recompute has just scored everybody, so nothing is outstanding —
+       a fresh entry starts with an empty stale set, and a mark made mid-compute
+       does not cause a pointless second pass over someone already counted. */
+    entry = { at: Date.now(), snapshot, dates: window.dates, stale: new Set() };
+    cache.set(today, entry);
     /* Closing the previous month is best-effort: a history record failing to
-       write must never stop today's board from rendering. */
-    archiveMonth(previousMonth(snapshot.month)).catch(() => {});
-  } else if (staleMembers.size > 0) {
+       write must never stop today's board from rendering. It stays on the
+       server's own month, exactly as before, so no archived month is closed
+       early or rewritten because a reader happens to be in another zone. */
+    archiveMonth(previousMonth(monthToDate().month)).catch(() => {});
+  } else if (entry.stale.size > 0) {
     // Somebody ticked something since the last look. Rescore just them.
-    cache = { at: cache.at, snapshot: await refreshStale(cache.snapshot) };
+    entry.snapshot = await refreshStale(entry);
   }
-  const { month, updatedAt, activeUsers, all } = cache.snapshot;
+  const { month, updatedAt, activeUsers, all } = entry.snapshot;
 
   const mine = all.find((e) => e.id === meId) || null;
-  const top = all.slice(0, TOP_N).map(({ id, ...e }) => ({ ...e, isMe: id === meId }));
+  /* Exactly the public fields, listed rather than spread, so nothing added to
+     the internal row for sorting (an id, an account's creation time) can leak. */
+  const top = all.slice(0, TOP_N).map((e) => ({
+    rank: e.rank, name: e.name, pct: e.pct, accomplishments: e.accomplishments, isMe: e.id === meId,
+  }));
 
   return {
     month, updatedAt, activeUsers, top,
-    me: mine ? { rank: mine.rank, pct: mine.pct, name: mine.name } : null,
+    me: mine
+      ? { rank: mine.rank, pct: mine.pct, name: mine.name, accomplishments: mine.accomplishments }
+      : null,
   };
 }
 
 /** Exposed for tests; also lets an admin action drop a stale snapshot. */
-export function clearCommunityCache() { cache = null; staleMembers.clear(); }
+export function clearCommunityCache() { cache.clear(); }

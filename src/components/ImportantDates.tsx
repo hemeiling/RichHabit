@@ -1,9 +1,10 @@
 "use client";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useToday } from "@/components/useToday";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useHabits } from "@/components/store";
 import { Field, GrowingTextarea, Sheet } from "@/components/ui";
 import { uid } from "@/lib/habits";
-import { addMonths, monthFirst, monthGrid, monthOf, todayISO } from "@/lib/dates";
+import { addMonths, monthFirst, monthGrid, monthOf } from "@/lib/dates";
 import { dateRangeFor, monthTitleFor, prettyDateFor } from "@/lib/i18n";
 import { useLocale, useT } from "@/lib/i18n/context";
 import {
@@ -40,30 +41,6 @@ const MAX_LANES = 3;
  */
 const UPCOMING = 5;
 
-/**
- * Today, kept honest without polling.
- *
- * The default window is derived from the current date rather than stored, so it
- * rolls forward on its own — but a tab left open overnight would keep rendering
- * yesterday's idea of "this month" until something else caused a render. A
- * laptop reopened the next morning fires both of these, which is the case that
- * actually happens; nothing ticks in the background for a panel nobody is
- * looking at.
- */
-function useToday(): string {
-  const [day, setDay] = useState(todayISO());
-  useEffect(() => {
-    const check = () => setDay((d) => (todayISO() === d ? d : todayISO()));
-    const onVisible = () => { if (document.visibilityState === "visible") check(); };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", check);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", check);
-    };
-  }, []);
-  return day;
-}
 
 /** A stored kind, as a label. Unknown keys (an older or newer build) read as
  *  no kind at all rather than as a bare key on screen. */

@@ -197,6 +197,17 @@ export function parsePriorityDone(b: any) {
   };
 }
 
+/**
+ * Rewording a priority. The same rules as writing one — trimmed at the ends,
+ * never blank, never longer than a new line may be — so an edit cannot store
+ * something creation would have refused. The words themselves are kept exactly.
+ */
+export function parsePriorityText(b: any): { id: string; text: string } {
+  const text = check.text(b?.text, "text", MAX_PRIORITY_LENGTH).trim();
+  if (!text) throw new ApiError("A priority needs some words");
+  return { id: check.uuid(b?.id, "id"), text };
+}
+
 export function parseMonthlyReflection(b: any) {
   const month = check.text(b?.month, "month", 7);
   if (!/^\d{4}-\d{2}$/.test(month)) throw new ApiError("month must be YYYY-MM");

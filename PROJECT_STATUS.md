@@ -3,12 +3,108 @@
 > Last updated: 2026-09-12
 >
 > **RELEASE APPROVED · PRODUCTION DATABASE MIGRATED · MAIN UPDATED · DEPLOY VERIFICATION PENDING**
+> **ACCOMPLISHMENTS: IMPLEMENTED LOCALLY · NOT COMMITTED · NOT DEPLOYED · AWAITING PRODUCT OWNER REVIEW**
 >
 > The Product Owner approved the application release on 2026-09-12. `main` is
-> fast-forwarded to release commit `cd3eef4` plus this status update. The
-> intention migration was rehearsed on a Neon branch and applied to production
-> before `main` moved. Production verification of the deploy follows in the next
-> status update.
+> fast-forwarded to release commit `cd3eef4` plus a status commit (`67105c6`) and
+> pushed. Render auto-deploy was not observed; the Product Owner was asked to
+> deploy `67105c6` manually, and that is not yet confirmed. The intention
+> migration was rehearsed on a Neon branch and applied to production before
+> `main` moved.
+
+## Accomplishments and a forward-looking Priority Compass (local only)
+
+Approved by the Product Owner on 2026-09-12 for local implementation. On branch
+`feature/accomplishments` from `67105c6`, uncommitted. **No migration, no new
+table, nothing committed, pushed or deployed.**
+
+**Rule.** An accomplishment is a priority whose `completed_on` is set, counted on
+that date. One rule in `src/lib/accomplishments.ts` serves Insights, My Progress
+and Community. Reopen clears the date; completing again counts once on the new
+day; delete removes the row and the count.
+
+**What changed**
+
+- **Insights:** a new Accomplishments card after the score card. Month view has
+  total, "Today n", daily bars and the list grouped by completion day with exact
+  titles and "from <date>". Year view has total and 12 month columns; a past month
+  opens that month; future months are quiet and not openable.
+- **My Progress:** habits % and accomplishments count side by side, never
+  combined; a small per-day strip under the habit line; the rail's Community tab
+  shows only the reader's own count.
+- **Community:** each visible member shows a quiet "n accomplished" under the
+  habit %. Ranking is unchanged and uses habits only. Only rank, name, pct,
+  accomplishments and isMe leave the server. A pre-existing leak of each member's
+  account creation time in the payload was removed.
+- **Community month uses the reader's calendar.** `/api/community` reads the
+  `x-rh-timezone` header (sent by the new `fetchCommunity`) and measures habit %
+  and accomplishments over the reader's month to date. Invalid or missing zone
+  falls back to the server date. The cache is keyed by reader date. The archive
+  of finished months still triggers on the server's month, so archived results
+  are unchanged. Priority complete, reopen and delete now mark the member stale.
+- **Completed-priority delete asks first** ("Delete this accomplishment?"). Open
+  priorities still delete in one click. Deletion semantics unchanged.
+- **Priority Compass** always shows today: previous-day navigation and the large
+  date heading are removed, and the matrix and Important Dates are top-aligned
+  peers. `prioritiesOn` and all rows are untouched; `useToday` moved to
+  `src/components/useToday.ts` and is shared.
+- **Inline priority rewording** (requested by the Product Owner, missing from the
+  first report, added 2026-09-12). Tapping a card's words turns them into a field
+  in place; Enter or Save saves, Escape or Cancel cancels. Blank wording is
+  refused on the client and the server. A failed save reopens the field with the
+  typed words. `PATCH /api/priorities {id, text}` updates only `body` on the same
+  row, so id, created, completed, quadrant, order, plan and accomplishment counts
+  cannot change; completed priorities can be reworded without reopening. Drag is
+  off for the card being edited. Analytics records `priority_edited` with the row
+  id only; no words reach analytics or logs.
+
+**Verification, 2026-09-12**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| unit tests | 561 of 562; the one failure is the known `inspect-prod-readonly` baseline |
+| new unit tests (rule, lifecycle, US zone month boundary, rank unaffected, privacy) | 35 of 35 |
+| new unit tests for inline rewording | 19 of 19 |
+| browser suite on the local test instance | 102 of 102 |
+| browser suite for inline rewording, desktop, phone, Chinese, dark | 26 of 26 |
+| analytics rows and server log after rewording, checked in the database | no priority words anywhere |
+
+The browser suite covered: Compass today and the next day; top alignment and
+phone order; Insights month and year, the year total against its month columns,
+opening a month and the previous year; My Progress and Community matching
+Insights through reopen, re-complete and delete; the confirmation's cancel and
+confirm; Los Angeles, Chicago and New York either side of local midnight on
+September 30; English, Chinese and bilingual; dark mode; 390px width with no
+horizontal scroll; no page errors.
+
+**Known limits.** A member with nothing scheduled this month is still left off
+the board even with accomplishments; that rule is unchanged. Month labels use the
+existing short form ("Sep 2026").
+
+**Design review refinements, 2026-09-12** (checked at 1440, 430, 390, 375 and
+320px):
+
+- Large counts use a new `.count` style, the body sans at regular weight,
+  because the display serif renders 11 as "ll". It applies to the Insights
+  total, both My Progress figures, the Community summary and the rail's ranking.
+- My Progress drops "today n" beside accomplished; it wrapped the rail.
+- Priority Compass shows today's date as one quiet line under the heading, with
+  the tally beside it; the heading no longer wraps on phones.
+- Community summary figures sit on one baseline when a label wraps.
+- Inline editing: the field opens with no text shift, the field no longer
+  clips its last line, the × is hidden while editing, desktop Save is a quiet
+  tint and touch Save stays filled, the hover wash is lighter, and the editor
+  scrolls above a phone keyboard.
+
+**Product decisions approved 2026-09-12:** removing account creation time from
+the Community payload; keeping members with no scheduled habits off the board;
+the responsive Chinese rank layout; the revised My Progress legend; the short
+month label; the narrow time-zone fix for both current-month figures.
+
+**Next step:** the Product Owner reviews the screens, including inline rewording.
+Commit, push, merge and deploy only on explicit approval, staging only the
+feature paths and never the four excluded files. No database action is needed.
 
 ## Production, verified 2026-09-12
 
@@ -289,8 +385,8 @@ the expected release stylesheet above and contains "My Journey".
 ## Open, not fixed
 
 - **Header title truncation at phone width**, deferred by the Product Owner.
-- **The matrix card says "Today's priorities" on past days**; wording inside the
-  unedited component.
+- **The matrix card says "Today's priorities" on past days** in the deployed
+  release. The local Accomplishments branch removes past days, which resolves it.
 - **Rich Habits leaves an empty rail column below My Progress** on tall desktop
   pages.
 - **`db/schema.sql` lacks the legacy `day_priorities` table** that an earlier

@@ -1,5 +1,6 @@
 "use client";
 import { useHabits } from "@/components/store";
+import Accomplishments from "@/components/Accomplishments";
 import AskCoach from "@/components/AskCoach";
 import MonthlyGratitude from "@/components/MonthlyGratitude";
 import { Bars, Heatmap } from "@/components/ui";
@@ -63,6 +64,10 @@ export default function Insights() {
           ))}
         </div>
       </section>
+
+      {/* What was accomplished, directly after how consistently habits were
+          kept: two dimensions of the same period, deliberately not merged. */}
+      <Accomplishments />
 
       <section className="card p-5">
         <div className="eyebrow mb-3">{t.insights.lastWeeks(17)}</div>
