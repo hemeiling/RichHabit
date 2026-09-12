@@ -2,11 +2,13 @@
 
 > Last updated: 2026-09-12
 >
-> **IMPLEMENTED LOCALLY · NOT COMMITTED · NOT PUSHED · MIGRATION NOT APPLIED · NOT DEPLOYED**
+> **RELEASE APPROVED · PRODUCTION DATABASE MIGRATED · MAIN UPDATED · DEPLOY VERIFICATION PENDING**
 >
-> The release set is identified and verified. Waiting on the Product Owner to
-> approve the release sequence below. Nothing has been committed, pushed,
-> migrated or deployed.
+> The Product Owner approved the application release on 2026-09-12. `main` is
+> fast-forwarded to release commit `cd3eef4` plus this status update. The
+> intention migration was rehearsed on a Neon branch and applied to production
+> before `main` moved. Production verification of the deploy follows in the next
+> status update.
 
 ## Production, verified 2026-09-12
 
@@ -180,7 +182,44 @@ Expected stylesheet once the release is serving, for verifying the deploy:
   does not let this session read `~/.Trash`, and the path no longer resolves.
   Nothing there was deleted.
 
-## Proposed release sequence — NOT STARTED
+## Release progress, 2026-09-12
+
+| Step | State |
+| --- | --- |
+| pre-flight: production healthy and still `109d295` | done, 19:57 UTC |
+| clean commit | `cd3eef49368b43766acbec33e24942c9169e798e` |
+| commit tree equals the verified tree | yes, `4ebb312611fbf846a79fef5a3f4b35f665788d6b` |
+| mode changes in the commit | 0 |
+| release branch pushed | `release/my-journey-intention` |
+| GitHub `main` | still `109d295` |
+| Render auto-deploy setting | not verifiable from this session |
+| credential rotated and Render `DATABASE_URL` updated | done by the Product Owner |
+| production healthy after rotation, still `109d295` | yes, 20:10 UTC: health ok, database up, stylesheet byte-identical |
+| migration target identified, read-only | the Neon endpoint production used before rotation; database `neondb`; 27 tables; schema at the `a59b118` level; no intentions objects yet |
+| Neon rehearsal branch | `rehearsal-intentions-2026-09-12`, created by the Product Owner from `production`; same Neon project, different branch timeline; byte-identical to production across 27 tables before migrating |
+| migration rehearsal on the Neon branch | passed 56 of 56: the two expected changes, a no-op second run, 13 schema checks, 26 constraint tests rolled back, all 27 existing tables byte-identical |
+| production migration | applied 20:25 UTC: `created text_array_within()`, `created intentions`, `Done — 2 change(s).` |
+| idempotency run on production | `Nothing to do; already up to date.` |
+| production verification | 38 of 38: new objects, constraints and index present; `intentions` empty; all 27 existing tables and 1,181 rows byte-identical before and after |
+| temporary database credentials in `.env.local` | removed; local development URL restored |
+| application release | approved by the Product Owner; `main` fast-forwarded to the release; deploy verification pending |
+
+**Migration notes.** Both databases were reached through pooled connections.
+The rehearsal URL was pooled rather than direct as described; that is a
+connection type, not an identity, and does not affect this single-transaction
+migration. The pg driver printed its standard notice that `sslmode=require` is
+treated as `verify-full`; it comes from the driver and changed nothing. No test
+intention was created in production. The rehearsal branch can be deleted in Neon
+once the deploy is verified.
+
+The working tree on the release branch still holds the four excluded content
+changes. It now shows 212 mode-only paths rather than 166, because the 46
+committed files are stored as 644 while this OneDrive checkout marks them
+executable.
+
+## Release sequence
+
+Steps 0 to 3 are complete. The Product Owner approved step 4 on 2026-09-12.
 
 The migration is additive and the new code is safe before it, but order still
 matters: migrating first means the intention page works from the first request,
