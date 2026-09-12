@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     await trackEvent({
       userId,
       event: done ? "habit_completed" : "habit_uncompleted",
-      entityType: "habit", entityId: habitId, page: "/today",
+      entityType: "habit", entityId: habitId, page: "/habits",
       // Whether a note exists is a product signal; its text is not recorded.
       properties: { hasValue: value != null, hasNote: !!note },
     });

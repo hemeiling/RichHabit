@@ -19,12 +19,63 @@ describe("the product name and tagline", () => {
     expect(both.appName).toContain("养成富有的习惯");
   });
 
-  /** One space in "Rich Habits" was the old name; the product is RichHabit. */
-  it("has no stray 'Rich Habits' left in user-facing English", () => {
-    const text = JSON.stringify(en);
-    // The tagline says "Rich Habits" on purpose — it is the phrase, not the name.
-    const withoutTagline = text.replace(JSON.stringify(en.tagline), '""');
-    expect(withoutTagline).not.toContain("Rich Habits");
+  /**
+   * One space in "Rich Habits" was the old product name; the product is
+   * RichHabit, one word.
+   *
+   * The phrase itself is not banned, because it is now the name of a
+   * destination as well as a phrase in the tagline: the habit experience is
+   * called Rich Habits in the sidebar and in its page title, and step five of
+   * Clarify Your Intention offers to add a habit to it by name. What must never
+   * come back is the phrase used where the *product* is meant — so the
+   * sanctioned uses are listed and everything else still fails.
+   */
+  it("uses 'Rich Habits' only as the tagline phrase and the destination's name", () => {
+    const sanctioned = [
+      en.tagline,                       // the phrase the promise is built on
+      en.nav.habits,                    // the sidebar destination
+      en.titles["/habits"],             // the same screen's page title
+      en.intention.action.addHabit,     // "Add to Rich Habits"
+    ];
+    let text = JSON.stringify(en);
+    for (const value of sanctioned) {
+      expect(value, "a sanctioned use must still say it").toContain("Rich Habits");
+      text = text.split(JSON.stringify(value)).join('""');
+    }
+    expect(text).not.toContain("Rich Habits");
+  });
+
+  it("names the three destinations, in both languages", () => {
+    expect(en.nav.intention).toBe("Clarify Intention");
+    expect(en.nav.habits).toBe("Rich Habits");
+    expect(en.nav.priorities).toBe("Priority Compass");
+    expect(zh.nav.intention).toBe("明确意图");
+    expect(zh.nav.habits).toBe("富有习惯");
+    expect(zh.nav.priorities).toBe("优先罗盘");
+    // The page title carries the full name; the sidebar label is the short one.
+    expect(en.titles["/intention"]).toBe("Clarify Your Intention");
+    expect(zh.titles["/intention"]).toBe("明确意图");
+  });
+
+  /**
+   * The attribution, word for word as the Product Owner approved it.
+   *
+   * Pinned in a test because the second sentence is what keeps an
+   * acknowledgement from reading as a claim of endorsement, and because the
+   * first must not drift into a quotation. Dr. Doty's work is credited; none of
+   * it is reproduced.
+   */
+  it("credits Dr. James R. Doty without implying endorsement", () => {
+    expect(en.intention.attribution).toBe(
+      "Inspired by the work of Dr. James R. Doty on intention, attention, and "
+      + "clarifying what truly matters. Created independently by RichHabit.");
+    expect(zh.intention.attribution).toContain("James R. Doty");
+    expect(zh.intention.attribution).toContain("独立开发");
+    // No quotation marks anywhere: nothing here is quoted, so nothing may look
+    // as though it is.
+    for (const text of [en.intention.attribution, zh.intention.attribution]) {
+      expect(text).not.toMatch(/["'“”「」]/);
+    }
   });
 
   it("has no stray 富习惯 left as a product name in Chinese", () => {

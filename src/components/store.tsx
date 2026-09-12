@@ -2,9 +2,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as db from "@/lib/db";
 import { isDone, uid } from "@/lib/habits";
+import { trimIntention } from "@/lib/intention";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority, PriorityCategory,
+  AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, ImportantDate, Intention,
+  Prefs, Priority, PriorityCategory,
   SpendingRecord,
   Stack, WeeklyReview,
 } from "@/lib/types";
@@ -26,7 +28,8 @@ interface Actions {
    * The post-it. A call per record rather than one "save the day", because an
    * open priority is not owned by a day — see lib/priorities.
    */
-  addPriority: (date: string, text: string, category: PriorityCategory) => void;
+  /** Returns the new priority's id, for callers that need to refer to it. */
+  addPriority: (date: string, text: string, category: PriorityCategory) => string;
   setPriorityPlannedOn: (id: string, plannedOn: string | null) => void;
   /** `date` is the day on screen: the day the completion is recorded against. */
   setPriorityDone: (id: string, done: boolean, date: string) => void;
@@ -44,6 +47,12 @@ interface Actions {
   /** §26. Create and edit are one call: the id is the event's identity. */
   saveImportantDate: (e: ImportantDate) => void;
   deleteImportantDate: (id: string) => void;
+  /**
+   * Clarify Your Intention. Debounced, like the journal: this is a field being
+   * written into over minutes, not a discrete act on a record, and the whole
+   * point is that nobody has to press save on a reflection.
+   */
+  setIntention: (i: Intention) => void;
   setPrefs: (p: Partial<Prefs>) => void;
 }
 
@@ -136,12 +145,29 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       .finally(() => setPending((n) => n - 1));
   }, []);
 
-  /** For fields typed into: keep the UI live, write once the typing stops. */
+  /**
+   * For fields typed into: keep the UI live, write once the typing stops.
+   *
+   * The bookkeeping matters as much as the timer. `pending` is what the header
+   * reads to say "Saving", and a cancelled write never reaches the `finally`
+   * that would release its claim on it — so replacing a scheduled write has to
+   * release the old one as it goes. Without that, the counter is a count of
+   * keystrokes rather than of writes in flight, and the indicator stays on for
+   * the rest of the session after the very first word anybody types.
+   *
+   * The key is dropped as the timer fires, so the next call knows there is
+   * nothing of its own left to cancel.
+   */
   const runDebounced = useCallback((key: string, next: (s: AppState) => AppState, write: () => Promise<unknown>) => {
     setState(next);
-    clearTimeout(debounced.current[key]);
+    if (debounced.current[key]) {
+      clearTimeout(debounced.current[key]);
+      delete debounced.current[key];
+      setPending((n) => n - 1);
+    }
     setPending((n) => n + 1);
     debounced.current[key] = setTimeout(() => {
+      delete debounced.current[key];
       write()
         .then(() => setError(null))
         .catch((e: Error) => setError(`${e.message}. That change wasn't saved.`))
@@ -275,6 +301,13 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
         }),
         () => db.addPriority(id, text, date, category),
       );
+      /*
+       * The id, so a caller can record which priority it just created. The
+       * priority itself is an ordinary one — same table, same rollover, same
+       * quadrant rules — and handing the id back does not make it anything
+       * else. Every existing caller ignores the return value.
+       */
+      return id;
     },
 
     /*
@@ -424,6 +457,23 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
     deleteImportantDate: (id) => run(
       (s) => ({ ...s, importantDates: s.importantDates.filter((e) => e.id !== id) }),
       () => db.deleteImportantDate(id),
+    ),
+
+    /*
+     * Autosave. Debounced under one key, so a session being typed into writes
+     * once the typing stops rather than once per keystroke, and the last state
+     * of the reflection is what lands.
+     *
+     * The optimistic update replaces the whole intention because that is what
+     * the screen is editing — one record the person is working on. It touches
+     * nothing else in state: creating a habit or a priority from step five goes
+     * through `saveHabit` and `addPriority` exactly as it does anywhere else,
+     * and this action neither writes nor reads those tables.
+     */
+    setIntention: (i) => runDebounced(
+      `intention:${i.id}`,
+      (s) => ({ ...s, intention: i }),
+      () => db.saveIntention(trimIntention(i)),
     ),
 
     setPrefs: (p) => {

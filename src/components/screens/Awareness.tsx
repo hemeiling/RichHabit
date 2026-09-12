@@ -89,7 +89,7 @@ export default function Awareness() {
                   {e.duration && <span>{e.duration}</span>}
                   {e.context && <span>{e.context}</span>}
                   <button className="btn btn-quiet" style={{ padding: "2px 8px", fontSize: 12 }}
-                    onClick={() => router.push(`/habits?from=${encodeURIComponent(e.activity)}`)}>
+                    onClick={() => router.push(`/more/habits?from=${encodeURIComponent(e.activity)}`)}>
                     {t.awareness.makeHabit}
                   </button>
                   <button className="btn btn-quiet" style={{ padding: "2px 8px", fontSize: 12 }}

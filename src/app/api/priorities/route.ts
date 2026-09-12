@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     await addPriority(userId, id, text, date, category);
     // That one was written, and on which day. Never a word of what it says.
     await trackEvent({
-      userId, event: "priority_added", entityType: "priority", entityId: id, page: "/today",
+      userId, event: "priority_added", entityType: "priority", entityId: id, page: "/priorities",
     });
   });
 }
@@ -54,7 +54,7 @@ export async function PATCH(request: Request) {
     await setPriorityDone(userId, id, done, date);
     await trackEvent({
       userId, event: done ? "priority_completed" : "priority_reopened",
-      entityType: "priority", entityId: id, page: "/today",
+      entityType: "priority", entityId: id, page: "/priorities",
     });
   });
 }
@@ -64,7 +64,7 @@ export async function DELETE(request: Request) {
     const id = requireId(request);
     await deletePriority(userId, id);
     await trackEvent({
-      userId, event: "priority_deleted", entityType: "priority", entityId: id, page: "/today",
+      userId, event: "priority_deleted", entityType: "priority", entityId: id, page: "/priorities",
     });
   });
 }

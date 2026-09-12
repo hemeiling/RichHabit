@@ -20,7 +20,7 @@ type Mode = "signin" | "signup";
  *
  * The magic-link option went with Supabase Auth — sending a link needs an email
  * provider, and this app has none configured. Both routes set the session
- * cookie and land on /today.
+ * cookie and land on /habits.
  *
  * The language switcher is here as well as in More: a relative opening this for
  * the first time has to be able to change it before they have an account.
@@ -110,14 +110,14 @@ export default function LoginForm() {
       if (res.status === 403 && data?.verifyPending) { setNeedsVerify(true); return; }
       if (!res.ok) throw new Error(data?.error || t.login.genericError);
       /*
-       * Registered, but not signed in — there is no session to go to /today
+       * Registered, but not signed in — there is no session to go to /habits
        * with, because the account holds no place until the link is clicked.
        */
       if (data?.pending) {
         setPending({ email: data.email ?? identifier, sent: data.sent !== false });
         return;
       }
-      router.push("/today");
+      router.push("/habits");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.login.genericError);

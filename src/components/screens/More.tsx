@@ -11,6 +11,7 @@ import { todayISO } from "@/lib/dates";
 import type { AccountSummary } from "@/lib/db/queries";
 
 const LINKS = [
+  { href: "/more/habits", key: "habits" },
   { href: "/more/refine", key: "refine" },
   { href: "/more/awareness", key: "awareness" },
   { href: "/more/goals", key: "goals" },

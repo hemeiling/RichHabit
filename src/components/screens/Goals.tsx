@@ -60,7 +60,7 @@ export default function Goals() {
                     const s = habitStats(state, h, 30);
                     return (
                       <button key={h.id} className="flat p-3 w-full text-left" style={{ cursor: "pointer" }}
-                        onClick={() => router.push(`/habits?edit=${h.id}`)}>
+                        onClick={() => router.push(`/more/habits?edit=${h.id}`)}>
                         <div className="flex justify-between items-baseline gap-3">
                           <span style={{ fontSize: 14.5 }}>{habitName(h, t)}</span>
                           <span className="num muted" style={{ fontSize: 13, flex: "none" }}>
@@ -79,7 +79,7 @@ export default function Goals() {
 
             <div className="flex gap-2 mt-3.5">
               <button className="btn" onClick={() => setDraft({ ...g, name: goalName(g, t) })}>{t.goals.editGoal}</button>
-              <button className="btn" onClick={() => router.push("/habits")}>{t.goals.addAHabit}</button>
+              <button className="btn" onClick={() => router.push("/more/habits")}>{t.goals.addAHabit}</button>
             </div>
           </section>
         );
@@ -90,7 +90,7 @@ export default function Goals() {
           <div className="eyebrow mb-2">{t.goals.notLinked}</div>
           <div className="flex flex-wrap gap-2">
             {unlinked.map((h) => (
-              <button key={h.id} className="chip" onClick={() => router.push(`/habits?edit=${h.id}`)}>{habitName(h, t)}</button>
+              <button key={h.id} className="chip" onClick={() => router.push(`/more/habits?edit=${h.id}`)}>{habitName(h, t)}</button>
             ))}
           </div>
         </section>

@@ -3,7 +3,7 @@ import { isSchemaBehind } from "@/lib/db/diagnose";
 import { query, transaction } from "@/lib/db/pool";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, Priority,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, Priority,
   SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 import { DEFAULT_PRIORITY_CATEGORY, normalizePriorityCategory } from "@/lib/types";
@@ -35,7 +35,7 @@ type Q = typeof query;
  * `null` owner means the row does not exist yet, which is a create and fine.
  */
 type Owned = "habits" | "goals" | "habit_stacks" | "habit_awareness_entries"
-  | "priorities" | "important_dates";
+  | "priorities" | "important_dates" | "intentions";
 
 async function assertOwns(q: Q, table: Owned, id: string, userId: string) {
   const rows = await q<{ user_id: string }>(
@@ -82,7 +82,7 @@ async function optionalRead<T>(
 
 export async function loadState(userId: string): Promise<AppState> {
   const [habits, schedules, goalLinks, goals, completions, notes, reflections, priorities,
-    importantDates, awareness, stacks, metrics, reviews, spending, prefs] =
+    importantDates, awareness, stacks, metrics, reviews, spending, prefs, intention] =
     await Promise.all([
       query("select * from habits where user_id = $1 order by sort_order, created_at", [userId]),
       query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
@@ -115,6 +115,19 @@ export async function loadState(userId: string): Promise<AppState> {
               where user_id = $1 and spent_on >= current_date - 365
               order by spent_on desc`, [userId]),
       query("select * from user_preferences where user_id = $1", [userId]),
+      /*
+       * The active intention, or nothing. Optional like the two above, and for
+       * the same reason: the schema is applied by hand on the free plan, so the
+       * account has to load whether or not the table is there yet. One row by
+       * construction — `intentions_one_active` is a unique index — so the limit
+       * is belt and braces rather than a window.
+       */
+      optionalRead<any>("intention",
+        `select id, want, why_chain, ownership, ownership_note, vision,
+                habit_ids, priority_id, step, completed_at
+           from intentions
+          where user_id = $1 and archived_at is null
+          order by created_at limit 1`, [userId]),
     ]);
 
   const state = emptyState();
@@ -231,6 +244,33 @@ export async function loadState(userId: string): Promise<AppState> {
     color: d.color ?? "blue",
     kind: d.kind ?? "none",
   }));
+
+  /*
+   * The intention. Private beyond even the journal: `unavailable` is what the
+   * screen reads to decide whether to offer a writing surface at all, because
+   * showing one over a missing table would invite somebody to lose a page of
+   * reflection into a write that cannot land.
+   *
+   * Text arrives exactly as it was stored. The ids are references and nothing
+   * more — they are resolved against this account's own habits and priorities
+   * when the card is drawn, and one naming a record that no longer exists is
+   * simply not shown.
+   */
+  if (intention.missing) state.unavailable.push(intention.missing);
+  const active = intention.rows[0];
+  state.intention = !active ? null : {
+    id: active.id,
+    want: active.want ?? "",
+    whyChain: Array.isArray(active.why_chain) && active.why_chain.length
+      ? active.why_chain : [""],
+    ownership: active.ownership ?? null,
+    ownershipNote: active.ownership_note ?? "",
+    vision: Array.isArray(active.vision) && active.vision.length ? active.vision : [""],
+    habitIds: Array.isArray(active.habit_ids) ? active.habit_ids : [],
+    priorityId: active.priority_id ?? null,
+    step: Number(active.step ?? 1),
+    complete: active.completed_at != null,
+  };
 
   state.awareness = awareness.map((a: any): AwarenessEntry => ({
     id: a.id, time: a.at_time?.slice(0, 5) ?? "", activity: a.activity,
@@ -701,6 +741,75 @@ export async function saveImportantDate(userId: string, e: ImportantDate) {
  */
 export async function deleteImportantDate(userId: string, id: string) {
   await query("delete from important_dates where id = $1 and user_id = $2", [id, userId]);
+}
+
+/**
+ * Clarify Your Intention — the whole reflection, written as one row.
+ *
+ * An upsert on the id, so autosave writes the same row however many times the
+ * person pauses to think. `completed_at` is set the first time the session is
+ * finished and never rewritten afterwards, which is what stops a revisit from
+ * re-dating a reflection that was already made.
+ *
+ * `archived_at` is never written here. Nothing in the application archives an
+ * intention yet; the column and its partial unique index exist so that when
+ * something does, it is a new row beside the old one rather than an overwrite.
+ *
+ * The ownership check runs first, as with every other write: an id belonging to
+ * another account is refused as not found rather than quietly upserted into.
+ */
+export async function saveIntention(
+  userId: string, i: Intention,
+): Promise<{ started: boolean; finished: boolean }> {
+  await assertOwns(query, "intentions", i.id, userId);
+  const rows = await query<{ started: boolean; finished: boolean }>(
+    /*
+     * One statement, and the CTE is what makes it one.
+     *
+     * Both answers the caller needs are about the transition rather than the
+     * result: did this call create the intention, and did this call finish it.
+     * A CTE reads the snapshot from before the statement, so `prior` still
+     * holds the old completed_at while the upsert writes the new one — which is
+     * how "finished just now" is told apart from "was already finished", and
+     * why revisiting a completed reflection records nothing. Reading it in a
+     * separate query first would be two round trips and a race.
+     */
+    `with prior as (
+       select completed_at from intentions where id = $1 and user_id = $2
+     ), saved as (
+       insert into intentions
+         (id, user_id, want, why_chain, ownership, ownership_note, vision,
+          habit_ids, priority_id, step, completed_at)
+       values ($1,$2,$3,$4::text[],$5,$6,$7::text[],$8::uuid[],$9,$10,
+               case when $11 then now() else null end)
+       on conflict (id) do update set
+         want = excluded.want,
+         why_chain = excluded.why_chain,
+         ownership = excluded.ownership,
+         ownership_note = excluded.ownership_note,
+         vision = excluded.vision,
+         habit_ids = excluded.habit_ids,
+         priority_id = excluded.priority_id,
+         step = excluded.step,
+         -- Kept if it is already set: finishing happened once, whenever that
+         -- was, and a revisit must not re-date it.
+         completed_at = coalesce(intentions.completed_at, excluded.completed_at),
+         updated_at = now()
+       where intentions.user_id = $2
+       -- xmax is zero on a fresh insert and non-zero on the update branch.
+       returning (xmax = 0) as inserted, completed_at
+     )
+     select saved.inserted as started,
+            (saved.completed_at is not null
+              and (select completed_at from prior) is null) as finished
+       from saved`,
+    [i.id, userId, i.want, i.whyChain, i.ownership, i.ownershipNote, i.vision,
+      i.habitIds, i.priorityId, i.step, i.complete],
+  );
+  return {
+    started: rows[0]?.started === true,
+    finished: rows[0]?.finished === true,
+  };
 }
 
 export async function savePrefs(userId: string, p: Prefs) {

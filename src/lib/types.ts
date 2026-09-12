@@ -294,6 +294,15 @@ export interface AppState {
    * the post-it: nothing here reaches Community Progress or an admin screen.
    */
   importantDates: ImportantDate[];
+  /**
+   * The one active intention, or null when the user has not started one.
+   *
+   * Singular for V1 on purpose: the product asks for one intention held
+   * clearly, not a library of them. The table keeps its own id and an archive
+   * marker so a future second intention needs no migration and destroys
+   * nothing, but nothing in the app writes that marker yet.
+   */
+  intention: Intention | null;
   awareness: AwarenessEntry[];
   stacks: Stack[];
   metrics: Record<string, DayMetrics>;
@@ -321,7 +330,48 @@ export const SPENDING_CATEGORIES = [
 
 export const emptyState = (): AppState => ({
   habits: [], goals: [], completions: {}, journal: {}, monthlyReflections: {},
-  priorities: [], importantDates: [],
+  priorities: [], importantDates: [], intention: null,
   awareness: [], stacks: [], metrics: {}, reviews: [], spending: [], unavailable: [],
   prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en", communityVisible: true },
 });
+
+/**
+ * Clarify Your Intention — one reflection, carried between sessions.
+ *
+ * Every text field here is the user's own words. Nothing in this record is ever
+ * translated, rewritten, summarised, scored or graded, and none of it reaches an
+ * analytics event, a log line or an admin screen: what someone wants and why is
+ * the most private content the app holds. See src/lib/intention.ts for the rules
+ * that operate on it and src/app/api/intention/route.ts for what is recorded.
+ *
+ * `habitIds` and `priorityId` name records the user explicitly chose to create
+ * from this intention, through the ordinary habit and priority paths. They are
+ * plain ids with no foreign key, resolved against loaded state on render: a
+ * habit that is later deleted simply drops off the card, and deleting one can
+ * never reach back into this row. Those records are normal habits and normal
+ * priorities from the moment they exist — nothing here owns them.
+ */
+export type IntentionOwnership = "mine" | "outside" | "unsure";
+
+export interface Intention {
+  id: string;
+  /** Step 1 — what the person wants. */
+  want: string;
+  /**
+   * Step 2 — the ladder, shallowest first. One entry per level they opened, so
+   * the array's length is how deep they chose to go, not a fixed set of boxes.
+   */
+  whyChain: string[];
+  /** Step 3. Null is "not answered", which is distinct from any of the three. */
+  ownership: IntentionOwnership | null;
+  ownershipNote: string;
+  /** Step 4 — one answer per prompt, in VISION_PROMPTS order. */
+  vision: string[];
+  /** Step 5 — up to MAX_INTENTION_HABITS, in the order they were created. */
+  habitIds: string[];
+  priorityId: string | null;
+  /** The furthest step reached, which is where resuming lands. 1 to 5. */
+  step: number;
+  /** True once the session has been finished at least once. */
+  complete: boolean;
+}

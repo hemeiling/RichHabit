@@ -19,8 +19,10 @@ export const zh: Dict = {
   localeName: "中文",
 
   nav: {
-    today: "今日",
-    habits: "习惯",
+    journey: "我的旅程",
+    intention: "明确意图",
+    habits: "富有习惯",
+    priorities: "优先罗盘",
     week: "本周",
     insights: "洞察",
     community: "社区",
@@ -31,12 +33,14 @@ export const zh: Dict = {
   },
 
   titles: {
-    "/today": "今日",
-    "/habits": "我的习惯",
+    "/intention": "明确意图",
+    "/habits": "富有习惯",
+    "/priorities": "优先罗盘",
     "/week": "七天清单",
     "/insights": "洞察",
     "/community": "社区进步",
     "/more": "更多",
+    "/more/habits": "我的习惯表",
     "/more/refine": "调整我的习惯",
     "/more/awareness": "习惯觉察",
     "/more/goals": "目标",
@@ -488,6 +492,7 @@ export const zh: Dict = {
   more: {
     prefsNotDeployed: "该设置尚未启用——这个账户的数据库还在更新中。设置没有被更改，请稍后再试。",
     links: {
+      habits: { label: "我的习惯表", note: "你保持的每个习惯，以及各自的情况" },
       refine: { label: "调整我的习惯", note: "说出想改变什么，再决定追踪哪些" },
       awareness: { label: "习惯觉察", note: "先如实记录一天，再给它打分" },
       goals: { label: "目标", note: "每个习惯究竟是为了什么" },
@@ -981,6 +986,102 @@ export const zh: Dict = {
     loadFailedRetry: "重试",
     loadFailedTitle: "无法加载你的账户",
     loadFailedBody: "你的习惯和历史记录都还在，只是这台设备暂时读取不到。这通常是临时问题。请重试，如果反复出现请给我们反馈。",
+  },
+
+  intention: {
+    eyebrow: "明确意图",
+    startTitle: "你真正想要的是什么？",
+    startBody: "五个简短的步骤，几个安静的问题。随时可以停下，回来时它还在这里。",
+    start: "开始",
+    resume: "接着上次继续",
+    steps: {
+      what: "想要",
+      why: "为何",
+      truth: "真实",
+      vision: "图景",
+      action: "行动",
+    },
+    progress: (step: number, total: number) => `第 ${step} 步，共 ${total} 步`,
+    back: "返回",
+    continue: "继续",
+
+    what: {
+      question: "有什么是你真心想要创造、改变、成为，或者亲自体验的？",
+      placeholder: "用你自己的话写。",
+    },
+
+    why: {
+      question: "这件事为什么对你重要？",
+      deeper: "那又为什么重要？",
+      deepest: "再往下一层，是什么？",
+      goDeeper: "再深一层",
+      placeholder: "这里没有标准答案。",
+      earlier: "你写的是",
+    },
+
+    truth: {
+      question: "这真的是你自己想要的吗？",
+      note: "我们想要的东西，有些出自自己，有些来自别处。两者都值得留意。",
+      choices: {
+        mine: "这确实是我自己的",
+        outside: "其中或许有一部分来自外界的期待",
+        unsure: "我还在分辨",
+      },
+      prompts: {
+        mine: "是什么让你觉得它属于你？",
+        outside: "哪一部分可能并不属于你？",
+        unsure: "什么能帮你看得更清楚？",
+      },
+    },
+
+    vision: {
+      question: "想象它已经成真。",
+      prompts: {
+        different: "有什么会真的不一样？",
+        doing: "那时你会在做什么？",
+        day: "平常的一天会是什么样子？",
+        feeling: "那会是什么感觉？",
+      },
+      next: "下一个问题",
+    },
+
+    action: {
+      question: "接下来你会做什么？",
+      note: "意图要靠你反复去做的事落地，也要靠你接下来把注意力放在哪里。",
+      habitsTitle: "我要养成的习惯",
+      habitsHint: "最多三个。每一个都会成为习惯清单上的普通习惯，和其他习惯一样追踪。",
+      habitPlaceholder: "一个可以重复去做的行为",
+      addHabit: "加入富有习惯",
+      habitAdded: "已在习惯清单上",
+      openHabit: (name: string) => `在习惯编辑器中打开「${name}」`,
+      priorityTitle: "我的下一个优先事项",
+      priorityHint: "一件现在就值得你投入注意力的事。完成之前它会一直留在罗盘上。",
+      priorityPlaceholder: "你接下来要做的那件事",
+      addPriority: "加入优先罗盘",
+      priorityAdded: "已在罗盘上",
+      askImportant: "重要吗？",
+      askUrgent: "紧急吗？",
+      finish: "完成",
+      whenTitle: "什么时候？",
+    },
+
+    card: {
+      intention: "我的意图",
+      why: "为什么重要",
+      habits: "我要养成的习惯",
+      priority: "我的下一个优先事项",
+      fullWhy: "完整的追问",
+      revisit: "重新回顾",
+      noHabits: "这个意图还没有带出习惯。",
+      noPriority: "这个意图还没有带出优先事项。",
+      done: "已完成",
+    },
+
+    attribution: "灵感源自 James R. Doty 博士关于意图、专注，以及厘清什么才真正重要的研究。本功能由 RichHabit 独立开发。",
+
+    alreadyStarted: "你已经有一个正在进行的意图。刷新本页即可继续。",
+    unavailableTitle: "尚未启用",
+    unavailableBody: "这个账户暂时还不能使用「明确意图」。此刻写下的内容不会被保存，所以页面先不打开，以免让你白写一场。",
   },
 
   ui: {

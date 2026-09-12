@@ -1,7 +1,7 @@
 "use client";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, SpendingRecord,
-  Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs,
+  SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
 /**
@@ -90,6 +90,13 @@ export const deleteSpending = (id: string) => remove("/api/spending", id);
  */
 export const saveImportantDate = (e: ImportantDate) => post("/api/important-dates", e);
 export const deleteImportantDate = (id: string) => remove("/api/important-dates", id);
+
+/**
+ * Clarify Your Intention. One call for the whole reflection, create and edit
+ * alike: the id is the identity, so autosaving the same session writes the same
+ * row however many times somebody pauses to think.
+ */
+export const saveIntention = (i: Intention) => post("/api/intention", i);
 
 export const savePrefs = (p: Prefs) => post("/api/prefs", p);
 

@@ -22,7 +22,7 @@ export default function SetupForm({ token }: { token: string }) {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Could not finish setting up");
       // Full load: the session is new and nothing from before should persist.
-      window.location.replace("/today");
+      window.location.replace("/habits");
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

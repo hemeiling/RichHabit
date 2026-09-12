@@ -409,6 +409,73 @@ try {
     }
   }
 
+  /*
+   * ---- 4d. intentions ------------------------------------------------------
+   *
+   * Clarify Your Intention. Create-only, exactly like important_dates: one
+   * helper function and one table. There is nothing to convert, nothing to
+   * backfill, no existing row to rewrite and no existing table to alter. Habits and priorities are untouched — an intention
+   * records the ids of records the user chose to create through the ordinary
+   * paths, and owns none of them.
+   *
+   * As with important_dates, the application is written so this table may
+   * legitimately be absent: the account still loads, the module reports itself
+   * unavailable, and the screen says the feature is not switched on yet rather
+   * than presenting an empty writing surface somebody could lose a page of
+   * reflection into.
+   */
+  /*
+   * The bound on the reflection arrays. A function because a CHECK constraint
+   * may not hold a subquery and the per-entry half of the bound needs one — see
+   * db/schema.sql, where the reasoning and the alternatives that were tried are
+   * written down. Created before the table that uses it, and only if missing,
+   * so a second run neither recreates it nor counts it as a change.
+   */
+  const { rows: bounded } = await client.query(
+    `select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'text_array_within'`);
+  if (bounded.length === 0) {
+    await client.query(`
+      create function text_array_within(items text[], max_items int, max_chars int)
+      returns boolean language sql immutable parallel safe as $$
+        select coalesce(cardinality(items), 0) <= max_items
+           and not exists (select 1 from unnest(items) as item where length(item) > max_chars)
+      $$`);
+    console.log("  created text_array_within()");
+    changed++;
+  }
+
+  if (!(await tableExists("intentions"))) {
+    await client.query(`
+      create table intentions (
+        id            uuid primary key default gen_random_uuid(),
+        user_id       uuid not null references users on delete cascade,
+        want          text not null default '' check (length(want) <= 2000),
+        why_chain     text[] not null default '{}'
+                      constraint intentions_why_chain_check
+                      check (text_array_within(why_chain, 3, 2000)),
+        ownership     text check (ownership in ('mine','outside','unsure')),
+        ownership_note text not null default '' check (length(ownership_note) <= 2000),
+        vision        text[] not null default '{}'
+                      constraint intentions_vision_check
+                      check (text_array_within(vision, 4, 2000)),
+        habit_ids     uuid[] not null default '{}'
+                      constraint intentions_habit_ids_check
+                      check (cardinality(habit_ids) <= 3),
+        priority_id   uuid,
+        step          smallint not null default 1 check (step between 1 and 5),
+        completed_at  timestamptz,
+        archived_at   timestamptz,
+        created_at    timestamptz not null default now(),
+        updated_at    timestamptz not null default now()
+      )`);
+    await client.query(
+      `create unique index intentions_one_active on intentions (user_id)
+         where archived_at is null`);
+    console.log("  created intentions");
+    changed++;
+  }
+
   // ---- 5. admin account management ------------------------------------------
   for (const [table, ddl, extra] of [
     ["user_invites", `

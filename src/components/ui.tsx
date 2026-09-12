@@ -83,12 +83,22 @@ export function Field({
  * silence. Callers validate instead, and say so.
  */
 export function GrowingTextarea({
-  value, onChange, maxHeight = "40vh", ...rest
+  value, onChange, maxHeight = "40vh", bare, ...rest
 }: {
   value: string;
   onChange: (v: string) => void;
   /** Any CSS length. Past this the field scrolls rather than growing. */
   maxHeight?: string;
+  /**
+   * Drops the boxed field and writes on the page instead: a rule under the
+   * text and nothing else. See `.write` in globals.css.
+   *
+   * A variant rather than a second component, because the awkward part of this
+   * control is the autosize measurement below and there should be exactly one
+   * of those. What changes between a form field and a writing surface is which
+   * skin the same behaviour wears.
+   */
+  bare?: boolean;
 } & Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange" | "style">) {
   const ref = React.useRef<HTMLTextAreaElement>(null);
 
@@ -105,7 +115,7 @@ export function GrowingTextarea({
     <textarea
       {...rest}
       ref={ref}
-      className={`textarea textarea-grow ${rest.className ?? ""}`}
+      className={`${bare ? "write" : "textarea"} textarea-grow ${rest.className ?? ""}`}
       style={{ ["--grow-max" as string]: maxHeight }}
       value={value}
       onChange={(e) => onChange(e.target.value)}

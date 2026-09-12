@@ -84,6 +84,17 @@ export const FEATURES = {
     label: "Important dates",
     events: ["important_date_saved", "important_date_deleted"],
   },
+  /*
+   * How many people start a guided intention and how many finish one. The
+   * events carry a step count and nothing else — not the intention, not a
+   * reason, not the ownership answer, not a word of the vision, and not a
+   * length or a count of any of them. What somebody wants and why is the most
+   * private content the app holds, and the adoption table needs none of it.
+   */
+  intention: {
+    label: "Clarify Your Intention",
+    events: ["intention_started", "intention_completed"],
+  },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

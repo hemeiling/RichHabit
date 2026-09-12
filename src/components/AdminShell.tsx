@@ -39,7 +39,7 @@ export default function AdminShell({ email, children }: { email: string; childre
           <div style={{ borderTop: "1px solid var(--line-soft)", paddingTop: 8 }}>
             <div className="px-5 pt-2 pb-1 faint"
               style={{ fontSize: 12, overflowWrap: "anywhere", lineHeight: 1.35 }}>{email}</div>
-            <Link href="/today" className="navlink" onClick={close}>← Back to app</Link>
+            <Link href="/habits" className="navlink" onClick={close}>← Back to app</Link>
             <button className="navlink" onClick={signOut} disabled={busy}>
               {busy ? "Signing out…" : "Sign out"}
             </button>

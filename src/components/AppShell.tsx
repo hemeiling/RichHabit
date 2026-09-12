@@ -4,27 +4,62 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { HabitsProvider, useHabits } from "@/components/store";
 import LanguageToggle from "@/components/LanguageToggle";
-import Sidebar, { SidebarToggle, type NavItem } from "@/components/Sidebar";
+import Sidebar, { SidebarToggle, type NavItem, type NavNode } from "@/components/Sidebar";
 import { useSignOut } from "@/components/useSignOut";
 import FeedbackSheet from "@/components/FeedbackSheet";
 import { LocaleProvider, useAdoptLocale, useLocale, useT } from "@/lib/i18n/context";
-import type { Locale } from "@/lib/i18n";
+import { dict, type Locale } from "@/lib/i18n";
 
 /**
  * The app's navigation. It used to be a bar fixed to the bottom of the screen;
  * it is a sidebar now, persistent from 900px and a drawer below that, sharing
  * one component with admin.
  */
-const TABS = [
-  { href: "/today", key: "today", path: "M4 5h16v15H4z M4 10h16 M8 3v4 M16 3v4" },
-  { href: "/habits", key: "habits", path: "M5 7h14 M5 12h14 M5 17h9" },
-  { href: "/week", key: "week", path: "M4 6h16v13H4z M4 11h16 M9 6v13 M14 6v13" },
+/**
+ * The navigation, as a tree.
+ *
+ * My Journey is the product's shape made navigable: direction, then behaviour,
+ * then action. It is a group rather than a destination — there is no journey
+ * dashboard, and inventing one would put a page between people and the three
+ * things they actually came to do.
+ *
+ * Two of the three children are existing screens that gained a name and an
+ * address and nothing else. Rich Habits is what /today was; Priority Compass is
+ * the matrix that used to sit inside it, now beside the calendar that used to
+ * sit in its rail. Today is deliberately absent: once its contents are
+ * distributed there is no distinct experience left for it to be, and a fourth
+ * item competing with the three would be navigation for its own sake. The route
+ * still answers — see app/(app)/today.
+ */
+const NAV = [
+  {
+    key: "journey",
+    children: [
+      {
+        href: "/intention", key: "intention",
+        // Concentric rings closing on a point: aim, and what the step is for.
+        path: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18 M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M12 12h.01",
+      },
+      { href: "/habits", key: "habits", path: "M5 7h14 M5 12h14 M5 17h9" },
+      {
+        href: "/priorities", key: "priorities",
+        /*
+         * Four separate boxes, which is what is behind the door. Drawn as four
+         * rather than one square divided twice so it cannot be mistaken at
+         * 19px for the week's table further down.
+         */
+        path: "M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z",
+      },
+    ],
+  },
+  { href: "/week", key: "week", startsGroup: true,
+    path: "M4 6h16v13H4z M4 11h16 M9 6v13 M14 6v13" },
   { href: "/insights", key: "insights", path: "M5 19V10 M10 19V5 M15 19v-6 M20 19v-9" },
   /*
    * Two figures, the nearer one whole and the further one partial. Drawn in the
    * same open-stroke language as its neighbours rather than a filled glyph, and
-   * placed after the four personal views because it is the only outward-looking
-   * screen — the order reads from "my day" to "everyone".
+   * placed after the personal views because it is the only outward-looking
+   * screen — the order reads from "my own" to "everyone".
    *
    * It is `/community`, not `/more/community`: the sidebar marks an item active
    * when the path starts with its href, so living under /more would light up
@@ -36,11 +71,18 @@ const TABS = [
 ] as const;
 
 /**
- * Pages that carry a side rail, and therefore a wider shell. Kept beside TABS
- * so the two facts about a route — where it sits in the nav and how wide it
+ * Pages that carry a side rail, and therefore a wider shell. Kept beside NAV so
+ * the two facts about a route — where it sits in the navigation and how wide it
  * runs — are read in one place.
+ *
+ * Both of the moved experiences have one. Rich Habits puts My Progress beside
+ * the day's score; Priority Compass puts the calendar beside the matrix, which
+ * is also what keeps the four boxes at the width they had inside Today. A form-
+ * shaped page gets the 780px reading measure instead: a goal description set
+ * 1200px wide is harder to read, not better used.
  */
-const RAIL_ROUTES = new Set(["/today"]);
+const RAIL_ROUTES = new Set(["/habits", "/priorities"]);
+const measureFor = (pathname: string) => (RAIL_ROUTES.has(pathname) ? 1240 : 780);
 
 /**
  * Keeps the language in three places agreed: React state (what you see), the
@@ -178,15 +220,39 @@ function Chrome({ email, localDb, children }:
   { email: string; localDb: boolean; children: React.ReactNode }) {
   const { state, actions, loading, saving, error, loadFailed, reload, dismissError } = useHabits();
   const t = useT();
+  const locale = useLocale();
+  const en = dict("en");
+  const zh = dict("zh");
   const pathname = usePathname();
   const router = useRouter();
   const isSubPage = pathname.split("/").length > 2;
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
-  const items: NavItem[] = TABS.map((tab) => ({
-    href: tab.href, label: t.nav[tab.key], icon: tab.path,
-  }));
+  /*
+   * Labels, and in bilingual mode a second line rather than a middot.
+   *
+   * `t` is already the merged dictionary, which joins the two languages into
+   * one string — right in a sentence, wrong in a 244px column, and worse once
+   * three of these are indented under a parent. So bilingual mode asks each
+   * dictionary for its own wording and the sidebar sets them on two lines. The
+   * component still receives nothing but strings.
+   */
+  const bilingual = locale === "both";
+  const label = (key: keyof typeof t.nav) => (bilingual ? en.nav[key] : t.nav[key]);
+  const sublabel = (key: keyof typeof t.nav) => (bilingual ? zh.nav[key] : undefined);
+  const toItem = (tab: { href: string; key: keyof typeof t.nav; path: string }): NavItem => ({
+    href: tab.href, label: label(tab.key), sublabel: sublabel(tab.key), icon: tab.path,
+  });
+
+  const items: NavNode[] = NAV.map((node) => ("children" in node
+    ? {
+      key: node.key,
+      label: label(node.key),
+      sublabel: sublabel(node.key),
+      children: node.children.map(toItem),
+    }
+    : { ...toItem(node), startsGroup: "startsGroup" in node ? node.startsGroup : undefined }));
 
   return (
     <div data-theme={state.prefs.theme} style={{ minHeight: "100vh" }}>
@@ -210,7 +276,7 @@ function Chrome({ email, localDb, children }:
         {/* Tracks the content width, or the page title would sit 230px left of
             the column it titles. */}
         <div className="mx-auto px-4 sm:px-6 flex items-center justify-between"
-          style={{ maxWidth: RAIL_ROUTES.has(pathname) ? 1240 : 780, height: 56 }}>
+          style={{ maxWidth: measureFor(pathname), height: 56 }}>
           <div className="flex items-center gap-2.5 min-w-0">
             <SidebarToggle onClick={() => setMenuOpen(true)} label={t.nav.openMenu} />
             {isSubPage && (
@@ -257,7 +323,7 @@ function Chrome({ email, localDb, children }:
         * text field was doing a job.
         */}
       <main className="mx-auto px-4 sm:px-6 py-5 fade-in"
-        style={{ maxWidth: RAIL_ROUTES.has(pathname) ? 1240 : 780, paddingBottom: 40 }}
+        style={{ maxWidth: measureFor(pathname), paddingBottom: 40 }}
         key={pathname}>
         {loading
           ? <div className="eyebrow py-10 text-center">{t.common.loading}</div>

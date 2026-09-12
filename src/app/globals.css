@@ -32,6 +32,24 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * The theme's ground and ink, declared on the element that carries the theme.
+ *
+ * This is load bearing, and its absence was a bug. `data-theme` sits on a div
+ * inside <body> (see AppShell), so the dark tokens are redefined there — but
+ * `body` is outside that element, which means `body { color: var(--ink) }`
+ * resolved the LIGHT ink and every descendant inherited it as a computed
+ * colour. In dark mode a card therefore painted its dark surface under
+ * near-black text: habit names, headings and the date were all but invisible,
+ * and only the classes that re-declare a colour of their own — .muted, .faint,
+ * the accent — stayed readable.
+ *
+ * Restating both properties where the variables are actually redefined fixes
+ * every screen at once, and changes nothing in light mode, where the two
+ * declarations resolve to the same values body already had.
+ */
+[data-theme] { background: var(--bg); color: var(--ink); }
+
 .display { font-family: var(--display); font-weight: 400; letter-spacing: -0.01em; }
 .num { font-variant-numeric: tabular-nums; }
 .eyebrow {
@@ -144,6 +162,78 @@ body {
 .navlink[aria-current="page"] {
   background: var(--accent-soft); border-color: var(--accent-soft);
   color: var(--accent); font-weight: 500;
+}
+
+/* ------------------------- a foldable nav group ---------------------------- */
+/*
+ * My Journey and its three destinations.
+ *
+ * The hierarchy is carried by one step of indentation and a chevron, and by
+ * nothing else: no nested box, no second background, no rule down the side. A
+ * sidebar 244px wide cannot afford furniture, and the three children are the
+ * product's core — they should read as the main thing, not as something filed
+ * away inside a container.
+ */
+.navgroup {
+  /*
+   * Quieter than a destination, and a little tighter. This is a heading you can
+   * fold, so it should not compete with the places you can actually go — but it
+   * keeps the same height and the same hover as its neighbours, because it is
+   * still a row you press.
+   */
+  font-size: 13.5px;
+  letter-spacing: 0.01em;
+}
+/*
+ * Something inside is where you are.
+ *
+ * Ink, and nothing more. The active child already wears the accent pill every
+ * destination wears, and a second highlight here would have the sidebar claim
+ * you are in two places at once.
+ */
+.navgroup[data-within] { color: var(--ink); }
+
+.navgroup-chev { transition: transform 0.18s ease; }
+.navgroup-chev[data-open="true"] { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .navgroup-chev { transition: none; } }
+
+/*
+ * One step of indent, 14px, applied to the children's own rows rather than to a
+ * wrapper with padding — so the pill on the active child still stretches to the
+ * same right-hand edge as every other destination, and only its left edge moves
+ * in. The children's icons land under the parent's chevron plus the step, which
+ * is what makes the second tier legible without drawing anything.
+ */
+.navkids > a.navlink {
+  margin-left: 22px;
+  width: calc(100% - 30px);
+}
+
+/*
+ * The second language, in bilingual mode, on its own line.
+ *
+ * "Clarify Intention · 明确意图" is 185px of a 204px column before any indent,
+ * so it wrapped mid-label wherever the label was long — and indenting three of
+ * them under a parent would have guaranteed it. Two lines, the second quieter
+ * and smaller, is the designed version of what was already happening.
+ */
+.navsub {
+  display: block;
+  font-size: 12px;
+  line-height: 1.3;
+  margin-top: 1px;
+  color: var(--faint);
+}
+.navlink:hover .navsub { color: var(--muted); }
+/* On the active row the pair reads as one label, so the second line takes the
+   accent rather than staying grey against it. */
+.navlink[aria-current="page"] .navsub { color: var(--accent); opacity: 0.72; }
+.navgroup[data-within] .navsub { color: var(--muted); }
+
+/* A finger is not a cursor: the rows keep a comfortable target where there is
+   no hover to aim with. */
+@media (pointer: coarse) {
+  .navlink { padding-top: 11px; padding-bottom: 11px; }
 }
 
 @media (min-width: 900px) {
@@ -572,3 +662,199 @@ input[type="range"] { accent-color: var(--accent); }
 /* Smaller than the global row: this sits inside a box, not under the matrix. */
 .qadd .input { font-size: 13.5px; padding: 8px 10px; border-radius: 10px; }
 .qadd .btn { padding: 7px 13px; font-size: 13px; }
+
+/* ------------------------- clarify your intention -------------------------- */
+/*
+ * A reflection, not a form.
+ *
+ * Everything here is additive: it borrows the tokens the rest of the app
+ * already defines and introduces none of its own. What makes the page feel
+ * different from the tracking screens is not new colour — there is none — but
+ * the absence of furniture. No card, no filled field, no box around the
+ * question. One question set large in the display face, room around it, and
+ * text on the page's own ground.
+ */
+.intent {
+  /*
+   * Narrower than the 780px shell the page sits in. A question somebody is
+   * meant to sit with reads better at a shorter measure, and the space left
+   * over on either side is doing the work, not going to waste.
+   */
+  max-width: 620px;
+  margin: 0 auto;
+  padding-top: 2vh;
+}
+@media (min-width: 900px) { .intent { padding-top: 6vh; } }
+
+/*
+ * Where you are, without a wizard. The current step's name on one line and five
+ * hairline ticks under it — which is what keeps this legible in bilingual mode,
+ * where five translated words across a phone would wrap into a paragraph. The
+ * step count is on the ticks' label for a screen reader.
+ */
+.intent-steps { display: flex; align-items: center; gap: 5px; }
+.intent-tick {
+  height: 2px; width: 20px; border-radius: 2px; background: var(--line);
+  transition: background .3s ease, width .3s ease, opacity .3s ease;
+}
+.intent-tick[data-state="done"] { background: var(--accent); opacity: .4; }
+.intent-tick[data-state="here"] { background: var(--accent); width: 34px; }
+
+.intent-q {
+  font-family: var(--display); font-weight: 400;
+  font-size: 24px; line-height: 1.3; letter-spacing: -0.015em;
+  /* A two-line question breaks at a sensible place rather than leaving one
+     word stranded on the second line. */
+  text-wrap: pretty;
+}
+@media (min-width: 640px) { .intent-q { font-size: 30px; line-height: 1.25; } }
+/*
+ * The second language, in bilingual mode, on its own line.
+ *
+ * The dictionary joins a finished sentence with a space, which is right inside
+ * a paragraph and wrong for a question set at 30px — the two languages run
+ * together into one long line and neither reads as a question any more. So the
+ * screen asks each dictionary for its own wording and stacks them. See
+ * `Question` in screens/Intention.tsx.
+ */
+.intent-q-alt {
+  display: block; margin-top: 7px;
+  color: var(--muted); font-size: 0.8em; line-height: 1.35;
+}
+/* A prompt inside a step, rather than the step's own question. */
+.intent-sub { font-size: 19px; }
+@media (min-width: 640px) { .intent-sub { font-size: 22px; } }
+
+/*
+ * The writing surface. No fill and no box: a rule under the text, the way you
+ * write on paper. It is the largest thing on the page after the question and
+ * the only thing with a caret in it, which is the whole hierarchy of the step.
+ */
+.write {
+  width: 100%; background: none; border: none; border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 2px 1px 12px;
+  font-family: inherit; font-size: 17px; color: var(--ink);
+  outline: none; transition: border-color .2s ease;
+}
+.write::placeholder { color: var(--faint); }
+.write:focus { border-bottom-color: var(--accent); }
+/* The rule is the focus indicator here; a 2px ring around a borderless field
+   set on the page ground reads as an error state, not as attention. */
+.write:focus-visible { outline: none; }
+@media (min-width: 640px) { .write { font-size: 18px; } }
+
+/*
+ * Something already written, kept in view while the next answer is typed — and
+ * clickable, so a rung can be reopened without leaving the step.
+ */
+.intent-said {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; border-left: 2px solid var(--line);
+  padding: 3px 0 3px 13px; font: inherit; font-size: 14.5px; line-height: 1.55;
+  color: var(--muted); cursor: pointer; white-space: pre-wrap;
+  overflow-wrap: anywhere; transition: border-color .15s ease, color .15s ease;
+}
+.intent-said:hover { border-left-color: var(--accent); color: var(--ink); }
+
+/*
+ * A sentence you choose, rather than a chip.
+ *
+ * The Truth step offers three answers that are each a clause long. A pill row
+ * would either truncate them or wrap into a hedge of borders, and both make a
+ * quiet question look like a filter bar — so each answer is a full-width line
+ * with a mark at its left, and the set reads as a short list you pick from.
+ */
+.choice {
+  display: flex; align-items: flex-start; gap: 11px; width: 100%; text-align: left;
+  background: none; border: 1px solid var(--line); border-radius: 14px;
+  padding: 13px 15px; font: inherit; font-size: 15px; line-height: 1.45;
+  color: var(--ink); cursor: pointer; transition: .15s ease;
+}
+.choice:hover { border-color: var(--muted); }
+.choice[aria-pressed="true"] {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--accent);
+}
+.choice-mark {
+  flex: none; width: 15px; height: 15px; margin-top: 3px; border-radius: 999px;
+  border: 1.5px solid var(--line); transition: .15s ease;
+}
+.choice[aria-pressed="true"] .choice-mark {
+  border-color: var(--accent);
+  /* A ring rather than a filled dot: the row is already tinted, and a solid
+     disc at this size reads heavier than the sentence beside it. */
+  box-shadow: inset 0 0 0 3.5px var(--accent-soft), inset 0 0 0 8px var(--accent);
+}
+
+/*
+ * Going deeper, and moving to the next prompt. A caption that happens to be
+ * clickable — never a button, because pressing it is optional and a button
+ * would read as the way forward when Continue is.
+ */
+.intent-more {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: none; border: none; padding: 7px 0;
+  font: inherit; font-size: 13px; color: var(--muted);
+  cursor: pointer; transition: color .15s ease;
+}
+.intent-more:hover { color: var(--accent); }
+@media (pointer: coarse) { .intent-more { padding: 11px 0; } }
+
+/*
+ * Back and Continue, sticky at the foot of the column.
+ *
+ * On a phone the question and the writing area can fill the screen, and a way
+ * forward that has to be scrolled to is a way forward people do not find. The
+ * gradient rather than a hard edge is so the text passing underneath fades out
+ * instead of being cut off by a bar.
+ */
+.intent-actions {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 26px;
+  padding: 18px 0 calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, var(--bg) 45%);
+}
+
+/*
+ * The attribution. Visually last and visually least — an acknowledgement, not
+ * a notice: no box, no icon, no rule above it heavier than a hairline.
+ */
+.intent-credit {
+  margin-top: 36px; padding-top: 15px; border-top: 1px solid var(--line-soft);
+  font-size: 11.5px; line-height: 1.65; color: var(--faint); text-wrap: pretty;
+}
+
+/* ---------------------------- the intention card --------------------------- */
+/*
+ * What the session leaves behind: four things, on one page, with room around
+ * them. Not a dashboard — there is no figure, no percentage and no chart here
+ * on purpose. The card exists to be recognised, not measured.
+ */
+.icard { padding: 28px 24px; }
+@media (min-width: 640px) { .icard { padding: 40px 44px; } }
+.icard-label {
+  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--faint); font-weight: 500;
+}
+.icard-intention {
+  font-family: var(--display); font-weight: 400;
+  font-size: 25px; line-height: 1.3; letter-spacing: -0.015em; margin-top: 11px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+@media (min-width: 640px) { .icard-intention { font-size: 31px; } }
+.icard-why {
+  font-family: var(--display); font-weight: 400;
+  font-size: 17px; line-height: 1.6; margin-top: 10px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+@media (min-width: 640px) { .icard-why { font-size: 18.5px; } }
+.icard-rule { border: none; border-top: 1px solid var(--line-soft); margin: 26px 0; }
+.icard-item {
+  display: flex; align-items: flex-start; gap: 11px; padding: 6px 0;
+  font-size: 15.5px; line-height: 1.5; overflow-wrap: anywhere;
+}
+.icard-bullet {
+  flex: none; width: 5px; height: 5px; border-radius: 999px;
+  background: var(--accent); margin-top: 9px;
+}

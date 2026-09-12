@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     await reorderHabits(userId, ids);
     // How many moved is a product signal; which habits moved is not.
     await trackEvent({
-      userId, event: "habits_reordered", page: "/today",
+      userId, event: "habits_reordered", page: "/habits",
       properties: { count: ids.length },
     });
   });

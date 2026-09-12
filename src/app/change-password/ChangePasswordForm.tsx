@@ -37,7 +37,7 @@ export default function ChangePasswordForm(
       /* Forced changes land on Today, as they always have — that redirect is
          what releases someone from the forced-change gate. A user who came
          here from Settings goes back to Settings, where they were. */
-      window.location.replace(forced ? "/today" : "/more?changed=1");
+      window.location.replace(forced ? "/habits" : "/more?changed=1");
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

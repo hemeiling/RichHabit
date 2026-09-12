@@ -221,7 +221,7 @@ describe("template resolution", () => {
 
 describe("bilingual dictionary", () => {
   it("carries both languages in every label", () => {
-    expect(both.nav.today).toBe("Today · 今日");
+    expect(both.nav.week).toBe("Week · 本周");
     expect(both.login.signIn).toBe("Sign in · 登录");
     expect(both.common.save).toBe("Save · 保存");
   });

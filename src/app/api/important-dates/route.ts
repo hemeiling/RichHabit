@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       event: "important_date_saved",
       entityType: "important_date",
       entityId: event.id,
-      page: "/today",
+      page: "/priorities",
       properties: {
         days: eventLength(event),
         multiDay: event.startDate !== event.endDate,
@@ -89,7 +89,7 @@ export async function DELETE(request: Request) {
     }
     await trackEvent({
       userId, event: "important_date_deleted", entityType: "important_date",
-      entityId: id, page: "/today",
+      entityId: id, page: "/priorities",
     });
   });
 }

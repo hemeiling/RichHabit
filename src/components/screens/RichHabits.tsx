@@ -4,9 +4,7 @@ import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import AddHabit from "@/components/AddHabit";
 import ProgressPanel from "@/components/ProgressPanel";
-import ImportantDates from "@/components/ImportantDates";
 import GratitudeJournal from "@/components/GratitudeJournal";
-import Priorities from "@/components/Priorities";
 import HabitEditor from "@/components/HabitEditor";
 import HabitMenu from "@/components/HabitMenu";
 import { Empty, Field, ScoreDial, Sheet } from "@/components/ui";
@@ -20,6 +18,20 @@ import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import { habitName, habitUnit } from "@/lib/templates";
 import type { AppState, Category, Habit } from "@/lib/types";
+
+/**
+ * Rich Habits — the daily habit experience.
+ *
+ * This is what /today was, moved rather than rebuilt: the same day header and
+ * score, the same three sections, the same rows, sheets, drag-and-drop and
+ * journal, reading and writing the same records. Two things left, and nothing
+ * else changed. The priority matrix is Priority Compass now, and Important
+ * Dates went with it.
+ *
+ * The date on screen drives the whole page, as it always did: the score, which
+ * habits are scheduled, which are ticked, and which day's journal you are
+ * writing in.
+ */
 
 /**
  * Logging how much, and how it went. The "Note" marker on a row used to have no
@@ -192,7 +204,7 @@ function HabitRow({
   );
 }
 
-export default function Today() {
+export default function RichHabits() {
   const { state, actions } = useHabits();
   const t = useT();
   const locale = useLocale();
@@ -336,8 +348,17 @@ export default function Today() {
         </div>
       </section>
 
-      {/* Written at the start of the day, so it sits above the checklist. */}
-      <Priorities date={date} />
+      {/*
+        * The priority matrix used to sit here, between the day's summary and
+        * the checklist. It is Priority Compass now, at /priorities, reached
+        * from the sidebar — the same component, unchanged, simply given its
+        * own address.
+        *
+        * Nothing replaces it on this page. A summary card would be a second,
+        * lesser rendering of a screen that already exists, and the app settled
+        * that question once before when Community Progress became a top-level
+        * destination: one home per experience.
+        */}
 
       {/* Every section is rendered whether or not it has habits: an empty one
           still needs its "+ Add habit", or the page would offer no way to fill
@@ -456,15 +477,23 @@ export default function Today() {
       </div>
 
       {/*
-        * The rail, in the order you look at it: how your own month is going —
-        * with the group one tap behind it — then what is coming up. Below 1280px it collapses into the page under the
-        * day's habits — see `.with-rail` — so on a phone the calendar sits at
-        * the bottom, where a glance at next month belongs relative to today's
-        * checklist.
+        * The rail: how your own month is going, with the group one tap behind
+        * it. It is top-aligned beside the score card rather than below the
+        * habit list, because the two answer the same question at two time
+        * scales — today, and the month it belongs to.
+        *
+        * Below 1280px the grid collapses and the rail follows the main content
+        * down the page — see `.with-rail` — which puts My Progress after the
+        * checklist and the journal on a phone. That order is deliberate: the
+        * first thing you should see is what you have to do, not how you
+        * compare. Nothing is hidden and nothing is repositioned by script.
+        *
+        * Important Dates used to sit here too. It is on Priority Compass now,
+        * beside the matrix, where what is coming up belongs next to what
+        * deserves attention. It is not rendered anywhere else.
         */}
       <aside className="rail flex flex-col gap-4">
         <ProgressPanel />
-        <ImportantDates />
       </aside>
     </div>
   );

@@ -575,6 +575,95 @@ create table important_dates (
 -- displayed months uses the same index.
 create index important_dates_user_range on important_dates (user_id, starts_on, ends_on);
 
+-- --------------------------- bounded text arrays ----------------------------
+-- Whether a text[] holds at most `max_items` entries, none longer than
+-- `max_chars` characters. Used by the intentions table below.
+--
+-- A function because a CHECK constraint may not contain a subquery, and the
+-- per-entry half of this needs one: unnest is what sees every element whatever
+-- shape the array arrives in. cardinality counts every element too, so neither
+-- a two-dimensional array nor one with a lower bound other than 1 can carry a
+-- long entry past the limit. Both were tried against real Postgres before this
+-- was written, as was a total-length check without a function, which was
+-- rejected: it bounds the sum and lets one entry take all of it.
+--
+-- Immutable — it reads nothing but its arguments — so it is safe inside a
+-- constraint and survives a dump and restore.
+create or replace function text_array_within(items text[], max_items int, max_chars int)
+returns boolean language sql immutable parallel safe as $$
+  select coalesce(cardinality(items), 0) <= max_items
+     and not exists (select 1 from unnest(items) as item where length(item) > max_chars)
+$$;
+
+-- ------------------------------- intentions --------------------------------
+-- Clarify Your Intention: one guided reflection, kept between sessions.
+--
+-- The most private table in the database. What somebody wants, why it matters
+-- to them and whether they suspect it is not really theirs is read by exactly
+-- one account: their own. Nothing here reaches Community Progress, an admin
+-- screen, an analytics event or a log line — the events the feature records
+-- carry a step number and nothing else.
+--
+-- One row per account for now, which the partial unique index below is what
+-- actually enforces. `archived_at` is here so replacing an intention later is a
+-- new row and a marker rather than an overwrite: the schema is already shaped
+-- so that keeping the old reflection costs nothing and losing it takes a
+-- deliberate delete. Nothing in the application writes it yet.
+create table intentions (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references users on delete cascade,
+  -- Step 1. The user's own words. Never translated, never rewritten, never
+  -- summarised. 2000 characters, the ceiling the validator enforces.
+  want          text not null default '' check (length(want) <= 2000),
+  -- Step 2. The ladder, shallowest first: one element per level they chose to
+  -- open, so the array's length is how deep they went. At most three levels,
+  -- each at most 2000 characters — what the screen offers and the validator
+  -- enforces. This is the backstop if either is ever bypassed.
+  why_chain     text[] not null default '{}'
+                constraint intentions_why_chain_check
+                check (text_array_within(why_chain, 3, 2000)),
+  -- Step 3. Null means unanswered, which is a real state and the one every
+  -- existing row would have had. Never scored and never compared.
+  ownership     text check (ownership in ('mine','outside','unsure')),
+  ownership_note text not null default '' check (length(ownership_note) <= 2000),
+  -- Step 4. One answer per prompt revealed, in the order the app asks them.
+  -- There are four prompts, so at most four entries, each at most 2000
+  -- characters.
+  vision        text[] not null default '{}'
+                constraint intentions_vision_check
+                check (text_array_within(vision, 4, 2000)),
+  /*
+   * Step 5. Records the user explicitly created through the ordinary habit and
+   * priority paths.
+   *
+   * Deliberately plain ids with no foreign key. A habit or a priority created
+   * from an intention is a normal habit and a normal priority from the moment
+   * it exists, and nothing about it belongs to this row: the ids are resolved
+   * against the account's own habits and priorities when the card is drawn, and
+   * one that has since been deleted is simply not shown. No constraint here can
+   * reach into those tables, and no delete there can reach into this one.
+   */
+  -- At most three, as the screen allows. A uuid is fixed-length, so only the
+  -- count needs a bound.
+  habit_ids     uuid[] not null default '{}'
+                constraint intentions_habit_ids_check
+                check (cardinality(habit_ids) <= 3),
+  priority_id   uuid,
+  -- The furthest step reached. Where "resume" lands, nothing more.
+  step          smallint not null default 1 check (step between 1 and 5),
+  -- When the session was first finished. Null while it is still in progress;
+  -- a timestamp rather than a boolean, because "when" is free to record.
+  completed_at  timestamptz,
+  -- Null means this is the active intention. See the index below.
+  archived_at   timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+-- One active intention per account, enforced here rather than in the API so it
+-- cannot be got around by a second request arriving at the same moment.
+create unique index intentions_one_active on intentions (user_id)
+  where archived_at is null;
+
 -- --------------------------- updated_at trigger ----------------------------
 create or replace function touch_updated_at() returns trigger
 language plpgsql as $$

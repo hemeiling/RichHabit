@@ -5,7 +5,7 @@ import { LocaleProvider } from "@/lib/i18n/context";
 import { getLocale } from "@/lib/i18n/server";
 
 /**
- * Sends an already-signed-in visitor to /today — checked against the session
+ * Sends an already-signed-in visitor to /habits — checked against the session
  * row, not against the presence of a cookie.
  *
  * Middleware used to make this call, but it runs on the edge runtime and can
@@ -15,7 +15,7 @@ import { getLocale } from "@/lib/i18n/server";
  * A stale cookie is simply ignored; the next successful sign-in overwrites it.
  */
 export default async function LoginPage() {
-  if (await getSessionUser()) redirect("/today");
+  if (await getSessionUser()) redirect("/habits");
 
   return (
     <LocaleProvider initial={getLocale()}>

@@ -33,8 +33,25 @@ export const en = {
   localeName: "English",
 
   nav: {
-    today: "Today",
-    habits: "Habits",
+    /*
+     * The umbrella the three experiences sit under. A group, not a page: it
+     * names the progression from direction to behaviour to action without
+     * putting a dashboard between people and the three things they came to do.
+     */
+    journey: "My Journey",
+    /*
+     * The three named destinations, in the order direction, behaviour, action.
+     * "Rich Habits" is the phrase, not the product name — RichHabit is one
+     * word, and this is the habit experience's own name.
+     *
+     * Shorter here than the page title on purpose: the sidebar is 244px wide,
+     * these are indented under a parent, and they have to sit on one line
+     * beside an icon. "Clarify Intention" keeps the verb, which is what makes
+     * the destination an act rather than a noun.
+     */
+    intention: "Clarify Intention",
+    habits: "Rich Habits",
+    priorities: "Priority Compass",
     week: "Week",
     insights: "Insights",
     /* Sits after the four personal views and before settings: it is the one
@@ -48,12 +65,15 @@ export const en = {
   },
 
   titles: {
-    "/today": "Today",
-    "/habits": "My habits",
+    /* No "/today": it redirects to /habits, so its title never renders. */
+    "/intention": "Clarify Your Intention",
+    "/habits": "Rich Habits",
+    "/priorities": "Priority Compass",
     "/week": "Rich habits checklist",
     "/insights": "Analytics",
     "/community": "Community Progress",
     "/more": "More",
+    "/more/habits": "My Habit Sheet",
     "/more/refine": "Refine my habits",
     "/more/awareness": "Habit awareness",
     "/more/goals": "Goals",
@@ -514,6 +534,9 @@ export const en = {
     /** The window between a deploy and the migration that follows it. */
     prefsNotDeployed: "That setting isn't available yet — this account's database is still being updated. Nothing was changed; try again shortly.",
     links: {
+      /* Every habit on the sheet, and the way in to change one. It answered at
+         /habits until Rich Habits took that address. */
+      habits: { label: "My Habit Sheet", note: "Every habit you keep, and how each is going" },
       refine: { label: "Refine my habits", note: "Name what to change, then choose what to track" },
       awareness: { label: "Habit awareness", note: "Log a normal day, then grade it" },
       goals: { label: "Goals", note: "What each habit is actually for" },
@@ -1117,6 +1140,135 @@ export const en = {
     loadFailedRetry: "Try again",
     loadFailedTitle: "We couldn't load your account",
     loadFailedBody: "Your habits and history are safe — this device just couldn't read them. This is usually temporary. Try again, and if it keeps happening please send feedback.",
+  },
+
+  /**
+   * Clarify Your Intention.
+   *
+   * Every prompt here is RichHabit's own wording. The experience is inspired by
+   * Dr. James R. Doty's work on intention and attention; none of his exercises
+   * or text is reproduced, and the attribution at the foot of the page says so
+   * without implying that he endorsed or was involved in any of this.
+   *
+   * The questions are deliberately short and end in a question mark, which is
+   * what makes the bilingual dictionary join them with a space rather than a
+   * middot. The screen goes further and sets the two languages on their own
+   * lines — see `Ask` in screens/Intention.tsx.
+   */
+  intention: {
+    /** The name of the experience, above the question. */
+    eyebrow: "Clarify your intention",
+    startTitle: "What do you truly want?",
+    startBody: "Five short steps and a few quiet questions. Stop whenever you like; it will be here when you come back.",
+    start: "Begin",
+    resume: "Continue where you left off",
+    /** The subtle progress treatment: one word per step. */
+    steps: {
+      what: "What",
+      why: "Why",
+      truth: "Truth",
+      vision: "Vision",
+      action: "Action",
+    },
+    /** Only a screen reader hears this; the ticks carry it visually. */
+    progress: (step: number, total: number) => `Step ${step} of ${total}`,
+    back: "Back",
+    continue: "Continue",
+
+    what: {
+      question: "What is something you genuinely want to create, change, become, or experience?",
+      placeholder: "In your own words.",
+    },
+
+    why: {
+      /* Three rungs, each revealed only once the one above has an answer. */
+      question: "Why does this matter to you?",
+      deeper: "And why is that important?",
+      deepest: "And underneath that?",
+      goDeeper: "Go deeper",
+      placeholder: "There is no right answer here.",
+      /** Marks the rung above, kept in view while the next one is written. */
+      earlier: "You wrote",
+    },
+
+    truth: {
+      question: "Is this really yours?",
+      note: "Some of what we want comes from us, and some of it arrives from elsewhere. Both are worth noticing.",
+      choices: {
+        mine: "This feels genuinely mine",
+        outside: "Some of it may come from outside expectations",
+        unsure: "I'm still figuring that out",
+      },
+      /* One follow-up, chosen by the answer. Never a verdict on it. */
+      prompts: {
+        mine: "What tells you it's yours?",
+        outside: "Which part might belong to someone else?",
+        unsure: "What would help you know?",
+      },
+    },
+
+    vision: {
+      question: "Imagine it has become real.",
+      prompts: {
+        different: "What would actually be different?",
+        doing: "What would you be doing?",
+        day: "What would an ordinary day look like?",
+        feeling: "How would it feel?",
+      },
+      next: "Next question",
+    },
+
+    action: {
+      question: "What will you actually do?",
+      note: "An intention becomes real through what you repeat, and through what you give your attention to next.",
+      habitsTitle: "Habits I'm building",
+      habitsHint: "Up to three. Each one becomes an ordinary habit on your sheet, tracked like any other.",
+      habitPlaceholder: "A behaviour you could repeat",
+      addHabit: "Add to Rich Habits",
+      habitAdded: "On your habit sheet",
+      openHabit: (name: string) => `Open "${name}" in the habit editor`,
+      priorityTitle: "My next priority",
+      priorityHint: "One thing that deserves your attention now. It stays on the compass until you finish it.",
+      priorityPlaceholder: "The next thing you'll do",
+      addPriority: "Add to Priority Compass",
+      priorityAdded: "On your compass",
+      /* The matrix asks these of every new line and never guesses. Asked here
+         for the same reason: nothing may decide what matters to someone. */
+      askImportant: "Important?",
+      askUrgent: "Urgent?",
+      finish: "Finish",
+      whenTitle: "When?",
+    },
+
+    card: {
+      intention: "My intention",
+      why: "Why it matters",
+      habits: "Habits I'm building",
+      priority: "My next priority",
+      /** The earlier rungs, folded away. The deepest one is what is shown. */
+      fullWhy: "The whole chain",
+      revisit: "Revisit",
+      noHabits: "No habits from this intention yet.",
+      noPriority: "No priority from this intention yet.",
+      done: "Done",
+    },
+
+    /**
+     * Verified before it shipped: Dr. James R. Doty was a neurosurgeon on the
+     * faculty of Stanford University School of Medicine and the founder and
+     * director of Stanford's Center for Compassion and Altruism Research and
+     * Education. Nothing here is quoted, and the second sentence is what keeps
+     * an acknowledgement from reading as a claim of endorsement.
+     */
+    attribution: "Inspired by the work of Dr. James R. Doty on intention, attention, and clarifying what truly matters. Created independently by RichHabit.",
+
+    /* Said when the table is not there yet, rather than offering a writing
+       surface over a write that cannot land. See api/intention/route.ts. */
+    /* Two tabs, both starting an intention. The first one won; reloading
+       shows it, and nothing the person wrote in either is lost. */
+    alreadyStarted: "You already have an intention in progress. Reload this page to carry on with it.",
+    unavailableTitle: "Not switched on yet",
+    unavailableBody: "Clarify Your Intention isn't available on this account yet. Nothing written here would be saved, so the page is holding back rather than risking your words.",
   },
 
   ui: {

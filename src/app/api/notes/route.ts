@@ -17,7 +17,7 @@ export async function POST(request: Request) {
      * anybody's journal.
      */
     await trackEvent({
-      userId, event: "gratitude_recorded", page: "/today",
+      userId, event: "gratitude_recorded", page: "/habits",
       properties: { entries: gratitude.length, hasReflection: reflection.trim().length > 0 },
     });
   });

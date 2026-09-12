@@ -6,8 +6,12 @@ import {
 import { isTemplateWording } from "@/lib/templates";
 import { SPENDING_CATEGORIES } from "@/lib/types";
 import { QUADRANTS } from "@/lib/priorities";
+import {
+  MAX_INTENTION_HABITS, MAX_NOTE, MAX_VISION_TEXT, MAX_WANT, MAX_WHY, MAX_WHY_TEXT,
+  OWNERSHIP_CHOICES, STEP_COUNT, VISION_PROMPTS,
+} from "@/lib/intention";
 import type {
-  AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Prefs, PriorityCategory,
+  AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, PriorityCategory,
   SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
@@ -336,4 +340,61 @@ export function parseIdList(b: any, field: string): string[] {
   if (!Array.isArray(raw)) throw new ApiError(`${field} must be an array`);
   if (raw.length > 200) throw new ApiError(`${field} has too many entries`);
   return raw.map((v, i) => check.uuid(v, `${field}[${i}]`));
+}
+
+/**
+ * Clarify Your Intention.
+ *
+ * Every text field arrives exactly as the person typed it and is stored that
+ * way: no trimming beyond the ends, no normalising, no rewriting. What is
+ * checked is only the shape — that the arrays are arrays and short enough, that
+ * the ownership answer is one of the three, that the step is in range — because
+ * the failure this prevents is a Postgres error naming a column, not a bad
+ * reflection. There is no such thing as a bad reflection.
+ *
+ * The ladders are bounded by the same constants the screen reveals rungs with,
+ * so a client cannot post a hundred levels of "why".
+ */
+export function parseIntention(b: any): Intention {
+  const texts = (raw: unknown, field: string, max: number, cap: number): string[] => {
+    if (!Array.isArray(raw)) throw new ApiError(`${field} must be an array`);
+    if (raw.length > cap) throw new ApiError(`${field} has too many entries`);
+    const out = raw.map((v, i) => check.text(v, `${field}[${i}]`, max));
+    // Always at least one slot, so the stored shape matches `blankIntention`
+    // and the screen never has to special-case an empty ladder.
+    return out.length ? out : [""];
+  };
+
+  const step = Number(b?.step ?? 1);
+  if (!Number.isInteger(step) || step < 1 || step > STEP_COUNT) {
+    throw new ApiError(`step must be between 1 and ${STEP_COUNT}`);
+  }
+
+  const habitIds = Array.isArray(b?.habitIds) ? b.habitIds : [];
+  if (habitIds.length > MAX_INTENTION_HABITS) {
+    throw new ApiError(`An intention can start at most ${MAX_INTENTION_HABITS} habits`);
+  }
+
+  return {
+    id: check.uuid(b?.id, "id"),
+    want: check.text(b?.want, "want", MAX_WANT),
+    whyChain: texts(b?.whyChain, "whyChain", MAX_WHY_TEXT, MAX_WHY),
+    // Null is "not answered yet", which is a real state and not a missing one.
+    ownership: b?.ownership == null || b?.ownership === ""
+      ? null
+      : check.oneOf(b.ownership, OWNERSHIP_CHOICES, "ownership"),
+    ownershipNote: check.text(b?.ownershipNote, "ownershipNote", MAX_NOTE),
+    vision: texts(b?.vision, "vision", MAX_VISION_TEXT, VISION_PROMPTS.length),
+    /*
+     * Ids of records the user created through the ordinary habit and priority
+     * paths. Shape-checked only: whether they exist and whether this account
+     * owns them is not asserted here, because an id that is neither is simply
+     * not found when the card resolves it against loaded state, and nothing is
+     * ever written to the record it names.
+     */
+    habitIds: habitIds.map((v: unknown, i: number) => check.uuid(v, `habitIds[${i}]`)),
+    priorityId: isUuid(b?.priorityId) ? b.priorityId : null,
+    step,
+    complete: b?.complete === true,
+  };
 }

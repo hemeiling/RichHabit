@@ -67,6 +67,20 @@ export const violatedConstraint = (e: unknown): string | null => {
   return err?.code === "23514" ? err.constraint ?? "" : null;
 };
 
+/**
+ * The unique index a write collided with, or null if it collided with none.
+ *
+ * 23505 unique_violation, the counterpart of the CHECK helper above. A
+ * collision is not always a bug: a partial unique index can be the rule that
+ * enforces "one of these per account", and a second request arriving at the
+ * same moment as the first is then a race the database settled correctly. The
+ * caller needs the index's name to say so in words instead of answering 500.
+ */
+export const uniqueViolation = (e: unknown): string | null => {
+  const err = e as { code?: string; constraint?: string } | null;
+  return err?.code === "23505" ? err.constraint ?? "" : null;
+};
+
 /** The shape of what DATABASE_URL points at. Never the value. */
 export function describeTarget(connectionString: string | undefined): DbTarget {
   if (!connectionString) return "not set";

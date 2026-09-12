@@ -31,6 +31,6 @@ export async function DELETE(request: Request) {
     const id = requireId(request);
     await deleteHabit(userId, id);
     markMemberStale(userId);
-    await trackEvent({ userId, event: "habit_deleted", entityType: "habit", entityId: id, page: "/habits" });
+    await trackEvent({ userId, event: "habit_deleted", entityType: "habit", entityId: id, page: "/more/habits" });
   });
 }
