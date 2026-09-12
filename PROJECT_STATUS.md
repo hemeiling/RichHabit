@@ -3,7 +3,7 @@
 > Last updated: 2026-09-12
 >
 > **RELEASE APPROVED · PRODUCTION DATABASE MIGRATED · MAIN UPDATED · DEPLOY VERIFICATION PENDING**
-> **ACCOMPLISHMENTS: IMPLEMENTED LOCALLY · NOT COMMITTED · NOT DEPLOYED · AWAITING PRODUCT OWNER REVIEW**
+> **ACCOMPLISHMENTS: IMPLEMENTED LOCALLY · COMMITTED ON `feature/accomplishments` · NOT MERGED · NOT DEPLOYED**
 >
 > The Product Owner approved the application release on 2026-09-12. `main` is
 > fast-forwarded to release commit `cd3eef4` plus a status commit (`67105c6`) and
@@ -12,11 +12,24 @@
 > migration was rehearsed on a Neon branch and applied to production before
 > `main` moved.
 
-## Accomplishments and a forward-looking Priority Compass (local only)
+## Accomplishments and a forward-looking Priority Compass (committed, not merged)
 
-Approved by the Product Owner on 2026-09-12 for local implementation. On branch
-`feature/accomplishments` from `67105c6`, uncommitted. **No migration, no new
-table, nothing committed, pushed or deployed.**
+Accomplishments, the Priority Compass simplification and inline priority editing
+are implemented locally and committed, approved by the Product Owner on
+2026-09-12.
+
+| | |
+| --- | --- |
+| branch | `feature/accomplishments`, from `67105c6` |
+| feature commit | `17e5ce24e33215cc8415a6096dd67e9a3e611c2a` (23 files) |
+| database migration | none required; no new table |
+| pushed | not yet, at the time of this status commit |
+| merged into `main` | no |
+| deployed | no |
+
+The unrelated `inspect-prod-readonly` script and test edits and the two untracked
+documents in `docs/` remain excluded and uncommitted. The one known unit-test
+failure comes from those excluded edits and is documented below.
 
 **Rule.** An accomplishment is a priority whose `completed_on` is set, counted on
 that date. One rule in `src/lib/accomplishments.ts` serves Insights, My Progress
@@ -102,9 +115,8 @@ the Community payload; keeping members with no scheduled habits off the board;
 the responsive Chinese rank layout; the revised My Progress legend; the short
 month label; the narrow time-zone fix for both current-month figures.
 
-**Next step:** the Product Owner reviews the screens, including inline rewording.
-Commit, push, merge and deploy only on explicit approval, staging only the
-feature paths and never the four excluded files. No database action is needed.
+**Next step:** push `feature/accomplishments`, then wait for the Product Owner's
+approval before merging into `main` and deploying. No database action is needed.
 
 ## Production, verified 2026-09-12
 
