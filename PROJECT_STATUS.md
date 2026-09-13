@@ -1,21 +1,211 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-09-12
+> Last updated: 2026-09-13
 >
-> **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED · `main` AT `026d8be` · DEPLOYED TO RENDER · PRODUCTION VERIFIED**
+> **INTENTION LINKS + AI SUGGESTIONS: RELEASED · `main` AT `e0eb036` · PRODUCTION MIGRATED (66/66) · DEPLOYED TO RENDER, LIVE 02:48 UTC 2026-09-13 · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · CLAUDE SUGGESTIONS FAIL GRACEFULLY UNTIL A WORKSPACE-SCOPED KEY IS SET**
+> **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> Production runs `026d8be4905f214f0ac8762f52853dacbd44b3f9`: Community Rankings on
-> top of the Accomplishments release, verified on 2026-09-13. It went live about
-> four minutes after `main` moved; from outside it is not possible to tell whether
-> that was Render's own deploy or the Product Owner's manual deploy. The
-> Accomplishments release (`d7281117b68c4fcbe69069b0c79d4be745ca604c`) had been
-> deployed manually and verified before it. Neither release needed a database
-> migration.
+> Production runs `e0eb036bda05d013584ac3c7cac63946b8d3f40f`: Clarify Your
+> Intention with any number of links and AI suggestions, on top of Community
+> Rankings (`026d8be`) and Accomplishments (`d728111`). Its additive intentions
+> migration was applied to production before the deploy. Render did not
+> auto-deploy; the Product Owner deployed manually.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Clarify Your Intention: any number of habits and priorities, and AI suggestions (released, verified in production)
+
+Design approved by the Product Owner on 2026-09-13.
+
+| Item | State |
+| --- | --- |
+| feature commit | `e0eb036bda05d013584ac3c7cac63946b8d3f40f` (31 files), on `feature/intention-links`, pushed |
+| release commit on `main` | `e0eb036`, fast-forwarded from `5245c87` and pushed |
+| migration | rehearsed on a reset Neon branch (59 of 59), then applied to production (66 of 66) |
+| deployed | on Render, manually; live between 02:48:08 and 02:48:43 UTC on 2026-09-13 |
+| production verification | automated and read-only checks passed; the Product Owner's signed-in checks passed |
+| not in the release | the unrelated `inspect-prod-readonly` script and test edits, two untracked docs |
+
+**What changed**
+
+- An intention links any number of ordinary habits and priorities. People can
+  create new ones, link existing ones, and remove a link without deleting the
+  record. Nothing is copied.
+- The completed page is five cards: My Intention, Why It Matters, Habits I'm
+  Building, My Priorities, and Important Dates. Important Dates are derived from
+  linked priorities with a planned day. Lists show 5, then "Show all (n)". The
+  final wizard step uses the same Habits and Priorities cards.
+- "✨ Suggest with AI" returns temporary drafts with Edit, Add and ×. Nothing is
+  created until the person presses Add, which uses the normal habit and priority
+  actions; the edited version is what gets created. For a priority, the person
+  answers Important? and Urgent? first. Drafts vanish on reload.
+- Claude Sonnet runs behind a server-side provider seam (`src/lib/ai`) using
+  Anthropic's official SDK. The model receives only the intention, why, vision,
+  titles already linked to this intention, on-screen drafts, and the language.
+  It never receives the ownership answer or note, other habits or priorities,
+  the journal, Community data, account details or email.
+- Limits: 10 suggestion requests an hour and 30 a day per user, and one request
+  in flight at a time. They are in memory per instance.
+- Analytics: `intention_ai_suggestions_requested`, `…_accepted` and `…_edited`,
+  each with the kind only. No text is logged or tracked.
+- The disclosure appears in the suggestion tray and in the Terms facts, in
+  English and Chinese.
+
+**Final migration (step 4e, `scripts/migrations/intention-links.mjs`)**
+
+```sql
+alter table intentions drop constraint if exists intentions_habit_ids_check;
+alter table intentions add column if not exists priority_ids uuid[] not null default '{}';
+update intentions set priority_ids = array[priority_id]
+ where priority_id is not null and cardinality(priority_ids) = 0;
+comment on column intentions.habit_ids    is 'Every habit linked to this intention, in the order linked. No count limit.';
+comment on column intentions.priority_ids is 'Canonical. Every priority linked to this intention, in the order linked. The application reads and writes this list.';
+comment on column intentions.priority_id  is 'Legacy compatibility only. Written as priority_ids[1], or null, so the pre-multi-link application still works after a rollback. Not a source of truth. To be removed by a later cleanup migration once no deployed code reads it.';
+```
+
+It adds no count constraint and is guarded, so a second run changes nothing.
+`priority_ids` is canonical. New saves write `priority_id` as its first entry, or
+null. The loader brings a rollback-era legacy link into the list once.
+`priority_id` stays until a later cleanup migration.
+
+**Configuration**
+
+`CLAUDE_API_KEY` is set locally and on Render. The current key is not scoped
+to an Anthropic workspace, so Anthropic rejects every request (HTTP 400). The
+released code can send an optional `anthropic-workspace-id` header from
+`CLAUDE_WORKSPACE_ID`, which is not set anywhere. Suggestions therefore fail
+gracefully today; everything else works.
+
+Anthropic's current documentation (Authentication and Workspaces pages, and the
+TypeScript SDK page) confirms the header name, that it applies to Messages API
+requests, and that the SDK's `defaultHeaders` option is the documented way to
+send it. It is required only for personal or service account keys that are not
+scoped to one workspace. The documented simpler alternative is a key created
+for a single workspace, which needs no header and no `CLAUDE_WORKSPACE_ID`.
+Whether to replace the key or set the workspace id is the Product Owner's call;
+the existing key has not been changed.
+
+**Verification, 2026-09-13**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| unit tests | 641 of 642; the one failure is the known `inspect-prod-readonly` baseline |
+| migration against a real Postgres copy of the production table (PGlite): data preserved, idempotent, no limits, previous release's save still works | 12 of 12 |
+| suggestion rules, limits, routes with a fake provider, privacy source checks | 25 of 25 |
+| Claude provider with the SDK mocked | 4 of 4 |
+| browser: links, Show all, add, link existing, unlink, editor, suggestion review, errors; 1440, 430, 390, 375 and 320px; English, Chinese, bilingual; dark | 78 of 80; the 2 failures are the live Claude request, blocked by the workspace setting |
+| browser bundles: `CLAUDE_API_KEY`, `CLAUDE_WORKSPACE_ID`, `sk-ant-`, the SDK or the API host | none present |
+| app server log: intention text, ownership note, suggestion text, key strings | none present |
+| analytics rows | kind only; no user text |
+
+**Neon rehearsal, 2026-09-13: passed, 59 of 59, from a clean reset**
+
+The Product Owner reset the branch behind `REHEARSAL_DATABASE_URL` from its
+production parent. Confirmed read-only before any write: new Neon timeline,
+compute restarted, newer data than before. The branch is a Neon endpoint other
+than production's, Postgres 18, writable primary, 28 tables. Production was
+never connected to. Migration code was the uncommitted working tree
+(`migrate.mjs` 76ca2069, `intention-links.mjs` 8ebadacc, `lib.mjs` 1a467533,
+sha256 prefixes). An earlier attempt on the unreset branch was discarded.
+
+| Step | Result |
+| --- | --- |
+| clean-branch pre-flight | `intentions_habit_ids_check` present; `priority_ids` absent; no migration comments; printed BRANCH IS CLEAN |
+| before-state captured | row count and content fingerprint for 27 other tables; schema fingerprint for all 28; whole-schema hash; intentions' 14 columns, 19 constraints, 2 indexes, 0 triggers, comments; original-column fingerprint of every intention row |
+| real intention rows | **1** (active, 3 linked habits, 1 linked priority) |
+| first run | exit 0: removed the three-habit limit, added `priority_ids`, carried **1** priority link, documented 3 columns; `Done — 6 change(s)` |
+| intended changes only | limit removed; `priority_ids uuid[] not null default '{}'` added with its NOT NULL; comments exact; all other intentions columns, constraints, indexes unchanged; the row's 14 original columns identical (text, `habit_ids`, `priority_id`, state, timestamps); `priority_ids = [priority_id]` |
+| unrelated tables vs PRE-migration | 27 of 27 identical in row count, content and schema |
+| second run | `Nothing to do`; whole-database fingerprint identical to after run 1 |
+| previous release's save, rolled back | insert and update work; 4 habits accepted; 1000 + 1000 links accepted; second active intention refused (23505); cross-account save changed nothing |
+| after rollback | no test rows; database identical to after run 2; 27 tables and the intention row still identical to PRE-migration |
+
+The branch now holds the migrated state and can be deleted or reset in Neon.
+
+**Claude credential decision, 2026-09-13.** The Product Owner chose a
+workspace-scoped key under `CLAUDE_API_KEY` only. Once that key is in place,
+remove `CLAUDE_WORKSPACE_ID` and the `anthropic-workspace-id` header support
+(`src/lib/env.ts`, `src/lib/ai/claude.ts`, `src/lib/ai/provider.ts`, the provider
+test, `.env.example`), and show "Suggestions aren't available right now" when
+the provider rejects the key. The current key is not changed by the agent. Live
+Claude checks stay pending until then and do not block the migration.
+
+**Production restore point (step 2): created by the Product Owner in Neon** on
+2026-09-13, before any production migration.
+
+**Production migration (step 3): run and verified, 2026-09-13, 66 of 66 checks.**
+Approved by the Product Owner. Target `PRODUCTION_DATABASE_URL`, endpoint
+`ep-jolly-****`, Postgres 18.6, 28 tables, 12 users; not the rehearsal or any
+other branch. Migration files byte-identical to `e0eb036`. No test writes.
+
+| Step | Result |
+| --- | --- |
+| read-only pre-flight | `intentions_habit_ids_check` present, `priority_ids` absent, no migration comments; one-active index, 19 constraints, no triggers as rehearsed |
+| before-state | row count, content and schema fingerprints for all tables; intentions structure; original-column fingerprints of the 1 real intention |
+| first run | exit 0: removed the three-habit limit, added `priority_ids`, carried **1** priority link, documented 3 columns; `Done — 6 change(s)` |
+| intentions | 1 row, unchanged in all 14 original columns (`habit_ids`, `priority_id`, text, state, timestamps); `priority_ids = [priority_id]`; only the limit removed and the `priority_ids` NOT NULL added; text constraints and one-active index intact; comments exact |
+| unrelated tables vs PRE-migration | 27 of 27 identical in rows, content and schema; functions and enum types identical; no live activity during the run |
+| second run | `Nothing to do; already up to date.`; everything identical to after run 1 |
+
+Production now has the schema the new code needs. The deployed app (`026d8be`)
+keeps working on it: the rehearsal proved the previous release's save still
+works after the migration.
+
+**Release, 2026-09-13.** `feature/intention-links` pushed at `e0eb036`; `main`
+fast-forwarded `5245c87..e0eb036` and pushed. Render did not auto-deploy within
+about five minutes; the Product Owner deployed `e0eb036` manually and it went
+live between 02:48:08 and 02:48:43 UTC. Render has no pre-deploy command, so the
+migration was not rerun.
+
+**Production verification, automated and read-only (no production writes)**
+
+| Check | Result |
+| --- | --- |
+| release live | stylesheet `75c048d9e24f72f2.css` byte-identical to a clean build of `e0eb036`; the previous stylesheet now 404; suggestion routes answer 401 signed out instead of 404; new intention strings present in served bundles. JavaScript chunk names differ between Render's build and the local build, so chunks were not compared byte for byte |
+| health | ok, database up |
+| routes and auth | `/login`, `/terms`, `/verify` 200; `/`, `/habits`, `/priorities`, `/insights`, `/community`, `/intention` redirect to login; `/today` 308; `/api/state`, `/api/community`, `POST /api/intention`, both suggestion routes 401 signed out |
+| public pages in a browser | login at 1440 and 390, terms, verify: no page errors, no failed requests, no horizontal overflow |
+| secrets in browser bundles | none in the 11 chunks production serves signed out, nor in all 52 chunks of the clean `e0eb036` build: no Claude, OpenAI, Resend or database variable names, no `sk-ant-`, workspace id, Anthropic host or SDK, Neon host or endpoint, connection string or `password_hash`; no `NEXT_PUBLIC_` variables |
+| existing intention (read-only DB) | 1 active completed intention; 3 of 3 linked habits resolve; `priority_ids` equals `priority_id`; the linked priority was deleted by its owner at 21:27 UTC on 2026-09-12, before the migration, and is skipped by design. Not repaired, per the Product Owner |
+| analytics privacy (read-only DB) | no AI events yet; intention events carry no properties; none of the intention's text fragments, nor any reflection text, appear anywhere in analytics |
+| Claude with the current key | verified on a local copy of `e0eb036` with the same key, in English at 1440 and Chinese at 390 (15 of 15): Anthropic rejects the request, the route answers 502, and the tray shows "Suggestions didn't load. Please try again in a moment." / "建议没有加载出来，请稍后再试。"; no drafts, no provider detail, habit links unchanged, Link existing still works, no page errors. The server log records only `intention suggestions failed (400)`; no key, workspace or intention text |
+| production server logs | not inspected: no Render log access. The code logs a status code only, and static tests enforce it |
+
+**Production verification, signed in, by the Product Owner on `e0eb036`**
+
+| Check | Result |
+| --- | --- |
+| add a habit from the intention | pass |
+| link an existing habit | pass |
+| remove a habit link without deleting the habit | pass |
+| add a priority | pass |
+| link an existing priority | pass |
+| remove a priority link without deleting the priority | pass |
+| Show all / Show fewer | pass |
+| desktop and mobile; English, Chinese and bilingual | pass |
+
+No production data loss was observed, and unlinked records remained intact.
+
+**Remaining follow-up: Claude suggestions**
+
+- The current `CLAUDE_API_KEY` is rejected by Anthropic.
+- Suggestions fail gracefully; the rest of the page keeps working.
+- Current wording: "Suggestions didn't load. Please try again in a moment."
+  (Chinese: "建议没有加载出来，请稍后再试。").
+- After the Product Owner replaces `CLAUDE_API_KEY` with a workspace-scoped key,
+  locally and on Render: remove `CLAUDE_WORKSPACE_ID` and the
+  `anthropic-workspace-id` header support, then rerun the live AI browser checks.
+
+Housekeeping: the rehearsal branch (`ep-curly-…`) holds the migrated state and
+can be deleted or reset in Neon. The production restore-point branch can be kept
+or deleted at the Product Owner's discretion.
+
+**Next step:** none required for this release. The Claude follow-up waits for the
+workspace-scoped key.
 
 ## Community rankings and two-series My Progress (released, verified in production)
 
