@@ -3,7 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useT } from "@/lib/i18n/context";
 import {
   formatBytes, streamReply, workspaceApi,
-  type AiConversation, type AiFile, type AiMessage, type Bootstrap, type ConversationView, type Exchange, type StreamEvent,
+  type AiAttachment, type AiConversation, type AiFile, type AiMessage, type Bootstrap, type ConversationView, type Exchange,
+  type ReplyModel, type StreamEvent,
 } from "./api";
 import { Markdown, copyText } from "./Markdown";
 import {
@@ -77,11 +78,28 @@ function UserMessage({ content, attachments }: {
   );
 }
 
-function Reply({ chain, exchange, text, t, canAct, runningHere, onContinue, onRetry, onStop }: {
+/** A picture an image model made, shown in the reply. It opens full size in a new tab. */
+function GeneratedImage({ attachment, t }: { attachment: AiAttachment; t: WorkspaceText }) {
+  if (attachment.removed) return <FileChip name={attachment.originalFilename} kind="image" removed />;
+  const src = workspaceApi.fileUrl(attachment.fileId);
+  return (
+    <figure className="aiw-gen">
+      <a className="aiw-gen-link" href={src} target="_blank" rel="noopener noreferrer" title={t.openImage}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="aiw-gen-img" src={src} alt={t.generatedImage} loading="lazy" data-testid="aiw-generated-image" />
+      </a>
+    </figure>
+  );
+}
+
+function Reply({ chain, exchange, text, t, model, showModel, canAct, runningHere, onContinue, onRetry, onStop }: {
   chain: AiMessage[];
   exchange: Exchange;
   text: string;
   t: WorkspaceText;
+  /** Which model wrote the reply, when known. */
+  model?: ReplyModel;
+  showModel: boolean;
   canAct: boolean;
   runningHere: boolean;
   onContinue: (id: string) => void;
@@ -90,17 +108,24 @@ function Reply({ chain, exchange, text, t, canAct, runningHere, onContinue, onRe
 }) {
   const [copied, setCopied] = useState(false);
   const tail = chain[chain.length - 1];
+  const images = chain.flatMap((m) => m.attachments).filter((a) => a.kind === "image");
   const streaming = tail.status === "streaming";
   const note = tail.status === "stopped" ? t.stopped
     : tail.status === "failed" ? t.failures[tail.errorCode ?? "provider_error"]
       : tail.stopReason === "max_tokens" ? t.lengthLimit
         : tail.stopReason === "refusal" ? t.refusal
+          : tail.stopReason === "storage_full" ? t.imageStorageFull
           : tail.stopReason === "context_window" ? t.contextWindow
             : null;
 
   return (
     <div className="aiw-reply" data-status={tail.status} data-testid="aiw-reply">
-      {text ? <Markdown text={text} /> : streaming ? <Thinking label={t.thinking} /> : null}
+      {images.length > 0 && (
+        <div className="aiw-gen-images" data-testid="aiw-generated-images">
+          {images.map((a) => <GeneratedImage key={a.fileId} attachment={a} t={t} />)}
+        </div>
+      )}
+      {text ? <Markdown text={text} /> : streaming ? <Thinking label={model?.image ? t.creatingImage : t.thinking} /> : null}
       {streaming && text && <span className="aiw-streaming" aria-hidden="true" />}
       {streaming && !runningHere && (
         <div className="aiw-actions">
@@ -111,6 +136,7 @@ function Reply({ chain, exchange, text, t, canAct, runningHere, onContinue, onRe
       )}
       {!streaming && (
         <div className="aiw-actions">
+          {showModel && model && <span className="aiw-model-tag" data-testid="aiw-reply-model">{model.label}</span>}
           {note && (
             <span className="aiw-note" data-tone={tail.status === "failed" ? "warn" : undefined} data-testid="aiw-reply-note">
               {note}
@@ -177,6 +203,8 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [modelId, setModelId] = useState<string | null>(boot.defaultModelId);
+  const [modelMenu, setModelMenu] = useState(false);
 
   const idRef = useRef<string | null>(conversationId);
   const streamRef = useRef<AbortController | null>(null);
@@ -194,6 +222,9 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
   // A new chat cannot start in an archived project; an existing one carries on.
   const projectArchived = Boolean(project?.archivedAt) && !conversation;
   const canCompose = boot.available && !archived && !projectArchived;
+  // Only configured models are offered; a choice that is no longer configured falls back to the default.
+  const selectedModel = boot.models.find((m) => m.id === modelId) ?? boot.models[0] ?? null;
+  const showModels = boot.models.length > 1 || boot.imageGeneration;
   const readyFiles = pending.filter((p) => p.status === "ready" && p.file);
   const uploading = pending.some((p) => p.status === "uploading");
   const canSend = canCompose && !active && !uploading && (draft.trim().length > 0 || readyFiles.length > 0);
@@ -222,6 +253,12 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
     if (open && !coarse) inputRef.current?.focus();
   }, [open, coarse]);
 
+  // A conversation carries on with the model it last used, while that model is configured.
+  const viewModelId = view?.modelId ?? null;
+  useEffect(() => {
+    if (viewModelId && boot.models.some((m) => m.id === viewModelId)) setModelId(viewModelId);
+  }, [viewModelId, boot.models]);
+
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
@@ -248,7 +285,7 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
     if (idRef.current) return idRef.current;
     const { conversation: created } = await workspaceApi.createConversation(projectId);
     idRef.current = created.id;
-    setView({ conversation: created, messages: [], exchanges: [], hasEarlier: false, files: [] });
+    setView({ conversation: created, messages: [], exchanges: [], hasEarlier: false, files: [], modelId: null, replyModels: {} });
     onConversationCreated(created);
     return created.id;
   };
@@ -307,7 +344,7 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
     setDraft("");
     setPending((current) => current.filter((p) => p.status === "error"));
     await runStream(`/conversations/${id}/messages`, {
-      clientId: newId(), content, fileIds: files.map((f) => (f.file as AiFile).id),
+      clientId: newId(), content, fileIds: files.map((f) => (f.file as AiFile).id), modelId: selectedModel?.id ?? null,
     }, id, () => {
       // Refused before anything was written: give the words and files back.
       setDraft(content);
@@ -341,7 +378,7 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
     if (idRef.current && !active) void runStream(`/messages/${id}/continue`, {}, idRef.current);
   };
   const retryReply = (id: string) => {
-    if (idRef.current && !active) void runStream(`/messages/${id}/retry`, {}, idRef.current);
+    if (idRef.current && !active) void runStream(`/messages/${id}/retry`, { modelId: selectedModel?.id ?? null }, idRef.current);
   };
 
   const addFiles = async (files: File[], accepted = false) => {
@@ -480,6 +517,7 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
         ...v,
         messages: [...earlier.messages, ...v.messages],
         exchanges: [...earlier.exchanges, ...v.exchanges],
+        replyModels: { ...earlier.replyModels, ...v.replyModels },
         hasEarlier: earlier.hasEarlier,
       } : v));
       requestAnimationFrame(() => { if (el) el.scrollTop += el.scrollHeight - heightBefore; });
@@ -576,7 +614,7 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
             )}
             {canCompose && (
               <div className="aiw-starters">
-                {t.starters.map((s) => (
+                {[...t.starters, ...(boot.imageGeneration ? [t.imageStarter] : [])].map((s) => (
                   <button key={s} type="button" className="aiw-starter"
                     onClick={() => { setDraft(s); inputRef.current?.focus(); }}>
                     {s}
@@ -601,6 +639,7 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
                   }))} />
                   {chain.length > 0 && (
                     <Reply chain={chain} exchange={x} text={chain.map(textFor).join("")} t={t}
+                      model={view?.replyModels[chain[chain.length - 1].id]} showModel={showModels}
                       canAct={boot.available && !archived && !active}
                       runningHere={Boolean(active) && chain.some((m) => m.id === active?.messageId || active?.messageId === null)}
                       onContinue={continueReply} onRetry={retryReply} onStop={(m) => void stopLeftBehind(m)} />
@@ -691,6 +730,33 @@ export default function Chat({ open, boot, setBoot, conversationId, projectId, c
                   void addFiles(files);
                 }} />
             </div>
+            {boot.models.length > 1 && selectedModel && (
+              <div className="aiw-model-wrap">
+                <button type="button" className="aiw-model" data-testid="aiw-model" aria-haspopup="menu"
+                  aria-expanded={modelMenu} aria-label={`${t.model}: ${selectedModel.label}`} title={t.chooseModel}
+                  disabled={!canCompose} onClick={() => setModelMenu((v) => !v)}>
+                  <span className="aiw-model-name">{selectedModel.label}</span>
+                  <Icon d="M7 10l5 5 5-5" size={14} />
+                </button>
+                {modelMenu && (
+                  <>
+                    <div className="aiw-menu-scrim" onClick={() => setModelMenu(false)} />
+                    <div className="aiw-menu aiw-menu-up" role="menu" aria-label={t.chooseModel}>
+                      {boot.models.map((m) => (
+                        <button key={m.id} type="button" role="menuitemradio" aria-checked={m.id === selectedModel.id}
+                          className="aiw-menu-item" data-testid="aiw-model-option"
+                          onClick={() => { setModelId(m.id); setModelMenu(false); }}>
+                          <span className="aiw-model-check">
+                            {m.id === selectedModel.id && <Icon d={ICONS.check} size={14} strokeWidth={2.4} />}
+                          </span>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <span className="aiw-count">
               {pending.length > 0 ? t.attachmentCount(attachedCount, boot.limits.maxAttachments) : ""}
             </span>

@@ -37,6 +37,7 @@ import * as stop from "../src/app/api/admin/ai/workspace/messages/[id]/stop/rout
 import * as files from "../src/app/api/admin/ai/workspace/files/route";
 import * as file from "../src/app/api/admin/ai/workspace/files/[id]/route";
 import * as disclosure from "../src/app/api/admin/ai/workspace/disclosure/route";
+import { UPLOAD_DISCLOSURE_VERSION } from "../src/lib/aiWorkspace/disclosure";
 import { resetReplySlots } from "../src/lib/aiWorkspaceRuntime/limits";
 import {
   ProviderAborted, setWorkspaceProviderForTests, type ChatRequest, type ChatResult, type WorkspaceProvider,
@@ -123,7 +124,7 @@ async function* events(res: Response) {
 async function setUp() {
   const admin = await newAdmin();
   as(admin);
-  await disclosure.POST(req("POST", "/disclosure", { version: 1 }));
+  await disclosure.POST(req("POST", "/disclosure", { version: UPLOAD_DISCLOSURE_VERSION }));
   const { conversation: c } = await body(await conversations.POST(req("POST", "/conversations", {})));
   return { admin, conversationId: c.id as string };
 }
@@ -152,7 +153,7 @@ describe("who can reach the workspace", () => {
       files.POST(upload("a.txt", Buffer.from("hello"), { conversationId: id })),
       file.GET(req("GET", `/files/${id}`), p(id)),
       file.DELETE(req("DELETE", `/files/${id}`), p(id)),
-      disclosure.POST(req("POST", "/disclosure", { version: 1 })),
+      disclosure.POST(req("POST", "/disclosure", { version: UPLOAD_DISCLOSURE_VERSION })),
     ]);
     for (const res of responses) {
       expect(res.status).toBe(404);
@@ -198,7 +199,8 @@ describe("conversations and replies", () => {
     const boot = await body(await root.GET());
     expect(boot).toMatchObject({
       available: true, projects: [], conversations: [],
-      settings: { hasAcceptedCurrentDisclosure: false, currentDisclosureVersion: 1 },
+      settings: { hasAcceptedCurrentDisclosure: false, currentDisclosureVersion: UPLOAD_DISCLOSURE_VERSION },
+      models: [{ id: "claude", label: "Claude Sonnet 5" }], defaultModelId: "claude", imageGeneration: false,
       limits: { maxAttachments: 20, maxPdfBytes: 10 * 1048576, maxImageBytes: 5 * 1048576, maxTextBytes: 2 * 1048576 },
     });
     setWorkspaceProviderForTests(null);
@@ -317,7 +319,7 @@ describe("conversations and replies", () => {
 describe("projects", () => {
   it("creates, renames, sets instructions, archives, restores and deletes a project with what is in it", async () => {
     as(await newAdmin());
-    await disclosure.POST(req("POST", "/disclosure", { version: 1 }));
+    await disclosure.POST(req("POST", "/disclosure", { version: UPLOAD_DISCLOSURE_VERSION }));
     const { project: created } = await body(await projects.POST(req("POST", "/projects", { name: "Launch", instructions: "" })));
     const updated = await body(await project.PATCH(req("PATCH", `/projects/${created.id}`,
       { name: "Launch plan", instructions: "Answer as a CFO." }), p(created.id)));
@@ -357,7 +359,7 @@ describe("files", () => {
     expect(refused.status).toBe(409);
     expect((await body(refused)).error).toBe("Review the upload notice before uploading files.");
     expect((await disclosure.POST(req("POST", "/disclosure", { version: 0 }))).status).toBe(409);
-    expect((await body(await disclosure.POST(req("POST", "/disclosure", { version: 1 })))).settings.hasAcceptedCurrentDisclosure).toBe(true);
+    expect((await body(await disclosure.POST(req("POST", "/disclosure", { version: UPLOAD_DISCLOSURE_VERSION })))).settings.hasAcceptedCurrentDisclosure).toBe(true);
     expect((await files.POST(upload("a.txt", Buffer.from("hello"), { conversationId: c.id }))).status).toBe(200);
   });
 

@@ -3,17 +3,21 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE, MAX_INSTRUCTIONS, MAX_PROJECT_NAME, MAX_TITLE, MAX_USER_MESSAGE_CHARS,
 } from "@/lib/aiWorkspace/validate";
 import { workspaceJson } from "@/lib/aiWorkspaceRuntime/http";
-import { workspaceProvider } from "@/lib/aiWorkspaceRuntime/provider";
+import { isChatModel, isImageModel, toPublicModel } from "@/lib/aiWorkspaceRuntime/models";
+import { modelCatalogue } from "@/lib/aiWorkspaceRuntime/provider";
 import { aiWorkspace } from "@/lib/env";
 
 /**
  * Everything the workspace needs to open: the upload notice state, storage,
- * projects, recent conversations and the limits the composer enforces. Admin
- * only; 404 for anyone else.
+ * projects, recent conversations, the models that are configured right now, and
+ * the limits the composer enforces. Admin only; 404 for anyone else.
+ *
+ * Models are named and identified, nothing more: no provider, key or endpoint
+ * detail reaches the browser.
  */
 export async function GET() {
   return workspaceJson(async (admin) => {
-    const [settings, storage, projects, archivedProjects, conversations, archivedConversations, provider] =
+    const [settings, storage, projects, archivedProjects, conversations, archivedConversations, catalogue] =
       await Promise.all([
         ai.getWorkspaceSettings(admin.id),
         ai.storageUsage(admin.id),
@@ -21,11 +25,15 @@ export async function GET() {
         ai.listProjects(admin.id, { archived: true }),
         ai.listConversations(admin.id, { limit: 100 }),
         ai.listConversations(admin.id, { archived: true, limit: 100 }),
-        workspaceProvider(),
+        modelCatalogue(),
       ]);
+    const chat = catalogue.filter(isChatModel);
     return {
       settings, storage, projects, archivedProjects, conversations, archivedConversations,
-      available: provider !== null,
+      available: chat.length > 0,
+      models: chat.map(toPublicModel),
+      defaultModelId: chat[0]?.id ?? null,
+      imageGeneration: catalogue.some(isImageModel),
       limits: {
         maxAttachments: MAX_ATTACHMENTS_PER_MESSAGE,
         maxMessageChars: MAX_USER_MESSAGE_CHARS,

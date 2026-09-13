@@ -218,6 +218,31 @@
 @media (pointer: coarse) { .aiw-action { height: 40px; padding: 0 12px; } }
 .aiw-note { padding: 0 8px; font-size: 13px; color: var(--muted); }
 .aiw-note[data-tone="warn"] { color: var(--warn); }
+.aiw-model-tag { padding: 0 8px; font-size: 12px; color: var(--faint); }
+
+/* Generated pictures: a comfortable size on a desktop, the full column on a phone. */
+.aiw-gen-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 2px 0 10px; }
+.aiw-gen { margin: 0; width: min(100%, 440px); max-width: 100%; }
+.aiw-gen-link {
+  display: block; line-height: 0; overflow: hidden;
+  border: 1px solid var(--line-soft); border-radius: 14px; background: var(--raise);
+}
+.aiw-gen-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.aiw-gen-img { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
+@media (max-width: 639px) { .aiw-gen { width: 100%; } }
+
+/* The model selector: quiet, next to the attachment button. */
+.aiw-model-wrap { position: relative; flex: none; min-width: 0; }
+.aiw-model {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 190px; height: 32px; padding: 0 8px 0 10px;
+  border: 0; border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer;
+}
+.aiw-model:hover:not(:disabled) { background: var(--raise); color: var(--ink); }
+.aiw-model:disabled { opacity: .5; cursor: default; }
+.aiw-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aiw-model-check { display: inline-flex; flex: none; width: 16px; justify-content: center; }
+@media (pointer: coarse) { .aiw-model { height: 40px; } }
+@media (max-width: 380px) { .aiw-model { max-width: 130px; } }
 
 .aiw-thinking { display: inline-flex; align-items: center; gap: 5px; height: 24px; }
 .aiw-thinking > span:not(.aiw-sr) {

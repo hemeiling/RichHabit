@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AiAttachment, AiMessage } from "../src/lib/aiWorkspace/types";
 import {
-  CONTINUE_INSTRUCTION, WORKSPACE_INSTRUCTIONS, assembleContext, estimateTextTokens, systemPrompt, userTurn,
+  CONTINUE_INSTRUCTION, IMAGE_GENERATION_AVAILABLE, IMAGE_GENERATION_UNAVAILABLE, WORKSPACE_INSTRUCTIONS,
+  assembleContext, estimateTextTokens, historyText, systemPrompt, userTurn,
 } from "../src/lib/aiWorkspaceRuntime/context";
 import { detectFileType } from "../src/lib/aiWorkspaceRuntime/fileType";
 import { localiseError } from "../src/lib/aiWorkspaceRuntime/http";
@@ -59,13 +60,32 @@ describe("what an uploaded file is", () => {
 
 describe("what the model receives", () => {
   it("starts from the workspace instructions, with project instructions in their own block", () => {
-    expect(systemPrompt(null)).toBe(WORKSPACE_INSTRUCTIONS);
-    expect(systemPrompt("   ")).toBe(WORKSPACE_INSTRUCTIONS);
+    expect(systemPrompt(null)).toBe(`${WORKSPACE_INSTRUCTIONS}\n\n${IMAGE_GENERATION_UNAVAILABLE}`);
+    expect(systemPrompt("   ")).toBe(`${WORKSPACE_INSTRUCTIONS}\n\n${IMAGE_GENERATION_UNAVAILABLE}`);
+    expect(systemPrompt(null, { imageGeneration: true })).toBe(`${WORKSPACE_INSTRUCTIONS}\n\n${IMAGE_GENERATION_AVAILABLE}`);
     const withProject = systemPrompt("Answer as a CFO.");
     expect(withProject.startsWith(WORKSPACE_INSTRUCTIONS)).toBe(true);
     expect(withProject).toContain("<project_instructions>\nAnswer as a CFO.\n</project_instructions>");
     expect(WORKSPACE_INSTRUCTIONS).toMatch(/cannot see RichHabit's database/);
-    expect(WORKSPACE_INSTRUCTIONS).toMatch(/habits, priorities, intentions, journals/);
+    expect(WORKSPACE_INSTRUCTIONS).toMatch(/habits, intentions, priorities, journals, important dates or Community/);
+  });
+
+  it("makes a general-purpose assistant, not a habit coach", () => {
+    expect(WORKSPACE_INSTRUCTIONS).toMatch(/^You are a general-purpose AI assistant/);
+    expect(WORKSPACE_INSTRUCTIONS).toMatch(/not a habit coach/);
+    expect(WORKSPACE_INSTRUCTIONS).toMatch(/not limited to RichHabit/);
+    expect(WORKSPACE_INSTRUCTIONS).not.toMatch(/RichHabit team/);
+    expect(IMAGE_GENERATION_UNAVAILABLE).toMatch(/isn't turned on/);
+  });
+
+  it("names generated pictures in history, including removed ones", () => {
+    const answer = msg({ id: "a", role: "assistant", content: "Here it is.", attachments: [
+      att({ fileId: "g1", originalFilename: "generated-image-1.png", kind: "image", mimeType: "image/png" }),
+      att({ fileId: "g2", originalFilename: "generated-image-2.png", kind: "image", mimeType: "image/png", removed: true }),
+    ] });
+    expect(historyText([answer])).toBe("Here it is.\n\n[Generated image: generated-image-1.png]\n\n[Generated image, since removed]");
+    expect(historyText([msg({ id: "b", role: "assistant", attachments: [att({ kind: "image", originalFilename: "p.png" })] })]))
+      .toBe("[Generated image: p.png]");
   });
 
   it("is built from the conversation, instructions and a budget, and nothing else", () => {

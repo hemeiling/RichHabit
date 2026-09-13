@@ -319,7 +319,9 @@ export async function listMessages(
     `select ${MESSAGE_COLUMNS} from ai_messages m
       where m.conversation_id = $1 and m.user_id = $2
         and ($3::timestamptz is null or m.created_at < $3::timestamptz)
-      order by m.created_at desc, m.id desc
+      -- A message and its reply can share a timestamp (same transaction, coarse clock):
+      -- the admin's message always reads first, so a reply never appears above its question.
+      order by m.created_at desc, (m.role = 'user') asc, m.id desc
       limit $4`,
     [conversationId, userId, opts.before ?? null, limit]);
   rows.reverse();
@@ -493,6 +495,29 @@ export async function startRetry(userId: string, input: { messageId: unknown } &
   });
 }
 
+/**
+ * What Continue and Retry need to choose a model before anything is written:
+ * the model that wrote the reply, and the admin's message it answers.
+ */
+export async function replyTarget(userId: string, messageId: unknown): Promise<{
+  conversationId: string; provider: string | null; model: string | null; userContent: string; attachmentKinds: FileKind[];
+} | null> {
+  if (!isUuid(messageId)) return null;
+  const [row] = await query(
+    `select m.conversation_id, m.provider, m.model, u.id as user_message_id, u.content as user_content
+       from ai_messages m
+       join ai_messages u on u.id = m.reply_to_message_id and u.user_id = m.user_id
+      where m.id = $1 and m.user_id = $2 and m.role = 'assistant'`,
+    [messageId, userId]);
+  if (!row) return null;
+  const attachments = await attachmentsFor(query, userId, [row.user_message_id]);
+  return {
+    conversationId: row.conversation_id, provider: row.provider ?? null, model: row.model ?? null,
+    userContent: row.user_content,
+    attachmentKinds: (attachments.get(row.user_message_id) ?? []).filter((a) => !a.removed).map((a) => a.kind),
+  };
+}
+
 /** Saves streamed text so far. Only while the reply is still streaming. */
 export async function saveReplyProgress(userId: string, messageId: unknown, content: unknown): Promise<boolean> {
   if (!isUuid(messageId)) return false;
@@ -662,6 +687,74 @@ export async function recordUpload(userId: string, input: {
       [userId, projectId, conversationId, originalFilename, kind, input.mimeType, byteSize, sha256,
         Buffer.from(input.bytes.buffer, input.bytes.byteOffset, input.bytes.byteLength)]);
     return { file: toFile(row), reused: false };
+  });
+}
+
+/** The largest picture kept from an image model. A backstop: real ones are a few megabytes at most. */
+const GENERATED_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Keeps a picture an image model made for a reply that is still being written,
+ * as a file in the reply's conversation, carried by the reply.
+ *
+ * The same storage as an upload: owner-scoped, counted against the quota under
+ * the same per-admin lock, de-duplicated by content, tombstoned when deleted,
+ * and removed with its conversation. The upload notice is not involved, because
+ * nothing is being sent anywhere; these bytes came back from the provider.
+ */
+export async function recordGeneratedImage(userId: string, input: {
+  messageId: unknown; mimeType: unknown; bytes: Uint8Array; filename: unknown;
+}): Promise<AiAttachment> {
+  if (!isUuid(input.messageId)) throw notFound("Message");
+  const messageId = input.messageId.toLowerCase();
+  if (typeof input.mimeType !== "string" || !MIME_TYPES_BY_KIND.image.includes(input.mimeType)) {
+    throw new ApiError("That kind of file isn't supported");
+  }
+  const mimeType = input.mimeType;
+  if (!(input.bytes instanceof Uint8Array) || input.bytes.byteLength === 0) throw new ApiError("That file is empty");
+  const byteSize = input.bytes.byteLength;
+  if (byteSize > GENERATED_IMAGE_MAX_BYTES) {
+    throw new ApiError(`That file is larger than the ${megabytesLabel(GENERATED_IMAGE_MAX_BYTES)} limit`, 413);
+  }
+  const originalFilename = v.sanitizeFilename(input.filename);
+  const sha256 = createHash("sha256").update(input.bytes).digest("hex");
+
+  return transaction(async (q) => {
+    await q(`select pg_advisory_xact_lock(hashtextextended($1, 0))`, [`ai_workspace_storage:${userId}`]);
+    const [message] = await q(
+      `select id, conversation_id from ai_messages
+        where id = $1 and user_id = $2 and role = 'assistant' and status = 'streaming' for update`,
+      [messageId, userId]);
+    if (!message) throw notFound("Message");
+
+    let [file] = await q(
+      `select ${FILE_COLUMNS} from ai_files
+        where user_id = $1 and sha256 = $2 and deleted_at is null and conversation_id = $3`,
+      [userId, sha256, message.conversation_id]);
+    if (!file) {
+      const usage = await storageUsage(userId, q);
+      if (usage.usedBytes + byteSize > usage.quotaBytes) {
+        const left = Math.max(0, usage.quotaBytes - usage.usedBytes);
+        throw new ApiError(`Not enough storage: ${megabytesLabel(left)} left of ${megabytesLabel(usage.quotaBytes)}`, 413);
+      }
+      [file] = await q(
+        `insert into ai_files
+           (user_id, conversation_id, original_filename, kind, mime_type, byte_size, sha256, content)
+         values ($1, $2, $3, 'image', $4, $5, $6, $7)
+         returning ${FILE_COLUMNS}`,
+        [userId, message.conversation_id, originalFilename, mimeType, byteSize, sha256,
+          Buffer.from(input.bytes.buffer, input.bytes.byteOffset, input.bytes.byteLength)]);
+    }
+    const [{ position }] = await q(
+      `select coalesce(max(position) + 1, 0)::int as position from ai_message_files where message_id = $1`, [messageId]);
+    await q(
+      `insert into ai_message_files (message_id, file_id, user_id, position) values ($1, $2, $3, $4)
+       on conflict (message_id, file_id) do nothing`,
+      [messageId, file.id, userId, position]);
+    return {
+      fileId: file.id, position: Number(position), originalFilename: file.original_filename, kind: "image",
+      mimeType: file.mime_type, byteSize: Number(file.byte_size), removed: false,
+    };
   });
 }
 

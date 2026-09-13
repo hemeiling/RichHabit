@@ -120,7 +120,10 @@ export function classifyFailure(e: unknown): ProviderFailure {
   return new ProviderFailure("provider_error");
 }
 
-export function createClaudeWorkspaceProvider(apiKey: string): WorkspaceProvider {
+/** Claude has a files API, so a PDF or image is uploaded once and its copy reused. */
+export function createClaudeWorkspaceProvider(
+  apiKey: string,
+): WorkspaceProvider & Required<Pick<WorkspaceProvider, "uploadFile" | "deleteFile">> {
   const client = new Anthropic({ apiKey, maxRetries: 1 });
 
   return {

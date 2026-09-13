@@ -18,10 +18,19 @@ import type { AiAttachment, AiMessage } from "@/lib/aiWorkspace/types";
  */
 
 export const WORKSPACE_INSTRUCTIONS = [
-  "You are the AI assistant in RichHabit's private admin workspace. You help the RichHabit team with writing, analysis, planning, product and engineering work, and with documents they choose to attach.",
-  "You cannot see RichHabit's database, its users, or anyone's habits, priorities, intentions, journals, dates or Community activity. The only material available to you is this conversation, any project instructions below, and files the admin attached. If asked about RichHabit user data, say that you don't have access to it.",
+  "You are a general-purpose AI assistant, available to the admin through their private AI Workspace. Help with whatever they bring: writing and editing, research and analysis, coding and architecture, brainstorming, translation, business questions, general knowledge, and documents or images they attach.",
+  "The workspace is hosted inside the RichHabit app, but you are not a habit coach, and your help is not limited to RichHabit, habits, intentions, priorities or productivity. Take on that kind of role only if the admin asks for it.",
+  "You cannot see RichHabit's database, its users, or anyone's habits, intentions, priorities, journals, important dates or Community activity. The only material available to you is this conversation, any project instructions below, and files the admin attached. If asked about RichHabit user data, say that you don't have access to it.",
   "Reply in the language of the admin's latest message unless they ask for another. Use Markdown where it helps: short headings, lists, tables, and fenced code blocks with a language tag. Be clear and direct.",
 ].join("\n\n");
+
+/** Added when an image model is configured: pictures are made by it, not by the conversational model. */
+export const IMAGE_GENERATION_AVAILABLE =
+  "This workspace can also create images. When the admin asks for a picture, a separate image model makes it and the picture appears in the conversation; earlier ones are noted in the history as [Generated image]. If the admin seems to want a new picture without asking for one outright, tell them they can ask, for example \"Create an image of …\".";
+
+/** Added when no image model is configured, so the answer is honest and still useful. */
+export const IMAGE_GENERATION_UNAVAILABLE =
+  "Image generation isn't turned on in this workspace. If the admin asks you to create a picture, say so in one sentence, then offer something useful instead, such as a detailed description.";
 
 export const CONTINUE_INSTRUCTION =
   "Continue your previous reply from exactly where it stopped. Do not repeat anything you already wrote and do not add a preamble.";
@@ -51,10 +60,28 @@ export interface AssembledContext {
   droppedExchanges: number;
 }
 
-export function systemPrompt(projectInstructions: string | null | undefined): string {
+export interface ContextOptions {
+  /** Whether an image model is configured, which the conversational model is told honestly. */
+  imageGeneration?: boolean;
+}
+
+export function systemPrompt(projectInstructions: string | null | undefined, options: ContextOptions = {}): string {
+  const base = `${WORKSPACE_INSTRUCTIONS}\n\n${options.imageGeneration ? IMAGE_GENERATION_AVAILABLE : IMAGE_GENERATION_UNAVAILABLE}`;
   const instructions = projectInstructions?.trim();
-  if (!instructions) return WORKSPACE_INSTRUCTIONS;
-  return `${WORKSPACE_INSTRUCTIONS}\n\nThe admin set these instructions for the current project. Follow them in this conversation unless they conflict with the rules above.\n<project_instructions>\n${instructions}\n</project_instructions>`;
+  if (!instructions) return base;
+  return `${base}\n\nThe admin set these instructions for the current project. Follow them in this conversation unless they conflict with the rules above.\n<project_instructions>\n${instructions}\n</project_instructions>`;
+}
+
+/**
+ * An earlier answer as history text. A generated picture cannot go back to a
+ * model as part of an assistant turn, so it is named instead, and a
+ * conversational model can still refer to it.
+ */
+export function historyText(chain: readonly AiMessage[]): string {
+  const notes = chain.flatMap((m) => m.attachments)
+    .filter((a) => a.kind === "image")
+    .map((a) => (a.removed ? "[Generated image, since removed]" : `[Generated image: ${a.originalFilename}]`));
+  return [chainText(chain), ...notes].filter((part) => part.trim()).join("\n\n");
 }
 
 /**
@@ -115,6 +142,7 @@ export function assembleContext(
   projectInstructions: string | null,
   budget: { targetTokens: number },
   newMessageId: string,
+  options: ContextOptions = {},
 ): AssembledContext {
   const all = messages.filter((m) => m.id !== newMessageId);
   const byId = new Map(all.map((m) => [m.id, m]));
@@ -147,7 +175,7 @@ export function assembleContext(
   }
   if (!anchor || anchor.role !== "user") throw new Error("context anchor not loaded");
 
-  const system = systemPrompt(projectInstructions);
+  const system = systemPrompt(projectInstructions, options);
   const anchorTurn = userTurn(anchor);
   const fixed = estimateTextTokens(system) + estimateTurn(anchorTurn) + tail.reduce((s, t) => s + estimateTurn(t), 0);
 
@@ -159,7 +187,7 @@ export function assembleContext(
     let count = 1;
     const chain = visibleChain(answersTo(user.id));
     if (includeInHistory(chain, null)) {
-      const text = chainText(chain);
+      const text = historyText(chain);
       if (text.trim()) {
         turns.push({ role: "assistant", parts: [{ type: "text", text }] });
         count += chain.length;

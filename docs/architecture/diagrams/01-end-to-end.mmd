@@ -6,42 +6,53 @@ flowchart LR
   classDef blocked fill:#F7ECEA,stroke:#A6584C,stroke-width:1.2px,stroke-dasharray:2 3,color:#3B1D18
 
   subgraph BROWSER["Browser · untrusted · rendered for admins only"]
-    UI["AiLauncher · Workspace · Chat · ProjectPage<br/>src/components/aiWorkspace · P2"]:::impl
+    UI["AiLauncher · Workspace · Chat · ProjectPage<br/>model selector · generated pictures"]:::impl
   end
 
-  subgraph SERVER["RichHabit server · Next.js on Render · trusted"]
+  subgraph SERVER["RichHabit server · Next.js on Render · the host and security boundary"]
     direction TB
-    ROUTES["12 route files<br/>src/app/api/admin/ai/workspace · P2"]:::impl
+    ROUTES["12 route files<br/>src/app/api/admin/ai/workspace"]:::impl
     GUARD["workspaceAdmin → currentAdmin<br/>users.role re-read · 404"]:::existing
-    RUNTIME["src/lib/aiWorkspaceRuntime · P2<br/>reply · context · limits · fileType · view · copies"]:::impl
-    PROVIDER["provider.ts · the provider seam · P2"]:::impl
-    CLAUDEFILE["src/lib/ai/claude.ts<br/>the only file using Anthropic's SDK"]:::impl
-    DATA["src/lib/aiWorkspace/queries.ts<br/>owner-scoped data layer · P1"]:::impl
-    ENV["env.ts · CLAUDE_API_KEY · AI_WORKSPACE_*"]:::existing
+    ROUTER["routing.ts · models.ts<br/>capability router · configured models"]:::impl
+    RUNTIME["src/lib/aiWorkspaceRuntime<br/>reply · context · limits · fileType · view · copies"]:::impl
+    PROVIDER["provider.ts<br/>chat and image seams · catalogue · keys read here"]:::impl
+    CLAUDEFILE["src/lib/ai/claude.ts<br/>Anthropic SDK"]:::impl
+    GEMINIFILE["src/lib/ai/gemini.ts<br/>Gemini REST · stateless generateContent"]:::impl
+    DATA["src/lib/aiWorkspace/queries.ts<br/>owner-scoped data layer"]:::impl
+    ENV["env.ts · CLAUDE_API_KEY · GEMINI_API_KEY · AI_WORKSPACE_*"]:::existing
   end
 
   subgraph POSTGRES["Neon Postgres · production"]
     direction TB
-    AITABLES[("7 ai_ tables<br/>migrated 2026-09-13")]:::impl
-    PERSONAL[("RichHabit personal data<br/>habits · priorities · intentions · journal")]:::blocked
+    AITABLES[("7 ai_ tables · schema unchanged<br/>generated pictures stored as ai_files")]:::impl
+    PERSONAL[("RichHabit personal data<br/>habits · intentions · priorities · journal · dates · Community")]:::blocked
   end
 
   subgraph ANTHROPIC["Anthropic · third party"]
     MESSAGES["Messages API · claude-sonnet-5<br/>streaming"]:::external
     FILESAPI["Files API<br/>attached PDFs and images"]:::external
   end
-  GEMINI["Gemini provider"]:::future
+
+  subgraph GOOGLE["Google · third party"]
+    GTEXT["streamGenerateContent · gemini-3.8-flash<br/>files inline"]:::external
+    GIMAGE["generateContent · gemini-3.1-flash-image<br/>Nano Banana 2 · billed project"]:::external
+  end
+  FUT["image editing · web research · video · tools"]:::future
 
   UI -->|"1 · same-origin fetch · session cookie"| ROUTES
   ROUTES -->|"2"| GUARD
-  GUARD -->|"3 · admin id"| RUNTIME
-  RUNTIME -->|"4"| DATA
-  DATA ==>|"5 · user_id on every statement"| AITABLES
-  RUNTIME -->|"6 · turns and parts"| PROVIDER
+  GUARD -->|"3 · admin id"| ROUTER
+  ROUTER -->|"4 · chosen model"| RUNTIME
+  RUNTIME -->|"5"| DATA
+  DATA ==>|"6 · user_id on every statement"| AITABLES
+  RUNTIME -->|"7 · turns or prompt"| PROVIDER
   PROVIDER --> CLAUDEFILE
-  ENV -.->|"key · server only"| CLAUDEFILE
-  CLAUDEFILE -->|"7 · stream"| MESSAGES
+  PROVIDER --> GEMINIFILE
+  ENV -.->|"keys · server only"| PROVIDER
+  CLAUDEFILE -->|"stream"| MESSAGES
   CLAUDEFILE -.->|"upload once · reuse"| FILESAPI
+  GEMINIFILE -->|"stream"| GTEXT
+  GEMINIFILE -->|"picture"| GIMAGE
   ROUTES -->|"8 · NDJSON start · delta · done"| UI
-  PROVIDER -.-> GEMINI
+  ROUTER -.-> FUT
   RUNTIME -. "no import path · boundary tests" .-> PERSONAL

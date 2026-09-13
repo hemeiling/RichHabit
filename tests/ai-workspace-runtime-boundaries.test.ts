@@ -39,7 +39,7 @@ describe("the runtime and routes", () => {
 
   it("import only the data layer, configuration, admin checks, i18n and their own modules", () => {
     const allowed = [/^@\/lib\/aiWorkspace\//, /^@\/lib\/aiWorkspaceRuntime\//, /^@\/lib\/env$/, /^@\/lib\/http$/,
-      /^@\/lib\/admin$/, /^@\/lib\/i18n(\/server)?$/, /^next\/server$/, /^\.\//, /^@\/lib\/ai\/claude$/];
+      /^@\/lib\/admin$/, /^@\/lib\/i18n(\/server)?$/, /^next\/server$/, /^\.\//, /^@\/lib\/ai\/claude$/, /^@\/lib\/ai\/gemini$/];
     for (const f of SERVER) {
       for (const s of specifiers(read(f))) expect(allowed.some((r) => r.test(s)), `${f} imports ${s}`).toBe(true);
     }
@@ -48,6 +48,8 @@ describe("the runtime and routes", () => {
   it("reach Claude only through the provider seam, and the scripted provider only through its guard", () => {
     const claude = SERVER.filter((f) => /@\/lib\/ai\/claude/.test(read(f)));
     expect(claude).toEqual([path.join("src", "lib", "aiWorkspaceRuntime", "provider.ts")]);
+    const gemini = [...SERVER, ...COMPONENTS].filter((f) => /@\/lib\/ai\/gemini|generativelanguage\.googleapis/.test(read(f)));
+    expect(gemini).toEqual([path.join("src", "lib", "aiWorkspaceRuntime", "provider.ts")]);
     const scripted = [...SERVER, ...COMPONENTS].filter((f) => /["']\.\/scriptedProvider["']|aiWorkspaceRuntime\/scriptedProvider/.test(read(f)));
     expect(scripted).toEqual([path.join("src", "lib", "aiWorkspaceRuntime", "provider.ts")]);
     expect(read("src/lib/aiWorkspaceRuntime/provider.ts")).toMatch(/if \(scriptedProviderAllowed\(\)\)/);
@@ -60,7 +62,7 @@ describe("the runtime and routes", () => {
 
   it("never read a credential", () => {
     for (const f of [...SERVER, ...COMPONENTS]) {
-      expect(/CLAUDE_API_KEY|ANTHROPIC_API_KEY|NEXT_PUBLIC_/.test(read(f)), f).toBe(false);
+      expect(/CLAUDE_API_KEY|ANTHROPIC_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|NEXT_PUBLIC_/.test(read(f)), f).toBe(false);
       if (!f.endsWith(path.join("aiWorkspaceRuntime", "provider.ts"))) expect(/process\.env/.test(read(f)), f).toBe(false);
     }
   });

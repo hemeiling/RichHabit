@@ -1,7 +1,8 @@
 import type {
   AiAttachment, AiConversation, AiFile, AiMessage, AiProject, StorageUsage, WorkspaceSettings,
 } from "@/lib/aiWorkspace/types";
-import type { Exchange } from "@/lib/aiWorkspaceRuntime/view";
+import type { PublicModel } from "@/lib/aiWorkspaceRuntime/models";
+import type { Exchange, ReplyModel } from "@/lib/aiWorkspaceRuntime/view";
 
 /**
  * The browser's view of the AI Workspace API.
@@ -12,7 +13,9 @@ import type { Exchange } from "@/lib/aiWorkspaceRuntime/view";
  * here is fetch against same-origin routes; the browser holds no credential.
  */
 
-export type { AiAttachment, AiConversation, AiFile, AiMessage, AiProject, Exchange, StorageUsage, WorkspaceSettings };
+export type {
+  AiAttachment, AiConversation, AiFile, AiMessage, AiProject, Exchange, PublicModel, ReplyModel, StorageUsage, WorkspaceSettings,
+};
 
 export interface Limits {
   maxAttachments: number;
@@ -33,6 +36,11 @@ export interface Bootstrap {
   conversations: AiConversation[];
   archivedConversations: AiConversation[];
   available: boolean;
+  /** Conversational models configured right now; the selector shows them when there is more than one. */
+  models: PublicModel[];
+  defaultModelId: string | null;
+  /** Whether an explicit request for a picture is answered with one. */
+  imageGeneration: boolean;
   limits: Limits;
 }
 
@@ -42,6 +50,10 @@ export interface ConversationView {
   exchanges: Exchange[];
   hasEarlier: boolean;
   files: AiFile[];
+  /** The conversational model this conversation carries on with, or null for the default. */
+  modelId: string | null;
+  /** Which model wrote each reply, by message id. */
+  replyModels: Record<string, ReplyModel>;
 }
 
 export interface ProjectView {

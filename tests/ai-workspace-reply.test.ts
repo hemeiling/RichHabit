@@ -21,6 +21,7 @@ vi.mock("@/lib/db/pool", () => ({
 }));
 
 import * as ai from "../src/lib/aiWorkspace/queries";
+import { UPLOAD_DISCLOSURE_VERSION } from "../src/lib/aiWorkspace/disclosure";
 import type { AiMessage } from "../src/lib/aiWorkspace/types";
 import { CONTINUE_INSTRUCTION, type ContextMode } from "../src/lib/aiWorkspaceRuntime/context";
 import {
@@ -52,7 +53,7 @@ afterEach(() => {
 async function newAdmin(): Promise<string> {
   const [row] = await sql(`insert into users (email, password_hash, role) values ($1, 'x', 'admin') returning id`,
     [`${randomUUID()}@example.com`]);
-  await ai.acceptUploadDisclosure(row.id, 1);
+  await ai.acceptUploadDisclosure(row.id, UPLOAD_DISCLOSURE_VERSION);
   return row.id;
 }
 

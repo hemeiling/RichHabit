@@ -19,6 +19,7 @@ vi.mock("@/lib/db/pool", () => ({
 }));
 
 import * as ai from "../src/lib/aiWorkspace/queries";
+import { UPLOAD_DISCLOSURE_VERSION } from "../src/lib/aiWorkspace/disclosure";
 
 const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
 const MODEL = { provider: "anthropic", model: "claude-sonnet-5", maxOutputTokens: 8000 };
@@ -31,7 +32,7 @@ const sql = async (text: string, params: unknown[] = []) => (await db.query<any>
 async function newAdmin(disclosure = true): Promise<string> {
   const [row] = await sql(`insert into users (email, password_hash, role) values ($1, 'x', 'admin') returning id`,
     [`${randomUUID()}@example.com`]);
-  if (disclosure) await ai.acceptUploadDisclosure(row.id, 1);
+  if (disclosure) await ai.acceptUploadDisclosure(row.id, UPLOAD_DISCLOSURE_VERSION);
   return row.id;
 }
 
@@ -110,16 +111,36 @@ describe("one admin can never reach another admin's workspace", () => {
   });
 });
 
+describe("message order", () => {
+  it("always reads a message before its reply, even when both have the same timestamp", async () => {
+    const a = await newAdmin();
+    const conversation = await ai.createConversation(a);
+    for (let i = 0; i < 12; i++) {
+      const started = await ai.startReply(a, { conversationId: conversation.id, clientId: randomUUID(), content: `m${i}`, ...MODEL });
+      await ai.finishReply(a, started.assistantMessage!.id, { status: "complete", content: `r${i}`, stopReason: "end_turn" });
+    }
+    // Force ties for every pair, as a coarse clock produces them.
+    await sql(`update ai_messages m set created_at = u.created_at from ai_messages u
+                where m.reply_to_message_id = u.id and m.user_id = $1`, [a]);
+    const messages = (await ai.listMessages(a, conversation.id, { limit: 200 }))!;
+    expect(messages.map((m) => m.content)).toEqual(Array.from({ length: 12 }, (_, i) => [`m${i}`, `r${i}`]).flat());
+  });
+});
+
 describe("upload disclosure", () => {
   it("is required, versioned, and only the current version is accepted", async () => {
     const a = await newAdmin(false);
     const conversation = await ai.createConversation(a);
     expect((await ai.getWorkspaceSettings(a)).hasAcceptedCurrentDisclosure).toBe(false);
     await rejects(upload(a, { conversationId: conversation.id }, "a.txt", "a"), 409, /upload notice/);
-    await rejects(ai.acceptUploadDisclosure(a, 2), 409);
-    await rejects(ai.acceptUploadDisclosure(a, "1"), 409);
-    const settings = await ai.acceptUploadDisclosure(a, 1);
-    expect(settings).toMatchObject({ uploadDisclosureVersion: 1, currentDisclosureVersion: 1, hasAcceptedCurrentDisclosure: true });
+    await rejects(ai.acceptUploadDisclosure(a, UPLOAD_DISCLOSURE_VERSION - 1), 409);
+    await rejects(ai.acceptUploadDisclosure(a, UPLOAD_DISCLOSURE_VERSION + 1), 409);
+    await rejects(ai.acceptUploadDisclosure(a, String(UPLOAD_DISCLOSURE_VERSION)), 409);
+    const settings = await ai.acceptUploadDisclosure(a, UPLOAD_DISCLOSURE_VERSION);
+    expect(settings).toMatchObject({
+      uploadDisclosureVersion: UPLOAD_DISCLOSURE_VERSION, currentDisclosureVersion: UPLOAD_DISCLOSURE_VERSION,
+      hasAcceptedCurrentDisclosure: true,
+    });
     expect(settings.uploadDisclosureAcceptedAt).not.toBeNull();
     await expect(upload(a, { conversationId: conversation.id }, "a.txt", "a")).resolves.toBeTruthy();
   });
@@ -129,14 +150,14 @@ describe("upload disclosure", () => {
     const conversation = await ai.createConversation(a);
     vi.resetModules();
     vi.doMock("../src/lib/aiWorkspace/disclosure", () => ({
-      UPLOAD_DISCLOSURE_VERSION: 2,
-      isCurrentDisclosure: (version: number | null | undefined) => version === 2,
+      UPLOAD_DISCLOSURE_VERSION: UPLOAD_DISCLOSURE_VERSION + 1,
+      isCurrentDisclosure: (version: number | null | undefined) => version === UPLOAD_DISCLOSURE_VERSION + 1,
     }));
     const next = await import("../src/lib/aiWorkspace/queries");
     await rejects(next.recordUpload(a, { conversationId: conversation.id, originalFilename: "b.txt", kind: "text",
       mimeType: "text/plain", bytes: bytes("b") }), 409, /upload notice/);
-    await rejects(next.acceptUploadDisclosure(a, 1), 409);
-    await next.acceptUploadDisclosure(a, 2);
+    await rejects(next.acceptUploadDisclosure(a, UPLOAD_DISCLOSURE_VERSION), 409);
+    await next.acceptUploadDisclosure(a, UPLOAD_DISCLOSURE_VERSION + 1);
     await expect(next.recordUpload(a, { conversationId: conversation.id, originalFilename: "b.txt", kind: "text",
       mimeType: "text/plain", bytes: bytes("b") })).resolves.toBeTruthy();
     vi.doUnmock("../src/lib/aiWorkspace/disclosure");

@@ -138,25 +138,23 @@
 
   <main>
     <header class="titleblock">
-      <p class="kicker">RichHabit · Solution engineering architecture · admin-only AI Workspace</p>
+      <p class="kicker">RichHabit (host) · Solution engineering architecture · private general-purpose AI Workspace</p>
       <h1>AI Workspace Solution Engineering Architecture</h1>
-      <p class="lede">The admin-only AI Workspace as it is built and verified: a chatbot with projects, files and streaming Claude replies, on a seven-table schema, traced from each capability to the module, the database objects, the rules that hold it together, and the evidence that it behaves that way.</p>
+      <p class="lede">The admin-only AI Workspace as it is built and verified: a general-purpose assistant hosted inside RichHabit, with more than one model behind a capability router — Claude and Gemini for conversation and documents, Nano Banana for pictures — plus projects, files and streaming replies on a seven-table schema. RichHabit provides sign-in, hosting, the interface and the security boundary; the assistant is not a habit coach and reads none of RichHabit's personal data. Each capability is traced to the module, the database objects, the rules that hold it together, and the evidence that it behaves that way.</p>
       <dl class="block">
-        <div><dt>Branch</dt><dd><code>feature/ai-workspace</code></dd></div>
-        <div><dt>Phase 1 commit</dt><dd><code>7fcf53a</code> schema, migration, data layer</dd></div>
-        <div><dt>Phase 2 commit</dt><dd><code>0236d45</code> routes, provider, interface</dd></div>
-        <div><dt>Repository main</dt><dd><code>f0a8e28</code> (not yet merged)</dd></div>
-        <div><dt>Deployed release</dt><dd><code>dd7bec0</code> (no AI Workspace code)</dd></div>
-        <div><dt>Production database</dt><dd>seven AI tables migrated 2026-09-13, verified 24 of 24</dd></div>
-        <div><dt>Model</dt><dd><code>claude-sonnet-5</code> through <code>CLAUDE_API_KEY</code></dd></div>
-        <div><dt>Document date</dt><dd>2026-09-13 · draft for review</dd></div>
+        <div><dt>Chatbot release</dt><dd><code>f7499fc</code> on <code>main</code>, deployed and verified (Claude only)</dd></div>
+        <div><dt>Model extension</dt><dd><code>feature/ai-workspace-models</code>, verified locally, not yet released</dd></div>
+        <div><dt>Phase commits</dt><dd><code>7fcf53a</code> data layer · <code>0236d45</code> chatbot</dd></div>
+        <div><dt>Production database</dt><dd>seven AI tables migrated 2026-09-13, verified 24 of 24; the model extension needs no migration</dd></div>
+        <div><dt>Models</dt><dd><code>claude-sonnet-5</code> (<code>CLAUDE_API_KEY</code>) · <code>gemini-3.8-flash</code> and <code>gemini-3.1-flash-image</code> (<code>GEMINI_API_KEY</code>)</dd></div>
+        <div><dt>Document date</dt><dd>2026-09-13 · updated for the multi-model extension</dd></div>
       </dl>
       <div class="state">
         <span class="badge b-p1">Implemented — phase 1</span>
         <span class="badge b-p2">Implemented — phase 2</span>
         <span class="badge b-neon">Verified on Neon</span>
-        <span class="badge b-prod">Migrated in production</span>
-        <span class="badge b-wait">Awaiting merge and deploy</span>
+        <span class="badge b-prod">Chatbot deployed</span>
+        <span class="badge b-wait">Models and pictures: awaiting release</span>
       </div>
       <div class="legend" aria-label="Status markers">
         <div><span class="badge b-p1">Implemented — phase 1</span><span>Schema, migration and data layer, committed.</span></div>
@@ -170,12 +168,63 @@
       </div>
     </header>
 
+    <!-- ─────────────────────────── 00 ─────────────────────────── -->
+    <section class="view" id="v0">
+      <div class="view-head">
+        <span class="view-no">View 00</span>
+        <h2>Models and capabilities</h2>
+        <div class="badges"><span class="badge b-local">Implemented and verified locally</span><span class="badge b-wait">Awaiting release</span><span class="badge b-future">Future capabilities</span></div>
+      </div>
+      <figure>
+        <div class="sheet" data-min="760"><pre class="mermaid">flowchart TB
+  classDef impl fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.6px,color:#14201B
+  classDef external fill:#FBF3E4,stroke:#A9762C,stroke-width:1.4px,color:#3A2A10
+  classDef future fill:#F1F0F5,stroke:#77738F,stroke-width:1.2px,stroke-dasharray:3 4,color:#2D2B3A
+  classDef blocked fill:#F7ECEA,stroke:#A6584C,stroke-width:1.2px,stroke-dasharray:2 3,color:#3B1D18
+
+  subgraph HOST["RichHabit · the host application and security boundary · sign-in · admin role · hosting · UI shell"]
+    direction TB
+    WS["General AI Workspace&lt;br/&gt;private to admins · a general-purpose assistant, not a habit coach"]:::impl
+    SEL["Model selector&lt;br/&gt;only configured conversational models"]:::impl
+    ROUTER["Model / capability router · routing.ts&lt;br/&gt;text · documents · image generation"]:::impl
+    CONV["Conversation layer · reply.ts · context.ts · view.ts&lt;br/&gt;streaming · Stop · Continue · Retry · history · projects · files"]:::impl
+    DATA[("AI Workspace data · 7 ai_ tables&lt;br/&gt;each reply records provider and model · pictures are ai_files on the reply")]:::impl
+    PERSONAL[("RichHabit personal data&lt;br/&gt;habits · intentions · priorities · journal · dates · Community")]:::blocked
+  end
+
+  CLAUDE["Claude Sonnet 5 · Anthropic&lt;br/&gt;text · reasoning · documents&lt;br/&gt;IMPLEMENTED · default"]:::external
+  GEMINI["Gemini 3.8 Flash · Google&lt;br/&gt;text · documents&lt;br/&gt;IMPLEMENTED"]:::external
+  IMAGE["Nano Banana 2 · gemini-3.1-flash-image · Google&lt;br/&gt;image generation&lt;br/&gt;IMPLEMENTED · needs a billed Google project"]:::external
+  FUT["FUTURE&lt;br/&gt;image editing · web research · video · tools · more providers"]:::future
+
+  WS --&gt; SEL --&gt; ROUTER
+  ROUTER --&gt;|"text · documents · selected model"| CLAUDE
+  ROUTER --&gt;|"text · documents · selected model"| GEMINI
+  ROUTER --&gt;|"an explicit request for a picture"| IMAGE
+  ROUTER -.-&gt; FUT
+  CLAUDE --&gt;|"streamed text"| CONV
+  GEMINI --&gt;|"streamed text"| CONV
+  IMAGE --&gt;|"picture kept as a file on the reply"| CONV
+  CONV --&gt; DATA
+  CONV -. "no import path · boundary tests" .-&gt; PERSONAL</pre></div>
+        <figcaption><span>Figure 0 — RichHabit hosts a general AI capability. A deterministic router sends an explicit request for a picture to the image model and everything else to the conversational model the admin selected.</span><code>diagrams/00-models-and-capabilities.mmd</code></figcaption>
+      </figure>
+      <ol class="notes">
+        <li>The system instruction describes a general-purpose assistant. It knows it is hosted in RichHabit, is told it is not a habit coach, and is told it cannot see RichHabit data.</li>
+        <li><code>provider.ts</code> lists only models whose key is set: Claude with <code>CLAUDE_API_KEY</code>; Gemini and Nano Banana with <code>GEMINI_API_KEY</code>. The selector shows conversational models only, by name.</li>
+        <li><code>routing.ts</code> recognises an explicit request to create a picture, in English and Chinese, with a small grammar and guards for questions about images, prompts, code and diagrams. It is not a keyword search.</li>
+        <li>Every reply stores its provider and model in existing columns, so history stays understandable and a conversation carries on with the model it last used. No schema change.</li>
+        <li>A generated picture is saved as an <code>ai_files</code> image carried by the reply: owner-scoped, counted against the quota, served only to its owner, tombstoned when deleted, removed with its conversation.</li>
+        <li>Future capabilities are named in <code>models.ts</code> so the design has a place for them. None is implemented.</li>
+      </ol>
+    </section>
+
     <!-- ─────────────────────────── 01 ─────────────────────────── -->
     <section class="view" id="v1">
       <div class="view-head">
         <span class="view-no">View 01</span>
         <h2>End-to-end solution architecture</h2>
-        <div class="badges"><span class="badge b-p1">Implemented — phase 1</span><span class="badge b-p2">Implemented — phase 2</span><span class="badge b-prod">Migrated in production</span><span class="badge b-wait">Awaiting deploy</span><span class="badge b-future">Gemini: future</span></div>
+        <div class="badges"><span class="badge b-p1">Implemented — phase 1</span><span class="badge b-p2">Implemented — phase 2</span><span class="badge b-prod">Chatbot deployed</span><span class="badge b-local">Gemini and pictures: verified locally</span><span class="badge b-future">Further capabilities: future</span></div>
       </div>
       <figure>
         <div class="sheet" data-min="900"><pre class="mermaid">flowchart LR
@@ -186,53 +235,64 @@
   classDef blocked fill:#F7ECEA,stroke:#A6584C,stroke-width:1.2px,stroke-dasharray:2 3,color:#3B1D18
 
   subgraph BROWSER["Browser · untrusted · rendered for admins only"]
-    UI["AiLauncher · Workspace · Chat · ProjectPage&lt;br/&gt;src/components/aiWorkspace · P2"]:::impl
+    UI["AiLauncher · Workspace · Chat · ProjectPage&lt;br/&gt;model selector · generated pictures"]:::impl
   end
 
-  subgraph SERVER["RichHabit server · Next.js on Render · trusted"]
+  subgraph SERVER["RichHabit server · Next.js on Render · the host and security boundary"]
     direction TB
-    ROUTES["12 route files&lt;br/&gt;src/app/api/admin/ai/workspace · P2"]:::impl
+    ROUTES["12 route files&lt;br/&gt;src/app/api/admin/ai/workspace"]:::impl
     GUARD["workspaceAdmin → currentAdmin&lt;br/&gt;users.role re-read · 404"]:::existing
-    RUNTIME["src/lib/aiWorkspaceRuntime · P2&lt;br/&gt;reply · context · limits · fileType · view · copies"]:::impl
-    PROVIDER["provider.ts · the provider seam · P2"]:::impl
-    CLAUDEFILE["src/lib/ai/claude.ts&lt;br/&gt;the only file using Anthropic's SDK"]:::impl
-    DATA["src/lib/aiWorkspace/queries.ts&lt;br/&gt;owner-scoped data layer · P1"]:::impl
-    ENV["env.ts · CLAUDE_API_KEY · AI_WORKSPACE_*"]:::existing
+    ROUTER["routing.ts · models.ts&lt;br/&gt;capability router · configured models"]:::impl
+    RUNTIME["src/lib/aiWorkspaceRuntime&lt;br/&gt;reply · context · limits · fileType · view · copies"]:::impl
+    PROVIDER["provider.ts&lt;br/&gt;chat and image seams · catalogue · keys read here"]:::impl
+    CLAUDEFILE["src/lib/ai/claude.ts&lt;br/&gt;Anthropic SDK"]:::impl
+    GEMINIFILE["src/lib/ai/gemini.ts&lt;br/&gt;Gemini REST · stateless generateContent"]:::impl
+    DATA["src/lib/aiWorkspace/queries.ts&lt;br/&gt;owner-scoped data layer"]:::impl
+    ENV["env.ts · CLAUDE_API_KEY · GEMINI_API_KEY · AI_WORKSPACE_*"]:::existing
   end
 
   subgraph POSTGRES["Neon Postgres · production"]
     direction TB
-    AITABLES[("7 ai_ tables&lt;br/&gt;migrated 2026-09-13")]:::impl
-    PERSONAL[("RichHabit personal data&lt;br/&gt;habits · priorities · intentions · journal")]:::blocked
+    AITABLES[("7 ai_ tables · schema unchanged&lt;br/&gt;generated pictures stored as ai_files")]:::impl
+    PERSONAL[("RichHabit personal data&lt;br/&gt;habits · intentions · priorities · journal · dates · Community")]:::blocked
   end
 
   subgraph ANTHROPIC["Anthropic · third party"]
     MESSAGES["Messages API · claude-sonnet-5&lt;br/&gt;streaming"]:::external
     FILESAPI["Files API&lt;br/&gt;attached PDFs and images"]:::external
   end
-  GEMINI["Gemini provider"]:::future
+
+  subgraph GOOGLE["Google · third party"]
+    GTEXT["streamGenerateContent · gemini-3.8-flash&lt;br/&gt;files inline"]:::external
+    GIMAGE["generateContent · gemini-3.1-flash-image&lt;br/&gt;Nano Banana 2 · billed project"]:::external
+  end
+  FUT["image editing · web research · video · tools"]:::future
 
   UI --&gt;|"1 · same-origin fetch · session cookie"| ROUTES
   ROUTES --&gt;|"2"| GUARD
-  GUARD --&gt;|"3 · admin id"| RUNTIME
-  RUNTIME --&gt;|"4"| DATA
-  DATA ==&gt;|"5 · user_id on every statement"| AITABLES
-  RUNTIME --&gt;|"6 · turns and parts"| PROVIDER
+  GUARD --&gt;|"3 · admin id"| ROUTER
+  ROUTER --&gt;|"4 · chosen model"| RUNTIME
+  RUNTIME --&gt;|"5"| DATA
+  DATA ==&gt;|"6 · user_id on every statement"| AITABLES
+  RUNTIME --&gt;|"7 · turns or prompt"| PROVIDER
   PROVIDER --&gt; CLAUDEFILE
-  ENV -.-&gt;|"key · server only"| CLAUDEFILE
-  CLAUDEFILE --&gt;|"7 · stream"| MESSAGES
+  PROVIDER --&gt; GEMINIFILE
+  ENV -.-&gt;|"keys · server only"| PROVIDER
+  CLAUDEFILE --&gt;|"stream"| MESSAGES
   CLAUDEFILE -.-&gt;|"upload once · reuse"| FILESAPI
+  GEMINIFILE --&gt;|"stream"| GTEXT
+  GEMINIFILE --&gt;|"picture"| GIMAGE
   ROUTES --&gt;|"8 · NDJSON start · delta · done"| UI
-  PROVIDER -.-&gt; GEMINI
+  ROUTER -.-&gt; FUT
   RUNTIME -. "no import path · boundary tests" .-&gt; PERSONAL</pre></div>
-        <figcaption><span>Figure 1 — Request path from the admin's browser to Claude and back. P1 and P2 mark the phase that built each part.</span><code>diagrams/01-end-to-end.mmd</code></figcaption>
+        <figcaption><span>Figure 1 — Request path from the admin's browser, through the capability router, to the chosen model and back.</span><code>diagrams/01-end-to-end.mmd</code></figcaption>
       </figure>
       <ol class="notes">
         <li>The launcher and workspace render only when the app layout finds <code>users.role = 'admin'</code>. The browser talks only to same-origin <code>/api/admin/ai/workspace</code> routes and holds no key.</li>
         <li>Every route starts with <code>workspaceAdmin()</code>, which re-reads the role from the database and answers <code>404</code> to everyone else.</li>
         <li>The admin's id is the only identity the runtime receives; every data-layer statement is scoped by it.</li>
         <li>The runtime assembles the model request from five layers only and hands turns and parts to the provider seam.</li>
-        <li><code>src/lib/ai/claude.ts</code> is the one file that uses Anthropic's SDK. It streams from the Messages API and uploads attached PDFs and images to the Files API once.</li>
+        <li><code>src/lib/ai/claude.ts</code> is the one file that uses Anthropic's SDK; it streams from the Messages API and uploads attached PDFs and images to the Files API once. <code>src/lib/ai/gemini.ts</code> is the one file that talks to Google; it streams Gemini replies and generates pictures with stateless <code>generateContent</code> requests, files inline, nothing stored at Google between requests.</li>
         <li>Text streams back to the browser as NDJSON and is saved to the reply's row as it arrives.</li>
       </ol>
     </section>

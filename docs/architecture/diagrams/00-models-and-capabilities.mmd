@@ -1,0 +1,31 @@
+flowchart TB
+  classDef impl fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.6px,color:#14201B
+  classDef external fill:#FBF3E4,stroke:#A9762C,stroke-width:1.4px,color:#3A2A10
+  classDef future fill:#F1F0F5,stroke:#77738F,stroke-width:1.2px,stroke-dasharray:3 4,color:#2D2B3A
+  classDef blocked fill:#F7ECEA,stroke:#A6584C,stroke-width:1.2px,stroke-dasharray:2 3,color:#3B1D18
+
+  subgraph HOST["RichHabit · the host application and security boundary · sign-in · admin role · hosting · UI shell"]
+    direction TB
+    WS["General AI Workspace<br/>private to admins · a general-purpose assistant, not a habit coach"]:::impl
+    SEL["Model selector<br/>only configured conversational models"]:::impl
+    ROUTER["Model / capability router · routing.ts<br/>text · documents · image generation"]:::impl
+    CONV["Conversation layer · reply.ts · context.ts · view.ts<br/>streaming · Stop · Continue · Retry · history · projects · files"]:::impl
+    DATA[("AI Workspace data · 7 ai_ tables<br/>each reply records provider and model · pictures are ai_files on the reply")]:::impl
+    PERSONAL[("RichHabit personal data<br/>habits · intentions · priorities · journal · dates · Community")]:::blocked
+  end
+
+  CLAUDE["Claude Sonnet 5 · Anthropic<br/>text · reasoning · documents<br/>IMPLEMENTED · default"]:::external
+  GEMINI["Gemini 3.8 Flash · Google<br/>text · documents<br/>IMPLEMENTED"]:::external
+  IMAGE["Nano Banana 2 · gemini-3.1-flash-image · Google<br/>image generation<br/>IMPLEMENTED · needs a billed Google project"]:::external
+  FUT["FUTURE<br/>image editing · web research · video · tools · more providers"]:::future
+
+  WS --> SEL --> ROUTER
+  ROUTER -->|"text · documents · selected model"| CLAUDE
+  ROUTER -->|"text · documents · selected model"| GEMINI
+  ROUTER -->|"an explicit request for a picture"| IMAGE
+  ROUTER -.-> FUT
+  CLAUDE -->|"streamed text"| CONV
+  GEMINI -->|"streamed text"| CONV
+  IMAGE -->|"picture kept as a file on the reply"| CONV
+  CONV --> DATA
+  CONV -. "no import path · boundary tests" .-> PERSONAL

@@ -181,6 +181,18 @@ export const aiWorkspace = {
   get maxTextBytes(): number { return megabytes("AI_WORKSPACE_MAX_TEXT_MB", 2); },
   /** Total live file bytes per admin, across projects and conversations. */
   get storageQuotaBytes(): number { return megabytes("AI_WORKSPACE_STORAGE_QUOTA_MB", 100); },
+  /**
+   * Google's server-only `GEMINI_API_KEY`, read lazily and handed straight to
+   * the Gemini adapter. When set, Gemini joins the model selector and image
+   * generation is turned on. Absent, the workspace runs on Claude alone.
+   */
+  get geminiApiKey(): string | null { return process.env.GEMINI_API_KEY?.trim() || null; },
+  /** Gemini's conversational model: a current stable Flash model. */
+  get geminiModel(): string { return str("AI_WORKSPACE_GEMINI_MODEL", "gemini-3.8-flash"); },
+  /** The image-generation model: Nano Banana 2, Google's recommended default. */
+  get imageModel(): string { return str("AI_WORKSPACE_IMAGE_MODEL", "gemini-3.1-flash-image"); },
+  /** Generated image resolution. 1K keeps each stored image to about a megabyte. */
+  get imageSize(): string { return str("AI_WORKSPACE_IMAGE_SIZE", "1K"); },
 };
 
 /**

@@ -2,6 +2,7 @@
 
 > Last updated: 2026-09-13
 >
+> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: IMPLEMENTED ON `feature/ai-workspace-models` · LOCAL TESTS PASS · REAL GEMINI CHAT VERIFIED · REAL IMAGE GENERATION BLOCKED BY GOOGLE FREE-TIER QUOTA (0) · NOT MERGED · NOT DEPLOYED · NO MIGRATION**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
 > **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
@@ -22,6 +23,92 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## AI Workspace: general-purpose assistant, multiple models, image generation
+
+A product correction on top of the released chatbot. RichHabit is the host
+(sign-in, admin role, hosting, interface, security boundary); the workspace is a
+general-purpose assistant, not a habit coach, and still reads no RichHabit
+personal data.
+
+| Item | State |
+| --- | --- |
+| branch | `feature/ai-workspace-models`, from `feature/ai-workspace` (`1e5e04a`), same worktree |
+| committed / pushed | see the commit that adds this section; pushed to `origin/feature/ai-workspace-models` |
+| schema / migration | **none**: replies already store `provider` and `model`; pictures are `ai_files` rows carried by the reply through `ai_message_files` |
+| merged into `main` | **no** |
+| deployed | **no**; production still runs `f7499fc` (Claude only) |
+
+**What changed**
+
+- System instruction: "a general-purpose AI assistant, available to the admin
+  through their private AI Workspace"; hosted in RichHabit but not a habit coach;
+  no RichHabit data; told honestly whether image generation is on.
+- `models.ts` (models and capabilities: text, documents, image generation;
+  image editing, web research, video and tools named as future) and `routing.ts`
+  (deterministic capability router: a small English/Chinese grammar for explicit
+  picture requests, with guards for questions, prompts, code and diagrams).
+- `provider.ts`: chat and image provider seams and a catalogue of configured
+  models only. `src/lib/ai/gemini.ts`: the one file that talks to Google; stateless
+  `generateContent` (streamed text; Nano Banana with `imageConfig`), files inline,
+  nothing stored at Google, errors reduced to codes. Claude unchanged.
+- Models, verified against Google's docs and this key's model list on
+  2026-09-13: `gemini-3.8-flash` (stable Flash) for conversation,
+  `gemini-3.1-flash-image` (Nano Banana 2, Google's recommended default) for
+  pictures at 1K; `gemini-3-pro-image` is the configurable higher-quality option.
+  Config: `GEMINI_API_KEY` (server only), `AI_WORKSPACE_GEMINI_MODEL`,
+  `AI_WORKSPACE_IMAGE_MODEL`, `AI_WORKSPACE_IMAGE_SIZE`.
+- Interface: a quiet model selector in the composer (only when more than one
+  conversational model is configured), a model tag on each reply, generated
+  pictures inline (max 440 px on desktop, full column on phones, open full size),
+  "Creating image…", no Continue on a picture (Retry makes a new one), an image
+  suggestion in the empty state, English and Chinese.
+- Upload notice version 2 names Google as well as Anthropic; every admin accepts
+  it again before their next upload.
+- A picture is stored like an upload: owner-scoped, counted against the 100 MB
+  quota (refused up front when under 2 MB remain), served only to its owner,
+  tombstoned when deleted, removed with its conversation, named in later history
+  as `[Generated image: …]`. Production database was 10 MB on 2026-09-13.
+- Bug fixed (pre-existing): a message and its reply sharing a timestamp could
+  list in random order; ties now always put the admin's message first. Found as a
+  flaky route test; PGlite's clock is millisecond-precise (170 of 200 ties).
+
+**Verification, 2026-09-13 (local)**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean; no key name or Google address in client bundles |
+| full unit suite | 838 of 838 (new: routing 51, Gemini adapter 10, models/image routes 11 including the screenshot's prompt in English and Chinese, plus runtime and ordering tests) |
+| earlier browser suite, scripted providers | 91 of 91, re-run on the final code |
+| models and image browser suite, scripted providers | 54 of 54: selector lists only configured chat models; Gemini/Claude switching with history; model persists after reload; EN and ZH hippo render an actual picture that survives refresh; Creating image…, Stop, Retry, refusal; picture owner-only (other admin, member, signed out 404); upload notice names Google; 1440/390/320 px without overflow; no prompt or image data in the server log; no provider request or key in the browser; no analytics |
+| live, real Claude + real Gemini (first run) | 15 of 19. Passed: Gemini streaming with usage, general question, multi-turn without thought signatures, switch to Claude on the same history, model remembered, Stop and Continue on Gemini, no stored Google file copy, routing of both hippo prompts to Nano Banana 2, no keys/prompts/image data in the server log. Failed with `rate_limited`: both real hippo images (Google free tier allows 0 image requests: `generate_content_free_tier_requests, limit: 0` for every Nano Banana model) and, after ~10 rapid calls, a Gemini PDF read and a Chinese reply (free-tier per-minute limit) |
+| live, spaced re-run | 4 of 4: Gemini reads an attached PDF inline; a Chinese question gets a Chinese answer; no keys or prompt text in the server log. A further real image attempt still failed `rate_limited` (quota 0) |
+
+**Required before release (Product Owner)**
+
+1. Enable billing on the Google project behind `GEMINI_API_KEY`. Without it no
+   real picture can be generated; the acceptance test cannot pass. (Paid-plan
+   decision; not done by Claude.)
+2. Add `GEMINI_API_KEY` to Render's environment. Production does not have it;
+   without it production stays Claude-only and hides Gemini and pictures.
+3. After billing: re-run the live check (`aiw-live-models.mjs` in the session
+   scratchpad) and confirm both hippo prompts store a real image.
+4. Merge `feature/ai-workspace-models` into `main` and deploy on Render. No
+   database step.
+
+**Known limits and risks**
+
+- A free-tier quota failure reads "The AI service is busy. Try again in a
+  minute." — accurate for per-minute limits, misleading for a quota of 0.
+- The router recognises explicit requests; loosely phrased ones ("hippo picture
+  please") go to the chat model, which is told to suggest "Create an image of …".
+- Image editing of earlier pictures is future; pictures attached to the same
+  message are sent as references.
+- Google's terms for the unpaid Gemini API tier allow using submitted content to
+  improve Google's products; verify the current terms, and prefer a billed
+  project before sending private material.
+- Earlier limits still apply: one Render instance; no malware scan; Anthropic
+  copies not deleted remotely on account deletion.
 
 ## AI Workspace chatbot (admin only): phases 1 and 2
 
