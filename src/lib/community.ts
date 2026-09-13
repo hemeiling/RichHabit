@@ -6,8 +6,19 @@ import { iso, todayISO } from "@/lib/dates";
 import type { AppState } from "@/lib/types";
 
 /**
- * Community Progress — a month-to-date completion figure for every active
- * member, ranked.
+ * Community Progress — two independent month-to-date rankings.
+ *
+ * ## Two rankings, never one
+ *
+ * Habits measure consistency: how much of what you scheduled you did.
+ * Accomplishments measure execution: how many priorities you finished. They are
+ * different units answering different questions, so each has its own list, its
+ * own rank and its own eligibility, and nothing here adds them together. Being
+ * first in one and fourth in the other is an ordinary, intended result.
+ *
+ * Every member is read once and scored for both; the two lists are then sorted
+ * separately from that one set of scores. So the rankings cannot disagree about
+ * who is visible, and a member's data is loaded once per refresh, not twice.
  *
  * ## Why this loads each user's state instead of running one SQL query
  *
@@ -24,6 +35,9 @@ import type { AppState } from "@/lib/types";
  *   2. Days with nothing scheduled are skipped, not counted as zero.
  *   3. Scoring is weight-aware.
  *
+ * Accomplishments follow the same reasoning: they are counted by the one rule in
+ * lib/accomplishments that Insights and My Progress also use.
+ *
  * So this calls the same functions the interface calls. It costs one state
  * load per member, which is fine at the tens-of-users scale this is for and
  * is cached below; past a few hundred members it should become a nightly
@@ -37,35 +51,55 @@ import type { AppState } from "@/lib/types";
  * differently because one prefers weighting. An unweighted percentage is one
  * yardstick applied to everybody. It can therefore differ slightly from the
  * weighted figure a user sees elsewhere in their own analytics, and the
- * screen says so rather than leaving them to notice.
+ * screen says so rather than leaving them to notice. Accomplishments are never
+ * weighted either: every quadrant counts one.
  */
 
+/** A row of the habit ranking. The shape is unchanged from before accomplishments. */
 export interface CommunityEntry {
   rank: number;
   /** A username, a display name, or an initialled form. Never an email. */
   name: string;
   pct: number;
-  /**
-   * Priorities completed in the same window. A count and nothing else: no
-   * titles, dates, quadrants or notes leave the server. Descriptive only — it
-   * never enters the ranking, which stays on `pct`.
-   */
-  accomplishments: number;
   isMe: boolean;
+}
+
+/**
+ * A row of the accomplishment ranking: a count and nothing else. No title,
+ * date, quadrant, plan or id of any priority is ever part of it.
+ */
+export interface AccomplishmentEntry {
+  rank: number;
+  name: string;
+  count: number;
+  isMe: boolean;
+}
+
+export interface AccomplishmentBoard {
+  /** How many members are ranked, i.e. have at least one accomplishment. */
+  members: number;
+  top: AccomplishmentEntry[];
+  /** Null when the reader is not ranked: nothing completed yet, or hidden. */
+  me: { rank: number; count: number; name: string } | null;
+  /** The reader's own count this month, ranked or not; null when hidden. */
+  mine: number | null;
 }
 
 export interface CommunitySnapshot {
   /** 'YYYY-MM' — the window everyone is measured over. */
   month: string;
   updatedAt: string;
+  /* The habit ranking, in the fields it has always had. */
   activeUsers: number;
   top: CommunityEntry[];
   /** Null when the signed-in user has nothing scheduled this month. */
-  me: { rank: number; pct: number; name: string; accomplishments: number } | null;
+  me: { rank: number; pct: number; name: string } | null;
+  /* The accomplishment ranking, separate. */
+  accomplishments: AccomplishmentBoard;
 }
 
 /**
- * Who appears on the board, as its own named rule rather than a condition
+ * Who can appear on either board, as its own named rule rather than a condition
  * buried in a query.
  *
  * Deliberately NOT the same rule as `OCCUPIES_A_SLOT` in db/capacity.ts, and
@@ -78,9 +112,11 @@ export interface CommunitySnapshot {
  * a role that removes you from your own progress. A disabled account is still
  * excluded: it cannot sign in, so it is not participating in anything.
  *
- * Someone with nothing scheduled this month is filtered later, on their score
- * rather than on their row — no schedule means no percentage, which is not the
- * same as zero effort.
+ * Each board then has its own eligibility on top of this, applied to the score
+ * rather than the row: the habit ranking needs something scheduled this month
+ * (no schedule is not zero effort), and the accomplishment ranking needs at
+ * least one completed priority. Neither depends on the other, so someone with
+ * no habits still appears among accomplishments.
  */
 export const RANKS_ON_LEADERBOARD = "u.disabled_at is null";
 
@@ -181,9 +217,72 @@ interface Row {
   id: string; username: string | null; created_at: string;
 }
 
-type Scored = CommunityEntry & { id: string; createdAt: string };
+/**
+ * One visible member's two figures, kept apart. `pct` is null when nothing was
+ * scheduled this month; `count` is zero when nothing was completed. The id and
+ * account age never leave the server — they exist to refresh and to order.
+ */
+export interface Member {
+  id: string;
+  name: string;
+  createdAt: string;
+  pct: number | null;
+  count: number;
+}
 
-type Cached = Omit<CommunitySnapshot, "me" | "top"> & { all: Scored[] };
+type HabitRow = { id: string; rank: number; name: string; pct: number; createdAt: string };
+type AccomplishmentRow = { id: string; rank: number; name: string; count: number; createdAt: string };
+
+interface Board {
+  month: string;
+  updatedAt: string;
+  members: Member[];
+  habits: HabitRow[];
+  accomplishments: AccomplishmentRow[];
+}
+
+/**
+ * The habit ranking — exactly the rule it has always had.
+ *
+ * Only members with something scheduled; highest percentage first; ties broken
+ * by account age, oldest first. Any deterministic rule would do; the point is
+ * that a refresh must not reshuffle equal scores — including a refresh caused
+ * by one member's score being recomputed on its own.
+ */
+export function rankHabits(members: Member[]): HabitRow[] {
+  return members
+    .filter((m) => m.pct !== null)
+    .sort((a, b) => b.pct! - a.pct! || a.createdAt.localeCompare(b.createdAt))
+    .map((m, i) => ({ id: m.id, rank: i + 1, name: m.name, pct: m.pct!, createdAt: m.createdAt }));
+}
+
+/**
+ * The accomplishment ranking.
+ *
+ * Only members with at least one accomplishment; most first. Equal counts share
+ * a rank ("#2, #2, #4") rather than being split by something the numbers do not
+ * say — there is no fair way to decide who "won" a tie, and inventing one from
+ * private priority data would be worse. Within a shared rank the listing order
+ * is the board's existing stable convention, account age, so it never jitters.
+ */
+export function rankAccomplishments(members: Member[]): AccomplishmentRow[] {
+  const sorted = members
+    .filter((m) => m.count > 0)
+    .sort((a, b) => b.count - a.count || a.createdAt.localeCompare(b.createdAt));
+  let rank = 0;
+  return sorted.map((m, i) => {
+    if (i === 0 || m.count !== sorted[i - 1].count) rank = i + 1;
+    return { id: m.id, rank, name: m.name, count: m.count, createdAt: m.createdAt };
+  });
+}
+
+const boardFrom = (month: string, members: Member[]): Board => ({
+  month,
+  updatedAt: new Date().toISOString(),
+  members,
+  habits: rankHabits(members),
+  accomplishments: rankAccomplishments(members),
+});
 
 /*
  * One cached board per reader date.
@@ -202,7 +301,7 @@ type Cached = Omit<CommunitySnapshot, "me" | "top"> & { all: Scored[] };
  * an id to a set costs nothing, and someone working down a list of ten habits
  * pays for one recompute on their next look rather than ten.
  */
-interface CacheEntry { at: number; snapshot: Cached; dates: string[]; stale: Set<string> }
+interface CacheEntry { at: number; board: Board; dates: string[]; stale: Set<string> }
 const cache = new Map<string, CacheEntry>();
 
 /**
@@ -217,15 +316,15 @@ export function markMemberStale(userId: string) {
 /**
  * Brings the marked members up to date in place, leaving everyone else alone.
  *
- * The board is re-ranked afterwards because one person's score moving can
+ * Both rankings are rebuilt afterwards because one person's score moving can
  * change other people's places — you passing someone moves them down, and a
  * board where your rank improved but theirs did not is incoherent. Re-ranking
  * is a sort of a few dozen rows; it is the state loads that cost, and there is
  * exactly one of those per marked member.
  */
-async function refreshStale(entry: CacheEntry) {
-  const { snapshot, dates, stale } = entry;
-  if (stale.size === 0) return snapshot;
+async function refreshStale(entry: CacheEntry): Promise<Board> {
+  const { board, dates, stale } = entry;
+  if (stale.size === 0) return board;
 
   const ids = [...stale];
   stale.clear();
@@ -236,22 +335,21 @@ async function refreshStale(entry: CacheEntry) {
       where ${RANKS_ON_LEADERBOARD} and u.id = any($1::uuid[])`, [ids]);
 
   // The same window the board was built over, not the server's own month.
-  const byId = new Map(snapshot.all.map((e) => [e.id, e]));
+  const byId = new Map(board.members.map((m) => [m.id, m]));
 
   for (const id of ids) {
     const row = rows.find((r) => r.id === id);
     // Gone, or no longer eligible: drop them rather than leave a stale row.
     if (!row) { byId.delete(id); continue; }
-    const entry = await scoreMember(row, dates);
-    // Null means nothing is scheduled for them this month any more, which is
-    // not a zero — so they leave the board rather than sink to the bottom.
-    if (entry) byId.set(id, entry); else byId.delete(id);
+    const member = await scoreMember(row, dates);
+    // Null means they have hidden themselves, so they leave both boards.
+    if (member) byId.set(id, member); else byId.delete(id);
   }
 
-  return { ...snapshot, updatedAt: new Date().toISOString(), ...ranked([...byId.values()]) };
+  return boardFrom(board.month, [...byId.values()]);
 }
 
-async function computeAll(window = monthToDate()) {
+async function computeAll(window = monthToDate()): Promise<Board> {
   const { month, dates } = window;
 
   /* Only the id, the public name and the account age are read. `profiles` is
@@ -263,31 +361,26 @@ async function computeAll(window = monthToDate()) {
       where ${RANKS_ON_LEADERBOARD}`,
   );
 
-  const scored: Scored[] = [];
+  const members: Member[] = [];
   for (const u of users) {
-    const entry = await scoreMember(u, dates);
-    // A null percentage means nothing was ever scheduled this month. That is
-    // not zero effort, so they are not ranked as though it were. It is not the
-    // same as a failure — that throws.
-    if (entry) scored.push(entry);
+    const member = await scoreMember(u, dates);
+    // Null only when the member has opted out. Having nothing scheduled or
+    // nothing completed is not a reason to skip them here: each board applies
+    // its own eligibility when it ranks.
+    if (member) members.push(member);
   }
 
-  return {
-    month,
-    updatedAt: new Date().toISOString(),
-    ...ranked(scored),
-  };
+  return boardFrom(month, members);
 }
 
 /**
- * One member's figure, by the same route the rest of the app takes.
+ * One member's two figures, by the same route the rest of the app takes.
  *
  * Pulled out of the loop so that refreshing one person costs one state load
- * rather than everybody's — and so there is only one definition of the number,
- * whether it is computed for the whole board or for you alone. Two code paths
- * here would be two answers to "what is my completeness".
+ * rather than everybody's — and so there is only one definition of each number,
+ * whether it is computed for the whole board or for you alone.
  */
-async function scoreMember(u: Row, dates: string[]): Promise<Scored | null> {
+async function scoreMember(u: Row, dates: string[]): Promise<Member | null> {
   /*
    * A failure to read a member is deliberately NOT caught here.
    *
@@ -313,19 +406,20 @@ async function scoreMember(u: Row, dates: string[]): Promise<Scored | null> {
    * full recompute and the refresh of a single stale member. A `where` clause
    * would have to be repeated in two queries that could then disagree, and
    * `refreshStale` already knows what to do with a null — it removes them.
+   * One opt-out therefore removes a member from both rankings at once.
    *
    * It is server-side, which is the requirement. Nothing about the decision
    * reaches the browser: an opted-out member is gone before a snapshot exists,
-   * so their username, percentage and rank are not merely hidden by the client,
-   * they were never sent to it, and they are absent from `activeUsers` because
-   * that is counted from the ranked list.
+   * so their username, figures and ranks are not merely hidden by the client,
+   * they were never sent to it, and they are absent from every count because
+   * those are counted from the ranked lists.
    *
    * And it survives the column not being there yet. `loadState` reads
    * preferences with `select *`, so an un-migrated database yields `true` here
    * and the board behaves exactly as it did before the setting existed.
    *
    * Their own data is untouched by any of this — the state was just read in
-   * full, and it is only this ranking that they leave.
+   * full, and it is only these rankings that they leave.
    */
   if (state.prefs.communityVisible === false) return null;
 
@@ -333,43 +427,23 @@ async function scoreMember(u: Row, dates: string[]): Promise<Scored | null> {
   // is measured the same way.
   const unweighted: AppState = { ...state, prefs: { ...state.prefs, weighted: false } };
   const score = rangeScore(unweighted, dates);
-  if (score.pct === null) return null;
   /* Counted by the same rule Insights and My Progress use, over the same days.
      Only the number is kept; the priorities themselves go no further. */
-  const accomplishments = dates.length
+  const count = dates.length
     ? accomplishedBetween(state.priorities, dates[0], dates[dates.length - 1]).length
     : 0;
-  return {
-    id: u.id, rank: 0, name: displayName(u), pct: score.pct, accomplishments,
-    isMe: false, createdAt: String(u.created_at),
-  };
+  return { id: u.id, name: displayName(u), createdAt: String(u.created_at), pct: score.pct, count };
 }
 
 /**
- * Places, and the count that goes with them.
- *
- * Ties broken by account age, oldest first. Any deterministic rule would do;
- * the point is that a refresh must not reshuffle equal scores — including a
- * refresh caused by one member's score being recomputed on its own.
- *
- * Accomplishments play no part, not even as a tiebreak. Ranking by them would
- * reward splitting work into many small priorities.
- */
-function ranked(scored: Scored[]) {
-  const all = [...scored].sort(
-    (a, b) => b.pct - a.pct || a.createdAt.localeCompare(b.createdAt));
-  all.forEach((e, i) => { e.rank = i + 1; });
-  return { activeUsers: all.length, all };
-}
-
-/**
- * Writes a finished month's board once, the first time anyone looks at the
- * new one. No scheduler to run or forget, and the work happens once because
+ * Writes a finished month's habit board once, the first time anyone looks at
+ * the new one. No scheduler to run or forget, and the work happens once because
  * the insert refuses duplicates.
  *
  * `do nothing` on conflict is what makes it safe to call on every request and
  * what stops a re-run from rewriting a month that was already closed. It only
- * ever inserts; it never touches habits or completions.
+ * ever inserts; it never touches habits or completions. Accomplishments are not
+ * archived: the table has no column for them and none was asked for.
  */
 async function archiveMonth(month: string) {
   const already = await query<{ n: string }>(
@@ -377,7 +451,7 @@ async function archiveMonth(month: string) {
   if (Number(already[0]?.n ?? 0) > 0) return;
 
   const finished = await computeAll(wholeMonth(month));
-  for (const e of finished.all) {
+  for (const e of finished.habits) {
     await query(
       `insert into community_month_scores (month, user_id, rank, pct, name)
        values ($1,$2,$3,$4,$5) on conflict (month, user_id) do nothing`,
@@ -387,7 +461,7 @@ async function archiveMonth(month: string) {
 }
 
 /**
- * The board as one reader sees it, measured over their month to date.
+ * Both boards as one reader sees them, measured over their month to date.
  *
  * `today` is the reader's calendar date (see `viewerToday`); it defaults to the
  * server's date for callers that have no reader.
@@ -398,11 +472,11 @@ export async function communitySnapshot(meId: string, today = todayISO()): Promi
   let entry = cache.get(today);
   if (!entry) {
     const window = monthToDate(today);
-    const snapshot = await computeAll(window);
+    const board = await computeAll(window);
     /* A full recompute has just scored everybody, so nothing is outstanding —
        a fresh entry starts with an empty stale set, and a mark made mid-compute
        does not cause a pointless second pass over someone already counted. */
-    entry = { at: Date.now(), snapshot, dates: window.dates, stale: new Set() };
+    entry = { at: Date.now(), board, dates: window.dates, stale: new Set() };
     cache.set(today, entry);
     /* Closing the previous month is best-effort: a history record failing to
        write must never stop today's board from rendering. It stays on the
@@ -411,22 +485,31 @@ export async function communitySnapshot(meId: string, today = todayISO()): Promi
     archiveMonth(previousMonth(monthToDate().month)).catch(() => {});
   } else if (entry.stale.size > 0) {
     // Somebody ticked something since the last look. Rescore just them.
-    entry.snapshot = await refreshStale(entry);
+    entry.board = await refreshStale(entry);
   }
-  const { month, updatedAt, activeUsers, all } = entry.snapshot;
+  const { month, updatedAt, members, habits, accomplishments } = entry.board;
 
-  const mine = all.find((e) => e.id === meId) || null;
-  /* Exactly the public fields, listed rather than spread, so nothing added to
-     the internal row for sorting (an id, an account's creation time) can leak. */
-  const top = all.slice(0, TOP_N).map((e) => ({
-    rank: e.rank, name: e.name, pct: e.pct, accomplishments: e.accomplishments, isMe: e.id === meId,
-  }));
+  /* Exactly the public fields, listed rather than spread, so nothing kept for
+     sorting or refreshing (an id, an account's creation time) can leak. */
+  const myHabit = habits.find((e) => e.id === meId) || null;
+  const myAccomplishment = accomplishments.find((e) => e.id === meId) || null;
+  const meMember = members.find((m) => m.id === meId) || null;
 
   return {
-    month, updatedAt, activeUsers, top,
-    me: mine
-      ? { rank: mine.rank, pct: mine.pct, name: mine.name, accomplishments: mine.accomplishments }
-      : null,
+    month,
+    updatedAt,
+    activeUsers: habits.length,
+    top: habits.slice(0, TOP_N).map((e) => ({ rank: e.rank, name: e.name, pct: e.pct, isMe: e.id === meId })),
+    me: myHabit ? { rank: myHabit.rank, pct: myHabit.pct, name: myHabit.name } : null,
+    accomplishments: {
+      members: accomplishments.length,
+      top: accomplishments.slice(0, TOP_N)
+        .map((e) => ({ rank: e.rank, name: e.name, count: e.count, isMe: e.id === meId })),
+      me: myAccomplishment
+        ? { rank: myAccomplishment.rank, count: myAccomplishment.count, name: myAccomplishment.name }
+        : null,
+      mine: meMember ? meMember.count : null,
+    },
   };
 }
 

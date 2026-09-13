@@ -4,12 +4,13 @@ import type { AppState, Habit, Priority } from "../src/lib/types";
 
 /**
  * The Community board's month is the reader's calendar month, and its
- * accomplishment counts are counts only.
+ * accomplishment figures are counts only.
  *
  * The server runs in UTC. Before this, a reader in California on the evening of
  * September 30 saw a board already measuring October while their own progress
  * was still on September. These tests pin the reader's date, the window both
- * figures use, that counts never move a rank, and that no priority text leaves.
+ * rankings use, that accomplishments never move the habit rank, and that no
+ * priority text leaves.
  */
 
 /* ---------------------------- a fake database ----------------------------- */
@@ -108,37 +109,39 @@ describe("the board for a reader on September 30", () => {
   it("measures habits and accomplishments over September, not October", async () => {
     const snap = await communitySnapshot(ALICE, "2026-09-30");
     expect(snap.month).toBe("2026-09");
-    const bob = snap.top.find((e) => e.name === "bob")!;
-    expect(bob.accomplishments).toBe(20);
-    expect(snap.me).toMatchObject({ name: "alice", pct: 100, accomplishments: 1, rank: 1 });
+    expect(snap.accomplishments.top.find((e) => e.name === "bob")?.count).toBe(20);
+    expect(snap.me).toMatchObject({ name: "alice", pct: 100, rank: 1 });
+    expect(snap.accomplishments.mine).toBe(1);
   });
 
   it("while a reader already on October 1 sees October", async () => {
     const snap = await communitySnapshot(ALICE, "2026-10-01");
     expect(snap.month).toBe("2026-10");
-    expect(snap.me?.accomplishments).toBe(0);
-    expect(snap.top.find((e) => e.name === "bob")?.accomplishments).toBe(0);
+    expect(snap.accomplishments.mine).toBe(0);
+    expect(snap.accomplishments.top.find((e) => e.name === "bob")).toBeUndefined();
   });
 
-  it("ranks by habits alone, however many accomplishments someone has", async () => {
+  it("ranks habits by habits alone, however many accomplishments someone has", async () => {
     const snap = await communitySnapshot(BOB, "2026-09-30");
     expect(snap.top.map((e) => [e.rank, e.name])).toEqual([[1, "alice"], [2, "bob"]]);
-    expect(snap.me).toMatchObject({ rank: 2, accomplishments: 20 });
+    expect(snap.me).toMatchObject({ rank: 2 });
+    expect(snap.accomplishments.me).toMatchObject({ rank: 1, count: 20 });
   });
 
   it("sends no priority text, and keeps a hidden member off the board entirely", async () => {
-    const json = JSON.stringify(await communitySnapshot(ALICE, "2026-09-30"));
+    const snap = await communitySnapshot(ALICE, "2026-09-30");
+    const json = JSON.stringify(snap);
     expect(json).not.toMatch(/private title|secret|hidden|carol/i);
     expect(json).not.toMatch(/2026-09-10|urgent_important|completedOn|text/);
-    expect(Object.keys((await communitySnapshot(ALICE, "2026-09-30")).top[0]).sort())
-      .toEqual(["accomplishments", "isMe", "name", "pct", "rank"]);
+    expect(Object.keys(snap.top[0]).sort()).toEqual(["isMe", "name", "pct", "rank"]);
+    expect(Object.keys(snap.accomplishments.top[0]).sort()).toEqual(["count", "isMe", "name", "rank"]);
   });
 
   it("picks up a newly completed priority on the next read", async () => {
     await communitySnapshot(ALICE, "2026-09-30");
     states.get(ALICE)!.priorities.push(done("2026-09-30", "Another"));
     markMemberStale(ALICE);
-    expect((await communitySnapshot(ALICE, "2026-09-30")).me?.accomplishments).toBe(2);
+    expect((await communitySnapshot(ALICE, "2026-09-30")).accomplishments.mine).toBe(2);
   });
 
   it("marks every cached reader date stale, so both months stay current", async () => {
@@ -146,7 +149,7 @@ describe("the board for a reader on September 30", () => {
     await communitySnapshot(ALICE, "2026-10-01");
     states.get(ALICE)!.priorities.push(done("2026-10-01", "October thing"));
     markMemberStale(ALICE);
-    expect((await communitySnapshot(ALICE, "2026-10-01")).me?.accomplishments).toBe(1);
-    expect((await communitySnapshot(ALICE, "2026-09-30")).me?.accomplishments).toBe(1);
+    expect((await communitySnapshot(ALICE, "2026-10-01")).accomplishments.mine).toBe(1);
+    expect((await communitySnapshot(ALICE, "2026-09-30")).accomplishments.mine).toBe(1);
   });
 });

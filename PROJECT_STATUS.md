@@ -3,7 +3,7 @@
 > Last updated: 2026-09-12
 >
 > **ACCOMPLISHMENTS: RELEASED · `main` AT `d728111` · DEPLOYED TO RENDER · PRODUCTION VERIFIED**
-> **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: COMMITTED LOCALLY (`97e0c1c`) · NOT PUSHED · NOT MERGED · NOT DEPLOYED**
+> **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: COMMITTED LOCALLY ON `feature/community-rankings` (rebased from `97e0c1c`) · NOT PUSHED · NOT MERGED · NOT DEPLOYED**
 >
 > Production runs the Accomplishments release,
 > `d7281117b68c4fcbe69069b0c79d4be745ca604c`, deployed manually on Render (Render
@@ -14,19 +14,53 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Community Rankings and two-series My Progress (local only)
+## Community rankings and two-series My Progress (committed locally, not pushed)
 
-| | |
+Requested and approved by the Product Owner on 2026-09-12, including the product
+choices listed here. Committed locally on branch `feature/community-rankings`, one
+commit on top of `main` (`8f5170c`), rebased from `97e0c1c`. **Not pushed, not merged, not deployed. No migration,
+no new table.**
+
+**Community: two independent rankings.**
+
+- *Habit Ranking* is unchanged: month-to-date unweighted completion, members with
+  something scheduled, ties by account age.
+- *Accomplishment Ranking* counts priorities with `completed_on` in the reader's
+  calendar month to date. Every quadrant counts one. A visible, enabled member with
+  at least one accomplishment is eligible, with or without habits. Equal counts
+  share a rank, listed by account age.
+- Opt-out removes a member from both; disabled accounts are excluded from both
+  through `RANKS_ON_LEADERBOARD`; admins who take part are included.
+- No combined or overall score exists anywhere.
+- `/api/community` keeps the habit fields and adds `accomplishments: {members, top,
+  me, mine}`. Rows carry rank, name, count and isMe only; the per-row
+  accomplishment figure on habit rows was removed. `mine` is the reader's own count.
+- Full page: tabs "Habit Ranking" / "Accomplishment Ranking". Rail: a small
+  "Habits" / "Accomplishments" switch inside the Community tab, one list at a time.
+- The archived month table still stores habit ranks only.
+
+**My Progress chart.** One chart, two forms on separate scales: habit completion as
+the thin line on 0–100%, accomplishments as soft columns scaled to the month's
+busiest day in the lower band. The legend is also the reading for the chosen day
+(today by default; hover, tap or arrow keys pick another). Drawn at its real width.
+Summary reads "66% habits" and "7 accomplishments". Counting logic is unchanged;
+`src/lib/progressSeries.ts` holds the pure series and geometry.
+
+**Bilingual labels** use the app's existing separator: "Habit Ranking · 习惯排名".
+
+**Verification, 2026-09-12**
+
+| Check | Result |
 | --- | --- |
-| branch | `feature/community-rankings`, local only |
-| feature commit | `97e0c1c3c90c40caa434abe8ea6cbdbfed04cef0` (13 files), based on `d728111` |
-| database migration | none required; no new table |
-| pushed | no |
-| merged into `main` | no |
-| deployed | no |
+| typecheck, lint, production build | clean |
+| unit tests | 586 of 587; the one failure is the known `inspect-prod-readonly` baseline |
+| browser: rankings and chart at 1440, 430, 390, 375, 320; English, Chinese, bilingual; dark | 214 of 214 |
+| browser: Accomplishments regression, updated for the new Community design | 102 of 102 |
+| browser: inline editing regression | 26 of 26 |
 
-It is released only after Accomplishments was verified, and only on the Product
-Owner's approval: rebase onto `main`, then push, merge and deploy.
+**Next step:** Accomplishments is live and verified, so Community Rankings is next:
+push `feature/community-rankings`, merge it into `main` and deploy it, each on the
+Product Owner's approval.
 
 ## Accomplishments and a forward-looking Priority Compass (released, verified in production)
 

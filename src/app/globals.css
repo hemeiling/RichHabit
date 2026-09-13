@@ -59,6 +59,11 @@ body {
  * they stay as quiet as the serif they replace.
  */
 .count { font-family: var(--body); font-weight: 400; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+/* My Progress chart: focusable so a keyboard can read each day. */
+.progress-chart:focus { outline: none; }
+/* Community rows: on a phone the number alone, so names are not cut short. */
+@media (max-width: 479px) { .rank-unit { display: none; } }
+.progress-chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 .eyebrow {
   font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
   color: var(--faint); font-weight: 500;

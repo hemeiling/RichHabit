@@ -211,6 +211,8 @@ describe("wording", () => {
     }
     expect(both.insights.accomplishments.title).toContain("Accomplishments");
     expect(both.insights.accomplishments.title).toContain("成果");
-    expect(both.community.accomplishedCount(14)).toContain("14");
+    expect(both.community.accomplishmentsCount(14)).toContain("14");
+    expect(both.community.accomplishmentRanking).toContain("Accomplishment Ranking");
+    expect(both.community.accomplishmentRanking).toContain("成果排名");
   });
 });

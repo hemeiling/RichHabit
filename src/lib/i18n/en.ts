@@ -628,9 +628,11 @@ export const en = {
   progress: {
     /* Habits and accomplishments, side by side and never combined. */
     habitsLabel: "habits",
-    accomplishedLabel: "accomplished",
-    stripLegend: "The small marks are accomplishments each day.",
-    myAccomplishments: (n: number) => `Accomplishments this month: ${n}`,
+    accomplishedLabel: "accomplishments",
+    /* The chart's legend, which is also the reading for the chosen day. */
+    legendHabits: "Habits",
+    legendAccomplishments: "Accomplishments",
+    chartLabel: (month: string) => `Habits and accomplishments by day, ${month}. Use the arrow keys to read each day.`,
     /** The switch at the top of the card. */
     title: "Progress",
     mine: "My Progress",
@@ -645,7 +647,7 @@ export const en = {
     tooEarly: "One more day and a line appears here.",
     /* Says the span, because Today's dial is one day and this is the whole
        month. Two different numbers, both correct, on the same screen. */
-    explain: "Each day's completion, across this month. Today's dial is just today.",
+    explain: "Each day this month: the line is habit completion on a 0–100% scale, and the columns count priorities completed that day, on their own scale. Today's dial is just today.",
     scheduledNone: "Nothing was scheduled on the greyed days.",
     /* Shown only when the two figures in this card can actually differ —
        i.e. when the reader weights their own habits by priority and the
@@ -661,12 +663,24 @@ export const en = {
   },
 
   community: {
-    /* A second, descriptive figure. It sits beside the habit percentage and
-       never feeds the ranking, so filing many small priorities earns nothing. */
-    habitsSuffix: "habits",
-    accomplishedCount: (n: number) => `${n} accomplished`,
-    myAccomplishments: "Accomplishments this month",
-    accomplishmentsNote: "Accomplishments are shown alongside and never change anyone's rank",
+    /* Two rankings, never combined: habits are consistency, accomplishments are
+       what got done. Each has its own list, rank and eligibility, and nothing
+       adds them together. Plain words, no medals or "top performer". */
+    habitRanking: "Habit Ranking",
+    accomplishmentRanking: "Accomplishment Ranking",
+    /** The shorter names the 300px rail's switch uses. */
+    boardHabits: "Habits",
+    boardAccomplishments: "Accomplishments",
+    showBoard: (name: string) => `Show ${name}`,
+    accomplishmentsThisMonth: "Accomplishments this month",
+    thisMonth: "This month",
+    accomplishmentsCount: (n: number) => `${n} ${n === 1 ? "accomplishment" : "accomplishments"}`,
+    accomplishmentsUnit: (n: number): string => (n === 1 ? "accomplishment" : "accomplishments"),
+    accomplishmentBasis: "Priorities completed so far this month, counted on the day each was completed. Every quadrant counts the same",
+    accomplishmentPrivacy: "Only the number is shared, never what the priorities were",
+    separateRankings: "Each ranking stands on its own. There is no combined score.",
+    accomplishmentNotRanked: "Complete a priority this month and you will appear here.",
+    accomplishmentEmpty: "No one has completed a priority this month yet.",
     title: "Community Progress",
     /* Named "live" because it is: the board is recomputed from habit records
        on every visit, so it moves as people tick things off during the day

@@ -1,15 +1,16 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useHabits } from "@/components/store";
 import { useLocale, useT } from "@/lib/i18n/context";
-import { monthTitleFor } from "@/lib/i18n";
-import { dayScore, rangeScore } from "@/lib/habits";
+import { monthTitleFor, shortDateFor, type Locale } from "@/lib/i18n";
+import { rangeScore } from "@/lib/habits";
 import { monthOf, monthSoFar, todayISO } from "@/lib/dates";
-import { accomplishedBetween, accomplishedOn } from "@/lib/accomplishments";
+import { accomplishedBetween } from "@/lib/accomplishments";
+import { barHeight, dailyProgress, dayIndexAt, type DayProgress } from "@/lib/progressSeries";
 import { fetchCommunity } from "@/lib/db";
 import type { Dict } from "@/lib/i18n";
-import { pointCount, runsOf } from "@/lib/trend";
+import { runsOf } from "@/lib/trend";
 import type { AppState } from "@/lib/types";
 import type { CommunitySnapshot } from "@/lib/community";
 
@@ -18,18 +19,14 @@ import type { CommunitySnapshot } from "@/lib/community";
  *
  * It used to be the board and only the board, which answered "how am I doing?"
  * with "here is where you rank" — a comparison, before the person had seen
- * their own month. So the default view is now theirs: a line of daily
- * completion across this month, and the month-to-date figure above it. The
- * ranking is one tap away and unchanged.
+ * their own month. So the default view is now theirs: the month-to-date figures
+ * and a small chart of each day under them. The rankings are one tap away.
  *
- * Every number here comes from `dayScore` / `rangeScore`, the same functions
- * Today's dial and Insights use, computed from state the browser already holds.
- * There is no second scoring rule and no extra request: a chart that disagreed
- * with the dial above it would be worse than no chart.
- *
- * Three percentages are visible within a screen of each other and they measure
- * different spans — today, this month, and this month measured the same way for
- * everyone. Each says which it is.
+ * Every habit number here comes from `dayScore` / `rangeScore`, the same
+ * functions Today's dial and Insights use, and every accomplishment number from
+ * the shared rule in lib/accomplishments — computed from state the browser
+ * already holds. There is no second scoring rule and no extra request: a chart
+ * that disagreed with the figures above it would be worse than no chart.
  */
 
 /** How the two views are told apart in state and in the switch. */
@@ -37,78 +34,118 @@ type View = "mine" | "community";
 
 /* ------------------------------- the chart -------------------------------- */
 
-/**
- * A month of daily completion, drawn small.
- *
- * Deliberately not `Spark` from ui.tsx: that scales its y-axis to the data, so
- * a month spent between 60% and 70% would climb dramatically across the card.
- * A completion rate has a real ceiling, and "am I improving?" is only an honest
- * question against a fixed 0-100. Days with nothing scheduled are gaps rather
- * than zeroes — nothing was asked of you, so nothing was missed.
- */
-function MonthTrend({ points, today }: {
-  points: { date: string; pct: number | null }[];
-  today: string;
-}) {
-  const t = useT();
-  const W = 268, H = 56, PAD = 3;
-  /* One path per unbroken run, so a gap stays a gap — see lib/trend. */
-  const runs = runsOf(points.map((p) => p.pct));
-  if (pointCount(runs) < 2) {
-    return <p className="faint mt-2" style={{ fontSize: 12, lineHeight: 1.5 }}>{t.progress.tooEarly}</p>;
-  }
-
-  const x = (i: number) => PAD + (i / Math.max(1, points.length - 1)) * (W - PAD * 2);
-  const y = (pct: number) => PAD + (1 - pct / 100) * (H - PAD * 2);
-
-  const todayIndex = points.findIndex((p) => p.date === today);
-  const todayPct = todayIndex >= 0 ? points[todayIndex].pct : null;
-
-  return (
-    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-      role="img" aria-label={t.progress.explain} style={{ display: "block", marginTop: 6 }}>
-      {/* Quarter lines, so the height of the line means something at a glance. */}
-      {[0, 50, 100].map((p) => (
-        <line key={p} x1={0} x2={W} y1={y(p)} y2={y(p)}
-          stroke="var(--line-soft)" strokeWidth="1" />
-      ))}
-      {runs.map((run, n) => (
-        <polyline
-          key={n}
-          points={run.map((s) => `${x(s.index)},${y(s.value)}`).join(" ")}
-          fill="none" stroke="var(--accent)" strokeWidth="1.8"
-          strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
-        />
-      ))}
-      {/* Today, marked. It is the point the reader is looking for. */}
-      {todayPct !== null && todayIndex >= 0 && (
-        <circle cx={x(todayIndex)} cy={y(todayPct)} r="3.2"
-          fill="var(--accent)" stroke="var(--surface)" strokeWidth="1.5" />
-      )}
-    </svg>
-  );
+/** The chart's drawn width follows its container, so marks are never stretched. */
+function useWidth(fallback: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => setWidth(Math.max(120, Math.round(el.getBoundingClientRect().width)));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, width] as const;
 }
 
 /**
- * Accomplishments per day, under the habit line and sharing only its day axis.
+ * Two things done each day, drawn together without pretending they share a unit.
  *
- * Its own strip with its own small height, never plotted against the 0–100
- * habit scale: a count and a percentage on one axis would make either look like
- * a fraction of the other. Days with nothing draw nothing.
+ * Habits are the thin line, on a fixed 0–100 scale: a completion rate has a real
+ * ceiling, and "am I improving?" is only an honest question against it. Days
+ * with nothing scheduled are gaps rather than zeroes. Accomplishments are the
+ * soft columns behind it, on their own scale — the busiest day of the month is
+ * the tallest column — held to the lower part of the chart so a count can never
+ * be read as a height on the percentage scale. Same colour family, different
+ * form and weight: the line is primary, the columns support it.
+ *
+ * The legend is also the reading. It shows the chosen day's two values — today
+ * unless someone hovers, taps or arrows to another day — so the numbers are
+ * readable on a phone without aiming a finger at a thin line.
  */
-function AccomplishmentStrip({ counts }: { counts: number[] }) {
-  const W = 268, H = 12, PAD = 3;
-  const max = Math.max(1, ...counts);
-  if (!counts.some(Boolean)) return null;
-  const x = (i: number) => PAD + (i / Math.max(1, counts.length - 1)) * (W - PAD * 2);
+function DayChart({ days, month, locale }: { days: DayProgress[]; month: string; locale: Locale }) {
+  const t = useT();
+  const [boxRef, W] = useWidth(268);
+  const [picked, setPicked] = useState<number | null>(null);
+
+  const H = 84, TOP = 6, BASE = H - 2, BAND = 30, PAD = 4;
+  const n = days.length;
+  const step = n > 1 ? (W - PAD * 2) / (n - 1) : 0;
+  const x = (i: number) => (n > 1 ? PAD + i * step : W / 2);
+  const y = (pct: number) => TOP + (1 - pct / 100) * (BASE - TOP);
+  const maxCount = Math.max(0, ...days.map((d) => d.count));
+  const barW = Math.max(2, Math.min(7, step ? step * 0.55 : 7));
+  const runs = runsOf(days.map((d) => d.pct));
+
+  // The last day is today: the series is the month so far.
+  const selected = Math.min(picked ?? n - 1, n - 1);
+  const day = days[selected];
+  const pick = (clientX: number, el: Element) =>
+    setPicked(dayIndexAt(clientX - el.getBoundingClientRect().left, W, PAD, n));
+
   return (
-    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-      aria-hidden="true" style={{ display: "block", marginTop: 3 }}>
-      {counts.map((c, i) => c > 0 && (
-        <rect key={i} x={x(i) - 1.5} y={H - (3 + (c / max) * (H - 3))} width={3}
-          height={3 + (c / max) * (H - 3)} rx={1} fill="var(--accent)" opacity={0.7} />
-      ))}
-    </svg>
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center" style={{ gap: "2px 12px", fontSize: 11.5 }} aria-live="polite">
+        <span className="faint num" style={{ minWidth: 38 }}>{shortDateFor(day.date, locale)}</span>
+        <span className="inline-flex items-center" style={{ gap: 5 }}>
+          <span aria-hidden="true" style={{ width: 12, height: 2, borderRadius: 1, background: "var(--accent)", display: "inline-block" }} />
+          <span className="muted">{t.progress.legendHabits}</span>
+          <span className="num" style={{ color: "var(--ink)", fontWeight: 500 }}>{day.pct === null ? "—" : `${day.pct}%`}</span>
+        </span>
+        <span className="inline-flex items-center" style={{ gap: 5 }}>
+          <span aria-hidden="true" style={{ width: 6, height: 10, borderRadius: 1.5, background: "var(--accent)", opacity: 0.32, display: "inline-block" }} />
+          <span className="muted">{t.progress.legendAccomplishments}</span>
+          <span className="num" style={{ color: "var(--ink)", fontWeight: 500 }}>{day.count}</span>
+        </span>
+      </div>
+
+      <div ref={boxRef} style={{ marginTop: 6 }}>
+        <svg
+          className="progress-chart" width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+          role="img" tabIndex={0}
+          aria-label={t.progress.chartLabel(month)}
+          style={{ display: "block", touchAction: "pan-y", cursor: "crosshair" }}
+          onPointerMove={(e) => pick(e.clientX, e.currentTarget)}
+          onPointerDown={(e) => pick(e.clientX, e.currentTarget)}
+          onPointerLeave={(e) => { if (e.pointerType === "mouse") setPicked(null); }}
+          onKeyDown={(e) => {
+            const moves: Record<string, number> = { ArrowLeft: selected - 1, ArrowRight: selected + 1, Home: 0, End: n - 1 };
+            if (e.key in moves) { e.preventDefault(); setPicked(Math.min(n - 1, Math.max(0, moves[e.key]))); }
+          }}
+        >
+          {/* Quarter lines for the habit scale, so the line's height means something. */}
+          {[0, 50, 100].map((p) => (
+            <line key={p} x1={0} x2={W} y1={y(p)} y2={y(p)} stroke="var(--line-soft)" strokeWidth="1" />
+          ))}
+
+          {/* The chosen day, behind everything drawn on it. */}
+          <line x1={x(selected)} x2={x(selected)} y1={TOP} y2={BASE}
+            stroke="var(--line)" strokeWidth="1" strokeDasharray="2 3" />
+
+          {/* Accomplishments: behind the line, on their own scale. */}
+          {days.map((d, i) => {
+            const h = barHeight(d.count, maxCount, BAND);
+            return h > 0 && (
+              <rect key={d.date} x={x(i) - barW / 2} y={BASE - h} width={barW} height={h} rx={1.5}
+                fill="var(--accent)" opacity={i === selected ? 0.6 : 0.3} />
+            );
+          })}
+
+          {/* Habits: one path per unbroken run, so a gap stays a gap — see lib/trend. */}
+          {runs.map((run, k) => (run.length > 1 ? (
+            <polyline key={k} points={run.map((s) => `${x(s.index)},${y(s.value)}`).join(" ")}
+              fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+          ) : (
+            <circle key={k} cx={x(run[0].index)} cy={y(run[0].value)} r="1.8" fill="var(--accent)" />
+          )))}
+          {day.pct !== null && (
+            <circle cx={x(selected)} cy={y(day.pct)} r="3.2" fill="var(--accent)" stroke="var(--surface)" strokeWidth="1.5" />
+          )}
+        </svg>
+      </div>
+    </div>
   );
 }
 
@@ -122,30 +159,21 @@ function MyProgress({ state }: { state: AppState }) {
 
   /*
    * Every day of the month so far. `dayScore` is the source of truth — the same
-   * call Today's dial makes — so the last point on this line and the dial above
-   * it are the same measurement of the same day, and the month-to-date figure
-   * is `rangeScore` over exactly these days.
+   * call Today's dial makes — so the last habit point and the dial above are the
+   * same measurement of the same day, and the month-to-date figure is
+   * `rangeScore` over exactly these days.
    */
-  const { points, mtd } = useMemo(() => {
-    const days = monthSoFar(today);
+  const { days, mtd, accomplished } = useMemo(() => {
+    const dates = monthSoFar(today);
     return {
-      points: days.map((date) => ({ date, pct: dayScore(state, date).pct })),
-      mtd: rangeScore(state, days),
+      days: dailyProgress(state, dates),
+      mtd: rangeScore(state, dates),
+      accomplished: accomplishedBetween(state.priorities, dates[0], today).length,
     };
   }, [state, today]);
 
-  const scored = points.filter((p) => p.pct !== null);
-  const todayPct = points[points.length - 1]?.pct ?? null;
-
-  /* Accomplishments over exactly the same days, by the same rule Insights and
-     Community use. */
-  const { accomplished, dayCounts } = useMemo(() => {
-    const days = monthSoFar(today);
-    return {
-      accomplished: accomplishedBetween(state.priorities, days[0], today).length,
-      dayCounts: days.map((d) => accomplishedOn(state.priorities, d).length),
-    };
-  }, [state.priorities, today]);
+  const scored = days.filter((d) => d.pct !== null).length;
+  const todayPct = days[days.length - 1]?.pct ?? null;
 
   return (
     <>
@@ -166,8 +194,6 @@ function MyProgress({ state }: { state: AppState }) {
           </div>
           <div style={{ minWidth: 0 }}>
             <span className="count block" style={{ fontSize: 24, lineHeight: 1.15 }}>{accomplished}</span>
-            {/* One word. Today's count lives in Insights; here it wrapped the
-                narrow rail onto a second line for a figure the strip already shows. */}
             <span className="faint block" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
               {t.progress.accomplishedLabel}
             </span>
@@ -175,23 +201,21 @@ function MyProgress({ state }: { state: AppState }) {
         </div>
       </div>
 
-      {scored.length === 0 ? (
+      {scored === 0 && accomplished === 0 ? (
         <p className="muted mt-3" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.progress.noneYet}</p>
       ) : (
         <>
           <div className="eyebrow mt-3" style={{ fontSize: 10 }}>
             {t.progress.thisMonth(monthTitleFor(month, locale))}
           </div>
-          <MonthTrend points={points} today={today} />
-          <AccomplishmentStrip counts={dayCounts} />
+          <DayChart days={days} month={monthTitleFor(month, locale)} locale={locale} />
           <div className="flex justify-between faint num" style={{ fontSize: 10.5, marginTop: 2 }}>
             <span>1</span>
             <span>{Number(today.slice(8, 10))}</span>
           </div>
-          {/* The labels that stop three percentages reading as a contradiction. */}
+          {/* The labels that stop the figures reading as a contradiction. */}
           <p className="faint mt-2" style={{ fontSize: 11.5, lineHeight: 1.45 }}>
             {t.progress.explain}
-            {accomplished > 0 && ` ${t.progress.stripLegend}`}
             {/* Only when this card can show two different month figures: the
                 reader's own is weighted by priority, the board's never is. */}
             {state.prefs.weighted && ` ${t.progress.weightedNote}`}
@@ -204,15 +228,20 @@ function MyProgress({ state }: { state: AppState }) {
 
 /* ------------------------------ the board --------------------------------- */
 
+type Board = "habits" | "accomplishments";
+
 /**
- * Unchanged in substance: the same `/api/community` the full page reads, so the
- * rank here and the rank there cannot disagree. Nothing about the calculation
- * lives in this file.
+ * The same `/api/community` the full page reads, so the ranks here and there
+ * cannot disagree. Nothing about the calculation lives in this file.
+ *
+ * The rail is 300px wide, so it shows one ranking at a time behind a small
+ * switch rather than both lists at once.
  */
 function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: boolean) => void }) {
   const t = useT();
   const [data, setData] = useState<CommunitySnapshot | null>(null);
   const [failed, setFailed] = useState(false);
+  const [board, setBoard] = useState<Board>("habits");
 
   useEffect(() => {
     let live = true;
@@ -226,8 +255,13 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
     return () => { live = false; };
   }, [visible]);
 
-  const top = data?.top.slice(0, 5) ?? [];
   const month = data ? t.community.monthNames[Number(data.month.split("-")[1]) - 1] : "";
+  const habits = board === "habits";
+  const acc = data?.accomplishments;
+  const rows = !data ? []
+    : habits
+      ? data.top.slice(0, 5).map((e) => ({ rank: e.rank, name: e.name, isMe: e.isMe, figure: `${e.pct}%` }))
+      : acc!.top.slice(0, 5).map((e) => ({ rank: e.rank, name: e.name, isMe: e.isMe, figure: String(e.count) }));
 
   return (
     <>
@@ -243,6 +277,21 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
         </p>
       )}
 
+      {visible && data && (
+        <div className="flex gap-1.5 mt-2" role="tablist" aria-label={t.community.title}>
+          {(["habits", "accomplishments"] as const).map((b) => {
+            const name = b === "habits" ? t.community.boardHabits : t.community.boardAccomplishments;
+            return (
+              <button key={b} type="button" role="tab" className="chip" data-on={board === b}
+                aria-selected={board === b} aria-label={t.community.showBoard(name)}
+                style={{ padding: "3px 9px", fontSize: 11.5 }} onClick={() => setBoard(b)}>
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {!visible ? (
         <div className="flat p-3 mt-3">
           <p style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.progress.hidden}</p>
@@ -250,38 +299,47 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
             {t.progress.hiddenHint}
           </p>
         </div>
-      ) : data?.me ? (
-        <div className="flat p-3 mt-3 flex items-baseline justify-between gap-2">
-          <span>
-            <span className="faint block" style={{ fontSize: 11 }}>{t.community.myRank}</span>
-            {/* The count face, as on the My Progress tab beside it. */}
-            <span className="count" style={{ fontSize: 18 }}>
-              {t.community.rankOf(data.me.rank, data.activeUsers)}
+      ) : data && habits ? (
+        data.me ? (
+          <div className="flat p-3 mt-3 flex items-baseline justify-between gap-2">
+            <span>
+              <span className="faint block" style={{ fontSize: 11 }}>{t.community.myRank}</span>
+              <span className="count" style={{ fontSize: 18 }}>
+                {t.community.rankOf(data.me.rank, data.activeUsers)}
+              </span>
             </span>
-          </span>
-          <span className="text-right">
-            <span className="faint block" style={{ fontSize: 11 }}>{t.community.monthToDate}</span>
-            <span className="count" style={{ fontSize: 18 }}>{data.me.pct}%</span>
-          </span>
-        </div>
-      ) : data ? (
-        <p className="muted mt-3" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-          {t.community.noneScheduled}
-        </p>
+            <span className="text-right">
+              <span className="faint block" style={{ fontSize: 11 }}>{t.community.monthToDate}</span>
+              <span className="count" style={{ fontSize: 18 }}>{data.me.pct}%</span>
+            </span>
+          </div>
+        ) : (
+          <p className="muted mt-3" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.community.noneScheduled}</p>
+        )
+      ) : data && acc ? (
+        <>
+          <div className="flat p-3 mt-3 flex items-baseline justify-between gap-2">
+            <span>
+              <span className="faint block" style={{ fontSize: 11 }}>{t.community.myRank}</span>
+              <span className="count" style={{ fontSize: 18 }}>
+                {acc.me ? t.community.rankOf(acc.me.rank, acc.members) : "—"}
+              </span>
+            </span>
+            <span className="text-right">
+              <span className="faint block" style={{ fontSize: 11 }}>{t.community.thisMonth}</span>
+              <span className="count" style={{ fontSize: 18 }}>{acc.mine ?? 0}</span>
+            </span>
+          </div>
+          {!acc.me && (
+            <p className="muted mt-2" style={{ fontSize: 12, lineHeight: 1.45 }}>{t.community.accomplishmentNotRanked}</p>
+          )}
+        </>
       ) : null}
-
-      {/* Only the reader's own count here. Other members' counts live on the
-          full Community page, where there is room to keep them clearly secondary. */}
-      {visible && data?.me && (
-        <p className="faint num mt-1.5" style={{ fontSize: 11.5 }}>
-          {t.progress.myAccomplishments(data.me.accomplishments)}
-        </p>
-      )}
 
       {visible && data && (
         <>
-          <div className="mt-3">
-            {top.map((e) => (
+          <div className="mt-3" role="tabpanel">
+            {rows.map((e) => (
               <div key={`${e.rank}-${e.name}`}
                 className="flex items-center justify-between gap-2 py-1.5"
                 style={e.isMe ? { fontWeight: 600 } : undefined}>
@@ -294,12 +352,17 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
                     {e.isMe && <span className="faint" style={{ marginLeft: 5 }}>{t.community.youTag}</span>}
                   </span>
                 </span>
-                <span className="num" style={{ fontSize: 13.5, flex: "none" }}>{e.pct}%</span>
+                <span className="num" style={{ fontSize: 13.5, flex: "none" }}>{e.figure}</span>
               </div>
             ))}
+            {!rows.length && (
+              <p className="faint" style={{ fontSize: 12, lineHeight: 1.45 }}>
+                {habits ? t.community.empty : t.community.accomplishmentEmpty}
+              </p>
+            )}
           </div>
           <p className="faint mt-1" style={{ fontSize: 11, lineHeight: 1.4 }}>
-            {t.community.unweightedNote}
+            {habits ? t.community.unweightedNote : t.community.accomplishmentPrivacy}
           </p>
         </>
       )}
@@ -323,7 +386,7 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
 
       <div className="flex items-center justify-between gap-2 mt-3">
         <span className="faint" style={{ fontSize: 11.5 }}>
-          {visible && data ? `${data.activeUsers} · ${t.community.activeUsers}` : ""}
+          {visible && data && habits ? `${data.activeUsers} · ${t.community.activeUsers}` : ""}
         </span>
         <Link href="/community" className="btn" style={{ padding: "5px 11px", fontSize: 12.5 }}>
           {t.community.view}
