@@ -2,24 +2,34 @@
 
 > Last updated: 2026-09-12
 >
-> **ACCOMPLISHMENTS: RELEASED · `main` AT `d728111` · DEPLOYED TO RENDER · PRODUCTION VERIFIED**
-> **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: COMMITTED LOCALLY ON `feature/community-rankings` (rebased from `97e0c1c`) · NOT PUSHED · NOT MERGED · NOT DEPLOYED**
+> **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED · `main` AT `026d8be` · DEPLOYED TO RENDER · PRODUCTION VERIFIED**
+> **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> Production runs the Accomplishments release,
-> `d7281117b68c4fcbe69069b0c79d4be745ca604c`, deployed manually on Render (Render
-> did not auto-deploy) and verified on 2026-09-13. Neither Accomplishments nor
-> Community Rankings needs a database migration.
+> Production runs `026d8be4905f214f0ac8762f52853dacbd44b3f9`: Community Rankings on
+> top of the Accomplishments release, verified on 2026-09-13. It went live about
+> four minutes after `main` moved; from outside it is not possible to tell whether
+> that was Render's own deploy or the Product Owner's manual deploy. The
+> Accomplishments release (`d7281117b68c4fcbe69069b0c79d4be745ca604c`) had been
+> deployed manually and verified before it. Neither release needed a database
+> migration.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Community rankings and two-series My Progress (committed locally, not pushed)
+## Community rankings and two-series My Progress (released, verified in production)
 
 Requested and approved by the Product Owner on 2026-09-12, including the product
-choices listed here. Committed locally on branch `feature/community-rankings`, one
-commit on top of `main` (`8f5170c`), rebased from `97e0c1c`. **Not pushed, not merged, not deployed. No migration,
-no new table.**
+choices listed here. Merged, deployed and verified.
+
+| | |
+| --- | --- |
+| branch | `feature/community-rankings`, pushed; fast-forwarded into `main` |
+| feature commit | `026d8be4905f214f0ac8762f52853dacbd44b3f9` (13 files), rebased from `97e0c1c` onto `8f5170c` |
+| release commit on `main` | `026d8be4905f214f0ac8762f52853dacbd44b3f9` |
+| database migration | none required; no new table |
+| deployed | on Render, live at 00:59 UTC on 2026-09-13 |
+| production verification | passed on 2026-09-13; no production issues found |
 
 **Community: two independent rankings.**
 
@@ -58,9 +68,28 @@ Summary reads "66% habits" and "7 accomplishments". Counting logic is unchanged;
 | browser: Accomplishments regression, updated for the new Community design | 102 of 102 |
 | browser: inline editing regression | 26 of 26 |
 
-**Next step:** Accomplishments is live and verified, so Community Rankings is next:
-push `feature/community-rankings`, merge it into `main` and deploy it, each on the
-Product Owner's approval.
+**Production verification, 2026-09-13.** Signed out and read-only; no production
+data was created, changed or deleted, and no test accounts were made.
+
+- The served stylesheet is byte-identical to a clean build of `026d8be`
+  (`3e2271478d183782.css`, sha256 `eb694a4b…`); the previous release's stylesheet
+  now answers 404. The served dictionary script matches that build once module ids
+  are masked.
+- New text is live: "Habit Ranking", "Accomplishment Ranking", 习惯排名, 成果排名,
+  the chart legend, and the notes that each ranking stands on its own and that only
+  the number is shared. The chart's focus style is in the stylesheet.
+- The Accomplishments release is still present ("Delete this accomplishment?",
+  "accomplished this month", "Priority wording"), and the wording Community
+  Rankings replaced (the strip legend, the per-row "habits" suffix) is gone.
+- `/api/health` is ok with the database up. `/login`, `/terms` and `/verify` load
+  with no page errors or failed requests at 1440px and 390px. Protected pages
+  redirect to login, `/today` still answers 308, and signed-out API calls answer
+  401.
+- No production issues were found. Signed-in smoke tests are the Product Owner's,
+  on their existing account.
+
+**Next step:** none pending for this release beyond the Product Owner's signed-in
+smoke tests. No database action is needed.
 
 ## Accomplishments and a forward-looking Priority Compass (released, verified in production)
 
