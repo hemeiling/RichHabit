@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-13
 >
-> **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · SIGNED-IN CHECKS PENDING (PRODUCT OWNER)**
+> **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
 > **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
@@ -40,7 +40,26 @@ the phase 1 schema and data layer without changing either.
 | merged into `main` | **yes**: `main` fast-forwarded from `f0a8e28` to `f7499fca52bca2bfebc75faca4b3a505e6a18830` on 2026-09-13 (pushed by the Product Owner) |
 | deployed | **yes**: `f7499fc` deployed to Render by the Product Owner on 2026-09-13, after two earlier deploys ran before `main` moved and still served `dd7bec0`. Code is identical to the tested branch head `d51f2a1`; only `PROJECT_STATUS.md` differs. |
 | production verified (public) | **21 of 21**, below |
-| production verified (signed in) | **pending**: Product Owner admin desktop, admin phone and ordinary-account checks |
+| production verified (signed in) | **passed**, Product Owner smoke test on 2026-09-13, below |
+| release | **closed** |
+
+**Product Owner signed-in production smoke test on `f7499fc`, 2026-09-13: all passed**
+
+| Check | Result |
+| --- | --- |
+| admin desktop: launcher opens the workspace | pass |
+| streaming reply | pass |
+| Stop, Continue, Retry | pass |
+| conversation persistence after reload | pass |
+| project and project instructions | pass |
+| PDF upload: disclosure first, then question answered | pass |
+| Chinese question gets a Chinese reply | pass |
+| admin phone UX | pass |
+| ordinary account has no launcher | pass |
+
+Existing RichHabit user data was verified intact by the read-only check after
+deploy. The production migration was not re-run. Known limits are unchanged and
+listed below.
 
 **Production verification after deploying `f7499fc`, 2026-09-13: 21 of 21 public checks, plus a read-only database check**
 
@@ -194,19 +213,10 @@ separate decision.
 
 **Next step (Product Owner):**
 
-Merge, deploy and public verification are done (`f7499fc`, 21 of 21). What remains
-is the signed-in check in production:
-
-1. Admin, desktop: the launcher shows; a reply streams; Stop, Continue and Retry
-   work; history survives a reload; a project with instructions works; the
-   upload notice comes first, then a question about a PDF is answered; a
-   Chinese question gets a Chinese reply.
-2. Admin, phone: the workspace fills the screen and the composer stays above the
-   keyboard.
-3. Ordinary account: no launcher.
-
-Record the result here. Merge any later status-only commits from
-`feature/ai-workspace` into `main` with the next release; they need no deploy.
+None for this release; it is closed. Status-only commits on
+`feature/ai-workspace` after `f7499fc` are not on `main` yet. Merge them with the
+next release; they need no deploy. Candidates for later decisions: the known
+limits below, and the separate schema-drift decision.
 
 **Known limits of this release:** one reply at a time and orphan recovery rely
 on RichHabit running as a single Render instance; Files API copies are not
