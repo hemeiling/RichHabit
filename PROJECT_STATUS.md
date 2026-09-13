@@ -2,19 +2,66 @@
 
 > Last updated: 2026-09-13
 >
-> **INTENTION LINKS + AI SUGGESTIONS: RELEASED · `main` AT `e0eb036` · PRODUCTION MIGRATED (66/66) · DEPLOYED TO RENDER, LIVE 02:48 UTC 2026-09-13 · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · CLAUDE SUGGESTIONS FAIL GRACEFULLY UNTIL A WORKSPACE-SCOPED KEY IS SET**
+> **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED · `main` AT `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
+> **AI WORKSPACE (ADMIN ONLY): PROPOSAL REVISION 3 APPROVED · PHASE 1 NEXT ON `feature/ai-workspace` · NOT IMPLEMENTED**
+> **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> Production runs `e0eb036bda05d013584ac3c7cac63946b8d3f40f`: Clarify Your
-> Intention with any number of links and AI suggestions, on top of Community
-> Rankings (`026d8be`) and Accomplishments (`d728111`). Its additive intentions
-> migration was applied to production before the deploy. Render did not
-> auto-deploy; the Product Owner deployed manually.
+> Production runs `dd7bec0142f9497849697960d09bd7795e0ad935`: the intention-links
+> release (`e0eb036`) plus a workspace-scoped Claude key with no workspace-id
+> setting, a clearer message when the provider refuses the key, and a fix for
+> priority suggestions that always came back empty. No database migration.
+> Render did not auto-deploy; the Product Owner deployed manually.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Claude key-only configuration and priority-suggestion fix (released, verified in production)
+
+| Item | State |
+| --- | --- |
+| feature commit | `dd7bec0142f9497849697960d09bd7795e0ad935` (8 files) on `feature/claude-key-only` |
+| release commit on `main` | `dd7bec0`, fast-forwarded from `534d4c7` and pushed at 03:18 UTC on 2026-09-13 |
+| migration | none |
+| deployed | on Render, manually by the Product Owner after auto-deploy did not start; live by 03:50 UTC |
+| production verification | automated, read-only database, and Product Owner signed-in checks passed on 2026-09-13 |
+
+**What changed**
+
+- `CLAUDE_API_KEY` is a workspace-scoped key, set locally and on Render.
+  `CLAUDE_WORKSPACE_ID` and the `anthropic-workspace-id` header were removed; a
+  guard test fails if either returns.
+- When Anthropic refuses the key or request (400, 401, 403, 404), suggestions
+  answer 503 with "Suggestions aren't available right now." / "暂时无法提供建议。".
+  Timeouts, rate limits and outages keep "Suggestions didn't load. Please try
+  again in a moment."
+- Priority suggestions were always empty in `e0eb036`: with items shaped
+  `{ text }`, Claude returned the list as one JSON-encoded string (0 of 5 live
+  trials usable). Priorities are now requested as a list of strings (5 of 5 in
+  English and 5 of 5 in Chinese).
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| local live Claude through the app, English 1440 and Chinese 390 mobile | 46 of 46 |
+| local server log and analytics | no key, workspace value, intention text or suggestion text |
+| typecheck, lint, build; browser bundles | clean; no key, workspace setting, Anthropic host or SDK |
+| unit tests | 647 of 648; the failure is the known `inspect-prod-readonly` baseline in uncommitted, unreleased files |
+| production, signed out (04:26 UTC) | health ok; routes and auth unchanged; public pages without errors or overflow; stylesheet unchanged, as expected for a server-only change; no secrets in served bundles |
+| production, read-only database | 03:50–03:58 UTC: one habit and one priority request; 4 habit and 4 priority suggestions accepted (the earlier code could never return priorities); new linked priorities all have a quadrant and linked habits a time of day; links unique; no duplicate priorities; `priority_id` equals the first `priority_ids` entry; the previously deleted linked priority is still skipped; AI analytics carry only the list kind; no intention text in analytics |
+| production, signed in by the Product Owner | priority suggestions returned; dismissing a suggestion created nothing; Important and Urgent asked before creating a priority; Chinese on a phone correct with no sideways scrolling; no page errors |
+
+Housekeeping: the Neon rehearsal branch (`ep-curly-…`) holds the migrated
+intention-links state and can be deleted or reset. The production restore-point
+branch can be kept or deleted at the Product Owner's discretion.
+
+**Next step:** AI Workspace phase 1 (schema, migration and data layer; local
+databases only) on `feature/ai-workspace`, in a separate worktree outside
+OneDrive, per the approved proposal revision 3. No production action is pending
+for this release.
 
 ## Clarify Your Intention: any number of habits and priorities, and AI suggestions (released, verified in production)
 
@@ -190,22 +237,7 @@ migration was not rerun.
 
 No production data loss was observed, and unlinked records remained intact.
 
-**Remaining follow-up: Claude suggestions**
-
-- The current `CLAUDE_API_KEY` is rejected by Anthropic.
-- Suggestions fail gracefully; the rest of the page keeps working.
-- Current wording: "Suggestions didn't load. Please try again in a moment."
-  (Chinese: "建议没有加载出来，请稍后再试。").
-- After the Product Owner replaces `CLAUDE_API_KEY` with a workspace-scoped key,
-  locally and on Render: remove `CLAUDE_WORKSPACE_ID` and the
-  `anthropic-workspace-id` header support, then rerun the live AI browser checks.
-
-Housekeeping: the rehearsal branch (`ep-curly-…`) holds the migrated state and
-can be deleted or reset in Neon. The production restore-point branch can be kept
-or deleted at the Product Owner's discretion.
-
-**Next step:** none required for this release. The Claude follow-up waits for the
-workspace-scoped key.
+The Claude follow-up was released in `dd7bec0`; see the section above.
 
 ## Community rankings and two-series My Progress (released, verified in production)
 
