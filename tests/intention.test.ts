@@ -2,12 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  MAX_INTENTION_HABITS, MAX_NOTE, MAX_VISION_TEXT, MAX_WANT, MAX_WHY, MAX_WHY_TEXT, STEP_COUNT,
+  LIST_PREVIEW, MAX_NOTE, MAX_VISION_TEXT, MAX_WANT, MAX_WHY, MAX_WHY_TEXT, STEP_COUNT,
   VISION_PROMPTS,
-  advance, blankIntention, canAddHabit, canContinue, canGoDeeper, canRevealVision, deepestWhy,
-  finish, goDeeper, isBlank, linkedHabits, linkedPriority, resumeStep, revealVision, setVision,
-  setWhy, trimIntention, visionPromptAt, whyDepth,
+  advance, blankIntention, canContinue, canGoDeeper, canRevealVision, deepestWhy,
+  finish, goDeeper, isBlank, legacyPriorityId, linkHabits, linkPriorities, linkedHabits,
+  linkedPriorities, plannedDates, reconcilePriorityIds, resumeStep, revealVision, setVision,
+  setWhy, trimIntention, uniqueIds, unlinkHabit, unlinkPriority, visionPromptAt, whyDepth,
 } from "../src/lib/intention";
+import {
+  HABIT_IDS_COMMENT, PRIORITY_IDS_COMMENT, PRIORITY_ID_COMMENT,
+} from "../scripts/migrations/intention-links.mjs";
 import { parseIntention } from "../src/lib/validate";
 import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
@@ -36,6 +40,7 @@ describe("a new intention", () => {
     expect(isBlank(make({ want: "Run a half marathon" }))).toBe(false);
     expect(isBlank(make({ ownership: "unsure" }))).toBe(false);
     expect(isBlank(make({ habitIds: [OTHER] }))).toBe(false);
+    expect(isBlank(make({ priorityIds: [OTHER] }))).toBe(false);
   });
 });
 
@@ -205,18 +210,66 @@ describe("the records an intention started", () => {
     expect(linkedHabits(make({ habitIds: ["gone"] }), habits)).toEqual([]);
   });
 
-  it("does the same for the priority", () => {
-    const priorities = [{ id: "p1", text: "Book the clinic" }];
-    expect(linkedPriority(make({ priorityId: "p1" }), priorities)?.text).toBe("Book the clinic");
-    expect(linkedPriority(make({ priorityId: "gone" }), priorities)).toBeNull();
-    expect(linkedPriority(make(), priorities)).toBeNull();
+  it("does the same for priorities, in the order linked", () => {
+    const priorities = [{ id: "p1", text: "Book the clinic" }, { id: "p2", text: "Call Mum" }];
+    expect(linkedPriorities(make({ priorityIds: ["p2", "gone", "p1"] }), priorities).map((p) => p.text))
+      .toEqual(["Call Mum", "Book the clinic"]);
+    expect(linkedPriorities(make(), priorities)).toEqual([]);
   });
 
-  it("starts at most three habits", () => {
-    expect(canAddHabit(make())).toBe(true);
-    expect(canAddHabit(make({ habitIds: ["a", "b"] }))).toBe(true);
-    expect(canAddHabit(make({ habitIds: ["a", "b", "c"] }))).toBe(false);
-    expect(MAX_INTENTION_HABITS).toBe(3);
+  /* The product rule: as many habits and priorities as somebody wants. */
+  it("links any number of habits and priorities, with no limit", () => {
+    const many = Array.from({ length: 250 }, (_, at) => `id-${at}`);
+    expect(linkHabits(make(), many).habitIds).toHaveLength(250);
+    expect(linkPriorities(make(), many).priorityIds).toHaveLength(250);
+  });
+
+  it("never links the same record twice, and keeps the order first linked", () => {
+    const i = linkHabits(make({ habitIds: ["a", "b"] }), ["b", "c", "a", "d"]);
+    expect(i.habitIds).toEqual(["a", "b", "c", "d"]);
+    expect(uniqueIds(["x", "y", "x"])).toEqual(["x", "y"]);
+  });
+
+  it("unlinks one record and leaves the rest alone", () => {
+    expect(unlinkHabit(make({ habitIds: ["a", "b", "c"] }), "b").habitIds).toEqual(["a", "c"]);
+    expect(unlinkPriority(make({ priorityIds: ["a", "b"] }), "a").priorityIds).toEqual(["b"]);
+    expect(unlinkHabit(make({ habitIds: ["a"] }), "zzz").habitIds).toEqual(["a"]);
+  });
+
+  it("shows five before Show all, as a display choice only", () => {
+    expect(LIST_PREVIEW).toBe(5);
+  });
+
+  it("derives Important Dates from linked priorities with a planned day, soonest first", () => {
+    const priorities = [
+      { id: "a", plannedOn: "2026-10-02" }, { id: "b", plannedOn: null },
+      { id: "c", plannedOn: "2026-09-20" }, { id: "d", plannedOn: "2026-09-01" },
+    ];
+    expect(plannedDates(make({ priorityIds: ["a", "b", "c"] }), priorities).map((p) => p.id))
+      .toEqual(["c", "a"]);
+  });
+});
+
+describe("one canonical priority list", () => {
+  it("treats priority_ids as the source of truth", () => {
+    expect(reconcilePriorityIds(["a", "b"], "a")).toEqual(["a", "b"]);
+    expect(reconcilePriorityIds(["a", "b"], null)).toEqual(["a", "b"]);
+    expect(reconcilePriorityIds([], null)).toEqual([]);
+  });
+
+  it("reads a row from before the migration through the legacy column", () => {
+    expect(reconcilePriorityIds(undefined, "p1")).toEqual(["p1"]);
+    expect(reconcilePriorityIds(null, null)).toEqual([]);
+  });
+
+  /* An edit made by the previous release during a rollback is not lost. */
+  it("brings in a legacy link the list does not have, once, at the front", () => {
+    expect(reconcilePriorityIds(["a", "b"], "c")).toEqual(["c", "a", "b"]);
+  });
+
+  it("writes the legacy column as the first linked priority, or null", () => {
+    expect(legacyPriorityId(["a", "b"])).toBe("a");
+    expect(legacyPriorityId([])).toBeNull();
   });
 });
 
@@ -229,7 +282,7 @@ describe("parsing a request", () => {
     ownershipNote: "",
     vision: [""],
     habitIds: [],
-    priorityId: null,
+    priorityIds: [],
     step: 2,
     complete: false,
     ...over,
@@ -259,8 +312,17 @@ describe("parsing a request", () => {
     expect(() => parseIntention(body({ vision: ["a", "b", "c", "d", "e"] }))).toThrow();
   });
 
-  it("refuses more habits than an intention may start", () => {
-    expect(() => parseIntention(body({ habitIds: [ID, OTHER, ID, OTHER] }))).toThrow();
+  it("accepts any number of habits and priorities, dropping repeats in order", () => {
+    const many = Array.from({ length: 50 }, () => crypto.randomUUID());
+    const parsed = parseIntention(body({ habitIds: [...many, many[0]], priorityIds: many }));
+    expect(parsed.habitIds).toEqual(many);
+    expect(parsed.priorityIds).toEqual(many);
+    expect(parseIntention(body({ habitIds: [ID, OTHER, ID, OTHER] })).habitIds).toEqual([ID, OTHER]);
+  });
+
+  it("refuses a malformed linked id", () => {
+    expect(() => parseIntention(body({ priorityIds: ["nope"] }))).toThrow();
+    expect(() => parseIntention(body({ priorityIds: "nope" }))).toThrow();
   });
 
   it("refuses a step out of range and a malformed id", () => {
@@ -271,9 +333,16 @@ describe("parsing a request", () => {
     expect(() => parseIntention(body({ habitIds: ["nope"] }))).toThrow();
   });
 
-  it("drops a priority id it cannot use rather than failing the save", () => {
+  /* A client from the previous release sends only the single legacy id. */
+  it("turns a legacy single priorityId into a one-item list", () => {
+    const legacy = { ...body(), priorityIds: undefined, priorityId: OTHER };
+    expect(parseIntention(legacy).priorityIds).toEqual([OTHER]);
+    expect(parseIntention({ ...legacy, priorityId: null }).priorityIds).toEqual([]);
+  });
+
+  it("drops a legacy priority id it cannot use rather than failing the save", () => {
     // A version skew should not cost somebody the reflection they just wrote.
-    expect(parseIntention(body({ priorityId: "nonsense" })).priorityId).toBeNull();
+    expect(parseIntention({ ...body(), priorityIds: undefined, priorityId: "nonsense" }).priorityIds).toEqual([]);
   });
 
   it("refuses text beyond the column's ceiling", () => {
@@ -341,8 +410,24 @@ describe("the schema, the migration and the validator agree on every limit", () 
     `check (length(ownership_note) <= ${MAX_NOTE})`,
     `check (text_array_within(why_chain, ${MAX_WHY}, ${MAX_WHY_TEXT}))`,
     `check (text_array_within(vision, ${VISION_PROMPTS.length}, ${MAX_VISION_TEXT}))`,
-    `check (cardinality(habit_ids) <= ${MAX_INTENTION_HABITS})`,
   ];
+
+  /* Removed on purpose: linking has no product or database count limit. */
+  it("puts no count limit on habit or priority links in the final schema", () => {
+    const schema = flat(source("db/schema.sql"));
+    expect(schema).not.toMatch(/cardinality\(habit_ids\)|cardinality\(priority_ids\)/);
+    expect(schema).toContain("priority_ids uuid[] not null default '{}'");
+  });
+
+  it("documents the canonical and legacy columns identically in the schema and the migration", () => {
+    const schema = source("db/schema.sql");
+    const literal = (text: string) => `'${text.replace(/'/g, "''")}'`;
+    expect(schema).toContain(`comment on column intentions.habit_ids is ${literal(HABIT_IDS_COMMENT)};`);
+    expect(schema).toContain(`comment on column intentions.priority_ids is ${literal(PRIORITY_IDS_COMMENT)};`);
+    expect(schema).toContain(`comment on column intentions.priority_id is ${literal(PRIORITY_ID_COMMENT)};`);
+    expect(PRIORITY_IDS_COMMENT).toMatch(/^Canonical\./);
+    expect(PRIORITY_ID_COMMENT).toMatch(/^Legacy compatibility only\./);
+  });
 
   it("in db/schema.sql", () => {
     const schema = flat(source("db/schema.sql"));
@@ -366,7 +451,7 @@ describe("the intention migration step", () => {
   const migrate = source("scripts/migrate.mjs");
   const step = code(migrate.slice(
     migrate.indexOf("---- 4d. intentions"),
-    migrate.indexOf("---- 5. admin account management"),
+    migrate.indexOf("---- 4e. intentions"),
   ));
 
   it("is where it should be", () => {
@@ -389,6 +474,29 @@ describe("the intention migration step", () => {
  * nothing. Checked against the source, because an analytics property or a log
  * line added in a hurry is exactly the kind of change a review can miss.
  */
+describe("the multi-link migration step (4e)", () => {
+  const migrate = code(source("scripts/migrate.mjs"));
+  const step = code(source("scripts/migrations/intention-links.mjs"));
+
+  it("is run by the migration, after the table exists", () => {
+    expect(migrate).toContain("changed += await migrateIntentionLinks(client, console.log)");
+    expect(migrate.indexOf('tableExists("intentions")')).toBeLessThan(migrate.indexOf("migrateIntentionLinks(client"));
+  });
+
+  it("removes only the habit constraint, adds only the list, and never deletes", () => {
+    expect(step).toContain("alter table intentions drop constraint if exists intentions_habit_ids_check");
+    expect(step).toContain("alter table intentions add column if not exists priority_ids uuid[] not null default '{}'");
+    expect(step).not.toMatch(/\bdrop\s+table\b|\bdrop\s+column\b|\btruncate\b|\bdelete\s+from\b|\binsert\s+into\b/i);
+    expect(step).not.toMatch(/cardinality\(priority_ids\)\s*<=|cardinality\(habit_ids\)\s*<=/);
+  });
+
+  it("carries a single link into the list once, and leaves updated_at alone", () => {
+    expect(flat(step)).toContain(
+      "update intentions set priority_ids = array[priority_id] where priority_id is not null and cardinality(priority_ids) = 0");
+    expect(step).not.toMatch(/updated_at/);
+  });
+});
+
 describe("the intention route keeps reflections private", () => {
   const route = code(source("src/app/api/intention/route.ts"));
   const fields = ["want", "whyChain", "ownership", "ownershipNote", "vision"];

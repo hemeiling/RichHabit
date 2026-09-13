@@ -353,6 +353,20 @@ export const emptyState = (): AppState => ({
  */
 export type IntentionOwnership = "mine" | "outside" | "unsure";
 
+/** Which list a suggestion is for. */
+export type SuggestionKind = "habits" | "priorities";
+
+/**
+ * A suggested habit or priority: a temporary draft that exists only on screen
+ * until the person explicitly adds it. Never stored as such, and never created
+ * by the server. `category` is a time of day for a habit and null for a
+ * priority, whose quadrant the person always chooses themselves.
+ */
+export interface IntentionSuggestion {
+  text: string;
+  category: Category | null;
+}
+
 export interface Intention {
   id: string;
   /** Step 1 — what the person wants. */
@@ -367,9 +381,14 @@ export interface Intention {
   ownershipNote: string;
   /** Step 4 — one answer per prompt, in VISION_PROMPTS order. */
   vision: string[];
-  /** Step 5 — up to MAX_INTENTION_HABITS, in the order they were created. */
+  /**
+   * Step 5 — ids of ordinary habits and priorities, created or chosen by the
+   * person, in the order they were linked. Any number of each. `priorityIds` is
+   * the canonical list; the legacy `priority_id` column is handled entirely in
+   * the database layer and never reaches the application.
+   */
   habitIds: string[];
-  priorityId: string | null;
+  priorityIds: string[];
   /** The furthest step reached, which is where resuming lands. 1 to 5. */
   step: number;
   /** True once the session has been finished at least once. */

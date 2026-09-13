@@ -17,6 +17,7 @@
  * direction: an unrecognised habit is treated as the user's own words.
  */
 import { connect } from "./lib.mjs";
+import { migrateIntentionLinks } from "./migrations/intention-links.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -475,6 +476,15 @@ try {
     console.log("  created intentions");
     changed++;
   }
+
+  /*
+   * ---- 4e. intentions: any number of linked habits and priorities ----------
+   *
+   * Removes the three-habit limit, adds the canonical `priority_ids` list,
+   * carries each existing single priority link into it and documents both
+   * columns. Additive and guarded; see scripts/migrations/intention-links.mjs.
+   */
+  changed += await migrateIntentionLinks(client, console.log);
 
   // ---- 5. admin account management ------------------------------------------
   for (const [table, ddl, extra] of [

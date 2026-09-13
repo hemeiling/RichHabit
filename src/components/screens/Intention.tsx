@@ -2,20 +2,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useHabits } from "@/components/store";
 import HabitEditor from "@/components/HabitEditor";
-import { GrowingTextarea, Segmented } from "@/components/ui";
-import { todayISO } from "@/lib/dates";
-import { CATEGORIES, blankHabit } from "@/lib/habits";
-import { quadrantFor } from "@/lib/priorities";
+import { HabitsCard, ImportantDatesCard, PrioritiesCard } from "@/components/IntentionLinks";
+import { GrowingTextarea } from "@/components/ui";
 import { dict } from "@/lib/i18n";
 import { useLocale, useT } from "@/lib/i18n/context";
 import {
   INTENTION_STEPS, OWNERSHIP_CHOICES, STEP_COUNT,
-  advance, blankIntention, canAddHabit, canContinue, canGoDeeper, canRevealVision, deepestWhy,
-  finish, goDeeper, isBlank, linkedHabits, linkedPriority, resumeStep, revealVision, setVision,
+  advance, blankIntention, canContinue, canGoDeeper, canRevealVision, deepestWhy,
+  finish, goDeeper, isBlank, resumeStep, revealVision, setVision,
   setWhy, visionPromptAt,
 } from "@/lib/intention";
-import { habitName } from "@/lib/templates";
-import type { Category, Habit, Intention as Reflection, IntentionOwnership } from "@/lib/types";
+import type { Habit, Intention as Reflection, IntentionOwnership } from "@/lib/types";
 import type { Dict } from "@/lib/i18n/en";
 
 /**
@@ -28,11 +25,11 @@ import type { Dict } from "@/lib/i18n/en";
  *
  * Three things this screen deliberately is not. It is not an assessment: no
  * answer is scored, ranked or compared, and the Truth step has no wrong answer
- * to give. It is not a coach: there is no model in this file and no advice
- * anywhere in it. And it is not a second habit or priority system — step five
- * calls `saveHabit` and `addPriority`, the same actions Today and the matrix
- * call, so what it creates is an ordinary habit and an ordinary priority from
- * the moment it exists.
+ * to give. It is not a coach that decides: suggestions are optional drafts the
+ * person edits, adds or dismisses, and nothing is created on their behalf. And
+ * it is not a second habit or priority system — step five and the completed
+ * page use `saveHabit` and `addPriority`, the same actions the habit sheet and
+ * the matrix call, or link records the person already has.
  *
  * Everything the person writes is theirs. It is stored exactly as typed, never
  * translated even in bilingual mode, and never placed in an analytics
@@ -321,52 +318,18 @@ function StepVision({
 /**
  * Turning the reflection into behaviour.
  *
- * Both creations go through the app's ordinary paths: a habit is `blankHabit()`
- * with a name and a section, saved by `saveHabit`; a priority is `addPriority`
- * with the quadrant the same two questions the matrix asks have derived. The
- * two questions are asked here for exactly the reason the matrix asks them —
- * nothing in this app may decide what matters to somebody — so there is no
- * default quadrant here either.
- *
- * Nothing is created until the button is pressed.
+ * The same two cards the completed page uses, so there is one way to add, link,
+ * unlink and ask for suggestions. Nothing is created until the person presses
+ * Add, and every record is an ordinary habit or priority.
  */
 function StepAction({
-  reflection, onHabit, onPriority, onOpenHabit,
+  reflection, onChange, onOpenHabit,
 }: {
   reflection: Reflection;
-  onHabit: (name: string, category: Category) => void;
-  onPriority: (text: string, important: boolean, urgent: boolean) => void;
+  onChange: (next: Reflection) => void;
   onOpenHabit: (habit: Habit) => void;
 }) {
-  const { state } = useHabits();
   const t = useT();
-
-  const [habitText, setHabitText] = useState("");
-  const [habitWhen, setHabitWhen] = useState<Category>("morning");
-  const [priorityText, setPriorityText] = useState("");
-  const [important, setImportant] = useState<boolean | null>(null);
-  const [urgent, setUrgent] = useState<boolean | null>(null);
-
-  const made = linkedHabits(reflection, state.habits);
-  const priority = linkedPriority(reflection, state.priorities);
-  const answered = important !== null && urgent !== null;
-
-  const addHabit = () => {
-    const name = habitText.trim();
-    if (!name || !canAddHabit(reflection)) return;
-    onHabit(name, habitWhen);
-    setHabitText("");
-  };
-
-  const addPriority = () => {
-    const text = priorityText.trim();
-    if (!text || !answered) return;
-    onPriority(text, important, urgent);
-    setPriorityText("");
-    setImportant(null);
-    setUrgent(null);
-  };
-
   return (
     <>
       <Question pick={(d) => d.intention.action.question} />
@@ -383,211 +346,93 @@ function StepAction({
         }}>{reflection.want.trim()}</p>
       )}
 
-      <hr className="icard-rule" />
-
-      <div className="eyebrow">{t.intention.action.habitsTitle}</div>
-      <p className="faint mt-1.5" style={{ fontSize: 13, lineHeight: 1.5 }}>
-        {t.intention.action.habitsHint}
-      </p>
-
-      {made.length > 0 && (
-        <div className="mt-3">
-          {made.map((habit) => (
-            <div className="icard-item" key={habit.id}>
-              <span className="icard-bullet" aria-hidden="true" />
-              <button type="button" onClick={() => onOpenHabit(habit)}
-                aria-label={t.intention.action.openHabit(habitName(habit, t))}
-                style={{
-                  background: "none", border: "none", padding: 0, textAlign: "left",
-                  font: "inherit", color: "inherit", cursor: "pointer", minWidth: 0,
-                }}>
-                {habitName(habit, t)}
-                <span className="faint" style={{ fontSize: 12.5, display: "block", marginTop: 1 }}>
-                  {t.intention.action.habitAdded}
-                </span>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {canAddHabit(reflection) && (
-        <div className="mt-4">
-          <input className="input" value={habitText} maxLength={200}
-            placeholder={t.intention.action.habitPlaceholder}
-            aria-label={t.intention.action.habitsTitle}
-            onChange={(e) => setHabitText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") addHabit(); }} />
-          {habitText.trim() && (
-            <div className="flex flex-wrap items-center gap-3 mt-3 fade-in">
-              <span className="faint" style={{ fontSize: 12.5 }}>
-                {t.intention.action.whenTitle}
-              </span>
-              <Segmented<Category> value={habitWhen} onChange={setHabitWhen} small
-                options={CATEGORIES.map((c) => ({ value: c.id, label: t.categories[c.id].label }))} />
-              <button className="btn" style={{ flex: "none" }} onClick={addHabit}>
-                {t.intention.action.addHabit}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      <hr className="icard-rule" />
-
-      <div className="eyebrow">{t.intention.action.priorityTitle}</div>
-      <p className="faint mt-1.5" style={{ fontSize: 13, lineHeight: 1.5 }}>
-        {t.intention.action.priorityHint}
-      </p>
-
-      {priority ? (
-        <div className="icard-item mt-3">
-          <span className="icard-bullet" aria-hidden="true" />
-          <span>
-            {priority.text}
-            <span className="faint" style={{ fontSize: 12.5, display: "block", marginTop: 1 }}>
-              {t.intention.action.priorityAdded}
-            </span>
-          </span>
-        </div>
-      ) : (
-        <div className="mt-4">
-          <input className="input" value={priorityText} maxLength={200}
-            placeholder={t.intention.action.priorityPlaceholder}
-            aria-label={t.intention.action.priorityTitle}
-            onChange={(e) => {
-              setPriorityText(e.target.value);
-              // Clearing the line clears the answers: the next thing typed
-              // starts unclassified rather than inheriting a judgement made
-              // about something else. The matrix does the same.
-              if (!e.target.value.trim()) { setImportant(null); setUrgent(null); }
-            }}
-            onKeyDown={(e) => { if (e.key === "Enter") addPriority(); }} />
-
-          {priorityText.trim() && (
-            <div className="pask">
-              <span className="pask-q">
-                <span className="faint">{t.intention.action.askImportant}</span>
-                <button type="button" className="chip" data-on={important === true}
-                  onClick={() => setImportant(true)}>{t.priorities.yes}</button>
-                <button type="button" className="chip" data-on={important === false}
-                  onClick={() => setImportant(false)}>{t.priorities.no}</button>
-              </span>
-              <span className="pask-q">
-                <span className="faint">{t.intention.action.askUrgent}</span>
-                <button type="button" className="chip" data-on={urgent === true}
-                  onClick={() => setUrgent(true)}>{t.priorities.yes}</button>
-                <button type="button" className="chip" data-on={urgent === false}
-                  onClick={() => setUrgent(false)}>{t.priorities.no}</button>
-              </span>
-              <button className="btn" style={{ flex: "none" }}
-                disabled={!answered} onClick={addPriority}>
-                {t.intention.action.addPriority}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      <div className="flex flex-col gap-4 mt-6">
+        <HabitsCard reflection={reflection} onChange={onChange} onOpenHabit={onOpenHabit} />
+        <PrioritiesCard reflection={reflection} onChange={onChange} />
+      </div>
     </>
   );
 }
 
-/* ──────────────────────────── the intention card ───────────────────────── */
+/* ──────────────────────────── the completed page ───────────────────────── */
 
 /**
- * What the session leaves behind.
+ * What the session leaves behind, as separate cards in the order the
+ * reflection runs: Direction (the intention), Meaning (why it matters),
+ * Behaviour (habits), Action (priorities), and Important Dates when a linked
+ * priority has a planned day.
  *
- * Four things and nothing else: the intention, the deepest reason, the habits,
- * the next priority. Deliberately no percentage, no streak, no chart and no
- * figure of any kind — this is a page somebody should want to come back and
- * look at, and the moment it starts reporting on them it becomes one more
- * screen keeping score.
- *
- * The habits and the priority are read from the account as they are now, so a
- * renamed habit reads correctly here and a deleted one is simply absent.
+ * Deliberately no percentage, no streak, no chart and no figure — this is a page
+ * somebody should want to come back to, and the moment it reports on them it
+ * becomes one more screen keeping score. The records are read from the account
+ * as they are now, so a renamed habit reads correctly and a deleted one is
+ * simply absent.
  */
-function IntentionCard({
-  reflection, onRevisit,
-}: { reflection: Reflection; onRevisit: () => void }) {
-  const { state } = useHabits();
+function IntentionPage({
+  reflection, onChange, onOpenHabit, onRevisit,
+}: {
+  reflection: Reflection;
+  onChange: (next: Reflection) => void;
+  onOpenHabit: (habit: Habit) => void;
+  onRevisit: () => void;
+}) {
   const t = useT();
-  const [chain, setChain] = useState(false);
+  const [more, setMore] = useState(false);
 
-  const habits = linkedHabits(reflection, state.habits);
-  const priority = linkedPriority(reflection, state.priorities);
   const why = deepestWhy(reflection);
-  // Everything above the deepest rung, which is what "the whole chain" opens.
+  // Everything above the deepest rung, and the vision, is what "the whole chain" opens.
   const earlier = reflection.whyChain.map((w) => w.trim()).filter(Boolean).slice(0, -1);
+  const vision = reflection.vision.map((v) => v.trim()).filter(Boolean);
 
   return (
-    <div className="intent">
-      <div className="card icard">
-        <div className="icard-label">{t.intention.card.intention}</div>
+    <div className="intent-page">
+      <section className="card icard" aria-labelledby="intention-hero">
+        <div className="ipage-hero-head">
+          <div className="icard-label" id="intention-hero">{t.intention.card.intention}</div>
+          <button type="button" className="btn btn-quiet" style={{ marginTop: -8 }} onClick={onRevisit}>
+            {t.intention.card.revisit}
+          </button>
+        </div>
         <div className="icard-intention">{reflection.want.trim()}</div>
+      </section>
 
-        {why && (
-          <>
-            <hr className="icard-rule" />
-            <div className="icard-label">{t.intention.card.why}</div>
-            <div className="icard-why">{why}</div>
-            {earlier.length > 0 && (
-              <>
-                <button type="button" className="intent-more mt-2"
-                  aria-expanded={chain} onClick={() => setChain((open) => !open)}>
-                  {t.intention.card.fullWhy}
-                  <span aria-hidden="true">{chain ? "↑" : "↓"}</span>
-                </button>
-                {chain && (
-                  <div className="flex flex-col gap-2.5 mt-1 fade-in">
-                    {earlier.map((step, at) => (
-                      <p className="intent-said" key={at} style={{ cursor: "default" }}>{step}</p>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        <hr className="icard-rule" />
-        <div className="icard-label">{t.intention.card.habits}</div>
-        {habits.length === 0 ? (
-          <p className="faint mt-2.5" style={{ fontSize: 14 }}>{t.intention.card.noHabits}</p>
-        ) : (
-          <div className="mt-2">
-            {habits.map((habit) => (
-              <div className="icard-item" key={habit.id}>
-                <span className="icard-bullet" aria-hidden="true" />
-                <span>{habitName(habit, t)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <hr className="icard-rule" />
-        <div className="icard-label">{t.intention.card.priority}</div>
-        {!priority ? (
-          <p className="faint mt-2.5" style={{ fontSize: 14 }}>{t.intention.card.noPriority}</p>
-        ) : (
-          <div className="icard-item mt-2">
-            <span className="icard-bullet" aria-hidden="true"
-              style={priority.completedOn ? { background: "var(--line)" } : undefined} />
-            <span style={priority.completedOn
-              ? { color: "var(--muted)", textDecoration: "line-through" } : undefined}>
-              {priority.text}
-              {priority.completedOn && (
-                <span className="faint" style={{ fontSize: 12.5, display: "block", marginTop: 1, textDecoration: "none" }}>
-                  {t.intention.card.done}
-                </span>
+      {why && (
+        <section className="card icard" aria-labelledby="intention-why">
+          <div className="icard-label" id="intention-why">{t.intention.card.why}</div>
+          <div className="icard-why">{why}</div>
+          {(earlier.length > 0 || vision.length > 0) && (
+            <>
+              <button type="button" className="intent-more mt-2"
+                aria-expanded={more} onClick={() => setMore((open) => !open)}>
+                {t.intention.card.fullWhy}
+                <span aria-hidden="true">{more ? "↑" : "↓"}</span>
+              </button>
+              {more && (
+                <div className="flex flex-col gap-2.5 mt-1 fade-in">
+                  {earlier.map((step, at) => (
+                    <p className="intent-said" key={`why-${at}`} style={{ cursor: "default" }}>{step}</p>
+                  ))}
+                  {vision.length > 0 && (
+                    <>
+                      <div className="icard-label" style={{ marginTop: 10 }}>{t.intention.card.vision}</div>
+                      {vision.map((line, at) => (
+                        <p className="intent-said" key={`vision-${at}`} style={{ cursor: "default" }}>{line}</p>
+                      ))}
+                    </>
+                  )}
+                </div>
               )}
-            </span>
-          </div>
-        )}
+            </>
+          )}
+        </section>
+      )}
+
+      <div className="ipage-grid">
+        <HabitsCard reflection={reflection} onChange={onChange} onOpenHabit={onOpenHabit} />
+        <PrioritiesCard reflection={reflection} onChange={onChange} />
       </div>
 
-      <div className="flex justify-center mt-5">
-        <button className="btn" onClick={onRevisit}>{t.intention.card.revisit}</button>
-      </div>
+      <ImportantDatesCard reflection={reflection} />
 
       <Attribution />
     </div>
@@ -693,6 +538,16 @@ export default function Intention() {
     top.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
 
+  /* The app's own habit editor, so a linked habit is refined with the same form as any other. */
+  const editor = editing && (
+    <HabitEditor
+      habit={editing} goals={state.goals}
+      onSave={(h) => { actions.saveHabit(h); setEditing(null); }}
+      onDelete={(id) => { actions.deleteHabit(id); setEditing(null); }}
+      onClose={() => setEditing(null)}
+    />
+  );
+
   /* ── the invitation ── */
   if (!reflection) {
     return (
@@ -710,11 +565,14 @@ export default function Intention() {
     );
   }
 
-  /* ── the card ── */
+  /* ── the completed page ── */
   if (reflection.complete && !revisiting) {
     return (
-      <IntentionCard reflection={reflection}
-        onRevisit={() => { setRevisiting(true); setStep(1); }} />
+      <>
+        <IntentionPage reflection={reflection} onChange={update} onOpenHabit={setEditing}
+          onRevisit={() => { setRevisiting(true); setStep(1); }} />
+        {editor}
+      </>
     );
   }
 
@@ -755,39 +613,7 @@ export default function Intention() {
             onReveal={() => update(revealVision(reflection))} />
         )}
         {step === 5 && (
-          <StepAction
-            reflection={reflection}
-            onOpenHabit={setEditing}
-            /*
-             * An ordinary habit. `blankHabit()` and `saveHabit` are what Today
-             * and the habit sheet use, and the row this writes is
-             * indistinguishable from one added there — it is scheduled, scored,
-             * editable, pausable and retirable exactly the same way. The
-             * intention only records that it was the one to suggest it.
-             */
-            onHabit={(name, category) => {
-              const habit: Habit = {
-                ...blankHabit(),
-                name,
-                category,
-                sortOrder: Math.max(0, ...state.habits
-                  .filter((h) => h.category === category)
-                  .map((h) => h.sortOrder)) + 1,
-              };
-              actions.saveHabit(habit);
-              update({ ...reflection, habitIds: [...reflection.habitIds, habit.id] });
-            }}
-            /*
-             * An ordinary priority, in the quadrant the two questions derived,
-             * written on today. It rolls forward until it is finished or
-             * removed like every other line on the compass, and it is not a
-             * copy of anything or owned by anything here.
-             */
-            onPriority={(text, important, urgent) => {
-              const id = actions.addPriority(todayISO(), text, quadrantFor(important, urgent));
-              update({ ...reflection, priorityId: id });
-            }}
-          />
+          <StepAction reflection={reflection} onChange={update} onOpenHabit={setEditing} />
         )}
       </div>
 
@@ -813,16 +639,7 @@ export default function Intention() {
 
       <Attribution />
 
-      {/* The app's own habit editor, so a habit started here is refined with
-          the same form as any other. */}
-      {editing && (
-        <HabitEditor
-          habit={editing} goals={state.goals}
-          onSave={(h) => { actions.saveHabit(h); setEditing(null); }}
-          onDelete={(id) => { actions.deleteHabit(id); setEditing(null); }}
-          onClose={() => setEditing(null)}
-        />
-      )}
+      {editor}
     </div>
   );
 }

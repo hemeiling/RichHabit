@@ -917,3 +917,110 @@ input[type="range"] { accent-color: var(--accent); }
   flex: none; width: 5px; height: 5px; border-radius: 999px;
   background: var(--accent); margin-top: 9px;
 }
+
+/* ------------------------ the completed intention page --------------------- */
+/*
+ * Direction → Meaning → Behaviour → Action, as cards in that order. The hero and
+ * the why read across the page; Habits and Priorities sit side by side as peers
+ * on a wide screen and stack on a phone; Important Dates follows only when there
+ * is one. Still no figures, percentages or charts.
+ */
+.intent-page {
+  display: flex; flex-direction: column; gap: 16px;
+  max-width: 1080px; margin: 0 auto; padding-top: 2vh;
+}
+@media (min-width: 900px) { .intent-page { gap: 20px; padding-top: 4vh; } }
+.ipage-hero-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ipage-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 900px) { .ipage-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; } }
+
+/* A list of linked records: habits, priorities, or planned dates. */
+.ilist { padding: 22px 20px; }
+@media (min-width: 640px) { .ilist { padding: 26px 28px; } }
+.ilist-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ilist-rows { list-style: none; margin: 10px 0 0; padding: 0; }
+.ilist-row {
+  display: flex; align-items: flex-start; gap: 10px; padding: 9px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.ilist-row:first-child { border-top: none; }
+.ilist-main { flex: 1; min-width: 0; }
+.ilist-title {
+  display: block; background: none; border: none; padding: 0; text-align: left;
+  font: inherit; font-size: 15px; line-height: 1.45; color: var(--ink);
+  cursor: pointer; overflow-wrap: anywhere; text-decoration: none;
+}
+.ilist-title:hover { color: var(--accent); }
+.ilist-title[data-done="true"] { color: var(--muted); text-decoration: line-through; }
+.ilist-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.ilist-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 2px; font-size: 12px; color: var(--faint); }
+.ilist-meta .overdue { color: var(--warn); }
+.ilist-mark {
+  flex: none; width: 14px; height: 14px; margin-top: 4px; border-radius: 999px;
+  border: 1.5px solid var(--line); display: grid; place-items: center;
+}
+.ilist-mark[data-done="true"] { background: var(--accent); border-color: var(--accent); }
+/* Row options: an ellipsis, deliberately not a ×, which elsewhere means delete. */
+.ilist-opt {
+  flex: none; background: none; border: none; color: var(--faint); cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 3px 7px; border-radius: 7px;
+}
+.ilist-opt:hover, .ilist-opt[aria-expanded="true"] { color: var(--ink); background: var(--line-soft); }
+.ilist-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (pointer: coarse) { .ilist-opt { padding: 9px 11px; } }
+.ilist-menu { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 8px; font-size: 12.5px; }
+
+/* One quiet line of actions per card: Add, Link existing, Suggest with AI. */
+.ilist-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 18px;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+}
+.ilink {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: none; padding: 7px 0; font: inherit; font-size: 13px;
+  color: var(--muted); cursor: pointer; transition: color .15s ease;
+}
+.ilink:hover:not(:disabled) { color: var(--accent); }
+.ilink[data-ai="true"] { color: var(--accent); }
+.ilink:disabled { opacity: .55; cursor: default; }
+.ilink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+@media (pointer: coarse) { .ilink { padding: 11px 0; } }
+.iform { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.iform-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+
+/* Suggestions: temporary drafts, set apart by a dashed edge so they never read
+   as records that already exist. */
+.ai-tray {
+  margin-top: 14px; padding: 12px; border: 1px dashed var(--line); border-radius: 14px;
+  background: var(--raise);
+}
+.ai-tray-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-note { margin-top: 4px; font-size: 11.5px; line-height: 1.5; color: var(--faint); }
+.ai-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.ai-card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.ai-card-text { font-size: 14.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.ai-card-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.ai-error { margin-top: 8px; font-size: 12.5px; line-height: 1.45; color: var(--warn); }
+.ai-skel { height: 42px; border-radius: 12px; background: var(--line-soft); animation: aiPulse 1.4s ease-in-out infinite; }
+@keyframes aiPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* Choosing existing records to link. */
+.link-list { display: flex; flex-direction: column; margin-top: 10px; max-height: 50vh; overflow-y: auto; }
+.link-row {
+  display: flex; align-items: flex-start; gap: 11px; width: 100%; text-align: left;
+  background: none; border: none; border-top: 1px solid var(--line-soft); padding: 11px 2px;
+  font: inherit; font-size: 14.5px; line-height: 1.45; color: var(--ink); cursor: pointer;
+}
+.link-row:first-child { border-top: none; }
+.link-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.link-box {
+  flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 5px;
+  border: 1.5px solid var(--line); display: grid; place-items: center;
+}
+.link-row[aria-checked="true"] .link-box { background: var(--accent); border-color: var(--accent); }
+
+/* Important Dates, derived from linked priorities with a planned day. */
+.idates-row { display: flex; gap: 14px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 14.5px; line-height: 1.45; }
+.idates-row:first-child { border-top: none; }
+.idates-date { flex: none; min-width: 64px; color: var(--muted); }
+.idates-date[data-overdue="true"] { color: var(--warn); }

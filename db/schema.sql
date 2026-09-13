@@ -643,12 +643,13 @@ create table intentions (
    * one that has since been deleted is simply not shown. No constraint here can
    * reach into those tables, and no delete there can reach into this one.
    */
-  -- At most three, as the screen allows. A uuid is fixed-length, so only the
-  -- count needs a bound.
-  habit_ids     uuid[] not null default '{}'
-                constraint intentions_habit_ids_check
-                check (cardinality(habit_ids) <= 3),
+  -- Any number, in the order linked. No count limit.
+  habit_ids     uuid[] not null default '{}',
+  -- Legacy compatibility only: the first of priority_ids, or null. See the
+  -- column comments below.
   priority_id   uuid,
+  -- Canonical: every linked priority, in the order linked. No count limit.
+  priority_ids  uuid[] not null default '{}',
   -- The furthest step reached. Where "resume" lands, nothing more.
   step          smallint not null default 1 check (step between 1 and 5),
   -- When the session was first finished. Null while it is still in progress;
@@ -663,6 +664,10 @@ create table intentions (
 -- cannot be got around by a second request arriving at the same moment.
 create unique index intentions_one_active on intentions (user_id)
   where archived_at is null;
+-- Each link column's role, kept identical to scripts/migrations/intention-links.mjs.
+comment on column intentions.habit_ids is 'Every habit linked to this intention, in the order linked. No count limit.';
+comment on column intentions.priority_ids is 'Canonical. Every priority linked to this intention, in the order linked. The application reads and writes this list.';
+comment on column intentions.priority_id is 'Legacy compatibility only. Written as priority_ids[1], or null, so the pre-multi-link application still works after a rollback. Not a source of truth. To be removed by a later cleanup migration once no deployed code reads it.';
 
 -- --------------------------- updated_at trigger ----------------------------
 create or replace function touch_updated_at() returns trigger

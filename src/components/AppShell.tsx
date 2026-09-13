@@ -82,7 +82,13 @@ const NAV = [
  * 1200px wide is harder to read, not better used.
  */
 const RAIL_ROUTES = new Set(["/habits", "/priorities"]);
-const measureFor = (pathname: string) => (RAIL_ROUTES.has(pathname) ? 1240 : 780);
+/*
+ * Clarify Your Intention gets the wide shell too: its completed page sets Habits
+ * and Priorities side by side. The guided session inside it keeps its own
+ * narrow reading measure (`.intent`), so nothing about the questions changes.
+ */
+const WIDE_ROUTES = new Set([...RAIL_ROUTES, "/intention"]);
+const measureFor = (pathname: string) => (WIDE_ROUTES.has(pathname) ? 1240 : 780);
 
 /**
  * Keeps the language in three places agreed: React state (what you see), the

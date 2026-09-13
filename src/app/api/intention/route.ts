@@ -1,9 +1,29 @@
-import { ApiError, body, withUser } from "@/lib/api";
+import { ApiError, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
 import { isSchemaBehind, uniqueViolation } from "@/lib/db/diagnose";
 import { saveIntention } from "@/lib/db/queries";
 import { getDict } from "@/lib/i18n/server";
+import { MAX_INTENTION_REQUEST_CHARS } from "@/lib/intention";
 import { parseIntention } from "@/lib/validate";
+
+/**
+ * The request, bounded by size before it is parsed.
+ *
+ * An intention may link any number of habits and priorities, so there is no
+ * count limit anywhere; what protects the server is refusing a body larger than
+ * any real reflection could produce. See MAX_INTENTION_REQUEST_CHARS.
+ */
+async function intentionBody(request: Request): Promise<unknown> {
+  const raw = await request.text();
+  if (raw.length > MAX_INTENTION_REQUEST_CHARS) throw new ApiError("Request too large", 413);
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+    // Falls through to the same refusal as a non-object.
+  }
+  throw new ApiError("Malformed request body");
+}
 
 /**
  * Clarify Your Intention.
@@ -76,7 +96,7 @@ function orNotDeployed(e: unknown): unknown {
 
 export async function POST(request: Request) {
   return withUser(async (userId) => {
-    const intention = parseIntention(await body(request));
+    const intention = parseIntention(await intentionBody(request));
     let outcome = { started: false, finished: false };
     try {
       outcome = await saveIntention(userId, intention);

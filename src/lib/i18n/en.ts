@@ -1140,6 +1140,7 @@ export const en = {
       "You can export everything as JSON at any time, from More → Your data.",
       "You can ask for your account to be deleted, which removes it and everything it owns.",
       "Free access is limited to the first 50 accounts while RichHabit is in early access, and may change later.",
+      "If you ask for suggestions in Clarify Your Intention, your intention, why and vision are securely sent to Claude, Anthropic's AI model, to generate them. Nothing else is sent. Suggestions are optional, and nothing is added unless you choose to add it.",
     ],
   },
 
@@ -1283,14 +1284,14 @@ export const en = {
       question: "What will you actually do?",
       note: "An intention becomes real through what you repeat, and through what you give your attention to next.",
       habitsTitle: "Habits I'm building",
-      habitsHint: "Up to three. Each one becomes an ordinary habit on your sheet, tracked like any other.",
+      habitsHint: "Each one is an ordinary habit on your sheet, tracked like any other. Add as many as feel right.",
       habitPlaceholder: "A behaviour you could repeat",
       addHabit: "Add to Rich Habits",
       habitAdded: "On your habit sheet",
       openHabit: (name: string) => `Open "${name}" in the habit editor`,
-      priorityTitle: "My next priority",
-      priorityHint: "One thing that deserves your attention now. It stays on the compass until you finish it.",
-      priorityPlaceholder: "The next thing you'll do",
+      priorityTitle: "My priorities",
+      priorityHint: "Things that deserve your attention. Each stays on the compass until you finish it.",
+      priorityPlaceholder: "Something you'll do next",
       addPriority: "Add to Priority Compass",
       priorityAdded: "On your compass",
       /* The matrix asks these of every new line and never guesses. Asked here
@@ -1305,13 +1306,61 @@ export const en = {
       intention: "My intention",
       why: "Why it matters",
       habits: "Habits I'm building",
-      priority: "My next priority",
-      /** The earlier rungs, folded away. The deepest one is what is shown. */
+      priorities: "My priorities",
+      /** The earlier rungs and the vision, folded away. The deepest why is what is shown. */
       fullWhy: "The whole chain",
+      vision: "What it will look like",
       revisit: "Revisit",
-      noHabits: "No habits from this intention yet.",
-      noPriority: "No priority from this intention yet.",
+      noHabits: "No habits linked yet.",
+      noPriorities: "No priorities linked yet.",
       done: "Done",
+      importantDates: "Important dates",
+      importantDatesHint: "Planned days from your priorities",
+    },
+
+    /** Adding, linking and unlinking the ordinary records an intention points to. */
+    links: {
+      add: "Add",
+      linkExisting: "Link existing",
+      suggest: "Suggest with AI",
+      showAll: (n: number) => `Show all (${n})`,
+      showFewer: "Show fewer",
+      options: (name: string) => `Options for "${name}"`,
+      remove: "Remove from intention",
+      removeNote: "Removes the link only. Nothing is deleted.",
+      openCompass: (text: string) => `Open "${text}" in Priority Compass`,
+      linkHabitsTitle: "Link existing habits",
+      linkPrioritiesTitle: "Link existing priorities",
+      search: "Search",
+      nothingToLink: "Everything you have is already linked.",
+      noMatch: "Nothing matches that search.",
+      linkCount: (n: number) => (n === 0 ? "Link" : `Link ${n}`),
+      completed: "Completed",
+      cancel: "Cancel",
+    },
+
+    /**
+     * Suggestions. Claude recommends; the person decides. Drafts are temporary
+     * and nothing is added until the person chooses to add it.
+     */
+    ai: {
+      disclosure: "To generate suggestions, your intention, why, and vision are securely sent to Claude. Suggestions are optional and you decide what to add.",
+      title: "Suggestions",
+      loading: "Thinking of ideas…",
+      edit: "Edit",
+      doneEditing: "Done",
+      field: "Suggestion",
+      addHabit: "Add habit",
+      addPriority: "Add priority",
+      dismiss: (text: string) => `Dismiss "${text}"`,
+      more: "Suggest more",
+      close: "Close suggestions",
+      none: "No new ideas this time. Try again, or add your own.",
+      failed: "Suggestions didn't load. Please try again in a moment.",
+      unavailable: "Suggestions aren't available right now.",
+      limited: "You've reached the suggestion limit for now. Please try again later.",
+      busy: "Still working on your last request.",
+      needsIntention: "Write what you want first, then ask for suggestions.",
     },
 
     /**

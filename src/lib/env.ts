@@ -134,6 +134,31 @@ export const coach = {
   timeoutSeconds: num("COACH_TIMEOUT_SECONDS", 60),
 };
 
+// ──────────────────────── Intention suggestions (Claude) ─────────────────────
+
+/**
+ * Suggested habits and priorities for Clarify Your Intention.
+ *
+ * `CLAUDE_API_KEY` is a server-only secret. It is read here, lazily, and handed
+ * to the provider in src/lib/ai — it is never logged, returned, or placed in
+ * anything the browser receives. Absent, the suggestion route answers 501 and
+ * the rest of Clarify Your Intention is unaffected.
+ */
+export const intentionAi = {
+  get apiKey(): string | null { return process.env.CLAUDE_API_KEY?.trim() || null; },
+  get model(): string { return str("INTENTION_AI_MODEL", "claude-sonnet-5"); },
+  /**
+   * Optional. Required only when the key is not scoped to a workspace: Anthropic
+   * then needs the workspace to bill and govern each request. An identifier,
+   * not a secret, but still server-only like everything in this file.
+   */
+  get workspaceId(): string | null { return process.env.CLAUDE_WORKSPACE_ID?.trim() || null; },
+  get timeoutSeconds(): number { return num("INTENTION_AI_TIMEOUT_SECONDS", 30); },
+  /** Approved V1 limits, per user. */
+  get hourlyLimit(): number { return num("INTENTION_AI_HOURLY_LIMIT", 10); },
+  get dailyLimit(): number { return num("INTENTION_AI_DAILY_LIMIT", 30); },
+};
+
 /**
  * Set on the throwaway stack (`npm run dev:test`). Accounts created against it
  * are stamped as test accounts at the moment they are made, which is the only

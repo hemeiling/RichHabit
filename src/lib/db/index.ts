@@ -1,6 +1,7 @@
 "use client";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs,
+  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, IntentionSuggestion,
+  Prefs, SuggestionKind,
   SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 import type { CommunitySnapshot } from "@/lib/community";
@@ -100,6 +101,18 @@ export const deleteImportantDate = (id: string) => remove("/api/important-dates"
  * row however many times somebody pauses to think.
  */
 export const saveIntention = (i: Intention) => post("/api/intention", i);
+
+/**
+ * Suggested habits or priorities for the current intention. Only the list kind
+ * and the drafts already on screen are sent; the server reads the intention
+ * itself. Nothing is created by this call.
+ */
+export const suggestForIntention = (kind: SuggestionKind, exclude: string[]) =>
+  post("/api/intention/suggestions", { kind, exclude }) as Promise<{ suggestions: IntentionSuggestion[] }>;
+
+/** A generic event about a suggestion. Best effort: a failure is ignored. */
+export const recordSuggestionEvent = (event: "accepted" | "edited", kind: SuggestionKind) =>
+  post("/api/intention/suggestions/events", { event, kind }).catch(() => undefined);
 
 export const savePrefs = (p: Prefs) => post("/api/prefs", p);
 

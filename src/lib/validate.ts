@@ -7,8 +7,8 @@ import { isTemplateWording } from "@/lib/templates";
 import { SPENDING_CATEGORIES } from "@/lib/types";
 import { QUADRANTS } from "@/lib/priorities";
 import {
-  MAX_INTENTION_HABITS, MAX_NOTE, MAX_VISION_TEXT, MAX_WANT, MAX_WHY, MAX_WHY_TEXT,
-  OWNERSHIP_CHOICES, STEP_COUNT, VISION_PROMPTS,
+  MAX_NOTE, MAX_VISION_TEXT, MAX_WANT, MAX_WHY, MAX_WHY_TEXT,
+  OWNERSHIP_CHOICES, STEP_COUNT, VISION_PROMPTS, uniqueIds,
 } from "@/lib/intention";
 import type {
   AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, PriorityCategory,
@@ -381,10 +381,26 @@ export function parseIntention(b: any): Intention {
     throw new ApiError(`step must be between 1 and ${STEP_COUNT}`);
   }
 
-  const habitIds = Array.isArray(b?.habitIds) ? b.habitIds : [];
-  if (habitIds.length > MAX_INTENTION_HABITS) {
-    throw new ApiError(`An intention can start at most ${MAX_INTENTION_HABITS} habits`);
-  }
+  /*
+   * Linked records: any number of each. Every entry must be a real uuid, and a
+   * repeat is dropped while keeping the order things were first linked. There
+   * is deliberately no count limit here — the route bounds the request's size,
+   * which protects the server without limiting what somebody may link.
+   */
+  const ids = (raw: unknown, field: string): string[] => {
+    if (raw == null) return [];
+    if (!Array.isArray(raw)) throw new ApiError(`${field} must be an array`);
+    return uniqueIds(raw.map((v: unknown, i: number) => check.uuid(v, `${field}[${i}]`)));
+  };
+  const habitIds = ids(b?.habitIds, "habitIds");
+  /*
+   * `priorityIds` is canonical. A client from the previous release sends only
+   * `priorityId`; that single id becomes a one-item list rather than being lost
+   * in the middle of a deploy. An unusable legacy id is dropped, as before.
+   */
+  const priorityIds = b?.priorityIds !== undefined
+    ? ids(b.priorityIds, "priorityIds")
+    : isUuid(b?.priorityId) ? [b.priorityId] : [];
 
   return {
     id: check.uuid(b?.id, "id"),
@@ -403,8 +419,8 @@ export function parseIntention(b: any): Intention {
      * not found when the card resolves it against loaded state, and nothing is
      * ever written to the record it names.
      */
-    habitIds: habitIds.map((v: unknown, i: number) => check.uuid(v, `habitIds[${i}]`)),
-    priorityId: isUuid(b?.priorityId) ? b.priorityId : null,
+    habitIds,
+    priorityIds,
     step,
     complete: b?.complete === true,
   };

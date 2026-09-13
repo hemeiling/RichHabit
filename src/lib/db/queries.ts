@@ -8,6 +8,7 @@ import type {
 } from "@/lib/types";
 import { DEFAULT_PRIORITY_CATEGORY, normalizePriorityCategory } from "@/lib/types";
 import type { PriorityCategory } from "@/lib/types";
+import { legacyPriorityId, reconcilePriorityIds, uniqueIds } from "@/lib/intention";
 
 /**
  * The only place that knows SQL. Server-only: every function takes the user id
@@ -122,9 +123,13 @@ export async function loadState(userId: string): Promise<AppState> {
        * construction — `intentions_one_active` is a unique index — so the limit
        * is belt and braces rather than a window.
        */
+      /*
+       * `select *` rather than a column list, so this build can read a table
+       * that has not reached the multi-link migration yet: `priority_ids` is
+       * then simply absent and the legacy `priority_id` stands in for it.
+       */
       optionalRead<any>("intention",
-        `select id, want, why_chain, ownership, ownership_note, vision,
-                habit_ids, priority_id, step, completed_at
+        `select *
            from intentions
           where user_id = $1 and archived_at is null
           order by created_at limit 1`, [userId]),
@@ -266,8 +271,9 @@ export async function loadState(userId: string): Promise<AppState> {
     ownership: active.ownership ?? null,
     ownershipNote: active.ownership_note ?? "",
     vision: Array.isArray(active.vision) && active.vision.length ? active.vision : [""],
-    habitIds: Array.isArray(active.habit_ids) ? active.habit_ids : [],
-    priorityId: active.priority_id ?? null,
+    habitIds: uniqueIds(Array.isArray(active.habit_ids) ? active.habit_ids : []),
+    // Canonical list, with any rollback-era legacy link carried in once.
+    priorityIds: reconcilePriorityIds(active.priority_ids, active.priority_id),
     step: Number(active.step ?? 1),
     complete: active.completed_at != null,
   };
@@ -796,9 +802,9 @@ export async function saveIntention(
      ), saved as (
        insert into intentions
          (id, user_id, want, why_chain, ownership, ownership_note, vision,
-          habit_ids, priority_id, step, completed_at)
+          habit_ids, priority_id, step, completed_at, priority_ids)
        values ($1,$2,$3,$4::text[],$5,$6,$7::text[],$8::uuid[],$9,$10,
-               case when $11 then now() else null end)
+               case when $11 then now() else null end, $12::uuid[])
        on conflict (id) do update set
          want = excluded.want,
          why_chain = excluded.why_chain,
@@ -806,6 +812,9 @@ export async function saveIntention(
          ownership_note = excluded.ownership_note,
          vision = excluded.vision,
          habit_ids = excluded.habit_ids,
+         -- Canonical list, and the legacy column kept as its first entry so
+         -- the previous release still reads a sensible value after a rollback.
+         priority_ids = excluded.priority_ids,
          priority_id = excluded.priority_id,
          step = excluded.step,
          -- Kept if it is already set: finishing happened once, whenever that
@@ -821,11 +830,64 @@ export async function saveIntention(
               and (select completed_at from prior) is null) as finished
        from saved`,
     [i.id, userId, i.want, i.whyChain, i.ownership, i.ownershipNote, i.vision,
-      i.habitIds, i.priorityId, i.step, i.complete],
+      i.habitIds, legacyPriorityId(i.priorityIds), i.step, i.complete, i.priorityIds],
   );
   return {
     started: rows[0]?.started === true,
     finished: rows[0]?.finished === true,
+  };
+}
+
+/**
+ * What an intention suggestion request is allowed to read, and nothing more.
+ *
+ * Only the columns the model may see — what the person wants, the why chain and
+ * the vision — plus the ids needed to find the titles of records already linked
+ * to this intention. The ownership answer and its note are not selected at all.
+ * No other habit, priority, journal entry or account detail is read.
+ *
+ * On a database that has not reached the multi-link migration the column list
+ * fails with an undefined-column error, which the route reports as "not
+ * switched on" rather than falling back to a wider read.
+ */
+export async function intentionSuggestionSource(userId: string): Promise<{
+  want: string;
+  whyChain: string[];
+  vision: string[];
+  habits: { name: string; templateKey: string | null }[];
+  priorities: string[];
+} | null> {
+  const rows = await query<{
+    want: string | null; why_chain: string[] | null; vision: string[] | null;
+    habit_ids: string[] | null; priority_ids: string[] | null; priority_id: string | null;
+  }>(
+    `select want, why_chain, vision, habit_ids, priority_ids, priority_id
+       from intentions
+      where user_id = $1 and archived_at is null
+      order by created_at limit 1`, [userId]);
+  const row = rows[0];
+  if (!row) return null;
+
+  const habitIds = uniqueIds(Array.isArray(row.habit_ids) ? row.habit_ids : []);
+  const priorityIds = reconcilePriorityIds(row.priority_ids, row.priority_id);
+
+  const habits = habitIds.length
+    ? await query<{ name: string; template_key: string | null }>(
+      "select name, template_key from habits where user_id = $1 and id = any($2::uuid[])",
+      [userId, habitIds])
+    : [];
+  const priorities = priorityIds.length
+    ? await query<{ body: string }>(
+      "select body from priorities where user_id = $1 and id = any($2::uuid[])",
+      [userId, priorityIds])
+    : [];
+
+  return {
+    want: row.want ?? "",
+    whyChain: Array.isArray(row.why_chain) ? row.why_chain : [],
+    vision: Array.isArray(row.vision) ? row.vision : [],
+    habits: habits.map((h) => ({ name: h.name, templateKey: h.template_key })),
+    priorities: priorities.map((p) => p.body),
   };
 }
 

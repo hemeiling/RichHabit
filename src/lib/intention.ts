@@ -31,10 +31,6 @@ export const MAX_WHY = 3;
 export const VISION_PROMPTS = ["different", "doing", "day", "feeling"] as const;
 export type VisionPrompt = (typeof VISION_PROMPTS)[number];
 
-/** How many habits one intention may start. The product's number, not a limit
- *  of the habit system: three is what somebody can actually begin at once. */
-export const MAX_INTENTION_HABITS = 3;
-
 export const OWNERSHIP_CHOICES: IntentionOwnership[] = ["mine", "outside", "unsure"];
 
 /** Lengths, so the field, the validator and the column agree on one number. */
@@ -42,6 +38,23 @@ export const MAX_WANT = 2000;
 export const MAX_WHY_TEXT = 2000;
 export const MAX_NOTE = 2000;
 export const MAX_VISION_TEXT = 2000;
+
+/**
+ * How many linked habits or priorities a card shows before "Show all".
+ *
+ * A display choice, not a limit: an intention may link any number of records.
+ * Five keeps the page calm; the rest are one tap away.
+ */
+export const LIST_PREVIEW = 5;
+
+/**
+ * The largest intention save the route will read, in characters.
+ *
+ * Request-size protection for the server, not a cap on links: at 36 characters
+ * a uuid, a million characters leaves room for tens of thousands of linked
+ * records next to the longest reflection the fields allow.
+ */
+export const MAX_INTENTION_REQUEST_CHARS = 1_000_000;
 
 export const blankIntention = (): Intention => ({
   id: uid(),
@@ -52,7 +65,7 @@ export const blankIntention = (): Intention => ({
   ownershipNote: "",
   vision: [""],
   habitIds: [],
-  priorityId: null,
+  priorityIds: [],
   step: 1,
   complete: false,
 });
@@ -197,11 +210,59 @@ export function isBlank(i: Intention): boolean {
     && i.ownership === null
     && !filled(i.ownershipNote)
     && i.habitIds.length === 0
-    && i.priorityId === null;
+    && i.priorityIds.length === 0;
 }
 
+/* ─────────────────────────── linked records ─────────────────────────── */
+
 /**
- * The habits this intention started, as they are now.
+ * The links are ids of ordinary RichHabit habits and priorities — records the
+ * person created through the normal paths or chose from the ones they already
+ * had. An intention owns none of them, copies none of them, and never writes to
+ * them. There is no limit on how many there are.
+ */
+
+/** A list of ids without repeats, keeping the order they were first linked. */
+export function uniqueIds(ids: readonly string[]): string[] {
+  return [...new Set(ids)];
+}
+
+export const linkHabits = (i: Intention, ids: readonly string[]): Intention =>
+  ({ ...i, habitIds: uniqueIds([...i.habitIds, ...ids]) });
+
+export const unlinkHabit = (i: Intention, id: string): Intention =>
+  ({ ...i, habitIds: i.habitIds.filter((h) => h !== id) });
+
+export const linkPriorities = (i: Intention, ids: readonly string[]): Intention =>
+  ({ ...i, priorityIds: uniqueIds([...i.priorityIds, ...ids]) });
+
+export const unlinkPriority = (i: Intention, id: string): Intention =>
+  ({ ...i, priorityIds: i.priorityIds.filter((p) => p !== id) });
+
+/**
+ * The canonical priority list, as read from a stored row.
+ *
+ * `priority_ids` is the source of truth. `priority_id` is the legacy column the
+ * previous release reads and writes. If that release was ever rolled back to
+ * and changed the single link, the id it wrote may be missing from the list —
+ * so it is put first, once, and the next save makes the two consistent again.
+ * An id already in the list changes nothing. This protects edits made during a
+ * rollback; it never makes the legacy column authoritative.
+ */
+export function reconcilePriorityIds(
+  priorityIds: readonly string[] | null | undefined, legacyPriorityId: string | null | undefined,
+): string[] {
+  const list = uniqueIds(Array.isArray(priorityIds) ? priorityIds : []);
+  if (legacyPriorityId && !list.includes(legacyPriorityId)) return [legacyPriorityId, ...list];
+  return list;
+}
+
+/** What the legacy column holds for a given list: the first priority, or null. */
+export const legacyPriorityId = (priorityIds: readonly string[]): string | null =>
+  priorityIds[0] ?? null;
+
+/**
+ * The habits this intention links, as they are now.
  *
  * Resolved against whatever habits the account currently has, in the order the
  * intention recorded them. A habit that has since been deleted is simply not
@@ -213,13 +274,20 @@ export function linkedHabits<T extends { id: string }>(i: Intention, habits: T[]
   return i.habitIds.map((id) => byId.get(id)).filter((h): h is T => Boolean(h));
 }
 
-export function linkedPriority<T extends { id: string }>(
-  i: Intention, priorities: T[],
-): T | null {
-  if (!i.priorityId) return null;
-  return priorities.find((p) => p.id === i.priorityId) ?? null;
+export function linkedPriorities<T extends { id: string }>(i: Intention, priorities: T[]): T[] {
+  const byId = new Map(priorities.map((p) => [p.id, p]));
+  return i.priorityIds.map((id) => byId.get(id)).filter((p): p is T => Boolean(p));
 }
 
-/** Whether another habit may be started from this intention. */
-export const canAddHabit = (i: Intention): boolean =>
-  i.habitIds.length < MAX_INTENTION_HABITS;
+/**
+ * Important Dates for the completed page, derived for now: the linked
+ * priorities that have a planned day, soonest first. No separate link between
+ * an intention and the calendar exists.
+ */
+export function plannedDates<T extends { id: string; plannedOn: string | null }>(
+  i: Intention, priorities: T[],
+): T[] {
+  return linkedPriorities(i, priorities)
+    .filter((p) => p.plannedOn !== null)
+    .sort((a, b) => (a.plannedOn! < b.plannedOn! ? -1 : a.plannedOn! > b.plannedOn! ? 1 : 0));
+}

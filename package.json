@@ -24,6 +24,7 @@
     "db:prune": "node scripts/prune-test-accounts.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "next": "14.2.15",
     "openai": "^7.4.0",
     "pg": "^8.23.0",

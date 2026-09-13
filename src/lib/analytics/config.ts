@@ -93,7 +93,13 @@ export const FEATURES = {
    */
   intention: {
     label: "Clarify Your Intention",
-    events: ["intention_started", "intention_completed"],
+    /* The AI events carry the kind (habit or priority) and nothing else: no
+       intention text, no suggestion text, no accepted text, no lengths. */
+    events: [
+      "intention_started", "intention_completed",
+      "intention_ai_suggestions_requested", "intention_ai_suggestion_accepted",
+      "intention_ai_suggestion_edited",
+    ],
   },
 } as const;
 
