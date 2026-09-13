@@ -41,7 +41,7 @@ the phase 1 schema and data layer without changing either.
 | pushed | `origin/feature/ai-workspace` at `0236d45` before this status commit |
 | production migration | **applied 2026-09-13 15:21 UTC and verified, 24 of 24** (below) |
 | merged into `main` | **not yet**: `feature/ai-workspace` fast-forwards cleanly onto `main` (`f0a8e28`); GitHub has no branch protection on `main` |
-| deployed | **no**; production still runs `dd7bec0`, which does not touch the new tables |
+| deployed | **no**. A Render deploy was run on 2026-09-13, but at 21:27 UTC GitHub `main` was still `f0a8e28` and production still served `dd7bec0`'s build: old stylesheet `75c048d9e24f72f2`; the workspace API returned the HTML 404, not JSON (Cloudflare `DYNAMIC`, so not a cache); none of the local build's assets were present. 7 of 21 public checks passed: health, no connection string in health, forged cookie refused, and no Claude key, database credential or OpenAI key in visitor scripts. Needs `8549421` pushed to `main`, then a redeploy. |
 
 **Release baseline re-verified before merge, 2026-09-13 (branch head `d51f2a1`)**
 
