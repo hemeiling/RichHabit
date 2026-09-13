@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import AppShell from "@/components/AppShell";
+import { currentAdmin } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n/server";
 import { databaseUrl, isLocalDatabase } from "@/lib/env";
@@ -26,9 +27,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
    */
   const localDb = isLocalDatabase(databaseUrl());
 
+  /*
+   * Whether to offer the AI Workspace launcher. Read from `users.role` on the
+   * server, like every admin check. This only decides what is drawn: the
+   * workspace's API answers 404 to anyone who is not an admin regardless.
+   */
+  const aiWorkspace = Boolean(await currentAdmin().catch(() => null));
+
   // Resolved server-side so the first paint is already in the right language.
   return (
-    <AppShell userId={user.id} email={user.email} locale={getLocale()} localDb={localDb}>
+    <AppShell userId={user.id} email={user.email} locale={getLocale()} localDb={localDb} aiWorkspace={aiWorkspace}>
       {children}
     </AppShell>
   );

@@ -7,6 +7,7 @@ import LanguageToggle from "@/components/LanguageToggle";
 import Sidebar, { SidebarToggle, type NavItem, type NavNode } from "@/components/Sidebar";
 import { useSignOut } from "@/components/useSignOut";
 import FeedbackSheet from "@/components/FeedbackSheet";
+import AiLauncher from "@/components/aiWorkspace/AiLauncher";
 import { LocaleProvider, useAdoptLocale, useLocale, useT } from "@/lib/i18n/context";
 import { dict, type Locale } from "@/lib/i18n";
 
@@ -343,15 +344,18 @@ function Chrome({ email, localDb, children }:
 }
 
 export default function AppShell({
-  userId, email, locale, localDb, children,
+  userId, email, locale, localDb, aiWorkspace = false, children,
 }: {
   userId: string; email: string; locale: Locale; localDb: boolean;
+  /** Admins only, decided by the layout from the database. */
+  aiWorkspace?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
         <Chrome email={email} localDb={localDb}>{children}</Chrome>
+        {aiWorkspace && <AiLauncher />}
       </HabitsProvider>
     </LocaleProvider>
   );

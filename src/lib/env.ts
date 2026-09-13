@@ -162,6 +162,13 @@ const megabytes = (name: string, fallback: number): number =>
  * migration. The database checks are generous backstops only.
  */
 export const aiWorkspace = {
+  /**
+   * The same server-only `CLAUDE_API_KEY` as intention suggestions: one
+   * workspace-scoped key, read lazily and handed straight to the provider.
+   * Absent, the workspace stays usable for reading history and says replies are
+   * unavailable.
+   */
+  get apiKey(): string | null { return process.env.CLAUDE_API_KEY?.trim() || null; },
   get model(): string { return str("AI_WORKSPACE_MODEL", "claude-sonnet-5"); },
   get maxOutputTokens(): number { return num("AI_WORKSPACE_MAX_OUTPUT_TOKENS", 8000); },
   get contextTargetTokens(): number { return num("AI_WORKSPACE_CONTEXT_TARGET_TOKENS", 150000); },
