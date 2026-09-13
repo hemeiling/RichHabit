@@ -2,21 +2,91 @@
 
 > Last updated: 2026-09-13
 >
-> **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED · `main` AT `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
-> **AI WORKSPACE (ADMIN ONLY): PROPOSAL REVISION 3 APPROVED · PHASE 1 NEXT ON `feature/ai-workspace` · NOT IMPLEMENTED**
+> **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
+> **AI WORKSPACE (ADMIN ONLY): PHASE 1 COMPLETE ON `feature/ai-workspace` AT `7fcf53a` · SCHEMA, MIGRATION AND DATA LAYER ONLY · BRANCH PUSHED, NOT MERGED · NO NEON OR PRODUCTION MIGRATION · NOT DEPLOYED**
 > **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> Production runs `dd7bec0142f9497849697960d09bd7795e0ad935`: the intention-links
+> **Repository:** `main` and `origin/main` are at `f0a8e28`, a status-only
+> commit on top of `dd7bec0`. The AI Workspace exists only on the
+> `feature/ai-workspace` branch.
+>
+> **Deployed application:** the code running in production is the `dd7bec0`
+> code release (`dd7bec0142f9497849697960d09bd7795e0ad935`): the intention-links
 > release (`e0eb036`) plus a workspace-scoped Claude key with no workspace-id
 > setting, a clearer message when the provider refuses the key, and a fix for
-> priority suggestions that always came back empty. No database migration.
-> Render did not auto-deploy; the Product Owner deployed manually.
+> priority suggestions that always came back empty. Production health is OK. No
+> AI Workspace code or migration is deployed. `dd7bec0` needed no database
+> migration; Render did not auto-deploy it and the Product Owner deployed
+> manually.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## AI Workspace, phase 1: schema, migration and data layer (complete locally, not released)
+
+Approved design: proposal revision 3 (seven tables, explicit reply lineage,
+`ai_message_files`, versioned upload disclosure).
+
+| Item | State |
+| --- | --- |
+| branch | `feature/ai-workspace`, from `f0a8e28`, in the worktree `~/dev/rich-habits-ai-workspace` outside OneDrive |
+| feature commit | `7fcf53a8a311d38a25b5cf603180106cb8e4757d` (15 files), local only |
+| status commit | this commit, `PROJECT_STATUS.md` only, local only |
+| pushed / merged | branch pushed to `origin/feature/ai-workspace` with this commit / not merged into `main` |
+| migration on Neon or production | **none has run** |
+| repository `main` | `main` and `origin/main` at `f0a8e28`, a status-only commit; no AI Workspace code on `main` |
+| production | **unchanged**: the deployed application code is the `dd7bec0` code release; health OK; no AI Workspace code or migration deployed |
+
+**Phase 1 is complete locally, and it is only the schema, the migration and the
+data layer.** There are no API routes, no interface, no provider (Claude or
+other) implementation and no network calls yet; those are later phases.
+
+**What exists**
+
+- Migration step 8 (`scripts/migrations/ai-workspace.mjs`, called last by
+  `scripts/migrate.mjs`): creates `ai_projects`, `ai_conversations`,
+  `ai_messages`, `ai_files`, `ai_message_files`, `ai_file_provider_copies` and
+  `ai_workspace_settings` if absent. Create-only and guarded; the same
+  definitions close `db/schema.sql`.
+- `src/lib/aiWorkspace`: types, disclosure version, lifecycle rules, validation,
+  and `queries.ts`, the only module touching the seven tables. Every function is
+  scoped to the admin's user id.
+- Limits are configuration in `src/lib/env.ts` (`AI_WORKSPACE_*`, documented in
+  `.env.example`): PDF 10 MB, image 5 MB, text 2 MB, 100 MB per admin, 20 and
+  100 messages an hour and a day, 8,000 output tokens, 150,000 / 200,000 context.
+
+**Local verification, 2026-09-13: all passed**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| full unit suite on the branch | 704 of 704 |
+| AI Workspace tests (migration, queries, lifecycle, boundaries) | 58 of 58 |
+| real `scripts/migrate.mjs` on a local database built from `main`'s schema, twice | run 1 creates the seven tables (main's own 2 changes + 7); run 2 "Nothing to do" |
+| same database migrated by `main`'s `migrate.mjs` vs the branch's | 10 of 10 checks; every non-AI table, column, constraint, index, trigger, function and row identical across 28 tables |
+| fresh install from the branch's `db/schema.sql` | step 8 creates nothing; identical AI structure to the migrated database |
+| change-set scans | no secrets, no mode changes, no control characters, no routes or interface, no network or provider code, no remote database strings |
+
+All databases used were throwaway local PGlite instances.
+
+**Issues found and fixed during phase 1:** a history rule in `lifecycle.ts` that
+always returned true; ids compared without normalising case; provider-copy
+updates that threw synchronously; two control characters written literally into
+source by the editor, now escaped.
+
+**Remaining database-safety evidence gap:** real concurrent contention on the
+per-admin storage-quota lock. It was exercised with concurrent uploads in
+PGlite, which runs one transaction at a time, so true parallel contention on a
+multi-connection database is unproven. **This will be tested on a Neon
+rehearsal branch before any production migration is put forward for approval.**
+
+**Next step:** the phase 1 Neon rehearsal, awaiting Product Owner approval,
+including a real multi-connection quota-lock contention test. It comes before
+any production migration or merge approval. Phase 2 has not started; no Neon
+rehearsal, production migration, merge or deploy until separately approved.
 
 ## Claude key-only configuration and priority-suggestion fix (released, verified in production)
 
