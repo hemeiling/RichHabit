@@ -2,25 +2,22 @@
 
 > Last updated: 2026-09-13
 >
-> **AI WORKSPACE CHATBOT (ADMIN ONLY): PHASES 1–2 COMMITTED AND PUSHED ON `feature/ai-workspace` (`0236d45`) · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC) · NOT MERGED INTO `main` (NEEDS PRODUCT OWNER REVIEW) · NOT DEPLOYED**
+> **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · SIGNED-IN CHECKS PENDING (PRODUCT OWNER)**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
 > **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `main` and `origin/main` are still `f0a8e28`. The AI Workspace
-> is on `origin/feature/ai-workspace`, which fast-forwards cleanly onto `main`;
-> the fast-forward was not performed because merging into `main` needs the
-> Product Owner's review in this environment.
+> **Repository:** `origin/main` is `f7499fc`, fast-forwarded from `f0a8e28`.
+> Later status-only commits may sit on `feature/ai-workspace` ahead of `main`.
 >
 > **Production database:** the seven AI Workspace tables exist in production
 > (additive, created empty on 2026-09-13). Every pre-existing table, index,
 > constraint and row was verified unchanged.
 >
-> **Deployed application:** still the `dd7bec0` code release
-> (`dd7bec0142f9497849697960d09bd7795e0ad935`), which does not use the new
-> tables. Production health is OK. Render did not auto-deploy the last releases;
-> the Product Owner deployed them manually.
+> **Deployed application:** `f7499fca52bca2bfebc75faca4b3a505e6a18830` (AI
+> Workspace), deployed manually by the Product Owner. Render has not
+> auto-deployed recent releases, and it deploys only what is on `main`.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
@@ -40,8 +37,23 @@ the phase 1 schema and data layer without changing either.
 | status commits | `PROJECT_STATUS.md` only, separate from the feature commits |
 | pushed | `origin/feature/ai-workspace` at `0236d45` before this status commit |
 | production migration | **applied 2026-09-13 15:21 UTC and verified, 24 of 24** (below) |
-| merged into `main` | **not yet**: `feature/ai-workspace` fast-forwards cleanly onto `main` (`f0a8e28`); GitHub has no branch protection on `main` |
-| deployed | **no**. A Render deploy was run on 2026-09-13, but at 21:27 UTC GitHub `main` was still `f0a8e28` and production still served `dd7bec0`'s build: old stylesheet `75c048d9e24f72f2`; the workspace API returned the HTML 404, not JSON (Cloudflare `DYNAMIC`, so not a cache); none of the local build's assets were present. 7 of 21 public checks passed: health, no connection string in health, forged cookie refused, and no Claude key, database credential or OpenAI key in visitor scripts. Needs `8549421` pushed to `main`, then a redeploy. |
+| merged into `main` | **yes**: `main` fast-forwarded from `f0a8e28` to `f7499fca52bca2bfebc75faca4b3a505e6a18830` on 2026-09-13 (pushed by the Product Owner) |
+| deployed | **yes**: `f7499fc` deployed to Render by the Product Owner on 2026-09-13, after two earlier deploys ran before `main` moved and still served `dd7bec0`. Code is identical to the tested branch head `d51f2a1`; only `PROJECT_STATUS.md` differs. |
+| production verified (public) | **21 of 21**, below |
+| production verified (signed in) | **pending**: Product Owner admin desktop, admin phone and ordinary-account checks |
+
+**Production verification after deploying `f7499fc`, 2026-09-13: 21 of 21 public checks, plus a read-only database check**
+
+| Check | Result |
+| --- | --- |
+| build identity | GitHub `main` = `f7499fc`; production serves stylesheets `acf9366ad5034582` and `407913228fec5345` and chunks `3629-a7361e4cb9b8196d` and `3274.db4a19fac5d27f05`, byte-for-byte the names of the local build of the same code; chunk `3274` holds the workspace client. The old `75c048d9e24f72f2` is gone. |
+| health | 200, database up; the response carries no connection string |
+| 13 workspace routes signed out (workspace, conversations list/create/read/message, stop, continue, retry, projects create/read, files upload/read, disclosure) | each 404 `application/json` `{"error":"Not found"}`, `no-store` |
+| forged session cookie | 404 |
+| visitor scripts | no `CLAUDE_API_KEY`, `sk-ant-`, `api.anthropic.com`, `postgres://`, `neon.tech`, `*DATABASE_URL`, `OPENAI_API_KEY` or `sk-proj-` |
+| database, read-only transaction | seven `ai_` tables present, all empty; users 13, habits 149, completions 78, priorities 46, goals 39, intentions 1, important dates 7, admins 4, identical to before the deploy |
+| migration | not re-run |
+| schema drift | unchanged: `priorities_user_order` still `(user_id, sort_order, created_on)`; `feedback_created_idx` still absent |
 
 **Release baseline re-verified before merge, 2026-09-13 (branch head `d51f2a1`)**
 
@@ -182,17 +194,19 @@ separate decision.
 
 **Next step (Product Owner):**
 
-1. Review and merge. `feature/ai-workspace` fast-forwards onto `main`:
-   `git push origin feature/ai-workspace:main`, or merge a pull request from
-   `feature/ai-workspace` into `main` on GitHub. No database step is needed;
-   production is already migrated.
-2. In Render, "Deploy latest commit" and wait for it to go live. Signed out,
-   `https://richhabit.onrender.com/api/admin/ai/workspace` then answers
-   `{"error":"Not found"}` as JSON instead of the HTML 404 page.
-3. Signed in as an admin: open the launcher at the bottom right, send a message
-   and watch it stream, Stop a long reply and Continue it, accept the upload
-   notice and ask about a PDF, reload and check the history, and try a phone.
-   Then confirm an ordinary account sees no launcher.
+Merge, deploy and public verification are done (`f7499fc`, 21 of 21). What remains
+is the signed-in check in production:
+
+1. Admin, desktop: the launcher shows; a reply streams; Stop, Continue and Retry
+   work; history survives a reload; a project with instructions works; the
+   upload notice comes first, then a question about a PDF is answered; a
+   Chinese question gets a Chinese reply.
+2. Admin, phone: the workspace fills the screen and the composer stays above the
+   keyboard.
+3. Ordinary account: no launcher.
+
+Record the result here. Merge any later status-only commits from
+`feature/ai-workspace` into `main` with the next release; they need no deploy.
 
 **Known limits of this release:** one reply at a time and orphan recovery rely
 on RichHabit running as a single Render instance; Files API copies are not
