@@ -12,16 +12,9 @@ import { AiFailed, type AiProvider } from "./provider";
  * Errors are reduced to a status code before they leave this file. The SDK's
  * error objects can carry request details, and none of that may reach a log.
  */
-export function createClaudeProvider(apiKey: string, model: string, workspaceId: string | null = null): AiProvider {
-  /*
-   * A key that is not scoped to a workspace must name one on every request.
-   * Sent only when configured, so a workspace-scoped key needs nothing extra.
-   */
-  const client = new Anthropic({
-    apiKey,
-    maxRetries: 1,
-    ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}),
-  });
+export function createClaudeProvider(apiKey: string, model: string): AiProvider {
+  // The key is scoped to one Anthropic workspace, so requests need no workspace header.
+  const client = new Anthropic({ apiKey, maxRetries: 1 });
 
   return {
     name: "claude",

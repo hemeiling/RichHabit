@@ -40,6 +40,17 @@ export class AiFailed extends Error {
   constructor(readonly status: number | null) {
     super(status ? `AI provider request failed (${status})` : "AI provider request failed");
   }
+
+  /**
+   * The provider refused the request itself — a missing, invalid or wrongly
+   * scoped key, no access to the model, or a request it will never accept.
+   * Retrying will not help, so the person is told suggestions are unavailable
+   * rather than asked to try again. Timeouts, rate limits and outages are not
+   * rejections.
+   */
+  get rejected(): boolean {
+    return this.status === 400 || this.status === 401 || this.status === 403 || this.status === 404;
+  }
 }
 
 let testProvider: AiProvider | null | undefined;
@@ -59,5 +70,5 @@ export async function intentionAiProvider(): Promise<AiProvider | null> {
   const apiKey = intentionAi.apiKey;
   if (!apiKey) return null;
   const { createClaudeProvider } = await import("./claude");
-  return createClaudeProvider(apiKey, intentionAi.model, intentionAi.workspaceId);
+  return createClaudeProvider(apiKey, intentionAi.model);
 }

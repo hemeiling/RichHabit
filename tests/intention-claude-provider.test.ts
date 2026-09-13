@@ -50,12 +50,18 @@ describe("the Claude provider", () => {
     expect(created[0].options).toEqual({ timeout: 1234 });
   });
 
-  it("sends a workspace header only when a workspace is configured", async () => {
+  it("sends no workspace header: the key is workspace-scoped", async () => {
     const { createClaudeProvider } = await import("../src/lib/ai/claude");
     createClaudeProvider(PLACEHOLDER, "claude-sonnet-5");
-    createClaudeProvider(PLACEHOLDER, "claude-sonnet-5", "wrkspc_placeholder");
-    expect(constructed[0].defaultHeaders).toBeUndefined();
-    expect(constructed[1].defaultHeaders).toEqual({ "anthropic-workspace-id": "wrkspc_placeholder" });
+    expect(constructed[0]).toEqual({ apiKey: PLACEHOLDER, maxRetries: 1 });
+    await createClaudeProvider(PLACEHOLDER, "claude-sonnet-5").generateStructured(request);
+    expect(JSON.stringify(created[0].options)).not.toMatch(/workspace/i);
+  });
+
+  it("treats a refused key or request as a rejection, and outages as retryable", async () => {
+    const { AiFailed } = await import("../src/lib/ai/provider");
+    for (const status of [400, 401, 403, 404]) expect(new AiFailed(status).rejected).toBe(true);
+    for (const status of [408, 429, 500, 529, null]) expect(new AiFailed(status).rejected).toBe(false);
   });
 
   it("reduces a provider error to its status code", async () => {

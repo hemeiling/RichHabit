@@ -147,12 +147,6 @@ export const coach = {
 export const intentionAi = {
   get apiKey(): string | null { return process.env.CLAUDE_API_KEY?.trim() || null; },
   get model(): string { return str("INTENTION_AI_MODEL", "claude-sonnet-5"); },
-  /**
-   * Optional. Required only when the key is not scoped to a workspace: Anthropic
-   * then needs the workspace to bill and govern each request. An identifier,
-   * not a secret, but still server-only like everything in this file.
-   */
-  get workspaceId(): string | null { return process.env.CLAUDE_WORKSPACE_ID?.trim() || null; },
   get timeoutSeconds(): number { return num("INTENTION_AI_TIMEOUT_SECONDS", 30); },
   /** Approved V1 limits, per user. */
   get hourlyLimit(): number { return num("INTENTION_AI_HOURLY_LIMIT", 10); },

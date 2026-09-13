@@ -64,6 +64,8 @@ export async function POST(request: Request) {
       } catch (e) {
         const status = e instanceof AiFailed ? e.status : null;
         console.error(`[api] intention suggestions failed (${status ?? "no status"})`);
+        // A refused key or configuration will not fix itself; anything else might.
+        if (e instanceof AiFailed && e.rejected) throw new ApiError(t.intention.ai.unavailable, 503);
         throw new ApiError(t.intention.ai.failed, 502);
       }
 

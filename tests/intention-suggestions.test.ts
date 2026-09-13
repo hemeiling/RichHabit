@@ -55,6 +55,13 @@ describe("what the model receives", () => {
     expect(JSON.stringify(priorities.schema)).not.toMatch(/time_of_day|important|urgent|quadrant|date/);
     expect(priorities.system).toMatch(/Do not decide how important or urgent/);
   });
+
+  it("asks for priorities as a plain list of strings, which Claude returns as a real array", () => {
+    const priorities = suggestionPrompt("priorities", buildSuggestionContext(source, [], "en"), []);
+    const habits = suggestionPrompt("habits", buildSuggestionContext(source, [], "en"), []);
+    expect((priorities.schema as any).properties.suggestions.items).toEqual({ type: "string" });
+    expect((habits.schema as any).properties.suggestions.items.required).toEqual(["text", "time_of_day"]);
+  });
 });
 
 describe("what comes back", () => {
@@ -84,9 +91,21 @@ describe("what comes back", () => {
     expect(out).toEqual([{ text: "New one", category: null }]);
   });
 
+  it("reads priorities returned as strings, with the same cleaning and de-duplication", () => {
+    const out = parseSuggestions(
+      { suggestions: ["- Book a trial lesson\nthis week", "Call Mum", "  ", 7, "book a trial lesson this week", "Draft the Q3 talk"] },
+      "priorities", ["Call Mum"], []);
+    expect(out).toEqual([
+      { text: "Book a trial lesson this week", category: null },
+      { text: "Draft the Q3 talk", category: null },
+    ]);
+  });
+
   it("returns nothing for a malformed answer", () => {
     expect(parseSuggestions(null, "habits", [], [])).toEqual([]);
     expect(parseSuggestions({ suggestions: "nope" }, "habits", [], [])).toEqual([]);
+    // What Claude sent for the old priority schema: the list JSON-encoded into one string.
+    expect(parseSuggestions({ suggestions: '{"text": "Book a coach"}, {"text": "Draft the talk"}' }, "priorities", [], [])).toEqual([]);
   });
 
   it("accepts only a known kind and a bounded list of on-screen drafts", () => {
@@ -152,14 +171,14 @@ const post = (body: unknown) => new Request("http://localhost/api/intention/sugg
 describe("the suggestion route", () => {
   let received: StructuredRequest[];
   let answer: unknown;
-  let fail = false;
+  let fail: number | false = false;
   const fake: AiProvider = {
     name: "fake",
     async generateStructured(request) {
       received.push(request);
       if (fail) {
         const { AiFailed } = await import("../src/lib/ai/provider");
-        throw new AiFailed(529);
+        throw new AiFailed(fail);
       }
       return answer;
     },
@@ -226,7 +245,7 @@ describe("the suggestion route", () => {
   });
 
   it("logs a provider failure as a status code only, and says nothing private", async () => {
-    fail = true;
+    fail = 529;
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const { POST } = await import("../src/app/api/intention/suggestions/route");
     const res = await POST(post({ kind: "habits" }));
@@ -237,6 +256,31 @@ describe("the suggestion route", () => {
     expect(logged).not.toMatch(/Speak confidently|To be heard|Calm in meetings|Read aloud/);
     expect(JSON.stringify(await res.json())).not.toMatch(/Speak confidently|529/);
     expect(tracked).toHaveLength(0);
+  });
+
+  it("says suggestions are unavailable when the provider refuses the key or request", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { POST } = await import("../src/app/api/intention/suggestions/route");
+    for (const status of [400, 401, 403, 404]) {
+      fail = status;
+      const res = await POST(post({ kind: "habits" }));
+      expect(res.status, String(status)).toBe(503);
+      expect((await res.json()).error).toBe("Suggestions aren't available right now.");
+    }
+    errors.mockRestore();
+    expect(tracked).toHaveLength(0);
+  });
+
+  it("asks to try again when the provider is busy, down or slow", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { POST } = await import("../src/app/api/intention/suggestions/route");
+    for (const status of [429, 500, 529]) {
+      fail = status;
+      const res = await POST(post({ kind: "priorities" }));
+      expect(res.status, String(status)).toBe(502);
+      expect((await res.json()).error).toBe("Suggestions didn't load. Please try again in a moment.");
+    }
+    errors.mockRestore();
   });
 });
 
@@ -310,5 +354,11 @@ describe("the credential and the browser", () => {
 
   it("keeps the placeholder in .env.example empty", () => {
     expect(read(".env.example")).toMatch(/^CLAUDE_API_KEY=$/m);
+  });
+
+  it("has no workspace id setting: the key is workspace-scoped", () => {
+    for (const f of [...files, ".env.example"]) {
+      expect(read(f), f).not.toMatch(/CLAUDE_WORKSPACE_ID|anthropic-workspace-id|workspaceId/);
+    }
   });
 });

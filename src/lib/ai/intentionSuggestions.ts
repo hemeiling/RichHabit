@@ -102,14 +102,20 @@ const quoteList = (items: string[]) => items.map((item, at) => `${at + 1}. ${ite
 /** The request for the provider. `system` never contains the person's words. */
 export function suggestionPrompt(kind: SuggestionKind, ctx: SuggestionContext, exclude: string[]) {
   const habits = kind === "habits";
-  const item: Record<string, unknown> = {
-    type: "object",
-    additionalProperties: false,
-    required: habits ? ["text", "time_of_day"] : ["text"],
-    properties: habits
-      ? { text: { type: "string" }, time_of_day: { type: "string", enum: TIMES } }
-      : { text: { type: "string" } },
-  };
+  /*
+   * A priority is only its words, so it is asked for as a plain string. Given an
+   * object with a single `text` property, Claude returned the whole list as one
+   * JSON-encoded string instead of an array — every time, in live trials — and
+   * nothing survived parsing. A string list came back as a real array every time.
+   */
+  const item: Record<string, unknown> = habits
+    ? {
+      type: "object",
+      additionalProperties: false,
+      required: ["text", "time_of_day"],
+      properties: { text: { type: "string" }, time_of_day: { type: "string", enum: TIMES } },
+    }
+    : { type: "string" };
 
   const prompt = [
     `<intention>\n${ctx.intention}\n</intention>`,
@@ -151,7 +157,8 @@ export function parseSuggestions(
   const seen = new Set([...alreadyLinked, ...exclude].map((s) => clean(s).toLowerCase()));
   const out: IntentionSuggestion[] = [];
   for (const entry of list) {
-    const item = (entry ?? {}) as { text?: unknown; time_of_day?: unknown };
+    // Priorities arrive as strings; habits, and any older object shape, as { text }.
+    const item = (typeof entry === "string" ? { text: entry } : entry ?? {}) as { text?: unknown; time_of_day?: unknown };
     const text = clean(item.text).replace(/^[-*•\d.)\s"'“]+/, "").replace(/["'”]+$/, "").slice(0, MAX_SUGGESTION_TEXT).trim();
     if (!text) continue;
     const key = text.toLowerCase();
