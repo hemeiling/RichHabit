@@ -1,0 +1,25 @@
+sequenceDiagram
+  autonumber
+  participant B as Browser
+  participant R as files route
+  participant F as fileType.ts
+  participant Q as queries.recordUpload
+  participant DB as Postgres
+
+  B->>R: multipart file + projectId or conversationId
+  R->>R: workspaceAdmin · 404 unless admin
+  R->>R: larger than the largest per-type limit · 413
+  R->>F: detectFileType(bytes)
+  alt not PDF, PNG, JPEG, GIF, WebP or UTF-8 text
+    R-->>B: 415 · unsupported
+  end
+  R->>Q: recordUpload with the kind and type found in the bytes
+  Note right of Q: one destination · allowlist · not empty<br/>per-type limit 413 · filename cleaned · SHA-256
+  Q->>DB: BEGIN
+  Q->>DB: current disclosure version accepted? else 409
+  Q->>DB: pg_advisory_xact_lock(hashtextextended('ai_workspace_storage:' + userId, 0))
+  Q->>DB: destination owned and not archived? else 404 or 409
+  Q->>DB: same SHA-256 live in the same place? return it · reused
+  Q->>DB: SUM of live byte_size · over quota 413 · rollback
+  Q->>DB: INSERT ai_files · COMMIT
+  R-->>B: file metadata and storage used, never the bytes

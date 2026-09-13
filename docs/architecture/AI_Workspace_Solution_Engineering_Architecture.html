@@ -1,0 +1,989 @@
+<title>AI Workspace Architecture</title>
+<meta name="description" content="Solution engineering architecture of RichHabit's admin AI Workspace, traced to the code and the verified behaviour.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Document for the RichHabit AI Workspace. Diagram sources: diagrams/*.mmd, embedded verbatim below. */
+  :root {
+    --paper: #F4F5F1; --surface: #FFFFFF; --sheet: #FBFBF8;
+    --ink: #15171B; --ink-2: #3B3F46; --muted: #5E636B; --rule: #D8DAD2; --rule-soft: #E7E8E2; --code-bg: #ECEDE7;
+    --pine: #2F5D50; --pine-bg: #E5F0EA; --steel: #2B5B84; --steel-bg: #E2ECF5;
+    --ochre: #8A5F1F; --ochre-line: #A9762C; --ochre-bg: #FAF1E1;
+    --lav: #5C5875; --lav-bg: #EFEEF4; --brick: #974A3F; --brick-bg: #F6EAE7;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #111315; --surface: #181B1E; --sheet: #FBFBF8;
+      --ink: #E8E9E4; --ink-2: #C6C9C3; --muted: #9DA1A6; --rule: #2F3337; --rule-soft: #24282B; --code-bg: #23272B;
+      --pine: #86C0AD; --pine-bg: #1B2B26; --steel: #8DB6DB; --steel-bg: #1A2632;
+      --ochre: #DDB06C; --ochre-line: #C99A52; --ochre-bg: #2D2517;
+      --lav: #B8B4CE; --lav-bg: #24232D; --brick: #DE9A8E; --brick-bg: #33211D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #111315; --surface: #181B1E; --sheet: #FBFBF8;
+    --ink: #E8E9E4; --ink-2: #C6C9C3; --muted: #9DA1A6; --rule: #2F3337; --rule-soft: #24282B; --code-bg: #23272B;
+    --pine: #86C0AD; --pine-bg: #1B2B26; --steel: #8DB6DB; --steel-bg: #1A2632;
+    --ochre: #DDB06C; --ochre-line: #C99A52; --ochre-bg: #2D2517;
+    --lav: #B8B4CE; --lav-bg: #24232D; --brick: #DE9A8E; --brick-bg: #33211D;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.6; padding-inline: 20px; }
+  code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); padding: .08em .35em; border-radius: 4px; overflow-wrap: anywhere; }
+  a { color: var(--steel); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+
+  .shell { max-width: 1320px; margin: 0 auto; padding-block: 28px 80px; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 44px; }
+  .index { position: sticky; top: 20px; align-self: start; font-size: 13px; }
+  .index p { font-family: var(--cond); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; color: var(--muted); margin: 0 0 8px; }
+  .index ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .index a { display: grid; grid-template-columns: 28px 1fr; gap: 4px; padding: 5px 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; }
+  .index a:hover { background: var(--surface); color: var(--ink); }
+  .index span { font-family: var(--mono); color: var(--muted); }
+  @media (max-width: 1080px) {
+    .shell { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .index { position: static; }
+    .index ol { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  }
+
+  main { min-width: 0; display: grid; gap: 64px; }
+  h1, h2, h3 { font-family: var(--cond); font-weight: 600; line-height: 1.15; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(30px, 4.2vw, 46px); letter-spacing: -.01em; }
+  h2 { font-size: clamp(22px, 2.6vw, 30px); }
+  h3 { font-size: 17px; margin-top: 8px; }
+  p { margin: 0; max-width: 78ch; }
+
+  .titleblock { display: grid; gap: 18px; }
+  .kicker { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  .block { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); border: 1px solid var(--rule); background: var(--surface); }
+  .block div { padding: 10px 12px; border-right: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); min-width: 0; }
+  .block dt { font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  .block dd { margin: 2px 0 0; font-size: 13.5px; overflow-wrap: anywhere; }
+  .state { display: flex; flex-wrap: wrap; gap: 8px; }
+  .lede { font-size: 16.5px; color: var(--ink-2); }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; padding: 3px 7px; border-radius: 3px; border: 1px solid; white-space: nowrap; line-height: 1.4; vertical-align: 1px; }
+  .b-p1 { color: var(--pine); background: var(--pine-bg); border-color: var(--pine); }
+  .b-p2 { color: var(--pine); background: var(--surface); border-color: var(--pine); border-width: 1px 1px 1px 4px; }
+  .b-neon { color: var(--steel); background: var(--steel-bg); border-color: var(--steel); }
+  .b-local { color: var(--steel); background: var(--surface); border-color: var(--steel); border-style: solid; }
+  .b-prod { color: var(--surface); background: var(--pine); border-color: var(--pine); }
+  .b-wait { color: var(--ochre); background: var(--ochre-bg); border-color: var(--ochre-line); border-style: dashed; }
+  .b-future { color: var(--lav); background: var(--lav-bg); border-color: var(--lav); border-style: dotted; }
+  .b-no { color: var(--brick); background: var(--brick-bg); border-color: var(--brick); }
+
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 20px; padding: 14px 16px; border: 1px solid var(--rule); background: var(--surface); font-size: 13px; }
+  .legend div { display: flex; gap: 10px; align-items: baseline; }
+  .legend .badge { flex: none; }
+
+  section.view { display: grid; gap: 18px; scroll-margin-top: 20px; }
+  .view-head { display: grid; gap: 8px; border-top: 2px solid var(--ink); padding-top: 12px; }
+  .view-no { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  figure { margin: 0; display: grid; gap: 6px; min-width: 0; }
+  .sheet { background: var(--sheet); border: 1px solid var(--rule); overflow-x: auto; padding: 18px; color: #15171B; }
+  .sheet pre.mermaid { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre; color: #15171B; background: transparent; }
+  .sheet svg { display: block; margin-inline: auto; height: auto; }
+  figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-size: 12.5px; color: var(--muted); }
+  figcaption code { background: none; padding: 0; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--rule-soft); }
+  th { font-family: var(--cond); font-weight: 600; font-size: 12px; letter-spacing: .03em; color: var(--ink-2); background: var(--paper); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .wide table { min-width: 1080px; }
+  .mid table { min-width: 760px; }
+  td .badge { margin: 1px 2px 1px 0; }
+  .num { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+
+  .notes { display: grid; gap: 8px; padding-left: 18px; margin: 0; max-width: 84ch; }
+  .notes li::marker { font-family: var(--mono); color: var(--muted); }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .panel { border: 1px solid var(--rule); background: var(--surface); padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+  .panel h3 { margin: 0; }
+  .panel ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 13.5px; }
+  .callout { border-left: 3px solid var(--ochre-line); background: var(--ochre-bg); padding: 12px 14px; font-size: 14px; }
+  .callout strong { color: var(--ochre); }
+  .findings { counter-reset: f; list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .findings li { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; font-size: 14px; }
+  .findings .id { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 2px; }
+  footer { border-top: 1px solid var(--rule); padding-top: 14px; font-size: 12.5px; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+<div class="shell">
+  <nav class="index" aria-label="Views">
+    <p>Views</p>
+    <ol>
+      <li><a href="#v1"><span>01</span>End-to-end solution</a></li>
+      <li><a href="#v2"><span>02</span>Backend functional blocks</a></li>
+      <li><a href="#v3"><span>03</span>Code to capability</a></li>
+      <li><a href="#v4"><span>04</span>Physical data</a></li>
+      <li><a href="#v5"><span>05</span>Send message</a></li>
+      <li><a href="#v6"><span>06</span>File upload and quota</a></li>
+      <li><a href="#v7"><span>07</span>Continue, Retry, lineage</a></li>
+      <li><a href="#v8"><span>08</span>Security and trust</a></li>
+      <li><a href="#v9"><span>09</span>Migration and release</a></li>
+      <li><a href="#v10"><span>10</span>Verification</a></li>
+      <li><a href="#findings"><span>—</span>Findings for review</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="titleblock">
+      <p class="kicker">RichHabit · Solution engineering architecture · admin-only AI Workspace</p>
+      <h1>AI Workspace Solution Engineering Architecture</h1>
+      <p class="lede">The admin-only AI Workspace as it is built and verified: a chatbot with projects, files and streaming Claude replies, on a seven-table schema, traced from each capability to the module, the database objects, the rules that hold it together, and the evidence that it behaves that way.</p>
+      <dl class="block">
+        <div><dt>Branch</dt><dd><code>feature/ai-workspace</code></dd></div>
+        <div><dt>Phase 1 commit</dt><dd><code>7fcf53a</code> schema, migration, data layer</dd></div>
+        <div><dt>Phase 2 commit</dt><dd><code>0236d45</code> routes, provider, interface</dd></div>
+        <div><dt>Repository main</dt><dd><code>f0a8e28</code> (not yet merged)</dd></div>
+        <div><dt>Deployed release</dt><dd><code>dd7bec0</code> (no AI Workspace code)</dd></div>
+        <div><dt>Production database</dt><dd>seven AI tables migrated 2026-09-13, verified 24 of 24</dd></div>
+        <div><dt>Model</dt><dd><code>claude-sonnet-5</code> through <code>CLAUDE_API_KEY</code></dd></div>
+        <div><dt>Document date</dt><dd>2026-09-13 · draft for review</dd></div>
+      </dl>
+      <div class="state">
+        <span class="badge b-p1">Implemented — phase 1</span>
+        <span class="badge b-p2">Implemented — phase 2</span>
+        <span class="badge b-neon">Verified on Neon</span>
+        <span class="badge b-prod">Migrated in production</span>
+        <span class="badge b-wait">Awaiting merge and deploy</span>
+      </div>
+      <div class="legend" aria-label="Status markers">
+        <div><span class="badge b-p1">Implemented — phase 1</span><span>Schema, migration and data layer, committed.</span></div>
+        <div><span class="badge b-p2">Implemented — phase 2</span><span>Routes, runtime, provider and interface, committed and tested locally.</span></div>
+        <div><span class="badge b-neon">Verified on Neon</span><span>Proven on Neon: the rehearsal branch or the production migration.</span></div>
+        <div><span class="badge b-local">Verified locally</span><span>Unit, browser or live-Claude checks on this machine.</span></div>
+        <div><span class="badge b-prod">Migrated in production</span><span>Present in the production database now.</span></div>
+        <div><span class="badge b-wait">Awaiting release</span><span>Needs the Product Owner: merge into <code>main</code>, Render deploy, signed-in checks.</span></div>
+        <div><span class="badge b-future">Future / optional</span><span>Designed for, not built.</span></div>
+        <div><span class="badge b-no">Not in V1</span><span>Deliberately absent, and held absent by tests.</span></div>
+      </div>
+    </header>
+
+    <!-- ─────────────────────────── 01 ─────────────────────────── -->
+    <section class="view" id="v1">
+      <div class="view-head">
+        <span class="view-no">View 01</span>
+        <h2>End-to-end solution architecture</h2>
+        <div class="badges"><span class="badge b-p1">Implemented — phase 1</span><span class="badge b-p2">Implemented — phase 2</span><span class="badge b-prod">Migrated in production</span><span class="badge b-wait">Awaiting deploy</span><span class="badge b-future">Gemini: future</span></div>
+      </div>
+      <figure>
+        <div class="sheet" data-min="900"><pre class="mermaid">flowchart LR
+  classDef impl fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.6px,color:#14201B
+  classDef existing fill:#FFFFFF,stroke:#8A8F98,stroke-width:1.2px,color:#15171B
+  classDef external fill:#FBF3E4,stroke:#A9762C,stroke-width:1.4px,color:#3A2A10
+  classDef future fill:#F1F0F5,stroke:#77738F,stroke-width:1.2px,stroke-dasharray:3 4,color:#2D2B3A
+  classDef blocked fill:#F7ECEA,stroke:#A6584C,stroke-width:1.2px,stroke-dasharray:2 3,color:#3B1D18
+
+  subgraph BROWSER["Browser · untrusted · rendered for admins only"]
+    UI["AiLauncher · Workspace · Chat · ProjectPage&lt;br/&gt;src/components/aiWorkspace · P2"]:::impl
+  end
+
+  subgraph SERVER["RichHabit server · Next.js on Render · trusted"]
+    direction TB
+    ROUTES["12 route files&lt;br/&gt;src/app/api/admin/ai/workspace · P2"]:::impl
+    GUARD["workspaceAdmin → currentAdmin&lt;br/&gt;users.role re-read · 404"]:::existing
+    RUNTIME["src/lib/aiWorkspaceRuntime · P2&lt;br/&gt;reply · context · limits · fileType · view · copies"]:::impl
+    PROVIDER["provider.ts · the provider seam · P2"]:::impl
+    CLAUDEFILE["src/lib/ai/claude.ts&lt;br/&gt;the only file using Anthropic's SDK"]:::impl
+    DATA["src/lib/aiWorkspace/queries.ts&lt;br/&gt;owner-scoped data layer · P1"]:::impl
+    ENV["env.ts · CLAUDE_API_KEY · AI_WORKSPACE_*"]:::existing
+  end
+
+  subgraph POSTGRES["Neon Postgres · production"]
+    direction TB
+    AITABLES[("7 ai_ tables&lt;br/&gt;migrated 2026-09-13")]:::impl
+    PERSONAL[("RichHabit personal data&lt;br/&gt;habits · priorities · intentions · journal")]:::blocked
+  end
+
+  subgraph ANTHROPIC["Anthropic · third party"]
+    MESSAGES["Messages API · claude-sonnet-5&lt;br/&gt;streaming"]:::external
+    FILESAPI["Files API&lt;br/&gt;attached PDFs and images"]:::external
+  end
+  GEMINI["Gemini provider"]:::future
+
+  UI --&gt;|"1 · same-origin fetch · session cookie"| ROUTES
+  ROUTES --&gt;|"2"| GUARD
+  GUARD --&gt;|"3 · admin id"| RUNTIME
+  RUNTIME --&gt;|"4"| DATA
+  DATA ==&gt;|"5 · user_id on every statement"| AITABLES
+  RUNTIME --&gt;|"6 · turns and parts"| PROVIDER
+  PROVIDER --&gt; CLAUDEFILE
+  ENV -.-&gt;|"key · server only"| CLAUDEFILE
+  CLAUDEFILE --&gt;|"7 · stream"| MESSAGES
+  CLAUDEFILE -.-&gt;|"upload once · reuse"| FILESAPI
+  ROUTES --&gt;|"8 · NDJSON start · delta · done"| UI
+  PROVIDER -.-&gt; GEMINI
+  RUNTIME -. "no import path · boundary tests" .-&gt; PERSONAL</pre></div>
+        <figcaption><span>Figure 1 — Request path from the admin's browser to Claude and back. P1 and P2 mark the phase that built each part.</span><code>diagrams/01-end-to-end.mmd</code></figcaption>
+      </figure>
+      <ol class="notes">
+        <li>The launcher and workspace render only when the app layout finds <code>users.role = 'admin'</code>. The browser talks only to same-origin <code>/api/admin/ai/workspace</code> routes and holds no key.</li>
+        <li>Every route starts with <code>workspaceAdmin()</code>, which re-reads the role from the database and answers <code>404</code> to everyone else.</li>
+        <li>The admin's id is the only identity the runtime receives; every data-layer statement is scoped by it.</li>
+        <li>The runtime assembles the model request from five layers only and hands turns and parts to the provider seam.</li>
+        <li><code>src/lib/ai/claude.ts</code> is the one file that uses Anthropic's SDK. It streams from the Messages API and uploads attached PDFs and images to the Files API once.</li>
+        <li>Text streams back to the browser as NDJSON and is saved to the reply's row as it arrives.</li>
+      </ol>
+    </section>
+
+    <!-- ─────────────────────────── 02 ─────────────────────────── -->
+    <section class="view" id="v2">
+      <div class="view-head">
+        <span class="view-no">View 02</span>
+        <h2>Backend functional block architecture</h2>
+        <div class="badges"><span class="badge b-p2">Routes and runtime — phase 2</span><span class="badge b-p1">Data layer — phase 1</span></div>
+      </div>
+      <figure>
+        <div class="sheet" data-min="860"><pre class="mermaid">flowchart TB
+  classDef route fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.3px,color:#15171B
+  classDef runtime fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef data fill:#F4F5F2,stroke:#5F646C,stroke-width:1.3px,color:#15171B
+  classDef table fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.3px,color:#15171B
+  classDef external fill:#FBF3E4,stroke:#A9762C,stroke-width:1.4px,color:#3A2A10
+
+  subgraph ROUTES["API routes · src/app/api/admin/ai/workspace · P2"]
+    direction LR
+    R1["route.ts&lt;br/&gt;bootstrap"]:::route
+    R2["projects&lt;br/&gt;projects/[id]"]:::route
+    R3["conversations&lt;br/&gt;conversations/[id]"]:::route
+    R4["conversations/[id]/messages&lt;br/&gt;NDJSON"]:::route
+    R5["messages/[id]/continue · retry · stop"]:::route
+    R6["files · files/[id]&lt;br/&gt;disclosure"]:::route
+  end
+
+  subgraph RUNTIME["Runtime · src/lib/aiWorkspaceRuntime · P2"]
+    direction LR
+    H["http.ts&lt;br/&gt;admin 404 · localised refusals · NDJSON"]:::runtime
+    RP["reply.ts&lt;br/&gt;replyResponse · runReply"]:::runtime
+    CX["context.ts&lt;br/&gt;five layers · token budget"]:::runtime
+    LM["limits.ts&lt;br/&gt;one reply slot · hourly and daily"]:::runtime
+    FT["fileType.ts&lt;br/&gt;type from bytes"]:::runtime
+    VW["view.ts&lt;br/&gt;exchanges · orphan recovery"]:::runtime
+    CP["copies.ts&lt;br/&gt;remote copy deletion"]:::runtime
+    PV["provider.ts&lt;br/&gt;seam · scripted-provider guard"]:::runtime
+  end
+
+  subgraph DATA["Data layer · src/lib/aiWorkspace · P1"]
+    direction LR
+    Q["queries.ts"]:::data
+    L["lifecycle.ts"]:::data
+    V["validate.ts · types.ts · disclosure.ts"]:::data
+  end
+
+  C["src/lib/ai/claude.ts&lt;br/&gt;createClaudeWorkspaceProvider"]:::external
+  T[("7 ai_ tables")]:::table
+
+  R1 --&gt; H
+  R2 --&gt; H
+  R3 --&gt; VW
+  R4 --&gt; RP
+  R5 --&gt; RP
+  R6 --&gt; FT
+  R2 --&gt; CP
+  R6 --&gt; CP
+  RP --&gt; LM
+  RP --&gt; CX
+  RP --&gt; PV
+  PV --&gt; C
+  RP --&gt; Q
+  VW --&gt; Q
+  VW --&gt; L
+  CX --&gt; L
+  LM --&gt; Q
+  FT --&gt; Q
+  Q --&gt; V
+  Q --&gt; T</pre></div>
+        <figcaption><span>Figure 2 — Routes call the runtime; only the data layer touches the seven tables.</span><code>diagrams/02-backend-blocks.mmd</code></figcaption>
+      </figure>
+      <div class="cols">
+        <div class="panel">
+          <h3>Conventions every block follows</h3>
+          <ul>
+            <li>The admin's user id is the first argument of every data-layer function; missing and foreign rows are indistinguishable (<code>null</code>, <code>false</code> or <code>404</code>).</li>
+            <li>Multi-statement writes run in one <code>transaction()</code>, locking the row they change with <code>FOR UPDATE</code>.</li>
+            <li>Refusals are <code>ApiError</code>s with safe English sentences, translated at the edge by <code>localiseError</code>; anything unrecognised becomes the generic message.</li>
+            <li>No block logs content: unexpected errors are logged as a name and a code only.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>What the data layer cannot see</h3>
+          <ul>
+            <li>No SQL naming a RichHabit data table; no import of analytics, auth, the store or domain modules (tests: <code>ai-workspace-boundaries</code>, <code>ai-workspace-runtime-boundaries</code>).</li>
+            <li>No credential or <code>process.env</code> read; configuration arrives through <code>env.ts</code> getters.</li>
+            <li>Only <code>src/lib/aiWorkspace</code> names the <code>ai_</code> tables.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────── 03 ─────────────────────────── -->
+    <section class="view" id="v3">
+      <div class="view-head">
+        <span class="view-no">View 03</span>
+        <h2>Actual code-to-capability mapping</h2>
+        <p>Capability → code → database objects → rules → runtime behaviour → evidence. Line numbers refer to <code>src/lib/aiWorkspace/queries.ts</code> unless another file is named. Evidence keys are listed under the table.</p>
+      </div>
+      <div class="table-wrap wide">
+        <table>
+          <thead><tr><th>Capability</th><th>Status</th><th>Code</th><th>Tables</th><th>Transaction and security rule</th><th>Runtime behaviour</th><th>Evidence</th></tr></thead>
+          <tbody>
+            <tr><td>Admin-only access</td><td><span class="badge b-p2">P2</span></td><td><code>workspaceAdmin</code>, <code>workspaceJson</code> (<code>http.ts</code>); <code>replyResponse</code> (<code>reply.ts</code>); first line of every handler</td><td>reads <code>users</code></td><td>role re-read from the database each request; nothing runs before it</td><td>signed out, ordinary, disabled → <code>404 {"error":"Not found"}</code></td><td>U-R · U-RB · E2E</td></tr>
+            <tr><td>Ownership isolation</td><td><span class="badge b-p1">P1</span></td><td>every function in <code>queries.ts</code> takes <code>userId</code> first</td><td>all seven</td><td>composite <code>(id, user_id)</code> keys; <code>user_id</code> in every predicate</td><td>another admin's id behaves as not found</td><td>U-Q · N-I · U-R · E2E</td></tr>
+            <tr><td>Workspace bootstrap</td><td><span class="badge b-p2">P2</span></td><td><code>GET route.ts</code></td><td>settings, files, projects, conversations</td><td>read-only</td><td>notice state, storage, lists, limits, whether replies are available</td><td>U-R</td></tr>
+            <tr><td>Projects</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>createProject</code> :113 · <code>updateProject</code> :122 · <code>setProjectArchived</code> :138; <code>projects</code> routes; <code>ProjectPage.tsx</code></td><td><code>ai_projects</code></td><td>name 1–120 on one line; instructions ≤ 20,000</td><td>archive is reversible; an archived project refuses new chats (404) and library uploads (409)</td><td>U-Q · U-R · E2E</td></tr>
+            <tr><td>Permanent project delete</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>projectDeletionSummary</code> :150 · <code>deleteProjectPermanently</code> :172; <code>copies.ts</code></td><td>all, by cascade</td><td>transaction, row lock, exact name; attachment key checked at commit</td><td>conversations, messages and files go; uploaded copies deleted remotely, best effort</td><td>U-M · U-Q · U-R · E2E</td></tr>
+            <tr><td>Conversations</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>createConversation</code> :218 · <code>renameConversation</code> :232 · <code>setConversationArchived</code> :242 · <code>deleteConversation</code> :255; <code>view.ts</code></td><td><code>ai_conversations</code></td><td>standalone, or in an owned live project</td><td>rename sets <code>title_edited</code>; archived refuses send, Continue, Retry and uploads (409)</td><td>U-R · E2E</td></tr>
+            <tr><td>Send and stream</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>startReply</code> :377; <code>replyResponse</code>, <code>runReply</code>; <code>Chat.tsx</code></td><td>messages, message files, conversations</td><td>one transaction for the rows; synchronous reply slot; limits before any write</td><td>NDJSON start, deltas, done; text saved at most a second apart</td><td>U-R · U-RP · E2E · LIVE</td></tr>
+            <tr><td>Idempotent send</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>startReply</code> client id branch; messages route <code>existing</code></td><td><code>ai_messages_client_idx</code></td><td>unique <code>(user_id, client_id)</code></td><td>a repeat returns the saved rows; the model is not asked again</td><td>U-Q · U-R · E2E</td></tr>
+            <tr><td>Stop</td><td><span class="badge b-p2">P2</span></td><td><code>stopRunningReply</code> (<code>limits.ts</code>); stop route; <code>finishReply</code> :514</td><td><code>ai_messages</code></td><td>only a streaming row changes</td><td>running here: abort, saved as stopped; left behind: ended with its saved text</td><td>U-R · U-RP · E2E · LIVE</td></tr>
+            <tr><td>Continue and Retry</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>startContinuation</code> :471 · <code>startRetry</code> :484; <code>canContinue</code>, <code>canRetry</code> (<code>lifecycle.ts</code>); <code>assembleContext</code> modes</td><td><code>ai_messages</code></td><td>continued once, retried once; lineage within one conversation</td><td>Continue sends the saved text and a fixed instruction; Retry asks the message again without later history</td><td>U-L · U-RT · U-RP · U-R · N-I · E2E · LIVE</td></tr>
+            <tr><td>Recovery</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>recoverStaleStreams</code> :298; orphan recovery in <code>conversationView</code></td><td><code>ai_messages</code></td><td>15 minutes in the data layer; 20 seconds for a reply no request in this process owns</td><td>shown as interrupted, with Retry</td><td>U-Q · U-RP · N-I</td></tr>
+            <tr><td>Spend limits</td><td><span class="badge b-p2">P2</span></td><td><code>hourlyAndDailyAllowance</code>, <code>reserveReply</code> (<code>limits.ts</code>) over <code>countRepliesSince</code> :538</td><td><code>ai_messages_usage_idx</code></td><td>20 an hour, 100 a day, counted from the database; one reply at a time</td><td>429 or 409 with a translated message</td><td>U-RT · U-R</td></tr>
+            <tr><td>Context assembly</td><td><span class="badge b-p2">P2</span></td><td><code>assembleContext</code>, <code>systemPrompt</code>, <code>userTurn</code> (<code>context.ts</code>)</td><td>reads messages and project instructions</td><td>five layers; imports only lifecycle and types</td><td>failed and stopped answers left out; oldest exchanges dropped past 150,000 estimated tokens</td><td>U-RT · U-RP · U-RB</td></tr>
+            <tr><td>Upload notice</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>acceptUploadDisclosure</code> :565; disclosure route; <code>DisclosureDialog</code></td><td><code>ai_workspace_settings</code></td><td>exact current version only</td><td>uploads refused until accepted; asked again when the version changes</td><td>U-Q · U-R · E2E</td></tr>
+            <tr><td>Uploads and quota</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td>files route with <code>detectFileType</code>; <code>recordUpload</code> :603</td><td><code>ai_files</code></td><td>type from bytes; per-type limit; advisory-locked quota; de-duplication</td><td>415, 413 or the existing file</td><td>U-RT · U-R · U-Q · N-C · E2E · LIVE</td></tr>
+            <tr><td>Attachments</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>startReply</code> eligibility; composer chips and library picker (<code>Chat.tsx</code>)</td><td><code>ai_message_files</code></td><td>≤ 20, unique, live, this conversation or this project's library</td><td>order kept end to end</td><td>U-Q · U-R · E2E</td></tr>
+            <tr><td>Deleting files</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>deleteFile</code> :697 · <code>discardUnsentUpload</code> :714; files/[id] route</td><td><code>ai_files</code>, copies</td><td>tombstone check: bytes gone exactly when <code>deleted_at</code> is set</td><td>messages show "File removed"; remote copy deleted and marked</td><td>U-M · U-R · E2E · LIVE</td></tr>
+            <tr><td>Provider copies</td><td><span class="badge b-p1">P1</span> <span class="badge b-p2">P2</span></td><td><code>claimProviderCopy</code> :728 · marks :756–768; <code>resolveAttachment</code> (<code>reply.ts</code>)</td><td><code>ai_file_provider_copies</code></td><td>uploaded needs a live file; a copy the provider could not use is marked failed</td><td>upload once, reuse; inline bytes for one request if an upload fails</td><td>U-RP · E2E · LIVE</td></tr>
+            <tr><td>Provider seam and Claude</td><td><span class="badge b-p2">P2</span></td><td><code>workspaceProvider</code> (<code>provider.ts</code>); <code>createClaudeWorkspaceProvider</code>, <code>classifyFailure</code> (<code>src/lib/ai/claude.ts</code>)</td><td>—</td><td>key read in <code>env.ts</code> only; one file uses the SDK</td><td>errors reduced to a code and a status; stop reasons normalised</td><td>U-C · U-RB · LIVE</td></tr>
+            <tr><td>Rendering</td><td><span class="badge b-p2">P2</span></td><td><code>Markdown.tsx</code></td><td>—</td><td>no raw HTML; images become links; highlighting escapes its input</td><td>lists, tables, highlighted code, copy</td><td>U-RB · E2E</td></tr>
+            <tr><td>Responsive and bilingual</td><td><span class="badge b-p2">P2</span></td><td><code>Workspace.tsx</code>, <code>workspace.css</code>; <code>aiWorkspace</code> in <code>en.ts</code> and <code>zh.ts</code></td><td>—</td><td>app tokens; visual-viewport height on phones</td><td>panel, expanded, full screen; English, Chinese, bilingual</td><td>i18n parity · E2E</td></tr>
+            <tr><td>Migration</td><td><span class="badge b-p1">P1</span> <span class="badge b-prod">Production</span></td><td><code>migrateAiWorkspace</code> (<code>scripts/migrations/ai-workspace.mjs</code>), step 8 of <code>scripts/migrate.mjs</code></td><td>seven tables, 14 indexes</td><td>create-only; inside the migration's single transaction</td><td>second run: "Nothing to do"</td><td>U-M · rehearsal · PM</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted)">Evidence keys — U-Q queries (16), U-M migration and constraints (16), U-L lifecycle (14), U-B data-layer boundaries (12), U-RT runtime (18), U-C Claude adapter (6), U-RP reply orchestration (10), U-R API routes (12), U-RB runtime boundaries (13), E2E browser suite (91), LIVE real Claude (13), N-I Neon integrity (26), N-C Neon concurrency (29), PM production migration (24).</p>
+    </section>
+
+    <!-- ─────────────────────────── 04 ─────────────────────────── -->
+    <section class="view" id="v4">
+      <div class="view-head">
+        <span class="view-no">View 04</span>
+        <h2>Physical data architecture</h2>
+        <div class="badges"><span class="badge b-p1">Implemented — phase 1</span><span class="badge b-neon">Verified on Neon</span><span class="badge b-prod">Migrated in production</span></div>
+        <p>Seven tables under the existing <code>users</code> table. Thick arrows are composite owner keys; dashed is the deferred attachment key; self arrows keep lineage inside one conversation.</p>
+      </div>
+      <figure>
+        <div class="sheet" data-min="1000"><pre class="mermaid">flowchart LR
+  classDef table fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.4px,color:#15171B
+  classDef existing fill:#F4F5F2,stroke:#8A8F98,stroke-width:1.2px,color:#15171B
+
+  USERS[("users&lt;br/&gt;existing RichHabit table")]:::existing
+
+  PROJ["ai_projects&lt;br/&gt;PK id · UNIQUE (id, user_id)&lt;br/&gt;name 1–120 · instructions ≤ 20,000&lt;br/&gt;archived_at&lt;br/&gt;INDEX owner (user_id, updated_at) WHERE live"]:::table
+
+  CONV["ai_conversations&lt;br/&gt;PK id · UNIQUE (id, user_id)&lt;br/&gt;project_id NULL = standalone&lt;br/&gt;title ≤ 200 · title_edited · last_message_at · archived_at&lt;br/&gt;INDEX recent · INDEX project"]:::table
+
+  MSG["ai_messages&lt;br/&gt;PK id · UNIQUE (id, conversation_id) · UNIQUE (id, user_id)&lt;br/&gt;role · status · reply_kind · content ≤ 500,000&lt;br/&gt;CHECK user row: complete, no lineage, no provider&lt;br/&gt;CHECK assistant row: reply_to set, exactly one kind&lt;br/&gt;UNIQUE (user_id, client_id) · continued once · retried once"]:::table
+
+  MFILES["ai_message_files&lt;br/&gt;PK (message_id, file_id)&lt;br/&gt;UNIQUE (message_id, position)&lt;br/&gt;position 0–99 backstop · 20 in data layer"]:::table
+
+  FILES["ai_files&lt;br/&gt;PK id · UNIQUE (id, user_id)&lt;br/&gt;CHECK exactly one home: project or conversation&lt;br/&gt;kind · mime allowlist · sha256 · byte_size ≤ 32 MB backstop&lt;br/&gt;TOMBSTONE deleted_at set ⇔ content NULL&lt;br/&gt;UNIQUE live (user_id, home, sha256)&lt;br/&gt;INDEX quota (user_id) INCLUDE byte_size"]:::table
+
+  COPIES["ai_file_provider_copies&lt;br/&gt;PK (file_id, provider)&lt;br/&gt;status pending · uploaded · failed · deleted&lt;br/&gt;CHECK uploaded ⇒ provider_file_id + uploaded_at&lt;br/&gt;CHECK deleted ⇒ deleted_at"]:::table
+
+  SETTINGS["ai_workspace_settings&lt;br/&gt;PK user_id&lt;br/&gt;CHECK disclosure version ⇔ accepted_at"]:::table
+
+  USERS --&gt;|"user_id · cascade"| PROJ
+  USERS --&gt;|"user_id · cascade"| CONV
+  USERS --&gt;|"user_id · cascade"| FILES
+  USERS --&gt;|"user_id · cascade"| SETTINGS
+  PROJ ==&gt;|"(project_id, user_id) · cascade"| CONV
+  PROJ ==&gt;|"(project_id, user_id) · cascade"| FILES
+  CONV ==&gt;|"(conversation_id, user_id) · cascade"| MSG
+  CONV ==&gt;|"(conversation_id, user_id) · cascade"| FILES
+  MSG ==&gt;|"(message_id, user_id) · cascade"| MFILES
+  FILES -.-&gt;|"(file_id, user_id) · DEFERRABLE INITIALLY DEFERRED · no cascade"| MFILES
+  FILES --&gt;|"file_id · cascade"| COPIES
+  MSG --&gt;|"self · (reply_to_message_id, conversation_id) · cascade"| MSG
+  MSG --&gt;|"self · (continuation_of_message_id, conversation_id) · cascade"| MSG
+  MSG --&gt;|"self · (retry_of_message_id, conversation_id) · cascade"| MSG</pre></div>
+        <figcaption><span>Figure 4 — Tables, keys, checks and relationships as created by migration step 8 and <code>db/schema.sql</code>.</span><code>diagrams/04-data-model.mmd</code></figcaption>
+      </figure>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>From</th><th>To</th><th>Kind</th><th>On delete</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><code>ai_projects.user_id</code>, <code>ai_conversations.user_id</code>, <code>ai_files.user_id</code>, <code>ai_workspace_settings.user_id</code></td><td><code>users</code></td><td>normal</td><td>cascade</td><td>an account's workspace goes with the account</td></tr>
+            <tr><td><code>ai_conversations (project_id, user_id)</code></td><td><code>ai_projects (id, user_id)</code></td><td>composite owner</td><td>cascade</td><td>a conversation can only sit in its owner's project; a null project means standalone</td></tr>
+            <tr><td><code>ai_messages (conversation_id, user_id)</code></td><td><code>ai_conversations (id, user_id)</code></td><td>composite owner</td><td>cascade</td><td>messages carry the owner of their conversation; there is no separate key to <code>users</code></td></tr>
+            <tr><td><code>ai_files (project_id, user_id)</code> and <code>(conversation_id, user_id)</code></td><td>project or conversation</td><td>composite owner, exactly one</td><td>cascade</td><td>a file lives in one place its owner controls</td></tr>
+            <tr><td><code>ai_message_files (message_id, user_id)</code></td><td><code>ai_messages (id, user_id)</code></td><td>composite owner</td><td>cascade</td><td>attachment rows go with their message</td></tr>
+            <tr><td><code>ai_message_files (file_id, user_id)</code></td><td><code>ai_files (id, user_id)</code></td><td>composite owner, <strong>deferrable initially deferred</strong></td><td>no action</td><td>a file with history is tombstoned, never removed, except in the transaction that removes every message carrying it</td></tr>
+            <tr><td><code>ai_messages</code> reply to, continuation of, retry of</td><td><code>ai_messages (id, conversation_id)</code></td><td>self, same conversation</td><td>cascade</td><td>lineage cannot cross conversations</td></tr>
+            <tr><td><code>ai_file_provider_copies.file_id</code></td><td><code>ai_files</code></td><td>normal</td><td>cascade</td><td>ownership flows through the file; the uploaded copy is deleted remotely first</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>Index</th><th>Definition</th><th>Serves</th></tr></thead>
+          <tbody>
+            <tr><td><code>ai_projects_owner_idx</code></td><td><code>(user_id, updated_at desc) where archived_at is null</code></td><td>project list</td></tr>
+            <tr><td><code>ai_conversations_recent_idx</code> · <code>_project_idx</code></td><td><code>(user_id, last_message_at desc)</code> live · <code>(project_id, last_message_at desc)</code></td><td>recent list · project chats</td></tr>
+            <tr><td><code>ai_messages_conversation_idx</code> · <code>_reply_to_idx</code></td><td><code>(conversation_id, created_at)</code> · <code>(reply_to_message_id)</code></td><td>thread pages · answers to a message</td></tr>
+            <tr><td><code>ai_messages_usage_idx</code></td><td><code>(user_id, created_at) where role = 'assistant'</code></td><td>hourly and daily limits</td></tr>
+            <tr><td><code>ai_messages_client_idx</code> (unique)</td><td><code>(user_id, client_id)</code></td><td>idempotent send</td></tr>
+            <tr><td><code>ai_messages_continued_once_idx</code> · <code>_retried_once_idx</code> (unique)</td><td><code>(continuation_of_message_id)</code> · <code>(retry_of_message_id)</code></td><td>Continue once, Retry once</td></tr>
+            <tr><td><code>ai_files_project_idx</code> · <code>_conversation_idx</code></td><td>live files by home, newest first</td><td>library and conversation files</td></tr>
+            <tr><td><code>ai_files_quota_idx</code></td><td><code>(user_id) include (byte_size) where deleted_at is null</code></td><td>quota sum inside the lock</td></tr>
+            <tr><td><code>ai_files_dedupe_idx</code> (unique)</td><td><code>(user_id, coalesce(project_id, conversation_id), sha256)</code> live</td><td>the same bytes once per place</td></tr>
+            <tr><td><code>ai_message_files_file_idx</code></td><td><code>(file_id)</code></td><td>discarding unsent uploads; deferred key checks</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────── 05 ─────────────────────────── -->
+    <section class="view" id="v5">
+      <div class="view-head">
+        <span class="view-no">View 05</span>
+        <h2>Send message runtime sequence</h2>
+        <div class="badges"><span class="badge b-p2">Implemented — phase 2</span><span class="badge b-local">Verified locally</span><span class="badge b-wait">Awaiting deploy</span></div>
+      </div>
+      <figure>
+        <div class="sheet" data-min="860"><pre class="mermaid">sequenceDiagram
+  autonumber
+  participant B as Browser · Chat.tsx
+  participant R as messages route
+  participant S as reply.ts
+  participant D as queries.ts · Postgres
+  participant P as Claude · claude.ts
+
+  B-&gt;&gt;R: POST clientId, content, fileIds
+  R-&gt;&gt;S: replyResponse
+  S-&gt;&gt;S: workspaceAdmin · 404 unless users.role is admin
+  S-&gt;&gt;S: reserveReply · 409 while a reply is running
+  S-&gt;&gt;S: provider available · 503 without a key
+  S-&gt;&gt;D: countRepliesSince last hour and day · 429 over the limit
+  S-&gt;&gt;D: startReply · one transaction
+  Note right of D: lock the conversation · archived 409&lt;br/&gt;a known clientId returns the saved rows&lt;br/&gt;stale streams recovered · one streaming reply&lt;br/&gt;files owned, live and eligible&lt;br/&gt;user message · ai_message_files · title&lt;br/&gt;assistant row, streaming
+  alt clientId already used
+    S--&gt;&gt;B: JSON existing · the model is not asked
+  end
+  S--&gt;&gt;B: NDJSON start · user message and streaming reply
+  S-&gt;&gt;D: messages · project instructions
+  S-&gt;&gt;S: assembleContext · five layers · 150,000-token target
+  S-&gt;&gt;D: claim or reuse provider copies
+  S-&gt;&gt;P: messages.stream with the abort signal
+  loop text deltas
+    P--&gt;&gt;S: delta
+    S--&gt;&gt;B: NDJSON delta
+    S-&gt;&gt;D: saveReplyProgress · at most every second
+  end
+  alt finished
+    S-&gt;&gt;D: finishReply complete · stop reason · usage
+  else Stop, closed tab or reload
+    S-&gt;&gt;D: finishReply stopped · the text so far
+  else provider failure
+    S-&gt;&gt;D: finishReply failed · error code · the text so far
+  end
+  S--&gt;&gt;B: NDJSON done · the saved reply
+  S-&gt;&gt;S: releaseReply</pre></div>
+        <figcaption><span>Figure 5 — From Send to the saved reply. Rows for the message are written in one transaction before the model is asked.</span><code>diagrams/05-send-message-sequence.mmd</code></figcaption>
+      </figure>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>Refusal</th><th>Status</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>not an admin, or another admin's conversation</td><td class="num">404</td><td><code>workspaceAdmin</code> · <code>startReply</code></td></tr>
+            <tr><td>a reply is still being written</td><td class="num">409</td><td><code>reserveReply</code>, then the data layer's streaming check</td></tr>
+            <tr><td>no provider key configured</td><td class="num">503</td><td><code>replyResponse</code></td></tr>
+            <tr><td>hourly or daily limit reached</td><td class="num">429</td><td><code>hourlyAndDailyAllowance</code></td></tr>
+            <tr><td>conversation archived · client id used in another conversation · attached file removed</td><td class="num">409</td><td><code>startReply</code></td></tr>
+            <tr><td>empty message, over 100,000 characters, more than 20 or duplicate attachments, a file from elsewhere</td><td class="num">400</td><td><code>validate.ts</code> · <code>startReply</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────── 06 ─────────────────────────── -->
+    <section class="view" id="v6">
+      <div class="view-head">
+        <span class="view-no">View 06</span>
+        <h2>File upload runtime sequence and quota</h2>
+        <div class="badges"><span class="badge b-p2">Byte typing — phase 2</span><span class="badge b-p1">Quota lock — phase 1</span><span class="badge b-neon">Verified on Neon</span></div>
+      </div>
+      <figure>
+        <div class="sheet" data-min="820"><pre class="mermaid">sequenceDiagram
+  autonumber
+  participant B as Browser
+  participant R as files route
+  participant F as fileType.ts
+  participant Q as queries.recordUpload
+  participant DB as Postgres
+
+  B-&gt;&gt;R: multipart file + projectId or conversationId
+  R-&gt;&gt;R: workspaceAdmin · 404 unless admin
+  R-&gt;&gt;R: larger than the largest per-type limit · 413
+  R-&gt;&gt;F: detectFileType(bytes)
+  alt not PDF, PNG, JPEG, GIF, WebP or UTF-8 text
+    R--&gt;&gt;B: 415 · unsupported
+  end
+  R-&gt;&gt;Q: recordUpload with the kind and type found in the bytes
+  Note right of Q: one destination · allowlist · not empty&lt;br/&gt;per-type limit 413 · filename cleaned · SHA-256
+  Q-&gt;&gt;DB: BEGIN
+  Q-&gt;&gt;DB: current disclosure version accepted? else 409
+  Q-&gt;&gt;DB: pg_advisory_xact_lock(hashtextextended('ai_workspace_storage:' + userId, 0))
+  Q-&gt;&gt;DB: destination owned and not archived? else 404 or 409
+  Q-&gt;&gt;DB: same SHA-256 live in the same place? return it · reused
+  Q-&gt;&gt;DB: SUM of live byte_size · over quota 413 · rollback
+  Q-&gt;&gt;DB: INSERT ai_files · COMMIT
+  R--&gt;&gt;B: file metadata and storage used, never the bytes</pre></div>
+        <figcaption><span>Figure 6.1 — Upload, from the multipart request to the stored row.</span><code>diagrams/06-file-upload-sequence.mmd</code></figcaption>
+      </figure>
+      <div class="cols">
+        <figure>
+          <div class="sheet" data-min="520"><pre class="mermaid">flowchart TD
+  classDef step fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.3px,color:#15171B
+  classDef lock fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.8px,color:#112233
+  classDef decision fill:#F4F5F2,stroke:#3B3F46,stroke-width:1.2px,color:#15171B
+  classDef refuse fill:#F7ECEA,stroke:#A6584C,stroke-width:1.3px,color:#3B1D18
+  classDef ok fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+
+  A["1 · Upload request&lt;br/&gt;shape, kind, media type, size, filename and SHA-256&lt;br/&gt;checked before the transaction"]:::step
+  B["2 · BEGIN"]:::step
+  C{"3 · Current disclosure&lt;br/&gt;version accepted?"}:::decision
+  CX["409 · rollback"]:::refuse
+  D["4 · pg_advisory_xact_lock&lt;br/&gt;hashtextextended('ai_workspace_storage:' + user_id, 0)&lt;br/&gt;same admin: waits · other admins: independent key"]:::lock
+  E{"5 · Destination owned&lt;br/&gt;and not archived?"}:::decision
+  EX["404 or 409 · rollback · lock released"]:::refuse
+  F{"6 · Same SHA-256 live&lt;br/&gt;in the same place?"}:::decision
+  FX["Existing file returned · reused&lt;br/&gt;commit · lock released"]:::ok
+  G["7 · SUM(byte_size) of live files&lt;br/&gt;WHERE user_id AND deleted_at IS NULL&lt;br/&gt;ai_files_quota_idx"]:::lock
+  H{"8 · used + size ≤ quota?"}:::decision
+  HX["413 · rollback&lt;br/&gt;no file row · no provider-copy row&lt;br/&gt;lock released"]:::refuse
+  I["9 · INSERT ai_files"]:::step
+  J["10 · COMMIT · lock released&lt;br/&gt;the next waiting upload now sees this file"]:::ok
+
+  A --&gt; B --&gt; C
+  C -- no --&gt; CX
+  C -- yes --&gt; D --&gt; E
+  E -- no --&gt; EX
+  E -- yes --&gt; F
+  F -- yes --&gt; FX
+  F -- no --&gt; G --&gt; H
+  H -- no --&gt; HX
+  H -- yes --&gt; I --&gt; J</pre></div>
+          <figcaption><span>Figure 6.2 — Quota decision inside the transaction.</span><code>diagrams/06b-quota-lock-flow.mmd</code></figcaption>
+        </figure>
+        <figure>
+          <div class="sheet" data-min="620"><pre class="mermaid">sequenceDiagram
+  participant H as Test holder · separate connection
+  participant A1 as Upload A1 · admin A · 600 KB
+  participant A2 as Upload A2 · admin A · 600 KB
+  participant L as Advisory lock key · admin A
+  participant B as Upload B · admin B
+
+  Note over H,B: VERIFIED ON NEON · quota 1 MB · separate Node processes on distinct backend connections
+  Note over H,B: Composite of rehearsal scenarios 2a (same admin) and 4 (different admin), which ran separately
+
+  H-&gt;&gt;L: hold admin A's lock
+  par same admin, both waiting
+    A1-&gt;&gt;L: pg_advisory_xact_lock
+    Note over A1,L: waiting · Lock / advisory in pg_stat_activity
+  and
+    A2-&gt;&gt;L: pg_advisory_xact_lock
+  and different admin, independent key
+    B-&gt;&gt;B: own lock granted at once · sum · insert · commit
+    Note over B: scenario 4 · B finished at +759 ms while A's lock was held until +3002 ms
+  end
+
+  H-&gt;&gt;L: release
+  L--&gt;&gt;A1: granted
+  A1-&gt;&gt;A1: sum 0 · 600 KB fits · insert · commit · release
+  L--&gt;&gt;A2: granted
+  A2-&gt;&gt;A2: sum 600 KB · 600 KB more exceeds 1 MB
+  Note over A2: scenario 2a · 413 "Not enough storage: 0.4 MB left of 1 MB" · rollback · no row</pre></div>
+          <figcaption><span>Figure 6.3 — Same admin serialised, different admins independent.</span><code>diagrams/06c-quota-concurrency.mmd</code></figcaption>
+        </figure>
+      </div>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>Kind</th><th>Recognised by</th><th>Stored media type</th><th>Limit</th><th>Sent to Claude as</th></tr></thead>
+          <tbody>
+            <tr><td>PDF</td><td><code>%PDF-</code> at byte 0</td><td><code>application/pdf</code></td><td class="num">10 MB</td><td>document from the Files API copy</td></tr>
+            <tr><td>Image</td><td>PNG, JPEG, GIF or WebP signature</td><td><code>image/png</code> · <code>jpeg</code> · <code>gif</code> · <code>webp</code></td><td class="num">5 MB</td><td>image from the Files API copy</td></tr>
+            <tr><td>Text</td><td>valid UTF-8, no NUL, almost no control characters</td><td><code>text/plain</code></td><td class="num">2 MB</td><td>text document, inline</td></tr>
+            <tr><td colspan="3">Per admin, live files only, across projects and conversations</td><td class="num">100 MB</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Proven with real contention on Neon (29 of 29): two same-admin uploads that together exceed the quota store exactly one; different admins never wait for each other; refused uploads leave no rows; a tombstone releases space, and a delete racing an upload never exceeds the quota.</p>
+    </section>
+
+    <!-- ─────────────────────────── 07 ─────────────────────────── -->
+    <section class="view" id="v7">
+      <div class="view-head">
+        <span class="view-no">View 07</span>
+        <h2>Continue, Retry and lineage</h2>
+        <div class="badges"><span class="badge b-p1">Lineage — phase 1</span><span class="badge b-p2">Actions and context — phase 2</span><span class="badge b-neon">Verified on Neon</span><span class="badge b-local">Verified with real Claude</span></div>
+      </div>
+      <div class="cols">
+        <figure>
+          <div class="sheet" data-min="520"><pre class="mermaid">stateDiagram-v2
+  [*] --&gt; streaming : startReply · startContinuation · startRetry
+  streaming --&gt; complete : finishReply(complete)
+  streaming --&gt; stopped : finishReply(stopped)
+  streaming --&gt; failed : finishReply(failed)
+  streaming --&gt; failed : recoverStaleStreams · older than 15 min · interrupted
+  complete --&gt; [*]
+  stopped --&gt; [*]
+  failed --&gt; [*]
+
+  note right of streaming
+    Only rows still streaming can change.
+    One streaming reply per admin.
+  end note
+  note right of stopped
+    Continue and Retry eligible.
+  end note
+  note left of complete
+    Continue eligible only when
+    stop_reason is max_tokens.
+    Retry eligible.
+  end note
+  note left of failed
+    Retry eligible.
+    Never sent back as history.
+  end note</pre></div>
+          <figcaption><span>Figure 7.1 — Reply states. Only a streaming reply changes.</span><code>diagrams/07a-message-states.mmd</code></figcaption>
+        </figure>
+        <figure>
+          <div class="sheet" data-min="760"><pre class="mermaid">flowchart LR
+  classDef user fill:#F4F5F2,stroke:#3B3F46,stroke-width:1.2px,color:#15171B
+  classDef reply fill:#FFFFFF,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef hidden fill:#FFFFFF,stroke:#A2A6AD,stroke-width:1.1px,stroke-dasharray:4 3,color:#6E727A
+  classDef rule fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.4px,color:#112233
+
+  U["User message U&lt;br/&gt;role user · complete"]:::user
+  R["Reply R&lt;br/&gt;reply_kind reply&lt;br/&gt;reply_to_message_id → U&lt;br/&gt;status stopped"]:::hidden
+  K["Continuation K&lt;br/&gt;reply_kind continuation&lt;br/&gt;reply_to_message_id → U&lt;br/&gt;continuation_of_message_id → R"]:::hidden
+  T1["Retry T1&lt;br/&gt;reply_kind retry&lt;br/&gt;reply_to_message_id → U&lt;br/&gt;retry_of_message_id → R&lt;br/&gt;status failed"]:::hidden
+  T2["Retry T2&lt;br/&gt;reply_kind retry&lt;br/&gt;reply_to_message_id → U&lt;br/&gt;retry_of_message_id → T1&lt;br/&gt;status complete"]:::reply
+
+  U --&gt; R
+  R --&gt;|"Continue · canContinue: target is the tail of the visible chain and stopped, or complete with max_tokens · once"| K
+  R --&gt;|"Retry · canRetry: target is the head, reply or retry, nothing streaming · once"| T1
+  T1 --&gt;|"Retry again · targets the newest head"| T2
+
+  VIS["visibleChain(answers to U)&lt;br/&gt;newest head that nobody retried&lt;br/&gt;+ its continuations in order&lt;br/&gt;here: T2"]:::rule
+  HIST["includeInHistory(chain)&lt;br/&gt;tail complete → sent as history&lt;br/&gt;tail stopped → only when this request continues it&lt;br/&gt;tail failed → never"]:::rule
+  T2 -.-&gt; VIS
+  VIS -.-&gt; HIST</pre></div>
+          <figcaption><span>Figure 7.2 — One answer's chain and what is shown.</span><code>diagrams/07b-lineage-chain.mmd</code></figcaption>
+        </figure>
+      </div>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>Action</th><th>Target must be</th><th>Guard in code</th><th>Guarantee in the database</th><th>What Claude receives</th></tr></thead>
+          <tbody>
+            <tr><td>Reply</td><td>the message just saved</td><td><code>startReply</code></td><td>assistant row with exactly one kind</td><td>earlier finished exchanges, then the message</td></tr>
+            <tr><td>Continue</td><td>the tail of the visible answer; stopped, or complete at <code>max_tokens</code></td><td><code>canContinue</code> · <code>startContinuation</code></td><td>continued once; same conversation</td><td>history, the message, the saved text so far, then a fixed continue instruction</td></tr>
+            <tr><td>Retry / Regenerate</td><td>the head of the visible answer, nothing streaming</td><td><code>canRetry</code> · <code>startRetry</code></td><td>retried once; same conversation</td><td>history up to that message, then the message again</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>History rule (<code>includeInHistory</code>): a finished answer goes back as history, including one continued to completion; a stopped answer only in the request that continues it; a failed answer never. The admin's own earlier messages are always kept.</p>
+    </section>
+
+    <!-- ─────────────────────────── 08 ─────────────────────────── -->
+    <section class="view" id="v8">
+      <div class="view-head">
+        <span class="view-no">View 08</span>
+        <h2>Security and trust boundaries</h2>
+        <div class="badges"><span class="badge b-p2">Implemented — phase 2</span><span class="badge b-local">Verified locally</span><span class="badge b-no">Personal data and analytics: not in V1</span></div>
+      </div>
+      <figure>
+        <div class="sheet" data-min="900"><pre class="mermaid">flowchart LR
+  classDef impl fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef existing fill:#FFFFFF,stroke:#8A8F98,stroke-width:1.2px,color:#15171B
+  classDef external fill:#FBF3E4,stroke:#A9762C,stroke-width:1.4px,color:#3A2A10
+  classDef blocked fill:#F7ECEA,stroke:#A6584C,stroke-width:1.2px,stroke-dasharray:2 3,color:#3B1D18
+  classDef secret fill:#15171B,stroke:#15171B,stroke-width:1px,color:#FFFFFF
+
+  subgraph Z0["Zone 0 · browser · untrusted"]
+    ANY["Signed out · ordinary account&lt;br/&gt;disabled account · another admin's ids"]:::existing
+    ADMINBROWSER["Admin browser&lt;br/&gt;no key · no provider file ids · no connection strings"]:::impl
+  end
+
+  subgraph Z1["Zone 1 · RichHabit server · trusted"]
+    direction TB
+    ROUTES["workspace routes · P2"]:::impl
+    GUARD["workspaceAdmin → currentAdmin&lt;br/&gt;role re-read every request · 404"]:::existing
+    RUNTIME["runtime · P2&lt;br/&gt;context from five layers only · logs codes only"]:::impl
+    DATA["queries.ts · P1&lt;br/&gt;user_id on every statement"]:::impl
+    SECRET["CLAUDE_API_KEY&lt;br/&gt;read in env.ts · used in claude.ts"]:::secret
+    ANALYTICS["analytics · trackEvent"]:::blocked
+  end
+
+  subgraph Z2["Zone 2 · Neon Postgres · trusted storage"]
+    AITABLES[("7 ai_ tables&lt;br/&gt;no credentials stored")]:::impl
+    PERSONAL[("intentions · habits · priorities&lt;br/&gt;gratitude journal · dates · Community")]:::blocked
+  end
+
+  subgraph Z3["Zone 3 · Anthropic · third party"]
+    ANTHROPIC["receives workspace and project instructions,&lt;br/&gt;chosen history, attached files, the message"]:::external
+  end
+
+  ANY --&gt;|"any workspace route → 404"| GUARD
+  ADMINBROWSER --&gt;|"HTTPS · SameSite session cookie"| ROUTES
+  ROUTES --&gt; GUARD --&gt; RUNTIME --&gt; DATA
+  DATA ==&gt;|"owner-scoped SQL"| AITABLES
+  RUNTIME --&gt;|"server to server · streaming"| ANTHROPIC
+  SECRET -.-&gt;|"never sent to the browser"| ANTHROPIC
+  RUNTIME -. "no import path · boundary tests" .-&gt; PERSONAL
+  RUNTIME -. "never called · boundary tests" .-&gt; ANALYTICS</pre></div>
+        <figcaption><span>Figure 8 — Four zones. Dashed red lines are paths that do not exist and are tested not to.</span><code>diagrams/08-trust-boundaries.mmd</code></figcaption>
+      </figure>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>Control</th><th>Status</th><th>Enforced by</th><th>Evidence</th></tr></thead>
+          <tbody>
+            <tr><td>Admin-only; everyone else gets 404</td><td><span class="badge b-p2">P2</span></td><td><code>workspaceAdmin()</code> first in every handler; launcher drawn only for admins</td><td>U-R 20-route matrix · U-RB · E2E</td></tr>
+            <tr><td>One admin cannot reach another's workspace</td><td><span class="badge b-p1">P1</span></td><td>owner-scoped statements and composite keys</td><td>U-Q · N-I · U-R · E2E</td></tr>
+            <tr><td>Key server-side only, never in the browser or a log</td><td><span class="badge b-p2">P2</span></td><td>read in <code>env.ts</code>, used in <code>claude.ts</code>; client components import no server code</td><td>credential guard tests · U-RB · E2E bundle scan · LIVE log scan</td></tr>
+            <tr><td>No RichHabit personal-data context</td><td><span class="badge b-no">Not in V1</span></td><td>context from five layers; no import of habits, priorities, intentions, journals, dates or Community</td><td>U-RB · U-RT</td></tr>
+            <tr><td>Files reach Claude only when attached</td><td><span class="badge b-p2">P2</span></td><td>only attachments become file parts; the library is not a layer</td><td>U-RP · E2E</td></tr>
+            <tr><td>No analytics in the workspace</td><td><span class="badge b-no">Not in V1</span></td><td>no <code>trackEvent</code> anywhere in workspace code</td><td>U-RB · E2E analytics query</td></tr>
+            <tr><td>No prompt, reply, instruction or file text in logs</td><td><span class="badge b-p2">P2</span></td><td>logs are fixed templates with codes and statuses</td><td>U-RB · U-RP · U-R · E2E · LIVE</td></tr>
+            <tr><td>Uploaded files cannot run as pages</td><td><span class="badge b-p2">P2</span></td><td><code>nosniff</code>, <code>sandbox</code> CSP; only images inline</td><td>U-R</td></tr>
+            <tr><td>Provider credentials never stored</td><td><span class="badge b-p1">P1</span></td><td>no credential column; provider file ids stay server-side</td><td>U-RB</td></tr>
+            <tr><td>Scripted test provider unreachable in production</td><td><span class="badge b-p2">P2</span></td><td>needs a flag, a test instance and a localhost database</td><td>U-RT · U-RB</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────── 09 ─────────────────────────── -->
+    <section class="view" id="v9">
+      <div class="view-head">
+        <span class="view-no">View 09</span>
+        <h2>Migration and release architecture</h2>
+        <div class="badges"><span class="badge b-prod">Migrated in production</span><span class="badge b-wait">Merge and deploy awaiting the Product Owner</span></div>
+      </div>
+      <figure>
+        <div class="sheet" data-min="1000"><pre class="mermaid">flowchart LR
+  classDef done fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef verified fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.8px,color:#112233
+  classDef gate fill:#2F5D50,stroke:#2F5D50,stroke-width:1.5px,color:#FFFFFF
+  classDef waiting fill:#FFFFFF,stroke:#A9762C,stroke-width:1.4px,stroke-dasharray:6 4,color:#3A2A10
+
+  subgraph BUILD["Build · feature/ai-workspace"]
+    direction TB
+    S1["1 · Phase 1 · 7fcf53a&lt;br/&gt;schema, migration step 8, data layer"]:::done
+    S2["2 · Neon rehearsal · PASS&lt;br/&gt;26 integrity · 29 concurrency"]:::verified
+    S3["3 · Phase 2 · 0236d45&lt;br/&gt;routes, provider, interface"]:::done
+    S4["4 · Local gates&lt;br/&gt;763 unit · 91 browser · 13 live Claude"]:::verified
+  end
+
+  subgraph DATABASE["Production database · 2026-09-13"]
+    direction TB
+    S5["5 · Preflight · 10 of 10&lt;br/&gt;schema identical to the rehearsed reference"]:::verified
+    S6["6 · Run 1&lt;br/&gt;seven AI tables created"]:::verified
+    S7["7 · Existing schema and rows unchanged&lt;br/&gt;fresh-install parity · 201 lines"]:::verified
+    S8["8 · Run 2&lt;br/&gt;Nothing to do"]:::verified
+  end
+  GATE{{"Production migration&lt;br/&gt;PASS · 24 of 24"}}:::gate
+
+  subgraph RELEASE["Release · waiting on the Product Owner"]
+    direction TB
+    S9["9 · Fast-forward main&lt;br/&gt;blocked for review"]:::waiting
+    S10["10 · Render · Deploy latest commit"]:::waiting
+    S11["11 · Production verification&lt;br/&gt;signed-in admin checks"]:::waiting
+  end
+
+  S1 --&gt; S2 --&gt; S3 --&gt; S4 --&gt; S5 --&gt; S6 --&gt; S7 --&gt; S8 --&gt; GATE
+  GATE -.-&gt; S9 -.-&gt; S10 -.-&gt; S11</pre></div>
+        <figcaption><span>Figure 9 — From build to production. Steps 1–8 are done; 9–11 need the Product Owner.</span><code>diagrams/09-migration-release.mmd</code></figcaption>
+      </figure>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>Production migration check, 2026-09-13</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>Migration source identical to the rehearsed commit <code>f09e2af</code></td><td>yes · 21 create-if-not-exists statements on <code>ai_</code> objects</td></tr>
+            <tr><td>Starting schema vs production-derived rehearsal reference</td><td>identical · 632 schema lines · no AI tables</td></tr>
+            <tr><td>Restore point before the change</td><td class="num">2026-09-13T15:20:38Z · LSN 0/367C298</td></tr>
+            <tr><td>Run 1</td><td>seven AI tables created · <code>Done — 7 change(s)</code></td></tr>
+            <tr><td>Existing schema and rows</td><td>unchanged by line and row digest · users 12 · habits 139 · priorities 41 · intentions 1</td></tr>
+            <tr><td>Fresh-install parity</td><td>201 AI schema lines identical</td></tr>
+            <tr><td>Run 2</td><td><code>Nothing to do; already up to date.</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="callout"><strong>Known issue, not changed here.</strong> Two pre-existing index differences between <code>db/schema.sql</code> and production — <code>feedback_created_idx</code> and <code>priorities_user_order</code> — predate the AI Workspace and were left untouched.</p>
+    </section>
+
+    <!-- ─────────────────────────── 10 ─────────────────────────── -->
+    <section class="view" id="v10">
+      <div class="view-head">
+        <span class="view-no">View 10</span>
+        <h2>Verification and quality architecture</h2>
+        <div class="badges"><span class="badge b-local">Verified locally</span><span class="badge b-neon">Verified on Neon</span><span class="badge b-wait">Production chatbot not yet verified</span></div>
+        <p>Each figure below is its own result and they overlap; they are not added together.</p>
+      </div>
+      <figure>
+        <div class="sheet" data-min="860"><pre class="mermaid">flowchart LR
+  classDef local fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef neon fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.8px,color:#112233
+  classDef capability fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.1px,color:#15171B
+  classDef waiting fill:#FFFFFF,stroke:#A9762C,stroke-width:1.3px,stroke-dasharray:6 4,color:#3A2A10
+
+  subgraph LOCAL["Local · PGlite and the local test instance"]
+    direction TB
+    V1["Full unit suite · 763 of 763"]:::local
+    V2["Phase 2 tests · 59&lt;br/&gt;runtime · Claude adapter · replies · routes · boundaries"]:::local
+    V3["Browser suite · 91 of 91&lt;br/&gt;scripted provider · 1440 · 390 · 320 px"]:::local
+    V4["Live Claude · 13 of 13&lt;br/&gt;streaming · Stop · Continue · PDF · Files API"]:::local
+  end
+
+  subgraph NEON["Neon"]
+    direction TB
+    N1["Rehearsal · integrity 26 of 26&lt;br/&gt;concurrency 29 of 29"]:::neon
+    N2["Production migration · 24 of 24&lt;br/&gt;existing rows and schema unchanged"]:::neon
+  end
+
+  PROD["Deployed chatbot in production&lt;br/&gt;not yet verified · not deployed"]:::waiting
+
+  C1["Admin-only access and ownership"]:::capability
+  C2["Streaming, lineage and saved state"]:::capability
+  C3["Files, quota and provider copies"]:::capability
+  C4["Privacy: context, logs, analytics, keys"]:::capability
+  C5["Responsive, English and Chinese"]:::capability
+  C6["Additive, idempotent migration"]:::capability
+
+  V2 --&gt; C1
+  V2 --&gt; C2
+  V2 --&gt; C4
+  V3 --&gt; C1
+  V3 --&gt; C2
+  V3 --&gt; C3
+  V3 --&gt; C4
+  V3 --&gt; C5
+  V4 --&gt; C2
+  V4 --&gt; C3
+  N1 --&gt; C3
+  N2 --&gt; C6
+  V1 -.-&gt; PROD</pre></div>
+        <figcaption><span>Figure 10 — Which evidence covers which capability.</span><code>diagrams/10-verification.mmd</code></figcaption>
+      </figure>
+      <div class="table-wrap mid">
+        <table>
+          <thead><tr><th>Evidence</th><th>Result</th><th>Where it ran</th><th>What it shows</th></tr></thead>
+          <tbody>
+            <tr><td>Full unit suite</td><td class="num">763 / 763</td><td>local</td><td>no regression anywhere in RichHabit</td></tr>
+            <tr><td>Phase 1 AI tests</td><td class="num">58 / 58</td><td>local PGlite</td><td>schema, data layer, lifecycle, boundaries</td></tr>
+            <tr><td>Phase 2 AI tests</td><td class="num">59 / 59</td><td>local PGlite</td><td>runtime, Claude adapter, replies, routes, boundaries</td></tr>
+            <tr><td>Migration comparison</td><td class="num">10 / 10</td><td>local</td><td>main's and the branch's migrations identical outside AI</td></tr>
+            <tr><td>Neon integrity</td><td class="num">26 / 26</td><td>Neon rehearsal branch</td><td>data-layer rules on real Postgres</td></tr>
+            <tr><td>Neon concurrency</td><td class="num">29 / 29</td><td>Neon rehearsal branch</td><td>quota lock under real contention</td></tr>
+            <tr><td>Browser suite</td><td class="num">91 / 91</td><td>local test instance, scripted provider</td><td>the product end to end, desktop and phones, English and Chinese</td></tr>
+            <tr><td>Live Claude</td><td class="num">13 / 13</td><td>local, real key</td><td>streaming, Stop and Continue, PDF through the Files API, Chinese</td></tr>
+            <tr><td>Production migration</td><td class="num">24 / 24</td><td>production Neon</td><td>additive, idempotent, existing data unchanged</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Not yet verified:</strong> the chatbot running in production, because the release is not merged or deployed; signed-in checks there need an admin session.</p>
+    </section>
+
+    <!-- ─────────────────────────── findings ─────────────────────────── -->
+    <section class="view" id="findings">
+      <div class="view-head">
+        <span class="view-no">For review</span>
+        <h2>Findings: code against the proposal</h2>
+      </div>
+      <h3>Where the implementation differs from the approved proposal</h3>
+      <ol class="findings">
+        <li><span class="id">M-1</span><span>The proposal kept the hourly limit and concurrency in memory. Both limits are counted from the database, and one reply at a time is held twice: a synchronous in-process slot and the data layer's streaming check.</span></li>
+        <li><span class="id">M-2</span><span>The proposal recovered stale replies when a conversation opens. The data layer also recovers before every reply, Continue and Retry, and the conversation view recovers a reply no request owns after 20 seconds instead of 15 minutes.</span></li>
+        <li><span class="id">M-3</span><span>The proposal offered Regenerate on the last reply. Retry/Regenerate is offered on every visible answer the lifecycle allows; retrying an earlier message sends history only up to that message.</span></li>
+        <li><span class="id">M-4</span><span>Text files are not uploaded to the Files API; they are sent inline as text documents. PDFs and images use stored copies, with a one-request inline fallback when an upload fails.</span></li>
+        <li><span class="id">M-5</span><span>The 200,000-token context ceiling is configuration only. History is trimmed to the 150,000 target by estimate; a request still too long fails as <code>context_too_long</code> with a clear message.</span></li>
+        <li><span class="id">M-6</span><span>The upload notice words the retention point as "not covered by zero data retention" and adds that Anthropic keeps files until they are deleted.</span></li>
+      </ol>
+      <h3>Behaviour the implementation has that the proposal did not describe</h3>
+      <ol class="findings">
+        <li><span class="id">B-1</span><span>An archived conversation refuses send, Continue, Retry and uploads; an archived project refuses new chats and library uploads, while its existing chats still work.</span></li>
+        <li><span class="id">B-2</span><span>A client id reused in a different conversation is refused (409) rather than returning the other conversation's rows.</span></li>
+        <li><span class="id">B-3</span><span>A conversation with only files is titled from the first file's name; an edited title is never overwritten.</span></li>
+        <li><span class="id">B-4</span><span>De-duplication runs before the quota check, so re-uploading stored bytes succeeds even when storage is full.</span></li>
+        <li><span class="id">B-5</span><span>Removing a chip before sending deletes that upload outright; files already carried by a message are left alone.</span></li>
+        <li><span class="id">B-6</span><span>Stop also ends a reply that no request is writing, keeping the text saved so far.</span></li>
+        <li><span class="id">B-7</span><span>The deletion summary counts live files, while permanent delete reports all files including tombstones, so the second number can be higher.</span></li>
+        <li><span class="id">B-8</span><span>Migration step 8 creates a missing index on an existing table but counts only new tables, so its "Nothing to do" can follow an index repair.</span></li>
+      </ol>
+      <h3>Risks and limits to carry forward</h3>
+      <ol class="findings">
+        <li><span class="id">R-1</span><span>The reply slot and orphan recovery assume one server instance, which is RichHabit's Render setup. Several instances would need the slot in the database. During a deploy overlap, a reply still running on the old instance can be marked interrupted by the new one.</span></li>
+        <li><span class="id">R-2</span><span>Deleting a whole account cascades its workspace rows without collecting Files API copies, so those remote copies are not deleted.</span></li>
+        <li><span class="id">R-3</span><span>Remote copy deletion is best effort with no retry queue; failures are logged as codes.</span></li>
+        <li><span class="id">R-4</span><span>Uploaded files are type-checked, not scanned for malware; they are served sandboxed and only to their owner.</span></li>
+        <li><span class="id">R-5</span><span>Render did not auto-deploy recent releases; deploys are manual.</span></li>
+      </ol>
+    </section>
+
+    <footer>
+      Sources: <code>src/lib/aiWorkspace</code>, <code>src/lib/aiWorkspaceRuntime</code>, <code>src/app/api/admin/ai/workspace</code>, <code>src/components/aiWorkspace</code>, <code>src/lib/ai/claude.ts</code>, <code>src/lib/env.ts</code>, <code>scripts/migrate.mjs</code>, <code>scripts/migrations/ai-workspace.mjs</code>, <code>db/schema.sql</code>, the AI Workspace tests, and the rehearsal and production migration logs. Diagrams are drawn from <code>docs/architecture/diagrams/*.mmd</code>; edit those and re-embed.
+    </footer>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var pending = function () {
+      return Array.prototype.filter.call(document.querySelectorAll("pre.mermaid"), function (p) {
+        return !p.getAttribute("data-processed") && !p.querySelector("svg");
+      });
+    };
+    function fit() {
+      document.querySelectorAll(".sheet svg").forEach(function (svg) {
+        var vb = svg.viewBox && svg.viewBox.baseVal;
+        if (!vb || !vb.width) return;
+        var sheet = svg.closest(".sheet");
+        var min = Math.min(vb.width, Number((sheet && sheet.dataset.min) || 720));
+        svg.style.width = "100%";
+        svg.style.minWidth = min + "px";
+        svg.style.maxWidth = Math.max(vb.width, min) + "px";
+        svg.removeAttribute("height");
+      });
+    }
+    new MutationObserver(fit).observe(document.body, { subtree: true, childList: true });
+    function load() {
+      if (!pending().length) { fit(); return; }
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
+      s.onload = function () {
+        window.mermaid.initialize({
+          startOnLoad: false, securityLevel: "strict", theme: "base",
+          fontFamily: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+          themeVariables: {
+            fontSize: "13px", primaryColor: "#FFFFFF", primaryBorderColor: "#3B3F46", primaryTextColor: "#15171B",
+            lineColor: "#555A62", secondaryColor: "#F4F5F0", tertiaryColor: "#FBFBF8",
+            clusterBkg: "#F2F3EE", clusterBorder: "#C8CBC2", edgeLabelBackground: "#FBFBF8",
+            actorBkg: "#FFFFFF", actorBorder: "#3B3F46", actorTextColor: "#15171B", signalColor: "#3B3F46", signalTextColor: "#15171B",
+            noteBkgColor: "#F4F1E6", noteBorderColor: "#B9A57C", noteTextColor: "#15171B",
+            labelBoxBkgColor: "#F2F3EE", labelBoxBorderColor: "#8A8F98", loopTextColor: "#15171B"
+          },
+          flowchart: { useMaxWidth: false, htmlLabels: true, curve: "basis" },
+          sequence: { useMaxWidth: false, mirrorActors: false },
+          state: { useMaxWidth: false }
+        });
+        window.mermaid.run({ nodes: pending() }).then(fit).catch(function () {});
+      };
+      document.head.appendChild(s);
+    }
+    if (document.readyState === "complete") setTimeout(load, 700);
+    else window.addEventListener("load", function () { setTimeout(load, 700); });
+  })();
+</script>

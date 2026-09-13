@@ -1,0 +1,26 @@
+stateDiagram-v2
+  [*] --> streaming : startReply · startContinuation · startRetry
+  streaming --> complete : finishReply(complete)
+  streaming --> stopped : finishReply(stopped)
+  streaming --> failed : finishReply(failed)
+  streaming --> failed : recoverStaleStreams · older than 15 min · interrupted
+  complete --> [*]
+  stopped --> [*]
+  failed --> [*]
+
+  note right of streaming
+    Only rows still streaming can change.
+    One streaming reply per admin.
+  end note
+  note right of stopped
+    Continue and Retry eligible.
+  end note
+  note left of complete
+    Continue eligible only when
+    stop_reason is max_tokens.
+    Retry eligible.
+  end note
+  note left of failed
+    Retry eligible.
+    Never sent back as history.
+  end note

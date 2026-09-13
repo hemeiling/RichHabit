@@ -1,0 +1,21 @@
+flowchart LR
+  classDef user fill:#F4F5F2,stroke:#3B3F46,stroke-width:1.2px,color:#15171B
+  classDef reply fill:#FFFFFF,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef hidden fill:#FFFFFF,stroke:#A2A6AD,stroke-width:1.1px,stroke-dasharray:4 3,color:#6E727A
+  classDef rule fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.4px,color:#112233
+
+  U["User message U<br/>role user · complete"]:::user
+  R["Reply R<br/>reply_kind reply<br/>reply_to_message_id → U<br/>status stopped"]:::hidden
+  K["Continuation K<br/>reply_kind continuation<br/>reply_to_message_id → U<br/>continuation_of_message_id → R"]:::hidden
+  T1["Retry T1<br/>reply_kind retry<br/>reply_to_message_id → U<br/>retry_of_message_id → R<br/>status failed"]:::hidden
+  T2["Retry T2<br/>reply_kind retry<br/>reply_to_message_id → U<br/>retry_of_message_id → T1<br/>status complete"]:::reply
+
+  U --> R
+  R -->|"Continue · canContinue: target is the tail of the visible chain and stopped, or complete with max_tokens · once"| K
+  R -->|"Retry · canRetry: target is the head, reply or retry, nothing streaming · once"| T1
+  T1 -->|"Retry again · targets the newest head"| T2
+
+  VIS["visibleChain(answers to U)<br/>newest head that nobody retried<br/>+ its continuations in order<br/>here: T2"]:::rule
+  HIST["includeInHistory(chain)<br/>tail complete → sent as history<br/>tail stopped → only when this request continues it<br/>tail failed → never"]:::rule
+  T2 -.-> VIS
+  VIS -.-> HIST

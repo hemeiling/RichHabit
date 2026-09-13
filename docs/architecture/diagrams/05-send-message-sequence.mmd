@@ -1,0 +1,38 @@
+sequenceDiagram
+  autonumber
+  participant B as Browser · Chat.tsx
+  participant R as messages route
+  participant S as reply.ts
+  participant D as queries.ts · Postgres
+  participant P as Claude · claude.ts
+
+  B->>R: POST clientId, content, fileIds
+  R->>S: replyResponse
+  S->>S: workspaceAdmin · 404 unless users.role is admin
+  S->>S: reserveReply · 409 while a reply is running
+  S->>S: provider available · 503 without a key
+  S->>D: countRepliesSince last hour and day · 429 over the limit
+  S->>D: startReply · one transaction
+  Note right of D: lock the conversation · archived 409<br/>a known clientId returns the saved rows<br/>stale streams recovered · one streaming reply<br/>files owned, live and eligible<br/>user message · ai_message_files · title<br/>assistant row, streaming
+  alt clientId already used
+    S-->>B: JSON existing · the model is not asked
+  end
+  S-->>B: NDJSON start · user message and streaming reply
+  S->>D: messages · project instructions
+  S->>S: assembleContext · five layers · 150,000-token target
+  S->>D: claim or reuse provider copies
+  S->>P: messages.stream with the abort signal
+  loop text deltas
+    P-->>S: delta
+    S-->>B: NDJSON delta
+    S->>D: saveReplyProgress · at most every second
+  end
+  alt finished
+    S->>D: finishReply complete · stop reason · usage
+  else Stop, closed tab or reload
+    S->>D: finishReply stopped · the text so far
+  else provider failure
+    S->>D: finishReply failed · error code · the text so far
+  end
+  S-->>B: NDJSON done · the saved reply
+  S->>S: releaseReply

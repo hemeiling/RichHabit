@@ -1,0 +1,27 @@
+sequenceDiagram
+  participant H as Test holder · separate connection
+  participant A1 as Upload A1 · admin A · 600 KB
+  participant A2 as Upload A2 · admin A · 600 KB
+  participant L as Advisory lock key · admin A
+  participant B as Upload B · admin B
+
+  Note over H,B: VERIFIED ON NEON · quota 1 MB · separate Node processes on distinct backend connections
+  Note over H,B: Composite of rehearsal scenarios 2a (same admin) and 4 (different admin), which ran separately
+
+  H->>L: hold admin A's lock
+  par same admin, both waiting
+    A1->>L: pg_advisory_xact_lock
+    Note over A1,L: waiting · Lock / advisory in pg_stat_activity
+  and
+    A2->>L: pg_advisory_xact_lock
+  and different admin, independent key
+    B->>B: own lock granted at once · sum · insert · commit
+    Note over B: scenario 4 · B finished at +759 ms while A's lock was held until +3002 ms
+  end
+
+  H->>L: release
+  L-->>A1: granted
+  A1->>A1: sum 0 · 600 KB fits · insert · commit · release
+  L-->>A2: granted
+  A2->>A2: sum 600 KB · 600 KB more exceeds 1 MB
+  Note over A2: scenario 2a · 413 "Not enough storage: 0.4 MB left of 1 MB" · rollback · no row

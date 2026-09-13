@@ -1,0 +1,32 @@
+flowchart LR
+  classDef done fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef verified fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.8px,color:#112233
+  classDef gate fill:#2F5D50,stroke:#2F5D50,stroke-width:1.5px,color:#FFFFFF
+  classDef waiting fill:#FFFFFF,stroke:#A9762C,stroke-width:1.4px,stroke-dasharray:6 4,color:#3A2A10
+
+  subgraph BUILD["Build · feature/ai-workspace"]
+    direction TB
+    S1["1 · Phase 1 · 7fcf53a<br/>schema, migration step 8, data layer"]:::done
+    S2["2 · Neon rehearsal · PASS<br/>26 integrity · 29 concurrency"]:::verified
+    S3["3 · Phase 2 · 0236d45<br/>routes, provider, interface"]:::done
+    S4["4 · Local gates<br/>763 unit · 91 browser · 13 live Claude"]:::verified
+  end
+
+  subgraph DATABASE["Production database · 2026-09-13"]
+    direction TB
+    S5["5 · Preflight · 10 of 10<br/>schema identical to the rehearsed reference"]:::verified
+    S6["6 · Run 1<br/>seven AI tables created"]:::verified
+    S7["7 · Existing schema and rows unchanged<br/>fresh-install parity · 201 lines"]:::verified
+    S8["8 · Run 2<br/>Nothing to do"]:::verified
+  end
+  GATE{{"Production migration<br/>PASS · 24 of 24"}}:::gate
+
+  subgraph RELEASE["Release · waiting on the Product Owner"]
+    direction TB
+    S9["9 · Fast-forward main<br/>blocked for review"]:::waiting
+    S10["10 · Render · Deploy latest commit"]:::waiting
+    S11["11 · Production verification<br/>signed-in admin checks"]:::waiting
+  end
+
+  S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> GATE
+  GATE -.-> S9 -.-> S10 -.-> S11

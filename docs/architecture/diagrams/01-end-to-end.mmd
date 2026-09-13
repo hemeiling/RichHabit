@@ -1,0 +1,47 @@
+flowchart LR
+  classDef impl fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.6px,color:#14201B
+  classDef existing fill:#FFFFFF,stroke:#8A8F98,stroke-width:1.2px,color:#15171B
+  classDef external fill:#FBF3E4,stroke:#A9762C,stroke-width:1.4px,color:#3A2A10
+  classDef future fill:#F1F0F5,stroke:#77738F,stroke-width:1.2px,stroke-dasharray:3 4,color:#2D2B3A
+  classDef blocked fill:#F7ECEA,stroke:#A6584C,stroke-width:1.2px,stroke-dasharray:2 3,color:#3B1D18
+
+  subgraph BROWSER["Browser · untrusted · rendered for admins only"]
+    UI["AiLauncher · Workspace · Chat · ProjectPage<br/>src/components/aiWorkspace · P2"]:::impl
+  end
+
+  subgraph SERVER["RichHabit server · Next.js on Render · trusted"]
+    direction TB
+    ROUTES["12 route files<br/>src/app/api/admin/ai/workspace · P2"]:::impl
+    GUARD["workspaceAdmin → currentAdmin<br/>users.role re-read · 404"]:::existing
+    RUNTIME["src/lib/aiWorkspaceRuntime · P2<br/>reply · context · limits · fileType · view · copies"]:::impl
+    PROVIDER["provider.ts · the provider seam · P2"]:::impl
+    CLAUDEFILE["src/lib/ai/claude.ts<br/>the only file using Anthropic's SDK"]:::impl
+    DATA["src/lib/aiWorkspace/queries.ts<br/>owner-scoped data layer · P1"]:::impl
+    ENV["env.ts · CLAUDE_API_KEY · AI_WORKSPACE_*"]:::existing
+  end
+
+  subgraph POSTGRES["Neon Postgres · production"]
+    direction TB
+    AITABLES[("7 ai_ tables<br/>migrated 2026-09-13")]:::impl
+    PERSONAL[("RichHabit personal data<br/>habits · priorities · intentions · journal")]:::blocked
+  end
+
+  subgraph ANTHROPIC["Anthropic · third party"]
+    MESSAGES["Messages API · claude-sonnet-5<br/>streaming"]:::external
+    FILESAPI["Files API<br/>attached PDFs and images"]:::external
+  end
+  GEMINI["Gemini provider"]:::future
+
+  UI -->|"1 · same-origin fetch · session cookie"| ROUTES
+  ROUTES -->|"2"| GUARD
+  GUARD -->|"3 · admin id"| RUNTIME
+  RUNTIME -->|"4"| DATA
+  DATA ==>|"5 · user_id on every statement"| AITABLES
+  RUNTIME -->|"6 · turns and parts"| PROVIDER
+  PROVIDER --> CLAUDEFILE
+  ENV -.->|"key · server only"| CLAUDEFILE
+  CLAUDEFILE -->|"7 · stream"| MESSAGES
+  CLAUDEFILE -.->|"upload once · reuse"| FILESAPI
+  ROUTES -->|"8 · NDJSON start · delta · done"| UI
+  PROVIDER -.-> GEMINI
+  RUNTIME -. "no import path · boundary tests" .-> PERSONAL

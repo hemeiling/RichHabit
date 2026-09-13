@@ -1,0 +1,34 @@
+flowchart LR
+  classDef table fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.4px,color:#15171B
+  classDef existing fill:#F4F5F2,stroke:#8A8F98,stroke-width:1.2px,color:#15171B
+
+  USERS[("users<br/>existing RichHabit table")]:::existing
+
+  PROJ["ai_projects<br/>PK id · UNIQUE (id, user_id)<br/>name 1–120 · instructions ≤ 20,000<br/>archived_at<br/>INDEX owner (user_id, updated_at) WHERE live"]:::table
+
+  CONV["ai_conversations<br/>PK id · UNIQUE (id, user_id)<br/>project_id NULL = standalone<br/>title ≤ 200 · title_edited · last_message_at · archived_at<br/>INDEX recent · INDEX project"]:::table
+
+  MSG["ai_messages<br/>PK id · UNIQUE (id, conversation_id) · UNIQUE (id, user_id)<br/>role · status · reply_kind · content ≤ 500,000<br/>CHECK user row: complete, no lineage, no provider<br/>CHECK assistant row: reply_to set, exactly one kind<br/>UNIQUE (user_id, client_id) · continued once · retried once"]:::table
+
+  MFILES["ai_message_files<br/>PK (message_id, file_id)<br/>UNIQUE (message_id, position)<br/>position 0–99 backstop · 20 in data layer"]:::table
+
+  FILES["ai_files<br/>PK id · UNIQUE (id, user_id)<br/>CHECK exactly one home: project or conversation<br/>kind · mime allowlist · sha256 · byte_size ≤ 32 MB backstop<br/>TOMBSTONE deleted_at set ⇔ content NULL<br/>UNIQUE live (user_id, home, sha256)<br/>INDEX quota (user_id) INCLUDE byte_size"]:::table
+
+  COPIES["ai_file_provider_copies<br/>PK (file_id, provider)<br/>status pending · uploaded · failed · deleted<br/>CHECK uploaded ⇒ provider_file_id + uploaded_at<br/>CHECK deleted ⇒ deleted_at"]:::table
+
+  SETTINGS["ai_workspace_settings<br/>PK user_id<br/>CHECK disclosure version ⇔ accepted_at"]:::table
+
+  USERS -->|"user_id · cascade"| PROJ
+  USERS -->|"user_id · cascade"| CONV
+  USERS -->|"user_id · cascade"| FILES
+  USERS -->|"user_id · cascade"| SETTINGS
+  PROJ ==>|"(project_id, user_id) · cascade"| CONV
+  PROJ ==>|"(project_id, user_id) · cascade"| FILES
+  CONV ==>|"(conversation_id, user_id) · cascade"| MSG
+  CONV ==>|"(conversation_id, user_id) · cascade"| FILES
+  MSG ==>|"(message_id, user_id) · cascade"| MFILES
+  FILES -.->|"(file_id, user_id) · DEFERRABLE INITIALLY DEFERRED · no cascade"| MFILES
+  FILES -->|"file_id · cascade"| COPIES
+  MSG -->|"self · (reply_to_message_id, conversation_id) · cascade"| MSG
+  MSG -->|"self · (continuation_of_message_id, conversation_id) · cascade"| MSG
+  MSG -->|"self · (retry_of_message_id, conversation_id) · cascade"| MSG

@@ -1,0 +1,59 @@
+flowchart TB
+  classDef route fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.3px,color:#15171B
+  classDef runtime fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef data fill:#F4F5F2,stroke:#5F646C,stroke-width:1.3px,color:#15171B
+  classDef table fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.3px,color:#15171B
+  classDef external fill:#FBF3E4,stroke:#A9762C,stroke-width:1.4px,color:#3A2A10
+
+  subgraph ROUTES["API routes · src/app/api/admin/ai/workspace · P2"]
+    direction LR
+    R1["route.ts<br/>bootstrap"]:::route
+    R2["projects<br/>projects/[id]"]:::route
+    R3["conversations<br/>conversations/[id]"]:::route
+    R4["conversations/[id]/messages<br/>NDJSON"]:::route
+    R5["messages/[id]/continue · retry · stop"]:::route
+    R6["files · files/[id]<br/>disclosure"]:::route
+  end
+
+  subgraph RUNTIME["Runtime · src/lib/aiWorkspaceRuntime · P2"]
+    direction LR
+    H["http.ts<br/>admin 404 · localised refusals · NDJSON"]:::runtime
+    RP["reply.ts<br/>replyResponse · runReply"]:::runtime
+    CX["context.ts<br/>five layers · token budget"]:::runtime
+    LM["limits.ts<br/>one reply slot · hourly and daily"]:::runtime
+    FT["fileType.ts<br/>type from bytes"]:::runtime
+    VW["view.ts<br/>exchanges · orphan recovery"]:::runtime
+    CP["copies.ts<br/>remote copy deletion"]:::runtime
+    PV["provider.ts<br/>seam · scripted-provider guard"]:::runtime
+  end
+
+  subgraph DATA["Data layer · src/lib/aiWorkspace · P1"]
+    direction LR
+    Q["queries.ts"]:::data
+    L["lifecycle.ts"]:::data
+    V["validate.ts · types.ts · disclosure.ts"]:::data
+  end
+
+  C["src/lib/ai/claude.ts<br/>createClaudeWorkspaceProvider"]:::external
+  T[("7 ai_ tables")]:::table
+
+  R1 --> H
+  R2 --> H
+  R3 --> VW
+  R4 --> RP
+  R5 --> RP
+  R6 --> FT
+  R2 --> CP
+  R6 --> CP
+  RP --> LM
+  RP --> CX
+  RP --> PV
+  PV --> C
+  RP --> Q
+  VW --> Q
+  VW --> L
+  CX --> L
+  LM --> Q
+  FT --> Q
+  Q --> V
+  Q --> T

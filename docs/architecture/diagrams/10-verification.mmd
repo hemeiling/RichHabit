@@ -1,0 +1,42 @@
+flowchart LR
+  classDef local fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+  classDef neon fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.8px,color:#112233
+  classDef capability fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.1px,color:#15171B
+  classDef waiting fill:#FFFFFF,stroke:#A9762C,stroke-width:1.3px,stroke-dasharray:6 4,color:#3A2A10
+
+  subgraph LOCAL["Local · PGlite and the local test instance"]
+    direction TB
+    V1["Full unit suite · 763 of 763"]:::local
+    V2["Phase 2 tests · 59<br/>runtime · Claude adapter · replies · routes · boundaries"]:::local
+    V3["Browser suite · 91 of 91<br/>scripted provider · 1440 · 390 · 320 px"]:::local
+    V4["Live Claude · 13 of 13<br/>streaming · Stop · Continue · PDF · Files API"]:::local
+  end
+
+  subgraph NEON["Neon"]
+    direction TB
+    N1["Rehearsal · integrity 26 of 26<br/>concurrency 29 of 29"]:::neon
+    N2["Production migration · 24 of 24<br/>existing rows and schema unchanged"]:::neon
+  end
+
+  PROD["Deployed chatbot in production<br/>not yet verified · not deployed"]:::waiting
+
+  C1["Admin-only access and ownership"]:::capability
+  C2["Streaming, lineage and saved state"]:::capability
+  C3["Files, quota and provider copies"]:::capability
+  C4["Privacy: context, logs, analytics, keys"]:::capability
+  C5["Responsive, English and Chinese"]:::capability
+  C6["Additive, idempotent migration"]:::capability
+
+  V2 --> C1
+  V2 --> C2
+  V2 --> C4
+  V3 --> C1
+  V3 --> C2
+  V3 --> C3
+  V3 --> C4
+  V3 --> C5
+  V4 --> C2
+  V4 --> C3
+  N1 --> C3
+  N2 --> C6
+  V1 -.-> PROD

@@ -1,0 +1,31 @@
+flowchart TD
+  classDef step fill:#FFFFFF,stroke:#3B3F46,stroke-width:1.3px,color:#15171B
+  classDef lock fill:#E3EDF6,stroke:#2B5B84,stroke-width:1.8px,color:#112233
+  classDef decision fill:#F4F5F2,stroke:#3B3F46,stroke-width:1.2px,color:#15171B
+  classDef refuse fill:#F7ECEA,stroke:#A6584C,stroke-width:1.3px,color:#3B1D18
+  classDef ok fill:#E7F1EC,stroke:#2F5D50,stroke-width:1.5px,color:#14201B
+
+  A["1 · Upload request<br/>shape, kind, media type, size, filename and SHA-256<br/>checked before the transaction"]:::step
+  B["2 · BEGIN"]:::step
+  C{"3 · Current disclosure<br/>version accepted?"}:::decision
+  CX["409 · rollback"]:::refuse
+  D["4 · pg_advisory_xact_lock<br/>hashtextextended('ai_workspace_storage:' + user_id, 0)<br/>same admin: waits · other admins: independent key"]:::lock
+  E{"5 · Destination owned<br/>and not archived?"}:::decision
+  EX["404 or 409 · rollback · lock released"]:::refuse
+  F{"6 · Same SHA-256 live<br/>in the same place?"}:::decision
+  FX["Existing file returned · reused<br/>commit · lock released"]:::ok
+  G["7 · SUM(byte_size) of live files<br/>WHERE user_id AND deleted_at IS NULL<br/>ai_files_quota_idx"]:::lock
+  H{"8 · used + size ≤ quota?"}:::decision
+  HX["413 · rollback<br/>no file row · no provider-copy row<br/>lock released"]:::refuse
+  I["9 · INSERT ai_files"]:::step
+  J["10 · COMMIT · lock released<br/>the next waiting upload now sees this file"]:::ok
+
+  A --> B --> C
+  C -- no --> CX
+  C -- yes --> D --> E
+  E -- no --> EX
+  E -- yes --> F
+  F -- yes --> FX
+  F -- no --> G --> H
+  H -- no --> HX
+  H -- yes --> I --> J
