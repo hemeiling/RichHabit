@@ -40,8 +40,20 @@ the phase 1 schema and data layer without changing either.
 | status commits | `PROJECT_STATUS.md` only, separate from the feature commits |
 | pushed | `origin/feature/ai-workspace` at `0236d45` before this status commit |
 | production migration | **applied 2026-09-13 15:21 UTC and verified, 24 of 24** (below) |
-| merged into `main` | **no**: `feature/ai-workspace` fast-forwards cleanly onto `main` (`f0a8e28`), but the merge was held for Product Owner review |
+| merged into `main` | **not yet**: `feature/ai-workspace` fast-forwards cleanly onto `main` (`f0a8e28`); GitHub has no branch protection on `main` |
 | deployed | **no**; production still runs `dd7bec0`, which does not touch the new tables |
+
+**Release baseline re-verified before merge, 2026-09-13 (branch head `d51f2a1`)**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| full unit suite | 763 of 763 |
+| browser suite, local test instance, scripted provider | 91 of 91 (the dev server needs `PG_IDLE_MS=1000`: PGlite serves one connection at a time and the suite queries it directly) |
+| live check with real Claude, locally | 13 of 13 |
+| `npm ls` against the lockfile | consistent |
+| read-only production database check | seven `ai_` tables, all empty; users 13, habits 149, completions 78, priorities 46, goals 39, intentions 1, important dates 7 (normal growth since migration); `priorities_user_order` unchanged, `feedback_created_idx` still absent |
+| bugs found | none; no code change |
 
 **Phase 2: what exists**
 
