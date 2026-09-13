@@ -3,7 +3,7 @@
 > Last updated: 2026-09-13
 >
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
-> **AI WORKSPACE (ADMIN ONLY): PHASE 1 COMPLETE ON `feature/ai-workspace` AT `7fcf53a` · SCHEMA, MIGRATION AND DATA LAYER ONLY · BRANCH PUSHED, NOT MERGED · NO NEON OR PRODUCTION MIGRATION · NOT DEPLOYED**
+> **AI WORKSPACE (ADMIN ONLY): PHASE 1 ON `feature/ai-workspace` (FEATURE `7fcf53a`) · NEON REHEARSAL PASS · DATABASE-SAFETY GATE CLOSED · NOT MERGED · NO PRODUCTION MIGRATION · NOT DEPLOYED**
 > **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
@@ -34,9 +34,10 @@ Approved design: proposal revision 3 (seven tables, explicit reply lineage,
 | --- | --- |
 | branch | `feature/ai-workspace`, from `f0a8e28`, in the worktree `~/dev/rich-habits-ai-workspace` outside OneDrive |
 | feature commit | `7fcf53a8a311d38a25b5cf603180106cb8e4757d` (15 files), local only |
-| status commit | this commit, `PROJECT_STATUS.md` only, local only |
-| pushed / merged | branch pushed to `origin/feature/ai-workspace` with this commit / not merged into `main` |
-| migration on Neon or production | **none has run** |
+| status commits | `PROJECT_STATUS.md` only, separate from the feature commit |
+| pushed / merged | branch pushed to `origin/feature/ai-workspace` / not merged into `main` |
+| migration on Neon | rehearsed on isolated databases on the rehearsal branch, 2026-09-13: **PASS**; those databases have since been deleted |
+| migration on production | **none has run** |
 | repository `main` | `main` and `origin/main` at `f0a8e28`, a status-only commit; no AI Workspace code on `main` |
 | production | **unchanged**: the deployed application code is the `dd7bec0` code release; health OK; no AI Workspace code or migration deployed |
 
@@ -77,16 +78,48 @@ always returned true; ids compared without normalising case; provider-copy
 updates that threw synchronously; two control characters written literally into
 source by the editor, now escaped.
 
-**Remaining database-safety evidence gap:** real concurrent contention on the
-per-admin storage-quota lock. It was exercised with concurrent uploads in
-PGlite, which runs one transaction at a time, so true parallel contention on a
-multi-connection database is unproven. **This will be tested on a Neon
-rehearsal branch before any production migration is put forward for approval.**
+**Phase 1 Neon rehearsal, 2026-09-13: PASS.** Approved by the Product Owner;
+this closes the phase-1 database-safety gate, including the earlier gap on real
+concurrent quota-lock contention.
 
-**Next step:** the phase 1 Neon rehearsal, awaiting Product Owner approval,
-including a real multi-connection quota-lock contention test. It comes before
-any production migration or merge approval. Phase 2 has not started; no Neon
-rehearsal, production migration, merge or deploy until separately approved.
+No Neon API access was available to create a branch, so four isolated databases
+were created inside the existing non-production rehearsal branch
+(`ep-curly-…`). The branch's production-derived `neondb` was the read-only
+reference and was never written. The migration ran through the real path from
+the worktree at `14111b3`: `RH_ALLOW_REMOTE=1 DATABASE_URL=<rehearsal database>
+node scripts/migrate.mjs`.
+
+| Check | Result |
+| --- | --- |
+| migration run 1 | the 7 AI Workspace tables created, `Done — 7 change(s)` |
+| migration run 2 | idempotent: `Nothing to do; already up to date.` |
+| starting point | built from `main`'s schema and migration; after aligning the two drifted indexes below in a throwaway database, identical to the production-derived reference (632 schema lines) |
+| existing production-like schema and data | every pre-existing table, column, constraint, index, trigger, comment, function, enum, view, sequence and seeded row unchanged |
+| fresh-schema parity | fresh install from `db/schema.sql` identical to the migrated databases (201 AI schema lines, and everything else) |
+| integrity suite on Neon, through the real pool | 26 of 26: ownership, attachments, deletion cascades, lineage, stale-stream recovery, disclosure versioning |
+| real multi-connection quota contention | 29 of 29, separate Node processes on separate direct Neon connections; activity sampling showed overlapping transactions and simultaneous advisory-lock waits |
+| same-admin quota operations | serialize correctly: combined under quota, both stored; each fits but together exceed, exactly one stored and the other refused (6 of 6 natural races, plus lock-held runs) |
+| different admins | do not block each other: admin B stored at +759 ms while admin A's lock was held until +3,002 ms |
+| refused uploads | leave no partial file, attachment or provider-copy rows; quota never exceeded; deleting a file releases its space |
+| code or schema changes required | **none** |
+| production migration | **none occurred** |
+| deployment | **none occurred** |
+| cleanup | the four synthetic rehearsal databases deleted on approval; the rehearsal branch and its `neondb` kept and verified unchanged |
+
+**Pre-existing schema drift — not caused by AI Workspace and not part of the
+Phase 1 change.** Found during the rehearsal by comparing `main`'s
+`db/schema.sql` with the production-derived reference. Not fixed here; needs a
+separate decision.
+
+1. `feedback_created_idx`: present in `db/schema.sql`, absent from production.
+2. `priorities_user_order`: `db/schema.sql` includes `category`
+   (`user_id, category, sort_order, created_on`); production does not
+   (`user_id, sort_order, created_on`).
+
+**Next step:** Product Owner direction on phase 2, developed on
+`feature/ai-workspace` unless a different branching strategy is approved. Not
+merged into `main`; no AI Workspace migration on production and no deploy until
+separately approved. The schema drift above is a separate decision.
 
 ## Claude key-only configuration and priority-suggestion fix (released, verified in production)
 
