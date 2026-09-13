@@ -18,6 +18,7 @@
  */
 import { connect } from "./lib.mjs";
 import { migrateIntentionLinks } from "./migrations/intention-links.mjs";
+import { migrateAiWorkspace } from "./migrations/ai-workspace.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -853,6 +854,14 @@ try {
       }
     }
   }
+
+  /*
+   * ---- 8. AI workspace, admin only ------------------------------------------
+   *
+   * Seven new tables, created only if absent. Additive and guarded; nothing
+   * existing is touched. See scripts/migrations/ai-workspace.mjs.
+   */
+  changed += await migrateAiWorkspace(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

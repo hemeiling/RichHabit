@@ -153,6 +153,29 @@ export const intentionAi = {
   get dailyLimit(): number { return num("INTENTION_AI_DAILY_LIMIT", 30); },
 };
 
+const megabytes = (name: string, fallback: number): number =>
+  Math.max(1, Math.floor(num(name, fallback) * 1024 * 1024));
+
+/**
+ * The admin-only AI Workspace. Limits live here rather than in database
+ * constraints, so raising any of them is a configuration change, not a
+ * migration. The database checks are generous backstops only.
+ */
+export const aiWorkspace = {
+  get model(): string { return str("AI_WORKSPACE_MODEL", "claude-sonnet-5"); },
+  get maxOutputTokens(): number { return num("AI_WORKSPACE_MAX_OUTPUT_TOKENS", 8000); },
+  get contextTargetTokens(): number { return num("AI_WORKSPACE_CONTEXT_TARGET_TOKENS", 150000); },
+  get contextMaxTokens(): number { return num("AI_WORKSPACE_CONTEXT_MAX_TOKENS", 200000); },
+  /** Per admin. The daily count is read from the database, so a restart does not reset it. */
+  get hourlyLimit(): number { return num("AI_WORKSPACE_HOURLY_LIMIT", 20); },
+  get dailyLimit(): number { return num("AI_WORKSPACE_DAILY_LIMIT", 100); },
+  get maxPdfBytes(): number { return megabytes("AI_WORKSPACE_MAX_PDF_MB", 10); },
+  get maxImageBytes(): number { return megabytes("AI_WORKSPACE_MAX_IMAGE_MB", 5); },
+  get maxTextBytes(): number { return megabytes("AI_WORKSPACE_MAX_TEXT_MB", 2); },
+  /** Total live file bytes per admin, across projects and conversations. */
+  get storageQuotaBytes(): number { return megabytes("AI_WORKSPACE_STORAGE_QUOTA_MB", 100); },
+};
+
 /**
  * Set on the throwaway stack (`npm run dev:test`). Accounts created against it
  * are stamped as test accounts at the moment they are made, which is the only
