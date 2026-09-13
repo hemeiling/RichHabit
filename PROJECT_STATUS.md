@@ -2,30 +2,45 @@
 
 > Last updated: 2026-09-12
 >
-> **RELEASE APPROVED · PRODUCTION DATABASE MIGRATED · MAIN UPDATED · DEPLOY VERIFICATION PENDING**
-> **ACCOMPLISHMENTS: IMPLEMENTED LOCALLY · COMMITTED ON `feature/accomplishments` · NOT MERGED · NOT DEPLOYED**
+> **ACCOMPLISHMENTS: RELEASED · `main` AT `d728111` · DEPLOYED TO RENDER · PRODUCTION VERIFIED**
+> **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: COMMITTED LOCALLY (`97e0c1c`) · NOT PUSHED · NOT MERGED · NOT DEPLOYED**
 >
-> The Product Owner approved the application release on 2026-09-12. `main` is
-> fast-forwarded to release commit `cd3eef4` plus a status commit (`67105c6`) and
-> pushed. Render auto-deploy was not observed; the Product Owner was asked to
-> deploy `67105c6` manually, and that is not yet confirmed. The intention
-> migration was rehearsed on a Neon branch and applied to production before
-> `main` moved.
+> Production runs the Accomplishments release,
+> `d7281117b68c4fcbe69069b0c79d4be745ca604c`, deployed manually on Render (Render
+> did not auto-deploy) and verified on 2026-09-13. Neither Accomplishments nor
+> Community Rankings needs a database migration.
+>
+> The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
+> intention migration applied to production on 2026-09-12) was deployed and
+> confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Accomplishments and a forward-looking Priority Compass (committed, not merged)
-
-Accomplishments, the Priority Compass simplification and inline priority editing
-are implemented locally and committed, approved by the Product Owner on
-2026-09-12.
+## Community Rankings and two-series My Progress (local only)
 
 | | |
 | --- | --- |
-| branch | `feature/accomplishments`, from `67105c6` |
-| feature commit | `17e5ce24e33215cc8415a6096dd67e9a3e611c2a` (23 files) |
+| branch | `feature/community-rankings`, local only |
+| feature commit | `97e0c1c3c90c40caa434abe8ea6cbdbfed04cef0` (13 files), based on `d728111` |
 | database migration | none required; no new table |
-| pushed | not yet, at the time of this status commit |
+| pushed | no |
 | merged into `main` | no |
 | deployed | no |
+
+It is released only after Accomplishments was verified, and only on the Product
+Owner's approval: rebase onto `main`, then push, merge and deploy.
+
+## Accomplishments and a forward-looking Priority Compass (released, verified in production)
+
+Accomplishments, the Priority Compass simplification and inline priority editing,
+approved by the Product Owner on 2026-09-12, are merged, deployed and verified.
+
+| | |
+| --- | --- |
+| branch | `feature/accomplishments`, from `67105c6`; fast-forwarded into `main` |
+| feature commit | `17e5ce24e33215cc8415a6096dd67e9a3e611c2a` (23 files) |
+| release commit on `main` | `d7281117b68c4fcbe69069b0c79d4be745ca604c` (the feature plus a status commit) |
+| database migration | none required; no new table |
+| deployed | manually on Render with "Deploy latest commit" |
+| production verification | passed on 2026-09-13; no production issues found |
 
 The unrelated `inspect-prod-readonly` script and test edits and the two untracked
 documents in `docs/` remain excluded and uncommitted. The one known unit-test
@@ -115,8 +130,24 @@ the Community payload; keeping members with no scheduled habits off the board;
 the responsive Chinese rank layout; the revised My Progress legend; the short
 month label; the narrow time-zone fix for both current-month figures.
 
-**Next step:** push `feature/accomplishments`, then wait for the Product Owner's
-approval before merging into `main` and deploying. No database action is needed.
+**Production verification, 2026-09-13.** Signed out and read-only; no production
+data was created, changed or deleted.
+
+- The served stylesheet is byte-identical to a clean build of `d728111`
+  (`98a1a3e0ce91e64e.css`, sha256 `1c65a130…`). The served dictionary script
+  matches that build once module ids are masked, and contains release-only text
+  such as "Delete this accomplishment?".
+- No Community Rankings code is live: its stylesheet and dictionary script return
+  404, and its text ("Habit Ranking", "Accomplishment Ranking") is absent.
+- `/api/health` is ok with the database up. `/login`, `/terms` and `/verify` load
+  with no page errors or failed requests at 1440px and 390px. Protected pages
+  redirect to login, `/today` still answers 308, and signed-out API calls answer
+  401.
+- No production issues were found. Signed-in smoke tests are the Product Owner's,
+  on their existing account.
+
+**Next step:** Community Rankings waits for the Product Owner's approval before it
+is pushed, merged and deployed. No database action is needed.
 
 ## Production, verified 2026-09-12
 
@@ -310,7 +341,7 @@ Expected stylesheet once the release is serving, for verifying the deploy:
 | idempotency run on production | `Nothing to do; already up to date.` |
 | production verification | 38 of 38: new objects, constraints and index present; `intentions` empty; all 27 existing tables and 1,181 rows byte-identical before and after |
 | temporary database credentials in `.env.local` | removed; local development URL restored |
-| application release | approved by the Product Owner; `main` fast-forwarded to the release; deploy verification pending |
+| application release | approved by the Product Owner; `main` fast-forwarded to the release; deployed and confirmed live by the Product Owner |
 
 **Migration notes.** Both databases were reached through pooled connections.
 The rehearsal URL was pooled rather than direct as described; that is a
