@@ -2,50 +2,102 @@
 
 > Last updated: 2026-09-13
 >
+> **AI WORKSPACE CHATBOT (ADMIN ONLY): PHASES 1–2 COMMITTED AND PUSHED ON `feature/ai-workspace` (`0236d45`) · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC) · NOT MERGED INTO `main` (NEEDS PRODUCT OWNER REVIEW) · NOT DEPLOYED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
-> **AI WORKSPACE (ADMIN ONLY): PHASE 1 ON `feature/ai-workspace` (FEATURE `7fcf53a`) · NEON REHEARSAL PASS · DATABASE-SAFETY GATE CLOSED · NOT MERGED · NO PRODUCTION MIGRATION · NOT DEPLOYED**
 > **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `main` and `origin/main` are at `f0a8e28`, a status-only
-> commit on top of `dd7bec0`. The AI Workspace exists only on the
-> `feature/ai-workspace` branch.
+> **Repository:** `main` and `origin/main` are still `f0a8e28`. The AI Workspace
+> is on `origin/feature/ai-workspace`, which fast-forwards cleanly onto `main`;
+> the fast-forward was not performed because merging into `main` needs the
+> Product Owner's review in this environment.
 >
-> **Deployed application:** the code running in production is the `dd7bec0`
-> code release (`dd7bec0142f9497849697960d09bd7795e0ad935`): the intention-links
-> release (`e0eb036`) plus a workspace-scoped Claude key with no workspace-id
-> setting, a clearer message when the provider refuses the key, and a fix for
-> priority suggestions that always came back empty. Production health is OK. No
-> AI Workspace code or migration is deployed. `dd7bec0` needed no database
-> migration; Render did not auto-deploy it and the Product Owner deployed
-> manually.
+> **Production database:** the seven AI Workspace tables exist in production
+> (additive, created empty on 2026-09-13). Every pre-existing table, index,
+> constraint and row was verified unchanged.
+>
+> **Deployed application:** still the `dd7bec0` code release
+> (`dd7bec0142f9497849697960d09bd7795e0ad935`), which does not use the new
+> tables. Production health is OK. Render did not auto-deploy the last releases;
+> the Product Owner deployed them manually.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## AI Workspace, phase 1: schema, migration and data layer (complete locally, not released)
+## AI Workspace chatbot (admin only): phases 1 and 2
 
 Approved design: proposal revision 3 (seven tables, explicit reply lineage,
-`ai_message_files`, versioned upload disclosure).
+`ai_message_files`, versioned upload disclosure). Phase 2 built the chatbot on
+the phase 1 schema and data layer without changing either.
 
 | Item | State |
 | --- | --- |
 | branch | `feature/ai-workspace`, from `f0a8e28`, in the worktree `~/dev/rich-habits-ai-workspace` outside OneDrive |
-| feature commit | `7fcf53a8a311d38a25b5cf603180106cb8e4757d` (15 files), local only |
-| status commits | `PROJECT_STATUS.md` only, separate from the feature commit |
-| pushed / merged | branch pushed to `origin/feature/ai-workspace` / not merged into `main` |
-| migration on Neon | rehearsed on isolated databases on the rehearsal branch, 2026-09-13: **PASS**; those databases have since been deleted |
-| migration on production | **none has run** |
-| repository `main` | `main` and `origin/main` at `f0a8e28`, a status-only commit; no AI Workspace code on `main` |
-| production | **unchanged**: the deployed application code is the `dd7bec0` code release; health OK; no AI Workspace code or migration deployed |
+| phase 1 commit | `7fcf53a` schema, migration step 8 and data layer (15 files) |
+| phase 2 commit | `0236d45ab5bc67f857732bb1abb8de32352a790c` chatbot: routes, provider, interface, tests (44 files); no schema or migration change |
+| status commits | `PROJECT_STATUS.md` only, separate from the feature commits |
+| pushed | `origin/feature/ai-workspace` at `0236d45` before this status commit |
+| production migration | **applied 2026-09-13 15:21 UTC and verified, 24 of 24** (below) |
+| merged into `main` | **no**: `feature/ai-workspace` fast-forwards cleanly onto `main` (`f0a8e28`), but the merge was held for Product Owner review |
+| deployed | **no**; production still runs `dd7bec0`, which does not touch the new tables |
 
-**Phase 1 is complete locally, and it is only the schema, the migration and the
-data layer.** There are no API routes, no interface, no provider (Claude or
-other) implementation and no network calls yet; those are later phases.
+**Phase 2: what exists**
 
-**What exists**
+- An admin-only launcher at the bottom right opens a panel that expands to the
+  whole window on desktop, and a full-screen workspace on phones that follows
+  the on-screen keyboard. It is not a navigation destination.
+- Conversations: new, history, automatic and edited titles, archive, restore,
+  delete. Replies stream from Claude as NDJSON and are saved while streaming (at
+  most a second apart); Stop, Continue and Retry/Regenerate use the phase 1
+  lineage. A reply left streaming by a restart shows as interrupted, with Retry.
+  Markdown, tables, highlighted code and copy.
+- Projects: create, rename, instructions, archive, restore, permanent delete
+  after typing the name; a project file library; chats in or out of projects.
+- Files: type decided from the bytes (PDF, PNG, JPEG, GIF, WebP, UTF-8 text),
+  per-type limits and the 100 MB per-admin quota, de-duplication, up to 20
+  ordered attachments, "File removed" for deleted files. PDF and image copies go
+  to the Anthropic Files API once, are reused, and are deleted with the file.
+  The current upload notice must be accepted first; only files attached to a
+  message reach Claude.
+- Context: workspace instructions, project instructions, conversation history,
+  attached files and the message, within a 150,000-token target (oldest history
+  dropped first). No RichHabit personal data, no analytics, and logs carry codes
+  only.
+- Security: every `/api/admin/ai/workspace` route answers 404 unless
+  `users.role` is admin; data access is owner-scoped; hourly (20) and daily
+  (100) reply limits are counted from the database; one reply at a time per admin.
+- A provider seam (`src/lib/aiWorkspaceRuntime/provider.ts`); Claude lives in
+  `src/lib/ai/claude.ts`, still the only file using Anthropic's SDK, with the
+  existing workspace-scoped `CLAUDE_API_KEY`. English, Chinese and bilingual chrome.
+
+**Phase 2 verification, 2026-09-13: all passed**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| full unit suite | 763 of 763, 59 of them new: runtime rules, the Claude adapter, reply orchestration on PGlite, every API route, privacy and security boundaries |
+| browser suite on the local test instance, scripted provider | 91 of 91: 404 for signed-out, ordinary and other-admin access; streaming; persistence after reload; Stop, Continue and Retry with lineage; length limit; rename, archive, delete; upload notice; typing from bytes; oversize refusal; de-duplication; attachment order; provider-copy reuse; project library and "File removed"; project archive and cascade delete; English and Chinese; 1440, 390 and 320 px and bilingual without horizontal overflow; composer above a keyboard-height viewport; no workspace analytics, no prompt text in the server log, no key or Anthropic address in browser scripts |
+| live check with real Claude, locally | 13 of 13: streaming, Stop and Continue, a PDF read through the Files API, the stored copy reused and deleted with its file, a Chinese reply, no key or prompt text in the server log |
+
+**Production migration, 2026-09-13: PASS (24 of 24)**
+
+Target: `PRODUCTION_DATABASE_URL` only, direct endpoint. Restore point recorded
+immediately before the change: 2026-09-13T15:20:38Z, LSN `0/367C298`, for Neon
+point-in-time restore.
+
+| Check | Result |
+| --- | --- |
+| migration source | `scripts/migrate.mjs`, `scripts/migrations/ai-workspace.mjs` and `db/schema.sql` byte-identical to the rehearsed commit `f09e2af`; 21 statements, all create-if-not-exists on `ai_` objects |
+| starting schema | identical to the production-derived rehearsal reference (632 schema lines); no AI tables |
+| run 1 | created exactly the seven AI tables; `Done — 7 change(s)`; nothing else reported |
+| existing schema and data | every table, column, constraint, index, trigger, comment, function, enum, view, sequence and row digest unchanged; users 12, habits 139, habit completions 75, priorities 41, intentions 1, goals 36, important dates 7 |
+| new tables | seven, empty, identical to a fresh `db/schema.sql` install (201 AI schema lines, compared on a throwaway database since removed) |
+| run 2 | `Nothing to do; already up to date.`; nothing changed |
+| drift indexes | `feedback_created_idx` and `priorities_user_order` untouched |
+
+**Phase 1: what exists**
 
 - Migration step 8 (`scripts/migrations/ai-workspace.mjs`, called last by
   `scripts/migrate.mjs`): creates `ai_projects`, `ai_conversations`,
@@ -59,7 +111,7 @@ other) implementation and no network calls yet; those are later phases.
   `.env.example`): PDF 10 MB, image 5 MB, text 2 MB, 100 MB per admin, 20 and
   100 messages an hour and a day, 8,000 output tokens, 150,000 / 200,000 context.
 
-**Local verification, 2026-09-13: all passed**
+**Phase 1 local verification, 2026-09-13: all passed**
 
 | Check | Result |
 | --- | --- |
@@ -102,8 +154,8 @@ node scripts/migrate.mjs`.
 | different admins | do not block each other: admin B stored at +759 ms while admin A's lock was held until +3,002 ms |
 | refused uploads | leave no partial file, attachment or provider-copy rows; quota never exceeded; deleting a file releases its space |
 | code or schema changes required | **none** |
-| production migration | **none occurred** |
-| deployment | **none occurred** |
+| production migration during the rehearsal | none (applied later, on 2026-09-13; see above) |
+| deployment during the rehearsal | none |
 | cleanup | the four synthetic rehearsal databases deleted on approval; the rehearsal branch and its `neondb` kept and verified unchanged |
 
 **Pre-existing schema drift — not caused by AI Workspace and not part of the
@@ -116,10 +168,26 @@ separate decision.
    (`user_id, category, sort_order, created_on`); production does not
    (`user_id, sort_order, created_on`).
 
-**Next step:** Product Owner direction on phase 2, developed on
-`feature/ai-workspace` unless a different branching strategy is approved. Not
-merged into `main`; no AI Workspace migration on production and no deploy until
-separately approved. The schema drift above is a separate decision.
+**Next step (Product Owner):**
+
+1. Review and merge. `feature/ai-workspace` fast-forwards onto `main`:
+   `git push origin feature/ai-workspace:main`, or merge a pull request from
+   `feature/ai-workspace` into `main` on GitHub. No database step is needed;
+   production is already migrated.
+2. In Render, "Deploy latest commit" and wait for it to go live. Signed out,
+   `https://richhabit.onrender.com/api/admin/ai/workspace` then answers
+   `{"error":"Not found"}` as JSON instead of the HTML 404 page.
+3. Signed in as an admin: open the launcher at the bottom right, send a message
+   and watch it stream, Stop a long reply and Continue it, accept the upload
+   notice and ask about a PDF, reload and check the history, and try a phone.
+   Then confirm an ordinary account sees no launcher.
+
+**Known limits of this release:** one reply at a time and orphan recovery rely
+on RichHabit running as a single Render instance; Files API copies are not
+deleted remotely when a whole account is deleted; remote copy deletion is best
+effort; uploads are type-checked but not malware-scanned; Render did not
+auto-deploy recent releases. The schema drift above is a separate decision and
+is not part of this release.
 
 ## Claude key-only configuration and priority-suggestion fix (released, verified in production)
 
