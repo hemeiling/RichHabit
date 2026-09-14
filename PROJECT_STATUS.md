@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-13
 >
-> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · PROVIDER-ERROR NORMALIZATION + NATURAL IMAGE ROUTING ADDED (IMPLEMENTATION TESTS PASS) · REAL GEMINI CHAT PASS · REAL IMAGE GENERATION: FINAL ACCEPTANCE PENDING THE PRODUCT OWNER'S GOOGLE BILLING CONFIRMATION · INCLUDES `1375082f` BY MERGE · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
+> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · REAL GEMINI IMAGE GENERATION: PASS (FINAL ACCEPTANCE ON `74d2eb3`, ENGLISH AND CHINESE) · REAL GEMINI CHAT PASS · IMPLEMENTATION TESTS PASS · INCLUDES `1375082f` BY MERGE · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
 > **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
@@ -131,7 +131,32 @@ personal data.
 | --- | --- |
 | implementation tests (controlled and scripted providers) | **pass**: typecheck, lint, production build (no secrets in client bundles), unit 907 of 907 (routing 87, provider errors 21, models/image routes 23); browser regression 91 of 91; models and image browser suite 75 of 75 (natural English and Chinese phrasing, Gemini and Claude selection semantics, quota/rate-limit/configuration messages in both languages and after refresh, no provider wording shown, privacy). The extended suite ran with a raised test-only reply limit (`AI_WORKSPACE_HOURLY_LIMIT`), because its first run correctly hit the default 20 replies an hour |
 | real Gemini chat | **pass** (live run on `e808b03`; the request path is unchanged by this tightening) |
-| real Gemini image generation | last real run on `e808b03`, after billing reached the key's project: **passed** (both hippo prompts). The Product Owner has since reported that the Google project has no usable image quota. Not re-run for this change and not faked. **Final acceptance pending**: both hippo prompts must render an actual picture in the conversation and still be present after refresh |
+| real Gemini image generation | **REAL GEMINI IMAGE GENERATION: PASS** — final acceptance on commit `74d2eb3` (2026-09-13), in a real browser against a local instance with the real Google and Anthropic keys, after the Product Owner confirmed Google AI Studio Tier 1 with paid API spend. Details below |
+
+**Final real acceptance, commit `74d2eb3` (2026-09-13): PASS**
+
+| Check | English: "Can you generate a cartoon image of a hippopotamus?" | Chinese: "帮我生成一张可爱的河马卡通图片" |
+| --- | --- | --- |
+| model that received the request | `gemini-3.1-flash-image` (Google) | `gemini-3.1-flash-image` (Google) |
+| Google returned a real image | **pass**: reply complete, no error; 1,471 output tokens; 6.4 s at the model | **pass**: reply complete, no error; 1,497 output tokens; 9.5 s at the model |
+| stored picture | 984 KB JPEG, owned by the admin, carried by the reply | 942 KB JPEG, owned by the admin, carried by the reply |
+| rendered in the AI Workspace conversation | **pass**, labelled Nano Banana 2, from the owner-only file route | **pass**, same |
+| same picture after a page refresh | **pass** | **pass** |
+| free-tier `generate_content_free_tier_requests limit: 0` error | gone | gone |
+| picture without the admin's session | refused (404) | refused (404) |
+
+Privacy scans passed: the server log, the page DOM, the conversation API, the
+scripts the browser loaded and the production build contain no API key or key
+name, no prompt text in logs or code, no generated image data, no billing
+details, no Google quota internals, no Google project id and no provider URL;
+the browser never contacted Google or Anthropic. The automated scan's three
+loose flags were traced to exact matches and are not leaks: "suspend"/"spending"
+(React and RichHabit's Spending feature), the `quota_unavailable` message key,
+the workspace's own `projectId`, and 1-pixel placeholders in the development
+framework runtime (absent from the production build).
+
+No code changes, no database or migration changes, no production access, and no
+deploy were involved in this acceptance.
 
 **Required before release (Product Owner)**
 
@@ -145,15 +170,15 @@ personal data.
    `feature/ai-workspace`.~~ **Done** by merge `c6d2c9d` (not cherry-picked);
    `git merge-base --is-ancestor 1375082f HEAD` succeeds and the commit appears
    once.
-5. **Remaining:** confirm Google billing and image quota, then run the two final
-   real acceptance tests on the release candidate ("Can you generate a cartoon
-   image of a hippopotamus?" and "帮我生成一张可爱的河马卡通图片"), each
-   rendering an actual picture in the conversation that is still present after
-   refresh.
-6. **Then:** fast-forward `main` to the release-candidate commit of
-   `feature/ai-workspace-models` and deploy it on Render. No database step.
-   Then verify in production, signed in: the model selector, a Gemini reply, a
-   hippo picture in English and Chinese, and re-accepting the upload notice.
+5. ~~Confirm Google billing and run the two final real acceptance tests.~~
+   **Done**: Tier 1 with paid spend confirmed by the Product Owner; both hippo
+   prompts PASS on `74d2eb3`.
+6. **Remaining (Product Owner):** fast-forward `main` to the final
+   release-candidate commit of `feature/ai-workspace-models` and deploy it on
+   Render. No database step; `GEMINI_API_KEY` is already set in Render. Then run
+   the production smoke test: Claude chat, Gemini chat, the model selector,
+   English and Chinese hippo pictures that persist after refresh, an ordinary
+   account with no access, and the privacy checks.
 
 **Known limits and risks**
 
