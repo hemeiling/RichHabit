@@ -93,7 +93,14 @@ personal data.
    without it production stays Claude-only and hides Gemini and pictures.
 3. After billing: re-run the live check (`aiw-live-models.mjs` in the session
    scratchpad) and confirm both hippo prompts store a real image.
-4. Merge `feature/ai-workspace-models` into `main` and deploy on Render. No
+4. Before merging, bring in the V1 image-understanding documentation commit
+   `1375082f61fffff704d8445344860f5c086156fd` from `feature/ai-workspace`. This
+   branch was created before it (common ancestor `1e5e04a`). Merge
+   `feature/ai-workspace` rather than cherry-picking, so the commit is kept once
+   under its own id; keep both sections of this file if they conflict, then
+   confirm with `git merge-base --is-ancestor 1375082f HEAD`. Deliberately not
+   done yet (Product Owner, 2026-09-13).
+5. Merge `feature/ai-workspace-models` into `main` and deploy on Render. No
    database step.
 
 **Known limits and risks**
