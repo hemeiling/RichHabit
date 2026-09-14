@@ -3,6 +3,7 @@
 > Last updated: 2026-09-13
 >
 > **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: IMPLEMENTED ON `feature/ai-workspace-models` · LOCAL TESTS PASS · REAL GEMINI CHAT VERIFIED · REAL IMAGE GENERATION BLOCKED BY GOOGLE FREE-TIER QUOTA (0) · NOT MERGED · NOT DEPLOYED · NO MIGRATION**
+> **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
 > **INTENTION LINKS + AI SUGGESTIONS: RELEASED IN `e0eb036` · STILL LIVE IN PRODUCTION**
@@ -116,6 +117,38 @@ personal data.
   project before sending private material.
 - Earlier limits still apply: one Render instance; no malware scan; Anthropic
   copies not deleted remotely on account deletion.
+
+## AI Workspace V1 — Image Understanding: VERIFIED
+
+An existing, verified capability of the released AI Workspace (`f7499fc`), not
+new work. Full reference: `docs/architecture/AI_Workspace_V1_Image_Understanding.md`.
+Documentation only: no application code, schema, migration, configuration or
+production change, and nothing deployed.
+
+**Supported now:** PNG, JPEG, GIF and WebP; a 5 MB application image limit;
+server-side magic-byte type detection; storage in Postgres; SHA-256
+de-duplication; one Anthropic Files API upload per image, reused afterwards;
+Claude vision through native `image` content blocks; a base64 `image` block
+fallback if the provider upload fails; object and scene understanding; reading
+text directly from images; upload-disclosure enforcement; admin-only access; no
+image, prompt or key contents in application logs.
+
+**Limitations:** BMP is not supported; animated GIFs are understood from the
+first frame only; images are not resized before being sent to Claude; the
+RichHabit limit is 5 MB although Anthropic accepts more (10 MB); large images
+can consume materially more input tokens.
+
+**Evidence, 2026-09-13 (local, real Claude, throwaway database):**
+
+| Check | Result |
+| --- | --- |
+| live Claude image checks against `f7499fc` | 30 of 30 passed |
+| V1 image-path unit tests | 46 of 46 passed |
+| PNG and JPEG, end to end | objects described (3/3 each), text read (2/2 each), Files API copy made and reused |
+| GIF and WebP | additionally verified: uploaded, typed from bytes, objects described, text read |
+| validation | 5.3 MB PNG refused (413); BMP and binary junk refused (415); text renamed `.png` stored as text; upload refused before the notice (409) |
+| logs | no key, prompt, reply, image text or image bytes |
+| production code | unchanged |
 
 ## AI Workspace chatbot (admin only): phases 1 and 2
 
