@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-13
 >
-> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: IMPLEMENTED ON `feature/ai-workspace-models` · LOCAL TESTS PASS · REAL GEMINI CHAT VERIFIED · REAL IMAGE GENERATION BLOCKED BY GOOGLE FREE-TIER QUOTA (0) · NOT MERGED · NOT DEPLOYED · NO MIGRATION**
+> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · REAL GEMINI IMAGE GENERATION VERIFIED ON A BILLED GOOGLE PROJECT (LIVE 23/23) · INCLUDES `1375082f` BY MERGE · POST-MERGE TESTS PASS · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
 > **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
@@ -35,10 +35,10 @@ personal data.
 | Item | State |
 | --- | --- |
 | branch | `feature/ai-workspace-models`, from `feature/ai-workspace` (`1e5e04a`), same worktree |
-| committed / pushed | see the commit that adds this section; pushed to `origin/feature/ai-workspace-models` |
-| schema / migration | **none**: replies already store `provider` and `model`; pictures are `ai_files` rows carried by the reply through `ai_message_files` |
-| merged into `main` | **no** |
-| deployed | **no**; production still runs `f7499fc` (Claude only) |
+| committed / pushed | feature `0f02a6e`; merge of `feature/ai-workspace` `c6d2c9d` (brings in `1375082f` once, by merge); release-candidate status in the commit that updates this row; all pushed to `origin/feature/ai-workspace-models` |
+| schema / migration | **none**: replies already store `provider` and `model`; pictures are `ai_files` rows carried by the reply through `ai_message_files`. No change under `db/`, `scripts/`, `render.yaml` or dependencies between `f7499fc` and the release candidate |
+| merged into `main` | **no** (Product Owner action) |
+| deployed | **no**; production still runs `f7499fc` (Claude only). Render already has `GEMINI_API_KEY` (added by the Product Owner) |
 
 **What changed**
 
@@ -84,25 +84,26 @@ personal data.
 | models and image browser suite, scripted providers | 54 of 54: selector lists only configured chat models; Gemini/Claude switching with history; model persists after reload; EN and ZH hippo render an actual picture that survives refresh; Creating image…, Stop, Retry, refusal; picture owner-only (other admin, member, signed out 404); upload notice names Google; 1440/390/320 px without overflow; no prompt or image data in the server log; no provider request or key in the browser; no analytics |
 | live, real Claude + real Gemini (first run) | 15 of 19. Passed: Gemini streaming with usage, general question, multi-turn without thought signatures, switch to Claude on the same history, model remembered, Stop and Continue on Gemini, no stored Google file copy, routing of both hippo prompts to Nano Banana 2, no keys/prompts/image data in the server log. Failed with `rate_limited`: both real hippo images (Google free tier allows 0 image requests: `generate_content_free_tier_requests, limit: 0` for every Nano Banana model) and, after ~10 rapid calls, a Gemini PDF read and a Chinese reply (free-tier per-minute limit) |
 | live, spaced re-run | 4 of 4: Gemini reads an attached PDF inline; a Chinese question gets a Chinese answer; no keys or prompt text in the server log. A further real image attempt still failed `rate_limited` (quota 0) |
+| live, after billing reached the key's project (2026-09-13, before an earlier re-run still showed the free-tier quota) | **23 of 23**. `gemini-3.1-flash-image` generated real JPEG pictures for both "Can you generate a cartoon image of a hippopotamus?" (9.7 s) and "帮我生成一张可爱的河马卡通图片" (8.3 s), stored and still present after a reload; no `generate_content_free_tier_requests limit: 0` error; Gemini text, multi-turn, Claude switching, Stop/Continue, inline PDF and Chinese all pass; no key, prompt, reply or image data in the server log |
+| post-merge (`c6d2c9d`) | typecheck and lint clean; unit 838 of 838; production build compiles with no key names, keys, provider addresses or database URLs in client bundles; browser suites 91 of 91 and 54 of 54; `1375082f` an ancestor, present once |
+| production database, read-only after the merge | seven `ai_` tables present; RichHabit counts unchanged (users 13, habits 149, completions 78, priorities 46, goals 39, intentions 1, dates 7); drift index untouched; migration not re-run |
 
 **Required before release (Product Owner)**
 
-1. Enable billing on the Google project behind `GEMINI_API_KEY`. Without it no
-   real picture can be generated; the acceptance test cannot pass. (Paid-plan
-   decision; not done by Claude.)
-2. Add `GEMINI_API_KEY` to Render's environment. Production does not have it;
-   without it production stays Claude-only and hides Gemini and pictures.
-3. After billing: re-run the live check (`aiw-live-models.mjs` in the session
-   scratchpad) and confirm both hippo prompts store a real image.
-4. Before merging, bring in the V1 image-understanding documentation commit
-   `1375082f61fffff704d8445344860f5c086156fd` from `feature/ai-workspace`. This
-   branch was created before it (common ancestor `1e5e04a`). Merge
-   `feature/ai-workspace` rather than cherry-picking, so the commit is kept once
-   under its own id; keep both sections of this file if they conflict, then
-   confirm with `git merge-base --is-ancestor 1375082f HEAD`. Deliberately not
-   done yet (Product Owner, 2026-09-13).
-5. Merge `feature/ai-workspace-models` into `main` and deploy on Render. No
-   database step.
+1. ~~Enable billing on the Google project behind `GEMINI_API_KEY`.~~ **Done**
+   (Product Owner, 2026-09-13).
+2. ~~Add `GEMINI_API_KEY` to Render's environment.~~ **Done** (Product Owner,
+   2026-09-13).
+3. ~~Re-run the live check and confirm both hippo prompts store a real image.~~
+   **Done**: 23 of 23.
+4. ~~Bring in `1375082f61fffff704d8445344860f5c086156fd` from
+   `feature/ai-workspace`.~~ **Done** by merge `c6d2c9d` (not cherry-picked);
+   `git merge-base --is-ancestor 1375082f HEAD` succeeds and the commit appears
+   once.
+5. **Remaining:** fast-forward `main` to the release-candidate commit of
+   `feature/ai-workspace-models` and deploy it on Render. No database step.
+   Then verify in production, signed in: the model selector, a Gemini reply, a
+   hippo picture in English and Chinese, and re-accepting the upload notice.
 
 **Known limits and risks**
 
