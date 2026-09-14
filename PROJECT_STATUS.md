@@ -2,6 +2,7 @@
 
 > Last updated: 2026-09-13
 >
+> **ADMIN → USERS MODERNIZATION: IMPLEMENTED ON `feature/admin-users-modernization` (FROM `main` `5eb1a92`) · TESTS PASS · NOT MERGED INTO `main` · NOT DEPLOYED · NO SCHEMA OR MIGRATION**
 > **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · REAL GEMINI IMAGE GENERATION: PASS (FINAL ACCEPTANCE ON `74d2eb3`, ENGLISH AND CHINESE) · REAL GEMINI CHAT PASS · IMPLEMENTATION TESTS PASS · INCLUDES `1375082f` BY MERGE · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
 > **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
@@ -24,6 +25,26 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Admin → Users modernization
+
+The users table now reflects the current product model instead of legacy
+Goals/Reviews counts. Admin analytics and UI only: the Goals and Weekly Review
+features and their data are untouched.
+
+| Item | State |
+| --- | --- |
+| branch | `feature/admin-users-modernization`, from `main` `5eb1a92`, worktree `~/dev/rich-habits-admin-users` |
+| committed / pushed | in the commit that adds this section; pushed to `origin/feature/admin-users-modernization` |
+| schema / migration / env / dependencies | **none**; nothing under `db/`, `scripts/`, `render.yaml`, `package*.json` or `.env.example` changed; drift indexes untouched |
+| merged into `main` / deployed | **no** / **no** |
+| desktop columns | User (name, then username or email; `test` tag) · Status · Role · Joined · Last Active · Active Days · Behavior: Habits, Completions · Action: Priorities, Accomplishments · Direction: Intention · Future: Important Dates |
+| removed from the table | Name/Username/Email (merged into User), Verified, Source, Sessions (Verified, Source and Sessions stay on the detail page), Goals, Reviews (also removed from the detail page) |
+| definitions | Habits = `habits` with `status = 'active'`; Completions = `habit_completions` rows; Priorities = all `priorities`; Accomplishments = `priorities.completed_on is not null`; Intention = `intention_completed` event → Completed, else `intention_started` → Started, else —; Important Dates = `important_dates` rows; Active Days unchanged (distinct UTC days with a tracked event) |
+| privacy | `tests/admin-users.test.ts` records every statement the list, selection and detail page run and fails on any content column (habit name, priority body, intention want/why_chain/ownership/ownership_note/vision, date title/note, journal/review/reflection text, AI content), any private table (`intentions`, `goals`, `weekly_reviews`, …, `ai_*`) or a star select; it also pins the returned field list |
+| layout | grouped table where the list is at least 720px wide (container query); a card per account below that |
+| verification | typecheck, lint, 918/918 unit tests (11 new), production build, 50/50 local browser checks (desktop 1440, tablet 820, mobile 390; counts vs independent SQL, role change, selection, sorting, filtering, detail page, no private text in HTML) |
+| next step | Product Owner review; merge to `main` and deploy when approved; signed-in look at Admin → Users on desktop and phone |
 
 ## AI Workspace: general-purpose assistant, multiple models, image generation
 

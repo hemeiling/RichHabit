@@ -190,7 +190,8 @@ export default async function Users({ searchParams }: {
       )}
 
       <p className="faint text-center" style={{ fontSize: 12, lineHeight: 1.5 }}>
-        Counts and dates only. Habit names, notes, metrics and goal text are never selected here.
+        Counts, dates and status only. Habit names, priority text, intentions, Important Date
+        titles and notes, journal entries and AI Workspace content are never selected here.
       </p>
     </div>
   );

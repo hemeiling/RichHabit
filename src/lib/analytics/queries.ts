@@ -385,10 +385,29 @@ export interface AdminUserRow {
   /** Null means active. Shown in the list so a disabled account is visible. */
   disabledAt: string | null;
   firstActive: string | null; lastActive: string | null;
-  activeDays: number; sessions: number; habits: number;
-  completions: number; goals: number; reviews: number;
+  /** Distinct UTC days with at least one tracked event. */
+  activeDays: number;
+  /** Runs of tracked events with no gap longer than the session idle window. */
+  sessions: number;
+  /** Habits on the sheet (`status = 'active'`), not every candidate or retired row. */
+  activeHabits: number;
+  /** Habit completion rows: one per habit per day marked done. */
+  completions: number;
+  /** Every Priority Compass priority, open and completed. */
+  priorities: number;
+  /** Priorities with `completed_on` set — the rule Insights and Community count by. */
+  accomplishments: number;
+  /**
+   * Clarify Intention progress, from the `intention_started` and
+   * `intention_completed` analytics events. The intentions table itself is
+   * never read here.
+   */
+  intention: IntentionStatus;
+  importantDates: number;
   status: EngagementStatus;
 }
+
+export type IntentionStatus = "none" | "started" | "completed";
 
 export type UserSort = "active" | "least_active" | "newest" | "oldest" | "last_active";
 export type RoleFilter = "all" | "user" | "admin";
@@ -480,20 +499,32 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
            u.role::text as role, u.created_at, u.disabled_at,
            ev.first_active, ev.last_active, coalesce(ev.active_days, 0) as active_days,
            coalesce(s.sessions, 0) as sessions,
-           coalesce(h.habits, 0) as habits,
+           coalesce(h.active_habits, 0) as active_habits,
            coalesce(hc.completions, 0) as completions,
-           coalesce(g.goals, 0) as goals,
-           coalesce(wr.reviews, 0) as reviews
+           coalesce(pr.priorities, 0) as priorities,
+           coalesce(pr.accomplishments, 0) as accomplishments,
+           case when it.completed then 'completed'
+                when it.user_id is not null then 'started'
+                else 'none' end as intention,
+           coalesce(idt.important_dates, 0) as important_dates
       from users u
       left join profiles p on p.id = u.id
       left join (select user_id, min(occurred_at) first_active, max(occurred_at) last_active,
                         count(distinct occurred_at::date) active_days
                    from analytics_events group by user_id) ev on ev.user_id = u.id
       left join (select user_id, count(*) sessions from user_sessions group by user_id) s on s.user_id = u.id
-      left join (select user_id, count(*) habits from habits group by user_id) h on h.user_id = u.id
+      left join (select user_id, count(*) active_habits from habits
+                  where status = 'active' group by user_id) h on h.user_id = u.id
       left join (select user_id, count(*) completions from habit_completions group by user_id) hc on hc.user_id = u.id
-      left join (select user_id, count(*) goals from goals group by user_id) g on g.user_id = u.id
-      left join (select user_id, count(*) reviews from weekly_reviews group by user_id) wr on wr.user_id = u.id
+      left join (select user_id, count(*) priorities,
+                        count(*) filter (where completed_on is not null) accomplishments
+                   from priorities group by user_id) pr on pr.user_id = u.id
+      left join (select user_id, bool_or(event_name = 'intention_completed') completed
+                   from analytics_events
+                  where event_name in ('intention_started', 'intention_completed')
+                  group by user_id) it on it.user_id = u.id
+      left join (select user_id, count(*) important_dates from important_dates group by user_id) idt
+             on idt.user_id = u.id
      where ${clause}
      order by ${SORT_SQL[sort] ?? SORT_SQL.active}
      limit $2 offset $3
@@ -512,8 +543,10 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
       createdAt: r.created_at, disabledAt: r.disabled_at ?? null,
       firstActive: r.first_active, lastActive: r.last_active,
       activeDays: Number(r.active_days), sessions: Number(r.sessions),
-      habits: Number(r.habits), completions: Number(r.completions),
-      goals: Number(r.goals), reviews: Number(r.reviews),
+      activeHabits: Number(r.active_habits), completions: Number(r.completions),
+      priorities: Number(r.priorities), accomplishments: Number(r.accomplishments),
+      intention: r.intention as IntentionStatus,
+      importantDates: Number(r.important_dates),
       status: classify({
         createdAt: r.created_at, lastActive: r.last_active, activeDays: Number(r.active_days),
       }),

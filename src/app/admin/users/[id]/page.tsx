@@ -7,10 +7,16 @@ import AccountActions from "./AccountActions";
 
 export const dynamic = "force-dynamic";
 
+const SOURCE_LABEL: Record<string, string> = {
+  self_signup: "signed up", admin: "created by an admin", test: "test",
+};
+const INTENTION_LABEL = { none: "—", started: "Started", completed: "Completed" } as const;
+
 /**
- * A usage profile, not a window into someone's life. Everything here is a count
- * or a date; the person's habit names, notes, metrics and goal descriptions are
- * never read. Seeing those would need a separate, explicitly authorised and
+ * A usage profile, not a window into someone's life. Everything here is a count,
+ * a date or an approved status; the person's habit names, priority text,
+ * intention, Important Date titles and notes, journal and AI Workspace content
+ * are never read. Seeing those would need a separate, explicitly authorised and
  * audited tool.
  */
 export default async function UserProfile({ params }: { params: { id: string } }) {
@@ -30,15 +36,25 @@ export default async function UserProfile({ params }: { params: { id: string } }
           {u.disabledAt ? "disabled" : u.status.replace("_", " ")} · {u.role}
           {admin.id === u.id ? " · this is you" : ""}
         </div>
-        <div className="grid grid-cols-2 min-[560px]:grid-cols-4 gap-3 mt-4">
+        <div className="faint mt-0.5" style={{ fontSize: 12 }}>
+          Verified: {u.emailVerifiedAt ? "yes"
+            : u.address == null ? "—" : u.verificationRequired ? "not yet" : "not asked"}
+          {" · "}Source: {u.createdVia ? SOURCE_LABEL[u.createdVia] ?? u.createdVia : "unclassified"}
+        </div>
+        <div className="grid grid-cols-2 min-[560px]:grid-cols-5 gap-3 mt-4">
           <Stat label="Joined" value={date(u.createdAt)} />
           <Stat label="First active" value={date(u.firstActive)} />
           <Stat label="Last active" value={date(u.lastActive)} />
           <Stat label="Active days" value={u.activeDays} />
           <Stat label="Sessions" value={u.sessions} />
-          <Stat label="Habit completions" value={u.completions} />
-          <Stat label="Goals created" value={u.goals} />
-          <Stat label="Weekly reviews" value={u.reviews} />
+        </div>
+        <div className="grid grid-cols-2 min-[560px]:grid-cols-3 gap-3 mt-3">
+          <Stat label="Active habits" value={u.activeHabits} sub="Behavior" />
+          <Stat label="Habit completions" value={u.completions} sub="Behavior" />
+          <Stat label="Priorities" value={u.priorities} sub="Action" />
+          <Stat label="Accomplishments" value={u.accomplishments} sub="Action" />
+          <Stat label="Intention" value={INTENTION_LABEL[u.intention]} sub="Direction" />
+          <Stat label="Important dates" value={u.importantDates} sub="Future" />
         </div>
       </section>
 

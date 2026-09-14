@@ -121,6 +121,72 @@ body {
 .chip:hover:not(:disabled) { border-color: var(--muted); color: var(--ink); }
 .chip:disabled { opacity: .45; cursor: default; }
 
+/*
+ * Admin → Users. One list, two layouts chosen by the width the list actually
+ * has rather than the viewport: a grouped table where there is room for it, and
+ * a card per account where there is not. A browser without container queries
+ * gets the cards, which work at any width.
+ */
+.au-list { container-type: inline-size; }
+.au-table-wrap { display: none; overflow-x: auto; }
+@container (min-width: 720px) {
+  .au-table-wrap { display: block; }
+  .au-cards { display: none; }
+}
+.au-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.au-table th {
+  font-size: 12px; font-weight: 500; color: var(--faint); text-align: left; white-space: nowrap;
+  padding: 4px 7px 8px; vertical-align: bottom;
+}
+.au-table th.au-g {
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; text-align: center;
+  padding: 0 7px 4px; border-bottom: 1px solid var(--line-soft);
+}
+.au-table th.au-n, .au-table td.au-n { text-align: right; }
+.au-table th.au-wrap { white-space: normal; line-height: 1.25; min-width: 52px; }
+.au-table td { padding: 9px 7px; vertical-align: middle; white-space: nowrap; }
+.au-table td.au-date { font-size: 12px; }
+.au-table tbody tr { border-top: 1px solid var(--line-soft); }
+.au-table .au-gs { border-left: 1px solid var(--line-soft); }
+.au-table .au-user { position: sticky; left: 0; background: var(--surface); padding-left: 0; }
+.au-row[data-selected] td, .au-card[data-selected] { background: var(--accent-soft); }
+.au-n { font-variant-numeric: tabular-nums; }
+.au-list [data-zero] { color: var(--faint); font-weight: 400; }
+.au-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Long names and addresses truncate in place; the full text is the tooltip. */
+.au-who-text { min-width: 0; line-height: 1.3; }
+.au-table .au-who-text { max-width: 160px; }
+.au-primary-line { display: flex; align-items: baseline; min-width: 0; }
+.au-primary-line > :not(.au-primary) { flex: none; white-space: nowrap; }
+.au-primary {
+  color: var(--ink); text-decoration: none; font-weight: 500;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.au-primary:hover { text-decoration: underline; }
+.au-secondary {
+  color: var(--faint); font-size: 12px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.au-you { margin-left: 4px; }
+.au-tag {
+  font-size: 10.5px; border: 1px solid var(--line); border-radius: 999px;
+  padding: 0 6px; color: var(--muted); margin-left: 6px; vertical-align: 1px;
+}
+.au-cards { list-style: none; margin: 0; padding: 0; }
+.au-card { border-top: 1px solid var(--line-soft); padding: 14px 4px; border-radius: 12px; }
+.au-card:first-child { border-top: 0; }
+.au-card-top { display: flex; align-items: flex-start; gap: 10px; }
+.au-card-top .au-who { flex: 1; }
+.au-badges { display: flex; align-items: center; gap: 8px; flex: none; font-size: 12.5px; }
+.au-meta { color: var(--muted); font-size: 12.5px; margin: 6px 0 0 21px; }
+.au-metrics {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+  margin: 10px 0 0 21px; font-size: 13px;
+}
+.au-metrics div { display: flex; align-items: baseline; gap: 6px; }
+.au-metrics dt { color: var(--muted); order: 2; }
+.au-metrics dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; order: 1; }
+
 .tick {
   width: 30px; height: 30px; border-radius: 10px; border: 1.5px solid var(--line);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
