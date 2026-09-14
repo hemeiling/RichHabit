@@ -3,6 +3,7 @@ import {
   type ChatRequest, type ChatResult, type ImageProvider, type ImageRequest, type ImageResult,
   type ProviderPart, type ProviderTurn, type WorkspaceProvider,
 } from "@/lib/aiWorkspaceRuntime/provider";
+import { providerFailure } from "@/lib/aiWorkspaceRuntime/providerErrors";
 
 /**
  * Gemini, through Google's Gemini API over REST. Server-only, and the only file
@@ -94,18 +95,9 @@ export function geminiStopReason(finishReason: string | null | undefined, blockR
   }
 }
 
-/** An error body, as a workspace code and a status. Google's message is read here and dropped. */
+/** An error body, normalized by `providerErrors.ts`. Google's message is classified there and dropped. */
 export function classifyGeminiError(status: number, body: GenerateResponse | null): ProviderFailure {
-  const kind = String(body?.error?.status ?? "");
-  const message = String(body?.error?.message ?? "").toLowerCase();
-  if (status === 429 || kind === "RESOURCE_EXHAUSTED") return new ProviderFailure("rate_limited", status || 429);
-  if (status === 503 || kind === "UNAVAILABLE") return new ProviderFailure("overloaded", status || 503);
-  if (status === 504 || status === 408 || kind === "DEADLINE_EXCEEDED") return new ProviderFailure("timeout", status || null);
-  if (status === 400 && /token|too long|exceeds the maximum|context window/.test(message)) {
-    return new ProviderFailure("context_too_long", status);
-  }
-  if (status === 400 && /\b(pdf|image|document|file|mime|inline)\b/.test(message)) return new ProviderFailure("unreadable_file", status);
-  return new ProviderFailure("provider_error", status || null);
+  return providerFailure({ status: status || null, type: body?.error?.status ?? null, message: body?.error?.message ?? null });
 }
 
 function transportFailure(e: unknown, signal: AbortSignal): Error {

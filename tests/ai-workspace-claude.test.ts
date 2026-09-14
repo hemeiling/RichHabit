@@ -120,23 +120,27 @@ describe("the workspace's Claude adapter", () => {
   it("reduces every failure to a code and a status, without the provider's words", async () => {
     const sdk = (await import("@anthropic-ai/sdk")).default as any;
     const { classifyFailure } = await import("../src/lib/ai/claude");
-    const cases: [unknown, string, number | null][] = [
-      [new sdk.APIError(429), "rate_limited", 429],
-      [new sdk.APIError(529), "overloaded", 529],
-      [new sdk.APIError(undefined, { type: "error", error: { type: "overloaded_error" } }), "overloaded", null],
-      [new sdk.APIError(400, undefined, "prompt is too long: 250000 tokens > 200000 maximum"), "context_too_long", 400],
-      [new sdk.APIError(413), "context_too_long", 413],
-      [new sdk.APIError(400, undefined, "Could not process PDF"), "unreadable_file", 400],
-      [new sdk.APIConnectionTimeoutError(), "timeout", null],
-      [new sdk.APIConnectionError(), "network", null],
-      [new sdk.APIError(500), "provider_error", 500],
-      [new Error("something else"), "provider_error", null],
+    const cases: [unknown, string, number | null, string | null][] = [
+      [new sdk.APIError(429), "rate_limited", 429, null],
+      [new sdk.APIError(529), "overloaded", 529, null],
+      [new sdk.APIError(undefined, { type: "error", error: { type: "overloaded_error" } }), "overloaded", null, null],
+      [new sdk.APIError(400, undefined, "prompt is too long: 250000 tokens > 200000 maximum"), "context_too_long", 400, null],
+      [new sdk.APIError(413), "context_too_long", 413, null],
+      [new sdk.APIError(400, undefined, "Could not process PDF"), "unreadable_file", 400, null],
+      [new sdk.APIError(400, undefined, "Your credit balance is too low to access the Anthropic API."), "provider_error", 400, "quota_unavailable"],
+      [new sdk.APIError(401, { type: "error", error: { type: "authentication_error" } }, "invalid x-api-key"), "provider_error", 401, "provider_config"],
+      [new sdk.APIConnectionTimeoutError(), "timeout", null, null],
+      [new sdk.APIConnectionError(), "network", null, null],
+      [new sdk.APIError(500), "overloaded", 500, null],
+      [new sdk.APIError(400, undefined, "provider detail that must not leak"), "provider_error", 400, null],
+      [new Error("something else"), "provider_error", null, null],
     ];
-    for (const [error, code, status] of cases) {
+    for (const [error, code, status, detail] of cases) {
       const failure = classifyFailure(error);
       expect(failure.code).toBe(code);
       expect(failure.status).toBe(status);
-      expect(failure.message).not.toMatch(/provider detail|PDF|prompt is too long|connection detail/);
+      expect(failure.detail).toBe(detail);
+      expect(failure.message).not.toMatch(/provider detail|PDF|prompt is too long|connection detail|credit balance|x-api-key/);
     }
   });
 
@@ -164,6 +168,6 @@ describe("the workspace's Claude adapter", () => {
     deleteError = new sdk.APIError(404);
     await expect(provider.deleteFile("file_gone")).resolves.toBeUndefined();
     deleteError = new sdk.APIError(500);
-    await expect(provider.deleteFile("file_x")).rejects.toMatchObject({ code: "provider_error", status: 500 });
+    await expect(provider.deleteFile("file_x")).rejects.toMatchObject({ code: "overloaded", status: 500 });
   });
 });

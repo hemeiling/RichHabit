@@ -12,6 +12,7 @@ import {
 } from "./http";
 import { hourlyAndDailyAllowance, releaseReply, reserveReply } from "./limits";
 import { isChatModel, isImageModel, type ModelOption } from "./models";
+import { failureName, statusClass } from "./providerErrors";
 import {
   ProviderAborted, ProviderFailure, chatProvider, imageProvider, modelCatalogue,
   type ImageProvider, type ProviderPart, type ProviderTurn, type WorkspaceProvider,
@@ -276,15 +277,23 @@ export async function runReply(input: {
     }
     const failure = e instanceof ProviderFailure ? e : null;
     const errorCode: MessageErrorCode = failure?.code ?? "provider_error";
-    if (failure) console.error(`[ai-workspace] reply failed (${failure.code}${failure.status ? ` ${failure.status}` : ""})`);
-    else logUnexpected("reply", e);
+    if (failure) {
+      // Safe, structured metadata only: never the prompt, the reply, an image or the provider's words.
+      const providerName = image?.id ?? provider?.id ?? "none";
+      const capability = image ? "image_generation" : "text";
+      console.error(`[ai-workspace] reply failed provider=${providerName} capability=${capability} status=${statusClass(failure.status)} code=${failureName(failure)}`);
+    } else {
+      logUnexpected("reply", e);
+    }
     // A stored copy the provider could not use is re-uploaded next time.
     if (failure && provider && (failure.code === "unreadable_file" || failure.status === 404)) {
       for (const fileId of usedCopies) {
         await ai.markProviderCopyFailed(userId, fileId, provider.id, failure.code).catch(() => {});
       }
     }
-    return done(await finish({ status: "failed", content, errorCode, latencyMs: Date.now() - started }));
+    return done(await finish({
+      status: "failed", content, errorCode, detail: failure?.detail ?? null, latencyMs: Date.now() - started,
+    }));
   }
 }
 

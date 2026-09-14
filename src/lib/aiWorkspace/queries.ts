@@ -5,7 +5,7 @@ import { ApiError, isUuid } from "@/lib/http";
 import { UPLOAD_DISCLOSURE_VERSION, isCurrentDisclosure } from "./disclosure";
 import { STALE_STREAMING_MINUTES, canContinue, canRetry, visibleChain } from "./lifecycle";
 import {
-  FILE_KINDS, MIME_TYPES_BY_KIND,
+  FAILURE_DETAILS, FILE_KINDS, MIME_TYPES_BY_KIND,
   type AiAttachment, type AiConversation, type AiFile, type AiMessage, type AiProject, type FileKind,
   type MessageErrorCode, type ProviderCopy, type StorageUsage, type WorkspaceSettings,
 } from "./types";
@@ -533,7 +533,7 @@ export type ReplyOutcome =
   | { status: "complete"; content: unknown; stopReason: unknown; inputTokens?: unknown; outputTokens?: unknown;
       cacheReadTokens?: unknown; cacheWriteTokens?: unknown; contextMessages?: unknown; latencyMs?: unknown }
   | { status: "stopped"; content: unknown; latencyMs?: unknown }
-  | { status: "failed"; content: unknown; errorCode: unknown; latencyMs?: unknown };
+  | { status: "failed"; content: unknown; errorCode: unknown; detail?: unknown; latencyMs?: unknown };
 
 /** Ends a streaming reply as complete, stopped or failed. Returns null if it was not streaming. */
 export async function finishReply(userId: string, messageId: unknown, outcome: ReplyOutcome): Promise<AiMessage | null> {
@@ -541,6 +541,12 @@ export async function finishReply(userId: string, messageId: unknown, outcome: R
   const content = v.assistantContent(outcome.content);
   const complete = outcome.status === "complete" ? outcome : null;
   const errorCode: MessageErrorCode | null = outcome.status === "failed" ? v.messageErrorCode(outcome.errorCode) : null;
+  // A failed reply keeps its normalized detail (see FAILURE_DETAILS) in stop_reason.
+  const rawDetail = outcome.status === "failed" ? outcome.detail ?? null : null;
+  if (rawDetail !== null && !(FAILURE_DETAILS as readonly unknown[]).includes(rawDetail)) {
+    throw new ApiError("Unknown failure detail");
+  }
+  const detail = rawDetail as string | null;
   if (!["complete", "stopped", "failed"].includes(outcome.status)) throw new ApiError("Unknown reply outcome");
   const [row] = await query(
     `update ai_messages
@@ -550,7 +556,7 @@ export async function finishReply(userId: string, messageId: unknown, outcome: R
       where id = $1 and user_id = $2 and role = 'assistant' and status = 'streaming'
       returning ${RETURNING_MESSAGE}`,
     [messageId, userId, outcome.status, content,
-      complete ? v.stopReason(complete.stopReason) : null, errorCode,
+      complete ? v.stopReason(complete.stopReason) : detail, errorCode,
       v.countOrNull(complete?.inputTokens), v.countOrNull(complete?.outputTokens),
       v.countOrNull(complete?.cacheReadTokens), v.countOrNull(complete?.cacheWriteTokens),
       v.countOrNull(complete?.contextMessages), v.countOrNull(outcome.latencyMs)]);

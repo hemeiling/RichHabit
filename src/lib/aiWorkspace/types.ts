@@ -17,6 +17,16 @@ export const MESSAGE_ERROR_CODES = [
 ] as const;
 export type MessageErrorCode = (typeof MESSAGE_ERROR_CODES)[number];
 
+/**
+ * Why a provider could not answer, where the error code alone would mislead.
+ * Stored in `stop_reason` of a failed reply (always with error code
+ * `provider_error`), so no constraint change was needed to add them.
+ *   quota_unavailable  the account's quota or billing does not allow the request
+ *   provider_config    the key, model or account is not usable as configured
+ */
+export const FAILURE_DETAILS = ["quota_unavailable", "provider_config"] as const;
+export type FailureDetail = (typeof FAILURE_DETAILS)[number];
+
 export const FILE_KINDS = ["pdf", "image", "text"] as const;
 export type FileKind = (typeof FILE_KINDS)[number];
 

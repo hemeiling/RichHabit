@@ -170,7 +170,7 @@ describe("writing a reply", () => {
     const { message } = await send(admin, c.id, "SECRET-PROMPT-WORDS", [], provider);
 
     expect(message).toMatchObject({ status: "failed", errorCode: "overloaded", content: "Half" });
-    expect(logged).toHaveBeenCalledWith("[ai-workspace] reply failed (overloaded 529)");
+    expect(logged).toHaveBeenCalledWith("[ai-workspace] reply failed provider=anthropic capability=text status=5xx code=overloaded");
     expect(JSON.stringify(logged.mock.calls)).not.toMatch(/SECRET-PROMPT-WORDS|Half/);
   });
 

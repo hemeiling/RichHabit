@@ -3,6 +3,7 @@ import {
   ProviderAborted, ProviderFailure,
   type ChatRequest, type ChatResult, type ImageProvider, type ImageResult, type ProviderPart, type WorkspaceProvider,
 } from "./provider";
+import { providerFailure } from "./providerErrors";
 
 /**
  * Scripted stand-ins for the workspace's models, so browser suites can drive
@@ -25,6 +26,9 @@ import {
  *   [[fail]]      fails part way the first time it is asked, for Retry
  *   [[markdown]]  a reply with a list, a table and a code block
  *   [[refuse]]    the image model declines, with words and no picture
+ *   [[quota]]     the image provider reports a quota of 0 (billing required)
+ *   [[ratelimit]] the image provider reports a temporary rate limit
+ *   [[badconfig]] the image provider rejects the key or project
  */
 
 interface ScriptState { uploads: number; deletes: number; images: number; next: number; failed?: Set<string> }
@@ -153,6 +157,12 @@ export function scriptedImageProvider(id = "scripted"): ImageProvider {
       if (failNow) state().failed.add(`image:${request.prompt}`);
       await sleep(has("slow") ? 4000 : 120, request.signal);
       if (failNow) throw new ProviderFailure("overloaded", 503);
+      // Provider errors as the real APIs send them, normalized the same way.
+      if (has("quota")) {
+        throw providerFailure({ status: 429, type: "RESOURCE_EXHAUSTED", message: "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0" });
+      }
+      if (has("ratelimit")) throw providerFailure({ status: 429, type: "RESOURCE_EXHAUSTED", message: "Resource has been exhausted" });
+      if (has("badconfig")) throw providerFailure({ status: 403, type: "PERMISSION_DENIED", message: "Permission denied" });
       const described = `[image model=${request.model} refs=${request.references.length} size=${request.imageSize}]`;
       if (has("refuse")) {
         return { images: [], text: `I can't create that picture. ${described}`, stopReason: "refusal", inputTokens: 5, outputTokens: 5 };

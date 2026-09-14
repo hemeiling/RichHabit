@@ -110,10 +110,13 @@ function Reply({ chain, exchange, text, t, model, showModel, canAct, runningHere
   const tail = chain[chain.length - 1];
   const images = chain.flatMap((m) => m.attachments).filter((a) => a.kind === "image");
   const streaming = tail.status === "streaming";
+  // A picture's failures read as image generation; a failed reply's detail, when present, is more precise than its code.
+  const failures = model?.image ? t.imageFailures : t.failures;
+  const failureKey = (tail.stopReason && tail.stopReason in failures ? tail.stopReason : tail.errorCode ?? "provider_error") as keyof typeof failures;
   const note = tail.status === "stopped" ? t.stopped
-    : tail.status === "failed" ? t.failures[tail.errorCode ?? "provider_error"]
+    : tail.status === "failed" ? failures[failureKey]
       : tail.stopReason === "max_tokens" ? t.lengthLimit
-        : tail.stopReason === "refusal" ? t.refusal
+        : tail.stopReason === "refusal" ? (model?.image ? t.imageRefusal : t.refusal)
           : tail.stopReason === "storage_full" ? t.imageStorageFull
           : tail.stopReason === "context_window" ? t.contextWindow
             : null;

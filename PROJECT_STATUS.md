@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-13
 >
-> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · REAL GEMINI IMAGE GENERATION VERIFIED ON A BILLED GOOGLE PROJECT (LIVE 23/23) · INCLUDES `1375082f` BY MERGE · POST-MERGE TESTS PASS · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
+> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · PROVIDER-ERROR NORMALIZATION + NATURAL IMAGE ROUTING ADDED (IMPLEMENTATION TESTS PASS) · REAL GEMINI CHAT PASS · REAL IMAGE GENERATION: FINAL ACCEPTANCE PENDING THE PRODUCT OWNER'S GOOGLE BILLING CONFIRMATION · INCLUDES `1375082f` BY MERGE · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
 > **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
@@ -88,6 +88,51 @@ personal data.
 | post-merge (`c6d2c9d`) | typecheck and lint clean; unit 838 of 838; production build compiles with no key names, keys, provider addresses or database URLs in client bundles; browser suites 91 of 91 and 54 of 54; `1375082f` an ancestor, present once |
 | production database, read-only after the merge | seven `ai_` tables present; RichHabit counts unchanged (users 13, habits 149, completions 78, priorities 46, goals 39, intentions 1, dates 7); drift index untouched; migration not re-run |
 
+**Tightening before the final live test: provider errors and natural image requests**
+
+- `providerErrors.ts` normalizes Anthropic and Google errors in one place:
+  temporary rate limit, quota or billing unavailable (a quota of 0, billing not
+  enabled, no credit), provider outage (5xx), provider configuration (bad key,
+  permission, unknown model), timeout, too long, unreadable file, generic
+  failure. A safety refusal stays a completed reply with stop reason `refusal`.
+  The provider's message is read only to classify and then dropped.
+- Stored with no schema change: the error code stays within the existing
+  constraint (`provider_error` for quota and configuration) and the detail
+  (`quota_unavailable`, `provider_config`) goes in the failed reply's
+  `stop_reason`.
+- The admin sees plain wording, image-specific for pictures, in English and
+  Chinese, e.g. "Image generation isn't available for the current Google AI
+  configuration." / "当前 Google AI 配置暂时无法使用图片生成功能。" and "Image
+  generation is temporarily rate-limited. Please try again shortly." /
+  "图片生成暂时受到频率限制，请稍后再试。" No billing, quota, project or key
+  detail is shown.
+- Logs: `[ai-workspace] reply failed provider=<id> capability=<text|image_generation> status=<4xx|5xx|none> code=<normalized>`
+  and nothing else; never prompts, replies, images or provider words.
+- Image-request routing is a compact English/Chinese parser: an image object
+  plus a creation verb, a request ("please", 帮我/给我/来一张) or a bare short noun
+  phrase ("hippo picture", 河马图片), or a drawing verb with an object ("draw me a
+  hippo", 画一只河马); excluded when the message describes, explains or edits an
+  image, asks for prompts or wording, code, diagrams or charts, is a question,
+  talks about image tools, or refers to an existing image. A bare caption with
+  a file attached stays with conversation. Ambiguous messages go to the selected
+  conversational model.
+- Model selection is unchanged: the selector chooses the conversational model;
+  a picture request goes to the image model whichever is selected, and does not
+  change the conversation's model.
+- Generated-image persistence re-checked by tests: owner-scoped, survives
+  refresh, identical pictures stored and counted once, no provider file copies,
+  a picture that no longer fits the quota is not kept (the reply says so),
+  removed with its conversation and with a permanently deleted project, not
+  fetchable by another account, no provider URL or token exposed.
+
+**Evidence, kept separate**
+
+| Area | State |
+| --- | --- |
+| implementation tests (controlled and scripted providers) | **pass**: typecheck, lint, production build (no secrets in client bundles), unit 907 of 907 (routing 87, provider errors 21, models/image routes 23); browser regression 91 of 91; models and image browser suite 75 of 75 (natural English and Chinese phrasing, Gemini and Claude selection semantics, quota/rate-limit/configuration messages in both languages and after refresh, no provider wording shown, privacy). The extended suite ran with a raised test-only reply limit (`AI_WORKSPACE_HOURLY_LIMIT`), because its first run correctly hit the default 20 replies an hour |
+| real Gemini chat | **pass** (live run on `e808b03`; the request path is unchanged by this tightening) |
+| real Gemini image generation | last real run on `e808b03`, after billing reached the key's project: **passed** (both hippo prompts). The Product Owner has since reported that the Google project has no usable image quota. Not re-run for this change and not faked. **Final acceptance pending**: both hippo prompts must render an actual picture in the conversation and still be present after refresh |
+
 **Required before release (Product Owner)**
 
 1. ~~Enable billing on the Google project behind `GEMINI_API_KEY`.~~ **Done**
@@ -100,17 +145,21 @@ personal data.
    `feature/ai-workspace`.~~ **Done** by merge `c6d2c9d` (not cherry-picked);
    `git merge-base --is-ancestor 1375082f HEAD` succeeds and the commit appears
    once.
-5. **Remaining:** fast-forward `main` to the release-candidate commit of
+5. **Remaining:** confirm Google billing and image quota, then run the two final
+   real acceptance tests on the release candidate ("Can you generate a cartoon
+   image of a hippopotamus?" and "帮我生成一张可爱的河马卡通图片"), each
+   rendering an actual picture in the conversation that is still present after
+   refresh.
+6. **Then:** fast-forward `main` to the release-candidate commit of
    `feature/ai-workspace-models` and deploy it on Render. No database step.
    Then verify in production, signed in: the model selector, a Gemini reply, a
    hippo picture in English and Chinese, and re-accepting the upload notice.
 
 **Known limits and risks**
 
-- A free-tier quota failure reads "The AI service is busy. Try again in a
-  minute." — accurate for per-minute limits, misleading for a quota of 0.
-- The router recognises explicit requests; loosely phrased ones ("hippo picture
-  please") go to the chat model, which is told to suggest "Create an image of …".
+- Picture-request routing is deliberately conservative: phrasing outside its
+  rules goes to the conversational model, which is told it can suggest
+  "Create an image of …". Mixed-language sentences are judged per clause.
 - Image editing of earlier pictures is future; pictures attached to the same
   message are sent as references.
 - Google's terms for the unpaid Gemini API tier allow using submitted content to

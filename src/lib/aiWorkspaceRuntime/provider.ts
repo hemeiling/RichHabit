@@ -1,4 +1,4 @@
-import type { MessageErrorCode } from "@/lib/aiWorkspace/types";
+import type { FailureDetail, MessageErrorCode } from "@/lib/aiWorkspace/types";
 import { aiWorkspace, isLocalDatabase } from "@/lib/env";
 import { CHAT_CAPABILITIES, IMAGE_CAPABILITIES, modelLabel, type ModelOption } from "./models";
 
@@ -106,8 +106,13 @@ export interface ImageProvider {
  * provider's own message — so it is safe to log.
  */
 export class ProviderFailure extends Error {
-  constructor(readonly code: MessageErrorCode, readonly status: number | null = null) {
-    super(`AI provider request failed (${code}${status ? ` ${status}` : ""})`);
+  constructor(
+    readonly code: MessageErrorCode,
+    readonly status: number | null = null,
+    /** Set by `providerErrors.ts` where the code alone would mislead. */
+    readonly detail: FailureDetail | null = null,
+  ) {
+    super(`AI provider request failed (${detail ?? code}${status ? ` ${status}` : ""})`);
     this.name = "ProviderFailure";
   }
 }

@@ -33,6 +33,11 @@ import * as cont from "../src/app/api/admin/ai/workspace/messages/[id]/continue/
 import * as retry from "../src/app/api/admin/ai/workspace/messages/[id]/retry/route";
 import * as stop from "../src/app/api/admin/ai/workspace/messages/[id]/stop/route";
 import * as file from "../src/app/api/admin/ai/workspace/files/[id]/route";
+import * as projects from "../src/app/api/admin/ai/workspace/projects/route";
+import * as project from "../src/app/api/admin/ai/workspace/projects/[id]/route";
+import * as ai from "../src/lib/aiWorkspace/queries";
+import { UPLOAD_DISCLOSURE_VERSION } from "../src/lib/aiWorkspace/disclosure";
+import { providerFailure, type ProviderErrorInput } from "../src/lib/aiWorkspaceRuntime/providerErrors";
 import { IMAGE_GENERATION_AVAILABLE, IMAGE_GENERATION_UNAVAILABLE } from "../src/lib/aiWorkspaceRuntime/context";
 import { resetReplySlots } from "../src/lib/aiWorkspaceRuntime/limits";
 import {
@@ -281,5 +286,125 @@ describe("image generation, as the screenshot asked for it", () => {
     const { conversationId } = await setUp();
     await send(conversationId, HIPPO_EN);
     expect(await sql(`select count(*)::int as n from analytics_events`)).toEqual(before);
+  });
+});
+
+describe("image provider errors, as the admin reads them", () => {
+  it.each<[string, ProviderErrorInput, string, string | null, string]>([
+    ["quota or billing", { status: 429, type: "RESOURCE_EXHAUSTED", message: "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, project 987654 SENTINEL-Q" }, "provider_error", "quota_unavailable", "4xx"],
+    ["temporary rate limit", { status: 429, type: "RESOURCE_EXHAUSTED", message: "Resource has been exhausted SENTINEL-R" }, "rate_limited", null, "4xx"],
+    ["outage", { status: 503, type: "UNAVAILABLE", message: "SENTINEL-O" }, "overloaded", null, "5xx"],
+    ["configuration", { status: 400, type: "INVALID_ARGUMENT", message: "API key not valid SENTINEL-C" }, "provider_error", "provider_config", "4xx"],
+    ["generic failure", { status: 400, type: "INVALID_ARGUMENT", message: "SENTINEL-G" }, "provider_error", null, "4xx"],
+  ])("saves a %s failure with its normalized code, and logs only safe metadata", async (_label, error, code, detail, status) => {
+    imageScript = async () => { throw providerFailure(error); };
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { conversationId } = await setUp();
+    const sent = await send(conversationId, HIPPO_EN);
+
+    expect(sent.done).toMatchObject({ status: "failed", errorCode: code, stopReason: detail, attachments: [] });
+    const saved = (await view(conversationId)).messages.find((m: any) => m.id === sent.done.id);
+    expect(saved).toMatchObject({ status: "failed", errorCode: code, stopReason: detail });
+    expect(logged.mock.calls.map((c) => c[0])).toContain(
+      `[ai-workspace] reply failed provider=google capability=image_generation status=${status} code=${detail ?? code}`);
+    const PROVIDER_WORDS = /SENTINEL|limit: 0|free_tier|987654|API key not valid|Resource has been exhausted/;
+    // Logs carry neither the provider's words nor the admin's prompt.
+    expect(JSON.stringify(logged.mock.calls)).not.toMatch(PROVIDER_WORDS);
+    expect(JSON.stringify(logged.mock.calls)).not.toMatch(/hippopotamus/);
+    // The admin's own browser gets their message back, but never the provider's words.
+    expect(`${sent.text} ${JSON.stringify(saved)}`).not.toMatch(PROVIDER_WORDS);
+  });
+});
+
+describe("pictures from natural requests, whichever conversational model is selected", () => {
+  for (const selected of ["gemini", "claude"] as const) {
+    it(`with ${selected} selected, a question goes to ${selected} and a picture request to the image model`, async () => {
+      const { conversationId } = await setUp();
+      const question = (await send(conversationId, "Explain Kubernetes.", selected)).done;
+      expect(question).toMatchObject(selected === "gemini"
+        ? { provider: "google", model: "gemini-3.8-flash" }
+        : { provider: "anthropic", model: "claude-sonnet-5" });
+      const picture = (await send(conversationId, "Create a cartoon hippopotamus.", selected)).done;
+      expect(picture).toMatchObject({ status: "complete", model: "gemini-3.1-flash-image" });
+      expect(picture.attachments).toHaveLength(1);
+      // The picture does not change the conversation's model.
+      expect((await view(conversationId)).modelId).toBe(selected);
+    });
+  }
+
+  it("understands natural phrasing in English and Chinese, and leaves look-alikes with conversation", async () => {
+    const { conversationId } = await setUp();
+    const pictures = ["hippo picture please", "draw me a hippo", "河马图片", "来一张可爱的河马卡通图", "帮我做一张海报"];
+    const conversationOnly = ["describe this image", "what would a cartoon hippo look like?", "create a Mermaid diagram", "给我写一个图片生成提示词", "帮我设计图片的文案"];
+    for (const text of pictures) await send(conversationId, text, "claude");
+    for (const text of conversationOnly) await send(conversationId, text, "claude");
+    expect(imageCalls.map((r) => r.prompt)).toEqual(pictures);
+    expect(chatCalls).toHaveLength(conversationOnly.length);
+  });
+
+  it("does not read a bare caption with an attached file as a picture request", async () => {
+    const { admin, conversationId } = await setUp();
+    await ai.acceptUploadDisclosure(admin, UPLOAD_DISCLOSURE_VERSION);
+    const { file: note } = await ai.recordUpload(admin, {
+      conversationId, originalFilename: "notes.txt", kind: "text", mimeType: "text/plain", bytes: new Uint8Array(Buffer.from("hello")),
+    });
+    const res = await messages.POST(req("POST", `/conversations/${conversationId}/messages`,
+      { clientId: randomUUID(), content: "hippo picture", fileIds: [note.id], modelId: "claude" }), p(conversationId));
+    await res.text();
+    expect(imageCalls).toHaveLength(0);
+    expect(chatCalls).toHaveLength(1);
+  });
+});
+
+describe("generated pictures in storage", () => {
+  it("counts identical pictures once, makes no provider file copies, and exposes no provider reference", async () => {
+    imageScript = async () => ({ images: [{ mimeType: "image/png", bytes: scriptedPng("the same picture") }], text: "", stopReason: "end_turn", inputTokens: 1, outputTokens: 1 });
+    const { admin, conversationId } = await setUp();
+    const first = (await send(conversationId, "Create an image of a hippo")).done;
+    const second = (await send(conversationId, "Create an image of a hippo again")).done;
+    expect(second.attachments[0].fileId).toBe(first.attachments[0].fileId);
+
+    const rows = await sql(`select id, byte_size from ai_files where user_id = $1`, [admin]);
+    expect(rows).toHaveLength(1);
+    expect((await ai.storageUsage(admin)).usedBytes).toBe(Number(rows[0].byte_size));
+    expect(await sql(`select message_id from ai_message_files where file_id = $1`, [rows[0].id])).toHaveLength(2);
+
+    await send(conversationId, "Describe what you made", "claude");
+    expect(await sql(`select 1 from ai_file_provider_copies c join ai_files f on f.id = c.file_id where f.user_id = $1`, [admin])).toHaveLength(0);
+    expect(JSON.stringify(await view(conversationId))).not.toMatch(/googleapis|providerFileId|file_id|base64/);
+  });
+
+  it("keeps the reply but not the picture when it no longer fits the storage quota", async () => {
+    process.env.AI_WORKSPACE_STORAGE_QUOTA_MB = "3";
+    const big = new Uint8Array(2_300_000);
+    big.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    imageScript = async () => ({ images: [{ mimeType: "image/png", bytes: big }], text: "", stopReason: "end_turn", inputTokens: 1, outputTokens: 1 });
+    const { admin, conversationId } = await setUp();
+    await ai.acceptUploadDisclosure(admin, UPLOAD_DISCLOSURE_VERSION);
+    await ai.recordUpload(admin, {
+      conversationId, originalFilename: "notes.txt", kind: "text", mimeType: "text/plain", bytes: new Uint8Array(1_000_000).fill(97),
+    });
+    // 2.05 MB left passes the up-front check; the 2.2 MB picture does not fit.
+    const sent = (await send(conversationId, HIPPO_EN)).done;
+    expect(sent).toMatchObject({ status: "complete", stopReason: "storage_full", attachments: [] });
+    expect((await ai.storageUsage(admin)).usedBytes).toBe(1_000_000);
+    expect(await sql(`select 1 from ai_files where user_id = $1 and kind = 'image'`, [admin])).toHaveLength(0);
+  });
+
+  it("removes pictures with their conversation, and with a permanently deleted project", async () => {
+    const { admin, conversationId } = await setUp();
+    const made = (await send(conversationId, HIPPO_EN)).done;
+    const fileId = made.attachments[0].fileId;
+    expect((await conversation.DELETE(req("DELETE", `/conversations/${conversationId}`), p(conversationId))).status).toBe(200);
+    expect(await sql(`select 1 from ai_files where id = $1`, [fileId])).toHaveLength(0);
+    expect(await sql(`select 1 from ai_message_files where file_id = $1`, [fileId])).toHaveLength(0);
+
+    const { project: zoo } = await body(await projects.POST(req("POST", "/projects", { name: "Zoo", instructions: "" })));
+    const { conversation: inProject } = await body(await conversations.POST(req("POST", "/conversations", { projectId: zoo.id })));
+    const inside = (await send(inProject.id, HIPPO_ZH)).done;
+    expect(inside.attachments).toHaveLength(1);
+    expect((await project.DELETE(req("DELETE", `/projects/${zoo.id}`, { confirmName: "Zoo" }), p(zoo.id))).status).toBe(200);
+    expect(await sql(`select 1 from ai_files where id = $1`, [inside.attachments[0].fileId])).toHaveLength(0);
+    expect(await sql(`select count(*)::int as n from ai_files where user_id = $1`, [admin])).toEqual([{ n: 0 }]);
   });
 });

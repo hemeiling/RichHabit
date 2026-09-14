@@ -121,22 +121,27 @@ describe("Gemini conversations", () => {
   });
 
   it("turns errors into workspace codes, without Google's words or the key", async () => {
-    const cases: [number, unknown, string][] = [
-      [429, { error: { code: 429, status: "RESOURCE_EXHAUSTED", message: LEAK } }, "rate_limited"],
-      [503, { error: { code: 503, status: "UNAVAILABLE", message: LEAK } }, "overloaded"],
-      [504, { error: { code: 504, status: "DEADLINE_EXCEEDED", message: LEAK } }, "timeout"],
-      [400, { error: { code: 400, status: "INVALID_ARGUMENT", message: "The input token count exceeds the maximum" } }, "context_too_long"],
-      [400, { error: { code: 400, status: "INVALID_ARGUMENT", message: "Unable to process input image" } }, "unreadable_file"],
-      [403, { error: { code: 403, status: "PERMISSION_DENIED", message: LEAK } }, "provider_error"],
+    const QUOTA_ZERO = "You exceeded your current quota. Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, project 1234";
+    const cases: [number, unknown, string, string | null][] = [
+      [429, { error: { code: 429, status: "RESOURCE_EXHAUSTED", message: LEAK } }, "rate_limited", null],
+      [429, { error: { code: 429, status: "RESOURCE_EXHAUSTED", message: QUOTA_ZERO } }, "provider_error", "quota_unavailable"],
+      [503, { error: { code: 503, status: "UNAVAILABLE", message: LEAK } }, "overloaded", null],
+      [504, { error: { code: 504, status: "DEADLINE_EXCEEDED", message: LEAK } }, "timeout", null],
+      [400, { error: { code: 400, status: "INVALID_ARGUMENT", message: "The input token count exceeds the maximum" } }, "context_too_long", null],
+      [400, { error: { code: 400, status: "INVALID_ARGUMENT", message: "Unable to process input image" } }, "unreadable_file", null],
+      [400, { error: { code: 400, status: "INVALID_ARGUMENT", message: "API key not valid. Please pass a valid API key." } }, "provider_error", "provider_config"],
+      [403, { error: { code: 403, status: "PERMISSION_DENIED", message: LEAK } }, "provider_error", "provider_config"],
+      [404, { error: { code: 404, status: "NOT_FOUND", message: "models/gemini-9 is not found" } }, "provider_error", "provider_config"],
     ];
-    for (const [status, body, code] of cases) {
+    for (const [status, body, code, detail] of cases) {
       respond = () => json(status, body);
       const error = await createGeminiWorkspaceProvider(PLACEHOLDER)
         .streamChat({ model: "m", system: "s", turns: TURNS, maxOutputTokens: 100, signal: signal() }, () => {})
         .catch((e) => e);
       expect(error).toBeInstanceOf(ProviderFailure);
       expect(error.code).toBe(code);
-      expect(`${error.message} ${String(error)}`).not.toMatch(/provider detail|quota|placeholder-not-a-key|token count/);
+      expect(error.detail).toBe(detail);
+      expect(`${error.message} ${String(error)}`).not.toMatch(/provider detail|project 1234|limit: 0|placeholder-not-a-key|token count|api key not valid|gemini-9/i);
     }
     expect(classifyGeminiError(0, null).code).toBe("provider_error");
   });

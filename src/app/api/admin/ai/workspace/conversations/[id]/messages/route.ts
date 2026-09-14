@@ -23,6 +23,7 @@ export async function POST(request: Request, { params }: Params) {
     const b = await readJson(request);
     const route = routeRequest({
       content: typeof b.content === "string" ? b.content : "", selectedModelId: b.modelId, catalogue: tools.catalogue,
+      hasAttachments: Array.isArray(b.fileIds) && b.fileIds.length > 0,
     });
     if (!route) throw new ApiError("Conversation not found", 404);
     await tools.use(route.option);

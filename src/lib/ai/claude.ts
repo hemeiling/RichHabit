@@ -4,6 +4,7 @@ import {
   ProviderAborted, ProviderFailure, normaliseStopReason,
   type ChatRequest, type ProviderPart, type WorkspaceProvider,
 } from "@/lib/aiWorkspaceRuntime/provider";
+import { providerFailure } from "@/lib/aiWorkspaceRuntime/providerErrors";
 
 /**
  * Claude, through Anthropic's official SDK. Server-only, and the only file in
@@ -95,27 +96,18 @@ export function toAnthropicContent(parts: ProviderPart[]): Anthropic.ContentBloc
   return blocks;
 }
 
-/** An SDK error, as a workspace error code and a status. The provider's message is read here and dropped. */
+/** An SDK error, normalized by `providerErrors.ts`. The provider's message is classified there and dropped. */
 export function classifyFailure(e: unknown): ProviderFailure {
   if (e instanceof ProviderFailure) return e;
   if (e instanceof Anthropic.APIConnectionTimeoutError) return new ProviderFailure("timeout");
   if (e instanceof Anthropic.APIConnectionError) return new ProviderFailure("network");
   if (e instanceof Anthropic.APIError) {
-    const status = typeof e.status === "number" ? e.status : null;
     const body = e.error as { type?: string; error?: { type?: string } } | undefined;
-    const type = String(body?.error?.type ?? body?.type ?? "");
-    const message = String(e.message ?? "").toLowerCase();
-    if (status === 429 || type === "rate_limit_error") return new ProviderFailure("rate_limited", status);
-    if (status === 529 || type === "overloaded_error") return new ProviderFailure("overloaded", status);
-    if (status === 408 || status === 504 || type === "timeout_error") return new ProviderFailure("timeout", status);
-    if (status === 413 || type === "request_too_large"
-      || /prompt is too long|too many (input )?tokens|context (window|length)/.test(message)) {
-      return new ProviderFailure("context_too_long", status);
-    }
-    if ((status === 400 || status === 404) && /\b(pdf|image|document|file)\b/.test(message)) {
-      return new ProviderFailure("unreadable_file", status);
-    }
-    return new ProviderFailure("provider_error", status);
+    return providerFailure({
+      status: typeof e.status === "number" ? e.status : null,
+      type: body?.error?.type ?? body?.type ?? null,
+      message: e.message ?? null,
+    });
   }
   return new ProviderFailure("provider_error");
 }
