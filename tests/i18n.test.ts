@@ -105,22 +105,26 @@ describe("resolveLocale", () => {
     expect(resolveLocale("both")).toBe("both");
   });
 
-  it("falls back to the browser's language for a new visitor", () => {
-    expect(resolveLocale(null, "zh-CN,zh;q=0.9,en;q=0.8")).toBe("zh");
-    expect(resolveLocale(null, "zh-Hant")).toBe("zh");
-    expect(resolveLocale(null, "en-GB,en;q=0.9")).toBe("en");
+  /**
+   * A new visitor is English, whatever their device says. The browser's
+   * language was consulted here once; it is not any more — see resolveLocale.
+   */
+  it("gives a visitor with no choice English", () => {
+    expect(resolveLocale(null)).toBe("en");
+    expect(resolveLocale(undefined)).toBe("en");
+    expect(resolveLocale("")).toBe("en");
   });
 
-  it("defaults to English when it recognises neither", () => {
-    expect(resolveLocale(null, "fr-FR,de;q=0.8")).toBe("en");
-    expect(resolveLocale(null, null)).toBe("en");
-    expect(resolveLocale("klingon", null)).toBe("en");
+  it("ignores anything that is not one of its own locales", () => {
+    expect(resolveLocale("klingon")).toBe("en");
+    expect(resolveLocale("zh-CN")).toBe("en");      // a browser tag, not a choice
+    expect(resolveLocale("EN")).toBe("en");
   });
 
-  it("lets an explicit choice beat the browser", () => {
-    expect(resolveLocale("en", "zh-CN")).toBe("en");
-    expect(resolveLocale("zh", "en-US")).toBe("zh");
-    expect(resolveLocale("both", "en-US")).toBe("both");
+  it("takes nothing but the reader's own choice", () => {
+    // Whatever a device might have asked for, only these three values decide.
+    expect(resolveLocale.length).toBe(1);
+    expect(LOCALES.map((l) => resolveLocale(l))).toEqual(["both", "en", "zh"]);
   });
 
   it("knows its own locales", () => {

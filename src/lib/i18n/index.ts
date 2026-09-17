@@ -92,20 +92,20 @@ export function instantDateFor(iso: string, locale: Locale): string {
  * The locale for a request: an explicit choice first, then the browser's
  * language, then English.
  */
-export function resolveLocale(
-  cookieValue?: string | null,
-  acceptLanguage?: string | null,
-): Locale {
-  // An explicit choice always wins over what the device happens to be set to.
-  if (isLocale(cookieValue)) return cookieValue;
-
-  for (const part of (acceptLanguage ?? "").split(",")) {
-    const tag = part.split(";")[0].trim().toLowerCase();
-    if (!tag) continue;
-    if (tag === "zh" || tag.startsWith("zh-")) return "zh";
-    if (tag === "en" || tag.startsWith("en-")) return "en";
-  }
-  return DEFAULT_LOCALE;
+export function resolveLocale(cookieValue?: string | null): Locale {
+  /*
+   * A choice, or English.
+   *
+   * This used to read the browser's Accept-Language when there was no choice
+   * yet, so a visitor on a Chinese device met a Chinese page before they had
+   * asked for one. Nothing is inferred now — not the browser, not the operating
+   * system, not the region — because a guessed language is indistinguishable
+   * from a preference the reader never set and cannot account for.
+   *
+   * The only input is this account's or this browser's own explicit choice,
+   * which the language switch writes. Everything else is English.
+   */
+  return isLocale(cookieValue) ? cookieValue : DEFAULT_LOCALE;
 }
 
 export type { Dict };
