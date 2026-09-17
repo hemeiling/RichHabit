@@ -12,6 +12,13 @@ import { zh } from "@/lib/i18n/zh";
  * visitor should feel what the product is for before they have read a second
  * line, and the only two things to do are join or come back.
  *
+ * There is no imagery, and there was briefly a figure of four marks standing
+ * for intention, habit, priority and accomplishment. It came out: three grey
+ * dots and a green one read as a carousel's pagination rather than as a
+ * progression, which on a phone sat directly under the second button. A mark
+ * that has to be explained to be understood is decoration, and this page is
+ * type and space.
+ *
  * Two deliberate decisions about type.
  *
  * The statement is written as its own lines rather than left to wrap. A
@@ -92,22 +99,6 @@ export default function Landing() {
           <Link href="/login" className="btn lp-btn">
             {t.landing.logIn}
           </Link>
-        </div>
-
-        {/*
-          * The one visual: four marks, the last one filled. It is the shape of
-          * the product — direction, behaviour, action, and something finished —
-          * without a word of explanation, and it is decoration as far as a
-          * screen reader is concerned.
-          */}
-        <div className="lp-path" aria-hidden="true">
-          <span className="lp-node" />
-          <span className="lp-seg" />
-          <span className="lp-node" />
-          <span className="lp-seg" />
-          <span className="lp-node" />
-          <span className="lp-seg" />
-          <span className="lp-node lp-node-done" />
         </div>
       </div>
     </main>

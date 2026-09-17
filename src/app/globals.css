@@ -1051,7 +1051,7 @@ input[type="range"] { accent-color: var(--accent); }
   /* Wide enough that the written lines never wrap again on their own. */
   max-width: 660px;
   margin: 0 auto;
-  padding: 7vh 0 11vh;
+  padding: 6vh 0 8vh;
 }
 .lp-headline {
   font-family: var(--display); font-weight: 400;
@@ -1092,15 +1092,6 @@ input[type="range"] { accent-color: var(--accent); }
   font-size: 15px; text-decoration: none;
 }
 
-/* Four marks, the last one arrived at. Decoration: see the component. */
-.lp-path { margin-top: clamp(38px, 5.4vh, 56px); display: flex; align-items: center; }
-.lp-seg { width: 26px; height: 1px; background: var(--line); }
-.lp-node { width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
-.lp-node-done {
-  width: 8px; height: 8px; background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
-}
-
 /* CJK faces. Instrument Serif carries no Chinese glyphs, so Chinese would fall
    back to whatever the browser chose; these stacks pick the serif for display
    and the UI face for prose deliberately. */
@@ -1119,7 +1110,6 @@ input[type="range"] { accent-color: var(--accent); }
 .lp-hero > * { animation: lp-rise .8s cubic-bezier(.2,.8,.3,1) both; }
 .lp-hero > *:nth-child(2) { animation-delay: .1s; }
 .lp-hero > *:nth-child(3) { animation-delay: .2s; }
-.lp-hero > *:nth-child(4) { animation-delay: .32s; }
 
 /* Phone: one thumb, two full-width buttons, nothing to reach across. */
 @media (max-width: 559px) {
@@ -1127,7 +1117,7 @@ input[type="range"] { accent-color: var(--accent); }
   /* `margin: 0 auto` centres the column on a desktop, and auto cross-axis
      margins stop a flex item stretching — which collapsed this to the width
      of its widest line and took the full-width buttons with it. */
-  .lp-hero { padding: 6vh 0 10vh; max-width: none; margin: 0; width: 100%; }
+  .lp-hero { padding: 5vh 0 7vh; max-width: none; margin: 0; width: 100%; }
   .lp-actions { flex-direction: column; align-self: stretch; gap: 10px; }
   .lp-btn { width: 100%; min-height: 52px; font-size: 15.5px; }
 }
