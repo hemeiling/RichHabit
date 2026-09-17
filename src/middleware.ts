@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/cookies";
 
 // API routes do their own auth check so fetch() callers get JSON, not an HTML redirect.
+//
+// Matched as prefixes, which is why the front page is NOT in this list: every
+// path starts with "/", so an entry for it would make the whole application
+// public. It is matched exactly, below.
 const PUBLIC_PATHS = [
   "/login",
   "/api",
@@ -85,7 +89,9 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  // The front page is public to everyone; it is the one page that explains what
+  // this is. Exact match — see the note on PUBLIC_PATHS.
+  const isPublic = path === "/" || PUBLIC_PATHS.some((p) => path.startsWith(p));
 
   if (!hasCookie && !isPublic) {
     const url = request.nextUrl.clone();

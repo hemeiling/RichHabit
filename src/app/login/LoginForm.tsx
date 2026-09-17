@@ -25,10 +25,10 @@ type Mode = "signin" | "signup";
  * The language switcher is here as well as in More: a relative opening this for
  * the first time has to be able to change it before they have an account.
  */
-export default function LoginForm() {
+export default function LoginForm({ initialMode = "signin" }: { initialMode?: Mode }) {
   const t = useT();
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [identifier, setIdentifier] = useState("");
   // Sign-up only. Kept apart from `identifier`, which is the one field a
   // returning user fills in.

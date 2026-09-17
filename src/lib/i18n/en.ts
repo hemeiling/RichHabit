@@ -32,6 +32,22 @@ export const en = {
   tagline: "Build Rich Habits. Build a Richer Life.",
   localeName: "English",
 
+  /**
+   * The public front page. One statement, one supporting line, two actions —
+   * and nothing else, on purpose: the page exists to be felt and acted on, not
+   * read. Anything that explains a feature belongs behind the sign-in.
+   */
+  landing: {
+    /**
+     * Written as its own lines. The break after "matters" is the sentence's
+     * hinge, and at this size where it breaks is the design — see Landing.tsx.
+     */
+    headline: ["Turn what matters", "into what you do."],
+    support: ["Build habits. Choose what matters.", "See the life you're creating."],
+    signUp: "Sign Up",
+    logIn: "Log In",
+  },
+
   nav: {
     /*
      * The umbrella the three experiences sit under. A group, not a page: it

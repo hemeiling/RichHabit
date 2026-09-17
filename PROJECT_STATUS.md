@@ -1,7 +1,8 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-09-13
+> Last updated: 2026-09-17
 >
+> **PUBLIC FRONT PAGE: IMPLEMENTED ON `feature/landing-page` (FROM `main` `5eb1a92`) · TESTS PASS · NOT MERGED INTO `main` · NOT DEPLOYED · NO SCHEMA OR MIGRATION**
 > **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · REAL GEMINI IMAGE GENERATION: PASS (FINAL ACCEPTANCE ON `74d2eb3`, ENGLISH AND CHINESE) · REAL GEMINI CHAT PASS · IMPLEMENTATION TESTS PASS · INCLUDES `1375082f` BY MERGE · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
 > **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
@@ -24,6 +25,27 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Public front page
+
+`/` used to redirect to `/habits`, so a visitor without an account bounced
+through the app and landed on the sign-in form with nothing explaining what
+they had arrived at. It is now a page: one statement, one supporting line, two
+buttons.
+
+| Item | State |
+| --- | --- |
+| branch | `feature/landing-page`, from `main` `5eb1a92`, worktree `~/dev/rich-habits-landing` |
+| committed / pushed | in the commit that adds this section; pushed to `origin/feature/landing-page` |
+| schema / migration / env / dependencies | **none**; nothing under `db/`, `scripts/`, `render.yaml`, `package*.json` or `.env.example` changed |
+| merged into `main` / deployed | **no** / **no** |
+| the page | brand (plus 养成富有的习惯 outside English) and the existing EN/中文/双语 switch; the statement "Turn what matters into what you do."; one supporting line; Sign Up (primary) and Log In; one unlabelled four-mark figure. No feature grid, pricing, testimonials or imagery |
+| copy | `en.landing` / `zh.landing`, written as two deliberate lines each — at 68px the line break is the design, and Chinese breaks at its comma |
+| bilingual | typeset, not concatenated: English statement at full size, Chinese beneath at .46em and quieter; the two buttons do use the joined labels ("Sign Up · 注册") |
+| authentication | unchanged. Sign Up → `/login?mode=signup`, Log In → `/login`; `?mode=` only chooses which form the existing screen opens on (`initialLoginMode`), and every account is still created and signed in by the existing routes. A visitor with a valid session at `/` still goes to `/habits`, checked against the session row |
+| routing | `/` is public by an exact match in middleware — every path starts with "/", so a prefix entry would have made the whole application public. `/habits` and the rest are still closed to a signed-out visitor |
+| verification | typecheck, lint, 921/921 unit tests (14 new), production build, 32/32 local browser checks (desktop 1440 and phone 390 in all three languages, tablet-width reflow, reduced motion, registration and sign-in through both buttons, signed-in redirect, no sideways scrolling, no page errors) |
+| next step | Product Owner design review; merge to `main` and deploy when approved |
 
 ## AI Workspace: general-purpose assistant, multiple models, image generation
 

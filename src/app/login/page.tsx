@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import LoginForm from "./LoginForm";
+import { initialLoginMode } from "@/lib/loginMode";
 import { getSessionUser } from "@/lib/auth";
 import { LocaleProvider } from "@/lib/i18n/context";
 import { getLocale } from "@/lib/i18n/server";
@@ -14,12 +15,16 @@ import { getLocale } from "@/lib/i18n/server";
  *
  * A stale cookie is simply ignored; the next successful sign-in overwrites it.
  */
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: {
+  searchParams?: { mode?: string };
+}) {
   if (await getSessionUser()) redirect("/habits");
 
   return (
     <LocaleProvider initial={getLocale()}>
-      <LoginForm />
+      {/* The front page's Sign Up button opens this same screen on its
+          registration form; everything else opens it on sign-in. */}
+      <LoginForm initialMode={initialLoginMode(searchParams?.mode)} />
     </LocaleProvider>
   );
 }

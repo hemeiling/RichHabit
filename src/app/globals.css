@@ -1024,3 +1024,114 @@ input[type="range"] { accent-color: var(--accent); }
 .idates-row:first-child { border-top: none; }
 .idates-date { flex: none; min-width: 64px; color: var(--muted); }
 .idates-date[data-overdue="true"] { color: var(--warn); }
+
+/* ───────────────────────────── front page ─────────────────────────────────
+ * The public landing page: typography, space, and two buttons.
+ *
+ * Sized in one column at every width rather than as a desktop layout that
+ * collapses — the phone case is the common one, and a headline that fills the
+ * screen on a phone is the whole design there. `clamp` does the scaling, so
+ * there is no breakpoint where the statement is awkwardly between sizes.
+ */
+.lp {
+  min-height: 100dvh;
+  display: flex; flex-direction: column;
+  padding: 20px 20px 30px;
+}
+.lp-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.lp-brand { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lp-wordmark { font-family: var(--display); font-size: 20px; letter-spacing: -0.01em; }
+/* The Chinese name, set as a mark rather than a sentence: small, spaced, quiet. */
+.lp-brand-zh { font-size: 11px; letter-spacing: .18em; color: var(--faint); }
+
+.lp-hero {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  /* Wide enough that the written lines never wrap again on their own. */
+  max-width: 660px;
+  margin: 0 auto;
+  padding: 7vh 0 11vh;
+}
+.lp-headline {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(37px, 7.4vw, 68px);
+  line-height: 1.1; letter-spacing: -0.022em;
+}
+/* Each written line on its own line; they wrap only on a very narrow phone. */
+.lp-headline span, .lp-support span { display: block; }
+/*
+ * Chinese is set smaller than English at the same role. The glyphs are square
+ * and full-height, so a Chinese line at 68px carries far more visual weight
+ * than a Latin one and stops being a calm statement.
+ */
+.lp-headline[data-script="hans"] {
+  font-size: clamp(30px, 5.6vw, 52px);
+  line-height: 1.32; letter-spacing: .012em;
+}
+/* Bilingual mode: the second language beneath, at half the size and quieter, so
+   two headlines read as one statement said twice rather than as two headlines. */
+.lp-headline-second {
+  display: block; margin-top: .3em;
+  font-size: .46em; line-height: 1.36; letter-spacing: .012em; color: var(--muted);
+}
+.lp-support {
+  margin-top: clamp(20px, 3.4vw, 30px);
+  max-width: 27em;
+  font-size: clamp(15.5px, 1.5vw, 17.5px); line-height: 1.6; color: var(--muted);
+  display: flex; flex-direction: column;
+}
+/* Its two lines are one sentence, so they sit at their own line height. The
+   second language is a separate group and gets the space that says so. */
+.lp-support-second { margin-top: 9px; font-size: .92em; color: var(--faint); }
+
+.lp-actions { margin-top: clamp(30px, 4.4vw, 44px); display: flex; gap: 12px; }
+.lp-btn {
+  min-width: 172px; min-height: 48px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; text-decoration: none;
+}
+
+/* Four marks, the last one arrived at. Decoration: see the component. */
+.lp-path { margin-top: clamp(38px, 5.4vh, 56px); display: flex; align-items: center; }
+.lp-seg { width: 26px; height: 1px; background: var(--line); }
+.lp-node { width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
+.lp-node-done {
+  width: 8px; height: 8px; background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+/* CJK faces. Instrument Serif carries no Chinese glyphs, so Chinese would fall
+   back to whatever the browser chose; these stacks pick the serif for display
+   and the UI face for prose deliberately. */
+.lp-hans-display {
+  font-family: var(--display), "Songti SC", "Source Han Serif SC",
+    "Noto Serif CJK SC", "Noto Serif SC", serif;
+}
+.lp-hans {
+  font-family: var(--body), "PingFang SC", "Hiragino Sans GB",
+    "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+/* One quiet arrival, staggered down the page. Removed entirely under
+   prefers-reduced-motion by the global rule above. */
+@keyframes lp-rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.lp-hero > * { animation: lp-rise .8s cubic-bezier(.2,.8,.3,1) both; }
+.lp-hero > *:nth-child(2) { animation-delay: .1s; }
+.lp-hero > *:nth-child(3) { animation-delay: .2s; }
+.lp-hero > *:nth-child(4) { animation-delay: .32s; }
+
+/* Phone: one thumb, two full-width buttons, nothing to reach across. */
+@media (max-width: 559px) {
+  .lp { padding: 18px 20px 26px; }
+  /* `margin: 0 auto` centres the column on a desktop, and auto cross-axis
+     margins stop a flex item stretching — which collapsed this to the width
+     of its widest line and took the full-width buttons with it. */
+  .lp-hero { padding: 6vh 0 10vh; max-width: none; margin: 0; width: 100%; }
+  .lp-actions { flex-direction: column; align-self: stretch; gap: 10px; }
+  .lp-btn { width: 100%; min-height: 52px; font-size: 15.5px; }
+}
+@media (min-width: 900px) {
+  .lp { padding: 30px 40px 40px; }
+  .lp-wordmark { font-size: 22px; }
+}

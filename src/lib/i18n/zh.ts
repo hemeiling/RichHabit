@@ -18,6 +18,14 @@ export const zh: Dict = {
   tagline: "好习惯，成就更富足的人生。",
   localeName: "中文",
 
+  landing: {
+    // Broken at the commas: Chinese left to wrap split 一点点 across lines.
+    headline: ["把真正重要的事，", "变成每天的行动。"],
+    support: ["培养习惯，专注重要的事，", "看见自己一点点成为想成为的人。"],
+    signUp: "注册",
+    logIn: "登录",
+  },
+
   nav: {
     journey: "我的旅程",
     intention: "明确意图",
