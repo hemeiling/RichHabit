@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-17
 >
-> **PUBLIC FRONT PAGE: IMPLEMENTED ON `feature/landing-page` (FROM `main` `5eb1a92`) · TESTS PASS · NOT MERGED INTO `main` · NOT DEPLOYED · NO SCHEMA OR MIGRATION**
+> **PUBLIC FRONT PAGE: PRODUCTION VERIFIED · IMPLEMENTED ON `feature/landing-page` → PUSHED TO `main` (`83e7ebb`, fast-forward from `5eb1a92`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-17 (21/21 SMOKE CHECKS) · NO SCHEMA OR MIGRATION**
 > **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · REAL GEMINI IMAGE GENERATION: PASS (FINAL ACCEPTANCE ON `74d2eb3`, ENGLISH AND CHINESE) · REAL GEMINI CHAT PASS · IMPLEMENTATION TESTS PASS · INCLUDES `1375082f` BY MERGE · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
 > **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
@@ -36,9 +36,9 @@ buttons.
 | Item | State |
 | --- | --- |
 | branch | `feature/landing-page`, from `main` `5eb1a92`, worktree `~/dev/rich-habits-landing` |
-| committed / pushed | in the commit that adds this section; pushed to `origin/feature/landing-page` |
+| committed / pushed | `3037cc5` the page, `fe06524` the four marks removed, `83e7ebb` the language default; pushed to `origin/feature/landing-page` |
 | schema / migration / env / dependencies | **none**; nothing under `db/`, `scripts/`, `render.yaml`, `package*.json` or `.env.example` changed |
-| merged into `main` / deployed | **no** / **no** |
+| release state | **IMPLEMENTED** → **PUSHED TO MAIN** (`83e7ebb`, fast-forward, no merge commit, no history rewritten) → **DEPLOYED** (Render, triggered by the Product Owner, live ~5 minutes later) → **PRODUCTION VERIFIED** |
 | the page | brand (plus 养成富有的习惯 outside English) and the existing EN/中文/双语 switch; the statement "Turn what matters into what you do."; one supporting line; Sign Up (primary) and Log In; one unlabelled four-mark figure. No feature grid, pricing, testimonials or imagery |
 | copy | `en.landing` / `zh.landing`, written as two deliberate lines each — at 68px the line break is the design, and Chinese breaks at its comma |
 | bilingual | typeset, not concatenated: English statement at full size, Chinese beneath at .46em and quieter; the two buttons do use the joined labels ("Sign Up · 注册") |
@@ -46,7 +46,9 @@ buttons.
 | authentication | unchanged. Sign Up → `/login?mode=signup`, Log In → `/login`; `?mode=` only chooses which form the existing screen opens on (`initialLoginMode`), and every account is still created and signed in by the existing routes. A visitor with a valid session at `/` still goes to `/habits`, checked against the session row |
 | routing | `/` is public by an exact match in middleware — every path starts with "/", so a prefix entry would have made the whole application public. `/habits` and the rest are still closed to a signed-out visitor |
 | verification | typecheck, lint, 927/927 unit tests (20 new), production build, 43/43 local browser checks (desktop 1440 and phone 390 in all three languages, tablet-width reflow, reduced motion, registration and sign-in through both buttons, signed-in redirect, the language default and every saved choice on a Chinese device, no sideways scrolling, no page errors) |
-| next step | Product Owner design review; merge to `main` and deploy when approved |
+| production verification | 2026-09-17, https://richhabit.onrender.com, 21/21: production assets byte-identical to the local `83e7ebb` build; `/` answers 200 with the landing page instead of redirecting to `/login`; a first-time visitor on a Chinese device gets English; 中文, 双语 and English each switch and persist across a reload; Sign Up registered a real account and signed it in; Log In signed that account in from a fresh browser; an authenticated `/` lands on `/habits`; seven protected routes still redirect a signed-out visitor to `/login`; the phone layout renders with two full-width buttons and no sideways scrolling; no browser errors, no failed requests, server healthy |
+| production data | one test account created by the smoke test — `rhsmoke64t0ru` — with the starter set every new account is seeded with (10 habits and their schedules, 3 goals, one preferences row). A read-only check after the test confirms exactly one account created in the previous 30 minutes and none other; no existing row was changed or deleted, and no migration was run |
+| next step | delete the `rhsmoke64t0ru` test account from Admin → Users if you would rather not keep it (it occupies one of the fifty early-access places) |
 
 ## AI Workspace: general-purpose assistant, multiple models, image generation
 
