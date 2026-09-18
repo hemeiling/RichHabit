@@ -4,7 +4,7 @@ import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
 import { both } from "../src/lib/i18n/both";
 
-const URL = "https://richhabit.example.com/verify?token=abc123";
+const URL = "https://richhabit.example.com/verify#token=abc123";
 
 describe("the confirmation email", () => {
   it("carries the link in both the HTML and the plain-text alternative", () => {

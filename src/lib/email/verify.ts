@@ -31,9 +31,19 @@ const TOKEN_BYTES = 32;
 
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 
-/** Where a verification link points. Absolute, because it is opened from mail. */
+/**
+ * Where a verification link points. Absolute, because it is opened from mail.
+ *
+ * The token is carried in the **fragment**, not the query string, and that is
+ * the whole point of the `#`: a fragment is never sent to the server. A query
+ * string is, and it is then written verbatim into every request log between the
+ * reader and the database — the platform's, the proxy's, the framework's — so a
+ * live credential would sit in log storage far longer than the twenty seconds
+ * it is actually needed for. The page reads the fragment in the browser, wipes
+ * it from the address bar, and sends it once, in the body of a POST.
+ */
 export const verifyUrl = (token: string) =>
-  `${appUrl()}/verify?token=${encodeURIComponent(token)}`;
+  `${appUrl()}/verify#token=${encodeURIComponent(token)}`;
 
 /**
  * Issues a token for an account and emails it.
@@ -68,6 +78,58 @@ export async function mayResend(userId: string): Promise<boolean> {
     [userId, String(capacity.resendGapSeconds)],
   );
   return Number(rows[0].recent) === 0;
+}
+
+/**
+ * What happened when an account asked to prove the address it already has.
+ *
+ * `sent` and `too_soon` are answered identically by the route: a caller cannot
+ * use the difference to learn anything, and nothing useful follows from it.
+ */
+export type OwnVerificationOutcome =
+  | "sent" | "already_verified" | "no_address" | "too_soon" | "not_available";
+
+/**
+ * An account verifying its own existing address, voluntarily.
+ *
+ * This exists because `verification_required` and `email_verified_at` answer
+ * two different questions. The first is "must this account prove its address
+ * before it may be used", decided once at creation and never re-read; the
+ * second is "has the address actually been proved". A grandfathered account
+ * holds false and null: it is fully entitled to the app, and its address is
+ * simply unproven. Until now nothing could move it, because the only way to be
+ * sent a link was to be an account that was *required* to verify.
+ *
+ * So this reads the address off the account itself. **The recipient is never an
+ * input.** There is no parameter for it and no branch that could take one from
+ * a request, which is what keeps this from becoming a way to post RichHabit
+ * mail at a stranger, or to attach a stranger's address to an account.
+ *
+ * Nothing here writes to `users`. `verification_required` is untouched, and
+ * `email_verified_at` is stamped only by `redeem` below, when a live token is
+ * actually presented.
+ */
+export async function requestOwnVerification(
+  userId: string, locale: Locale,
+): Promise<OwnVerificationOutcome> {
+  const rows = await query<{
+    email: string | null; verified_at: string | null; disabled_at: string | null;
+  }>(
+    `select email, email_verified_at as verified_at, disabled_at
+       from users where id = $1`,
+    [userId],
+  );
+
+  const row = rows[0];
+  if (!row || row.disabled_at) return "not_available";
+  if (row.verified_at) return "already_verified";
+  if (!row.email) return "no_address";
+  // The same per-account gap the resend route uses, so one button cannot be
+  // turned into a way to fill an inbox.
+  if (!await mayResend(userId)) return "too_soon";
+
+  await sendVerification(userId, row.email, locale);
+  return "sent";
 }
 
 export type VerifyOutcome =

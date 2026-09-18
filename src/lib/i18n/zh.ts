@@ -1015,6 +1015,16 @@ export const zh: Dict = {
     resendSent: "如果该账户正在等待确认，新的链接已经在路上了。",
   },
 
+  protect: {
+    title: "保护你的账户",
+    body: "验证邮箱后，忘记密码时你可以重新登录账户。",
+    action: "验证邮箱",
+    sending: "发送中…",
+    sent: "请查收邮件中的验证链接。",
+    verified: "邮箱已验证",
+    noAddress: "此账户还没有邮箱地址。",
+  },
+
   errors: {
     nameRequired: "请填写你的姓和名。",
     verifyPending: "请先确认你的邮箱地址再登录——确认链接已发送到你的邮箱。",

@@ -16,7 +16,7 @@ export default function VerifyPage({ searchParams }: {
 }) {
   return (
     <LocaleProvider initial={getLocale()}>
-      <VerifyContent token={searchParams.token ?? ""} />
+      <VerifyContent queryToken={searchParams.token ?? ""} />
     </LocaleProvider>
   );
 }

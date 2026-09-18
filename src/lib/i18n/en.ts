@@ -1188,6 +1188,21 @@ export const en = {
     resendSent: "If that account is waiting to be confirmed, a new link is on its way.",
   },
 
+  /**
+   * Verifying the address the account already has, so it can be used to get
+   * back in later. Offered, never demanded: an account that was grandfathered
+   * in stays grandfathered whether or not it ever presses this.
+   */
+  protect: {
+    title: "Protect your account",
+    body: "Verify your email so you can get back in if you forget your password.",
+    action: "Verify Email",
+    sending: "Sending…",
+    sent: "Check your email for the verification link.",
+    verified: "Email verified",
+    noAddress: "This account has no email address yet.",
+  },
+
   errors: {
     nameRequired: "Enter your first and last name.",
     verifyPending: "Confirm your email address before signing in — check your inbox for the link.",

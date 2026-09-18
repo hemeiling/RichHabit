@@ -35,6 +35,27 @@ export default function More({ account }: { account: AccountSummary }) {
   const [savingName, setSavingName] = useState(false);
   const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  /* Verifying the address already on the account. Nothing is sent from here
+     but the request itself — the recipient is the account's own address, read
+     server-side, and this component never sees or sends one. */
+  const [verifying, setVerifying] = useState(false);
+  const [verifyNote, setVerifyNote] = useState<string | null>(null);
+
+  const verifyEmail = async () => {
+    setVerifying(true);
+    setVerifyNote(null);
+    try {
+      const res = await fetch("/api/account/email/verify", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || t.errors.saveFailed);
+      setVerifyNote(data?.note ?? t.protect.sent);
+    } catch (e) {
+      setVerifyNote((e as Error).message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const saveUsername = async () => {
     setSavingName(true);
     setNameMsg(null);
@@ -144,6 +165,37 @@ export default function More({ account }: { account: AccountSummary }) {
             </p>
           )}
         </div>
+
+        {/*
+          * Protecting the account, offered rather than demanded.
+          *
+          * Shown only to an account that has an address and has not proved it.
+          * Pressing it changes nothing about the account: it asks for a link,
+          * and the address becomes verified only when that link is opened.
+          */}
+        {account.hasEmail && !account.emailVerified && (
+          <div className="flat p-3.5 mt-3">
+            <div style={{ fontSize: 14.5 }}>{t.protect.title}</div>
+            <p className="faint mt-1" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+              {t.protect.body}
+            </p>
+            {verifyNote ? (
+              <p className="mt-2" role="status" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                {verifyNote}
+              </p>
+            ) : (
+              <button className="btn mt-2.5" type="button" disabled={verifying}
+                style={{ padding: "6px 14px", fontSize: 13.5 }} onClick={verifyEmail}>
+                {verifying ? t.protect.sending : t.protect.action}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Once proved, it is a quiet fact rather than a card asking for anything. */}
+        {account.emailVerified && (
+          <div className="faint mt-3" style={{ fontSize: 12.5 }}>{t.protect.verified}</div>
+        )}
 
         {/* The same page the forced-change flow uses, reached deliberately
             rather than by redirect. One password form, one API route. */}

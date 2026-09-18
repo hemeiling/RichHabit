@@ -919,6 +919,17 @@ export interface AccountSummary {
   username: string | null;
   createdAt: string;
   isAdmin: boolean;
+  /**
+   * Whether the account is identified by an address at all. `email` above is
+   * the address *or* the username, so it cannot answer this on its own.
+   */
+  hasEmail: boolean;
+  /**
+   * Whether that address has actually been proved. Deliberately independent of
+   * `verification_required`: a grandfathered account is never required to
+   * verify, and may still do it.
+   */
+  emailVerified: boolean;
   activeHabits: number;
   daysRecorded: number;
 }
@@ -929,6 +940,8 @@ export async function loadAccount(userId: string): Promise<AccountSummary | null
             u.username,
             u.created_at,
             u.role = 'admin' as is_admin,
+            u.email is not null as has_email,
+            u.email_verified_at is not null as email_verified,
             (select count(*) from habits h
               where h.user_id = u.id and h.status = 'active')          as active_habits,
             (select count(distinct done_on) from habit_completions c
@@ -945,6 +958,8 @@ export async function loadAccount(userId: string): Promise<AccountSummary | null
     // timezone the reader is in, so the browser decides which day it was.
     createdAt: new Date(r.created_at).toISOString(),
     isAdmin: r.is_admin === true,
+    hasEmail: r.has_email === true,
+    emailVerified: r.email_verified === true,
     activeHabits: Number(r.active_habits),
     daysRecorded: Number(r.days_recorded),
   };
