@@ -143,7 +143,7 @@ export default function LoginForm({ initialMode = "signin" }: { initialMode?: Mo
             {t.verify.sentTitle}
           </h1>
           <p className="mt-3" style={{ fontSize: 14, lineHeight: 1.6 }}>
-            {pending.sent ? t.verify.sentBody(pending.email) : t.verify.sendFailed}
+            {pending.sent ? t.verify.sentBody : t.verify.sendFailed}
           </p>
           {pending.sent && (
             <p className="muted mt-2" style={{ fontSize: 13, lineHeight: 1.55 }}>
@@ -331,6 +331,15 @@ export default function LoginForm({ initialMode = "signin" }: { initialMode?: Mo
             </Link>
           </p>
         </div>
+
+        {/* Only on sign-in: there is nothing to have forgotten while registering. */}
+        {mode === "signin" && (
+          <div className="mt-3 text-center">
+            <Link href="/forgot" className="faint" style={{ fontSize: 12.5, textDecoration: "underline" }}>
+              {t.forgot.link}
+            </Link>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 mt-4">
           {mode !== "signin" && (

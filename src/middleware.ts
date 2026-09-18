@@ -18,6 +18,11 @@ const PUBLIC_PATHS = [
   // Confirming an address happens before there is any session at all — the
   // token in the URL is the credential, and it is checked server-side.
   "/verify",
+  // Asking for a password reset, and choosing the new password. Both are for
+  // somebody who cannot sign in, which is the whole point; the reset token is
+  // the credential and is checked server-side, once.
+  "/forgot",
+  "/reset",
 ];
 
 /**

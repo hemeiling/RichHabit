@@ -57,17 +57,15 @@ const SIGNOFF = "RichHabit · 养成富有的习惯";
  * languages one after the other rather than silently picking English. One link,
  * stated twice — not two links, which would look like two different requests.
  */
-const blocks = (locale: Locale): Copy[] =>
-  locale === "zh" ? [ZH] : locale === "both" ? [EN, ZH] : [EN];
+const blocks = (locale: Locale, en: Copy, zh: Copy): Copy[] =>
+  locale === "zh" ? [zh] : locale === "both" ? [en, zh] : [en];
 
 /** Anything interpolated into HTML is escaped, including our own link. */
 const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function verificationEmail(locale: Locale, url: string) {
-  const parts = blocks(locale);
+function compose(parts: Copy[], locale: Locale, url: string, hours: number) {
   const href = escape(url);
-  const hours = capacity.verifyTtlHours;
 
   const section = (c: Copy, first: boolean) => `
     <h1 style="margin:${first ? "0" : "26px"} 0 12px;font-size:20px;font-weight:600"
@@ -112,4 +110,40 @@ export function verificationEmail(locale: Locale, url: string) {
   ].join("\n");
 
   return { subject: parts.map((c) => c.subject).join(" · "), html, text };
+}
+
+/** Confirming an address. The lifetime is the verification link's own. */
+export function verificationEmail(locale: Locale, url: string) {
+  return compose(blocks(locale, EN, ZH), locale, url, capacity.verifyTtlHours);
+}
+
+/**
+ * Getting back into an account. Deliberately the same plain layout as the
+ * confirmation message — no images, no tracking pixel, no remote stylesheet —
+ * and it says plainly that ignoring it leaves the password alone, because the
+ * person reading it may not be the person who asked.
+ */
+const RESET_EN: Copy = {
+  subject: "Reset your RichHabit password",
+  heading: "Reset your password",
+  lead: "Open the link below to choose a new password for your RichHabit account.",
+  button: "Choose a new password",
+  fallback: "If the button does not work, copy this link into your browser:",
+  expiry: (m) => `This link works for ${m} minutes and can be used once.`,
+  ignore: "If you did not ask to reset your password, you can ignore this email — "
+    + "your password will not change.",
+};
+
+const RESET_ZH: Copy = {
+  subject: "重置你的 RichHabit 密码",
+  heading: "重置密码",
+  lead: "打开下面的链接，为你的「养成富有的习惯」账户设置新密码。",
+  button: "设置新密码",
+  fallback: "如果按钮无法使用，请把下面的链接复制到浏览器打开：",
+  expiry: (m) => `此链接在 ${m} 分钟内有效，且只能使用一次。`,
+  ignore: "如果这不是你本人操作，可以忽略这封邮件，你的密码不会被更改。",
+};
+
+export function resetEmail(locale: Locale, url: string, ttlMinutes: number) {
+  return compose(blocks(locale, RESET_EN, RESET_ZH), locale, url, ttlMinutes);
 }

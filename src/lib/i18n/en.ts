@@ -1179,8 +1179,7 @@ export const en = {
 
     // The screen that replaces the sign-up form once an account is pending.
     sentTitle: "Check your email",
-    sentBody: (email: string) =>
-      `We've sent a confirmation link to ${email}. Open it to activate your account.`,
+    sentBody: "We sent a verification link to your email. Verify your email to activate your RichHabit account.",
     sentHint: "The link works for 24 hours. If it isn't there, check your spam folder.",
     sendFailed: "We couldn't send the confirmation email just now. Try sending it again.",
     resend: "Send it again",
@@ -1201,6 +1200,39 @@ export const en = {
     sent: "Check your email for the verification link.",
     verified: "Email verified",
     noAddress: "This account has no email address yet.",
+  },
+
+  /**
+   * Getting back in. One page asks who you are, one page sets the new password,
+   * and the sentence between them is deliberately the same whatever the truth
+   * is — see src/app/api/auth/forgot/route.ts.
+   */
+  forgot: {
+    link: "Forgot password?",
+    title: "Reset your password",
+    intro: "Enter your email or username and we'll send you a link.",
+    identifier: "Email or username",
+    send: "Send reset link",
+    sending: "Sending…",
+    /* Said to everyone: unknown account, no address, an address nobody proved,
+       a disabled account, a live one. */
+    sentTitle: "Check your email",
+    sentBody: "If we can verify an account with those details, we'll send password-reset instructions.",
+    sentHint: (m: number) => `The link works for ${m} minutes and can be used once.`,
+    backToSignIn: "Back to sign in",
+
+    chooseTitle: "Choose a new password",
+    newPassword: "New password",
+    confirmPassword: "Confirm new password",
+    save: "Set new password",
+    saving: "Saving…",
+    linkInvalid: "This link is no longer valid. Request a new one.",
+    linkExpired: "This link has expired. Request a new one.",
+    requestAnother: "Request a new link",
+
+    doneTitle: "Password changed",
+    doneBody: "You've been signed out on your other devices. Sign in with your new password.",
+    signIn: "Sign in",
   },
 
   errors: {

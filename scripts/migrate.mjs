@@ -19,6 +19,7 @@
 import { connect } from "./lib.mjs";
 import { migrateIntentionLinks } from "./migrations/intention-links.mjs";
 import { migrateAiWorkspace } from "./migrations/ai-workspace.mjs";
+import { migratePasswordResets } from "./migrations/password-resets.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -862,6 +863,7 @@ try {
    * existing is touched. See scripts/migrations/ai-workspace.mjs.
    */
   changed += await migrateAiWorkspace(client, console.log);
+  changed += await migratePasswordResets(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

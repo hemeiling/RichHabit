@@ -129,6 +129,31 @@ create table email_verifications (
 create unique index email_verifications_hash_idx on email_verifications (token_hash);
 create index email_verifications_user_idx on email_verifications (user_id, created_at desc);
 
+-- --------------------------- password resets -------------------------------
+-- Forgotten-password tokens. A table of its own rather than a purpose column on
+-- email_verifications: the two credentials have different lifetimes — thirty
+-- minutes against twenty-four hours — and different consequences, and sharing
+-- one table would mean every existing query needed a purpose filter, where a
+-- missed filter is a privilege bug rather than a cosmetic one.
+--
+-- No address is stored here. The recipient is read from the account when the
+-- message is sent, so a token issued before an address changed can never be
+-- used to mail the old one.
+create table password_resets (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users on delete cascade,
+  -- Only the SHA-256 of the token. A copy of this table is not a set of
+  -- working links, for the same reason password_hash is not a password.
+  token_hash  text not null,
+  expires_at  timestamptz not null,
+  -- Single use. Set in the same transaction that changes the password, and on
+  -- every other outstanding token for that account at the same moment.
+  consumed_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+create unique index password_resets_hash_idx on password_resets (token_hash);
+create index password_resets_user_idx on password_resets (user_id, created_at desc);
+
 -- Opaque session tokens. The cookie carries the id; nothing is signed into it,
 -- so revoking a session is a delete rather than a key rotation.
 create table sessions (

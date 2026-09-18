@@ -1007,7 +1007,7 @@ export const zh: Dict = {
     tryAgain: "重试",
 
     sentTitle: "请查收邮件",
-    sentBody: (email: string) => `我们已向 ${email} 发送了确认链接，打开它即可启用账户。`,
+    sentBody: "我们已向你的邮箱发送验证链接。验证邮箱后即可激活你的 RichHabit 账户。",
     sentHint: "链接在 24 小时内有效。如果没有收到，请查看垃圾邮件文件夹。",
     sendFailed: "确认邮件暂时发送失败，请重新发送一次。",
     resend: "重新发送",
@@ -1023,6 +1023,32 @@ export const zh: Dict = {
     sent: "请查收邮件中的验证链接。",
     verified: "邮箱已验证",
     noAddress: "此账户还没有邮箱地址。",
+  },
+
+  forgot: {
+    link: "忘记密码？",
+    title: "重置密码",
+    intro: "输入你的邮箱或用户名，我们会给你发送重置链接。",
+    identifier: "邮箱或用户名",
+    send: "发送重置链接",
+    sending: "发送中…",
+    sentTitle: "请查收邮件",
+    sentBody: "如果这些信息对应一个已验证邮箱的账户，我们会发送密码重置说明。",
+    sentHint: (m: number) => `链接在 ${m} 分钟内有效，且只能使用一次。`,
+    backToSignIn: "返回登录",
+
+    chooseTitle: "设置新密码",
+    newPassword: "新密码",
+    confirmPassword: "确认新密码",
+    save: "设置新密码",
+    saving: "保存中…",
+    linkInvalid: "此链接已失效，请重新获取。",
+    linkExpired: "此链接已过期，请重新获取。",
+    requestAnother: "重新获取链接",
+
+    doneTitle: "密码已更新",
+    doneBody: "你在其他设备上的登录已退出，请使用新密码登录。",
+    signIn: "登录",
   },
 
   errors: {

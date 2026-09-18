@@ -80,8 +80,19 @@ body {
 .flat { background: var(--raise); border: 1px solid var(--line-soft); border-radius: 16px; }
 
 .btn {
+  /*
+   * A button is a box, whatever element it is written as.
+   *
+   * Without this an <a class="btn"> stays an inline box: its vertical padding
+   * paints outward without reserving any height, so the pill overlaps the
+   * paragraph above it — which is exactly what happened under the confirmation
+   * message on /verify. inline-flex makes the padding count and centres the
+   * label, and it costs a <button> nothing, since those are already boxes.
+   */
+  display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
   padding: 9px 16px; font-size: 14px; font-weight: 500; cursor: pointer; transition: .15s ease;
+  text-decoration: none; color: inherit;
 }
 .btn:hover { border-color: var(--muted); }
 .btn:active { transform: scale(.985); }

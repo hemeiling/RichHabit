@@ -76,9 +76,18 @@ describe("what the reader is told", () => {
     expect(zh.errors.verifyPending).toMatch(/[一-鿿]/);
   });
 
-  it("names the address it sent to, in both", () => {
-    expect(en.verify.sentBody("a@b.com")).toContain("a@b.com");
-    expect(zh.verify.sentBody("a@b.com")).toContain("a@b.com");
+  /**
+   * It used to quote the address back. It no longer does, and that is the safer
+   * sentence as well as the approved one: the screen is reached by whoever just
+   * typed something into a form, and echoing it teaches them nothing they did
+   * not just write while making the page repeat an address it need not hold.
+   */
+  it("tells them to check their email, in both, without naming the address", () => {
+    expect(en.verify.sentBody).toContain("verification link");
+    expect(zh.verify.sentBody).toMatch(/[一-鿿]/);
+    for (const body of [en.verify.sentBody, zh.verify.sentBody]) {
+      expect(body).not.toContain("@");
+    }
   });
 
   it("derives the bilingual dictionary automatically", () => {

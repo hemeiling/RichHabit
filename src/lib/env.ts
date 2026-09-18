@@ -229,6 +229,25 @@ export const capacity = {
   resendGapSeconds: num("VERIFY_RESEND_GAP_SECONDS", 60),
 };
 
+/**
+ * Forgotten-password links.
+ *
+ * Shorter-lived than a confirmation link by design: a reset token is a way into
+ * an account that already exists, where a confirmation token only proves an
+ * address. Thirty minutes is long enough for a slow inbox and short enough that
+ * a message left open on a shared screen stops mattering quickly.
+ */
+export const passwordReset = {
+  ttlMinutes: num("PASSWORD_RESET_TTL_MINUTES", 30),
+  /** The shortest gap between two reset emails to the same account. */
+  gapSeconds: num("PASSWORD_RESET_GAP_SECONDS", 60),
+  /**
+   * How many reset emails one account may be sent in a day. Database-backed
+   * rather than in memory, so a restart cannot reset somebody's allowance.
+   */
+  maxPerDay: num("PASSWORD_RESET_MAX_PER_DAY", 5),
+};
+
 // ──────────────────────────────── outgoing mail ──────────────────────────────
 
 /**
