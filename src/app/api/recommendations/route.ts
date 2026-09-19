@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { withUser } from "@/lib/api";
+import { ApiError, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
 import { getSessionUser } from "@/lib/auth";
 import { loadState, saveHabit } from "@/lib/db/queries";
@@ -44,8 +44,15 @@ export async function POST() {
     try {
       proposals = await generate(behaviours, state, t, locale);
     } catch (e) {
+      /*
+       * Thrown, not returned. `withUser` serialises whatever the callback
+       * returns — `NextResponse.json(data ?? { ok: true })` — so returning a
+       * NextResponse from in here produced a 200 whose body was a serialised
+       * response object, and this 501 never reached the browser. An ApiError is
+       * the contract `withUser` actually understands.
+       */
       if (e instanceof RecommendationsUnavailable) {
-        return NextResponse.json({ error: t.errors.coachUnavailable }, { status: 501 });
+        throw new ApiError(t.errors.coachUnavailable, 501);
       }
       throw e;
     }

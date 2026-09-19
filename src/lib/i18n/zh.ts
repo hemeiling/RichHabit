@@ -1073,6 +1073,7 @@ export const zh: Dict = {
     tooManyAttempts: "尝试次数过多，请几分钟后再试。",
     coachUnavailable: "这个应用还没有启用 AI 教练。",
     coachEmpty: "教练没有返回内容，请再试一次。",
+    coachFailed: "教练暂时没有回应，请稍后再试。",
     questionTooLong: "问题太长了。",
     coachHourlyLimit: "最近一小时你向教练提问较多，稍等一会儿再问。",
     coachDailyLimit: "今天向教练提问的次数已经用完，一天之内会恢复，你的习惯和记录不受影响。",

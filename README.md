@@ -106,7 +106,7 @@ src/
                     awareness, stacks, metrics, reviews, spending, prefs,
                     important-dates
     (app)/more/refine  Behaviours to change, and the backlog they wait in
-    api/coach/      The AI coach, against the OpenAI Responses API
+    api/coach/      The AI coach, Claude through the consumer provider seam
   middleware.ts     Cookie presence only; validity is decided against the database
 db/schema.sql
 docker-compose.yml   Local Postgres, schema applied on first boot
@@ -882,7 +882,9 @@ away from private paths, which it can do safely from cookie presence alone.
 account, builds the picture with `coach.buildContext` — per-habit stats by phase, goal linkage,
 metrics, recent reviews — and answers from that, so the context can't be shaped from the browser.
 
-Set `OPENAI_API_KEY` to switch it on; `OPENAI_MODEL` overrides the default of `gpt-5.6-terra`.
+Claude answers, through the consumer provider seam in `src/lib/ai/provider.ts` — the same seam
+and the same `CLAUDE_API_KEY` as the Clarify Intention suggestions. `COACH_MODEL` overrides the
+default of `claude-sonnet-5`.
 Without a key the route returns 501 rather than pretending. Nothing in the app depends on a model
 being reachable: `coach.suggestions(state)` produces its observations from the data alone, and
 that section renders above the question box either way.
@@ -946,7 +948,8 @@ variables and sets the rest itself:
 | Variable | Value | Set by |
 |---|---|---|
 | `DATABASE_URL` | the Neon direct string from step 1 | **you, at the prompt** |
-| `OPENAI_API_KEY` | your OpenAI key, or leave empty | **you, at the prompt** — empty means `/api/coach` answers 501 and nothing else changes |
+| `CLAUDE_API_KEY` | your workspace-scoped Anthropic key, or leave empty | **you, at the prompt** — empty means the coach, the habit recommendations and the intention suggestions answer 501 and nothing else changes |
+| `GEMINI_API_KEY` | your Google key, or leave empty | **you, at the prompt** — empty means the admin AI Workspace runs on Claude alone, with no image generation |
 | `NODE_ENV` | `production` | blueprint — this is what makes the session cookie `Secure` |
 | `NODE_VERSION` | `20` | blueprint |
 | `APP_VERSION` | `0.1.0` | blueprint — stamped on analytics events |
@@ -1056,9 +1059,11 @@ changes the schema.
   **503 `{ok:false,db:"down"}` while Postgres is unreachable**, and 200 again
   once it returns — so an instance that cannot reach its database is taken out
   of rotation instead of serving errors.
-- **`OPENAI_API_KEY` is `sync: false`** — Render prompts for it in the dashboard
-  and it never enters this file or git. Leave it unset and the coach answers
-  501; nothing else changes.
+- **`CLAUDE_API_KEY` and `GEMINI_API_KEY` are `sync: false`** — Render prompts for
+  them in the dashboard and they never enter this file or git. Leave the Anthropic
+  key unset and the coach, the habit recommendations and the intention
+  suggestions answer 501; leave the Google one unset and the AI Workspace runs on
+  Claude alone. Nothing else changes.
 - **`NODE_ENV=production`**, which is what makes the session cookie `Secure`.
 - **`RH_TEST_INSTANCE` is deliberately absent.** It stamps every account the
   server creates as `created_via='test'`, which is how Admin → Users tells

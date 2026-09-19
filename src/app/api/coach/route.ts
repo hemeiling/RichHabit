@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import { getSessionUser } from "@/lib/auth";
 import { loadState } from "@/lib/db/queries";
 import { coach } from "@/lib/coach";
@@ -7,22 +6,26 @@ import { getDict, getLocale } from "@/lib/i18n/server";
 import { trackEvent } from "@/lib/analytics/track";
 import { coach as coachEnv } from "@/lib/env";
 import { takeCoachRequest, type CoachAllowance } from "@/lib/ai/coachLimit";
+import { AiFailed, coachProvider } from "@/lib/ai/provider";
 
 /**
  * The AI coach. The client sends a question and nothing else; this route reads
  * the account, builds the JSON picture with `coach.buildContext`, and answers
  * from it. Returns { answer }.
  *
- * Needs OPENAI_API_KEY — server-side only, never shipped to the browser.
- * Without it the route refuses with a 501 rather than pretending, so nothing in
- * the app quietly comes to depend on a model being reachable:
+ * Claude answers, through the consumer provider seam in `@/lib/ai/provider` —
+ * the same seam and the same server-only credential as intention suggestions.
+ * Without a credential the route refuses with a 501 rather than pretending, so
+ * nothing in the app quietly comes to depend on a model being reachable:
  * `coach.suggestions` is still what the Insights screen renders on its own.
+ *
+ * No provider SDK is imported here, and no provider message ever reaches the
+ * caller: the browser puts `error.message` straight on screen, so every failure
+ * answers with the app's own wording.
  */
 
-// Reasoning models are slow enough to outlast the default serverless timeout.
+// A reasoning model is slow enough to outlast the default serverless timeout.
 export const maxDuration = coachEnv.timeoutSeconds;
-
-const MODEL = coachEnv.model;
 
 const INSTRUCTIONS = `You are the coach inside a habit-tracking app called RichHabit.
 
@@ -74,8 +77,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg.questionTooLong }, { status: 400 });
   }
 
-  const apiKey = coachEnv.apiKey;
-  if (!apiKey) {
+  /* Asked before the limit is charged: a coach that is not configured cannot
+     cost anything, so it must not cost allowance either. */
+  const provider = await coachProvider();
+  if (!provider) {
     return NextResponse.json(
       { error: msg.coachUnavailable },
       { status: 501 },
@@ -108,23 +113,33 @@ export async function POST(request: Request) {
     );
   }
 
-  const client = new OpenAI({ apiKey });
-
   try {
     // Read the account here rather than trusting a context from the browser —
     // row-level security scopes this to the signed-in user either way.
     const state = await loadState(user.id);
     const context = coach.buildContext(state, getDict());
 
-    const response = await client.responses.create({
-      model: MODEL,
-      reasoning: { effort: "medium" },
-      instructions: `${INSTRUCTIONS}\n\n${LANGUAGE[locale] ?? LANGUAGE.en}`,
-      input: [
-        `Their data:\n${JSON.stringify(context)}`,
-        `Their question:\n${question}`,
-      ].join("\n\n"),
-    });
+    let answer: string;
+    try {
+      answer = await provider.generateText({
+        system: `${INSTRUCTIONS}\n\n${LANGUAGE[locale] ?? LANGUAGE.en}`,
+        prompt: [
+          `Their data:\n${JSON.stringify(context)}`,
+          `Their question:\n${question}`,
+        ].join("\n\n"),
+        maxTokens: coachEnv.maxOutputTokens,
+        timeoutMs: coachEnv.timeoutSeconds * 1000,
+      });
+    } catch (error) {
+      // A status code, never the provider's words: this message is rendered.
+      const status = error instanceof AiFailed ? error.status : null;
+      console.error(`[api] coach failed (${status ?? "no status"})`);
+      // A refused key or configuration will not fix itself; anything else might.
+      if (error instanceof AiFailed && error.rejected) {
+        return NextResponse.json({ error: msg.coachUnavailable }, { status: 503 });
+      }
+      return NextResponse.json({ error: msg.coachFailed }, { status: 502 });
+    }
 
     await trackEvent({
       userId: user.id, event: "coach_question_asked", page: "/insights",
@@ -132,16 +147,14 @@ export async function POST(request: Request) {
       properties: { locale, questionLength: question.length },
     });
 
-    const answer = response.output_text?.trim();
     if (!answer) {
       return NextResponse.json({ error: msg.coachEmpty }, { status: 502 });
     }
     return NextResponse.json({ answer });
   } catch (error) {
-    // Surface the model's own status where there is one — a bad key and a rate
-    // limit are different problems and the caller should be able to tell.
-    const status = error instanceof OpenAI.APIError ? error.status ?? 502 : 502;
-    const message = error instanceof Error ? error.message : "Coach request failed.";
-    return NextResponse.json({ error: message }, { status });
+    // A bug or a database failure. Logged in full; the caller is told nothing,
+    // because a raw error can name columns, constraints and sometimes values.
+    console.error("[api] coach", error);
+    return NextResponse.json({ error: msg.coachFailed }, { status: 500 });
   }
 }

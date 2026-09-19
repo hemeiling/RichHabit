@@ -57,6 +57,37 @@ export function createClaudeProvider(apiKey: string, model: string): AiProvider 
       const block = message.content.find((c) => c.type === "tool_use");
       return block && block.type === "tool_use" ? block.input : null;
     },
+
+    /**
+     * Prose. No tool and no schema: the coach's answer is read by a person, and
+     * forcing it through a tool call would only invite the model to describe an
+     * answer instead of giving one.
+     *
+     * Every text block is joined, because a model may split its reply across
+     * several. Anything that is not text — a thinking block, say — is ignored.
+     */
+    async generateText(request) {
+      let message: Anthropic.Message;
+      try {
+        message = await client.messages.create(
+          {
+            model,
+            max_tokens: request.maxTokens,
+            system: request.system,
+            messages: [{ role: "user", content: request.prompt }],
+          },
+          { timeout: request.timeoutMs },
+        );
+      } catch (e) {
+        const status = e instanceof Anthropic.APIError && typeof e.status === "number" ? e.status : null;
+        throw new AiFailed(status);
+      }
+      return message.content
+        .filter((c): c is Anthropic.TextBlock => c.type === "text")
+        .map((c) => c.text)
+        .join("\n")
+        .trim();
+    },
   };
 }
 

@@ -4,20 +4,24 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * POST /api/coach under its safety limit, against a real Postgres (PGlite) and
- * a recording provider.
+ * POST /api/coach: Claude through the consumer provider seam, behind the durable
+ * safety limit, against a real Postgres (PGlite) and a recording provider.
  *
  * What these pin down: the limit is charged *before* the provider is called, a
- * refusal never reaches the provider, the copy is in the reader's language, and
- * a counter that cannot be read fails closed rather than calling a paid API
- * with nothing counting.
+ * refusal never reaches the provider, a failed provider call still costs
+ * allowance, no provider message ever reaches the caller, the copy is in the
+ * reader's language, and a counter that cannot be read fails closed rather than
+ * calling a paid API with nothing counting.
  */
 
 const state = vi.hoisted(() => ({
-  created: [] as unknown[],
-  /** Set to throw from the provider, to prove a failed call still costs. */
-  fail: false,
-  /** Set to make the counter unreadable, to prove the route fails closed. */
+  /** Every request handed to the provider. Also the proof it was reached. */
+  asked: [] as { system: string; prompt: string; maxTokens: number; timeoutMs: number }[],
+  answer: "Evenings are at 41%. Try moving one habit earlier tomorrow.",
+  /** An AiFailed status to throw, or false to answer normally. */
+  fail: false as number | false,
+  /** null simulates no credential at all. */
+  configured: true,
   breakDb: false,
   user: null as { id: string } | null,
   locale: "en" as "en" | "zh" | "both",
@@ -43,25 +47,31 @@ vi.mock("@/lib/i18n/server", () => ({
   getDict: () => dict(state.locale),
   getLocale: () => state.locale,
 }));
-vi.mock("openai", () => {
-  class APIError extends Error { status = 502; }
-  class OpenAI {
-    static APIError = APIError;
-    responses = {
-      create: async (request: unknown) => {
-        state.created.push(request);
-        if (state.fail) throw new APIError("provider exploded");
-        return { output_text: "Evenings are at 41%." };
+/**
+ * The provider seam, not a provider SDK. If this route ever imports one
+ * directly again, these tests keep passing while the guard test fails — which
+ * is the right division of labour.
+ */
+vi.mock("@/lib/ai/provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/lib/ai/provider")>();
+  return {
+    ...actual,
+    coachProvider: async () => (state.configured ? {
+      name: "fake",
+      async generateStructured() { throw new Error("the coach must ask for text, not a shape"); },
+      async generateText(request: any) {
+        state.asked.push(request);
+        if (state.fail !== false) throw new actual.AiFailed(state.fail);
+        return state.answer;
       },
-    };
-  }
-  return { default: OpenAI, APIError };
+    } : null),
+  };
 });
 
 const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
 const HOURLY = 3;
 const DAILY = 4;
-process.env.OPENAI_API_KEY = "test-key-not-real";
+process.env.CLAUDE_API_KEY = "placeholder-not-a-key";
 process.env.COACH_HOURLY_LIMIT = String(HOURLY);
 process.env.COACH_DAILY_LIMIT = String(DAILY);
 
@@ -88,8 +98,9 @@ beforeAll(async () => {
 afterAll(async () => { await db.close(); });
 
 beforeEach(async () => {
-  state.created = [];
+  state.asked = [];
   state.fail = false;
+  state.configured = true;
   state.breakDb = false;
   state.locale = "en";
   const [row] = await sql(
@@ -98,25 +109,82 @@ beforeEach(async () => {
   state.user = { id: row.id };
 });
 
-describe("POST /api/coach, under the safety limit", () => {
-  it("answers while under the limit, and records one request per call", async () => {
+describe("POST /api/coach, answered by Claude", () => {
+  it("returns the model's prose, and records one request", async () => {
     const response = await ask();
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ answer: "Evenings are at 41%." });
-    expect(state.created).toHaveLength(1);
+    expect(await response.json()).toEqual({ answer: state.answer });
+    expect(state.asked).toHaveLength(1);
     expect(await rowsForUser()).toBe(1);
   });
 
+  it("asks for text, with the account's own data and the model's limits", async () => {
+    await ask("Why are my evenings weak?");
+    const [request] = state.asked;
+    // The instructions carry no personal data; the prompt carries the snapshot
+    // the server built, and the question. Nothing came from the browser but the
+    // question itself.
+    expect(request.system).toMatch(/habit-tracking app called RichHabit/);
+    expect(request.prompt).toContain("Their data:");
+    expect(request.prompt).toContain("Why are my evenings weak?");
+    expect(request.maxTokens).toBeGreaterThan(0);
+    expect(request.timeoutMs).toBeGreaterThan(0);
+  });
+
+  it("answers in the reader's language, and bilingually for both", async () => {
+    state.locale = "zh";
+    await ask();
+    expect(state.asked[0].system).toMatch(/用简体中文回答/);
+
+    state.locale = "both";
+    await ask();
+    expect(state.asked[1].system).toMatch(/Answer twice/);
+  });
+
+  it("says nothing when the coach is not configured, and charges nothing", async () => {
+    state.configured = false;
+    const response = await ask();
+    expect(response.status).toBe(501);
+    expect(await response.json()).toEqual({ error: dict("en").errors.coachUnavailable });
+    expect(state.asked).toHaveLength(0);
+    // Not configured cannot cost anything, so it must not cost allowance.
+    expect(await rowsForUser()).toBe(0);
+  });
+
+  it("never passes a provider message to the caller", async () => {
+    state.fail = 500;
+    const response = await ask();
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: dict("en").errors.coachFailed });
+  });
+
+  it("treats a refused key as unavailable rather than retryable", async () => {
+    state.fail = 401;
+    const response = await ask();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: dict("en").errors.coachUnavailable });
+  });
+
+  it("refuses an empty answer rather than rendering nothing", async () => {
+    state.answer = "";
+    const response = await ask();
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: dict("en").errors.coachEmpty });
+    state.answer = "Evenings are at 41%. Try moving one habit earlier tomorrow.";
+  });
+});
+
+describe("the durable safety limit, in front of the provider", () => {
   it("refuses past the hourly limit without reaching the provider", async () => {
     for (let i = 0; i < HOURLY; i++) expect((await ask()).status).toBe(200);
-    expect(state.created).toHaveLength(HOURLY);
+    expect(state.asked).toHaveLength(HOURLY);
 
     const refused = await ask();
     expect(refused.status).toBe(429);
     expect(await refused.json()).toEqual({ error: dict("en").errors.coachHourlyLimit });
     expect(refused.headers.get("retry-after")).toBe("600");
     // The whole point: no fourth call, so no fourth bill.
-    expect(state.created).toHaveLength(HOURLY);
+    expect(state.asked).toHaveLength(HOURLY);
     // And a refusal does not consume allowance of its own.
     expect(await rowsForUser()).toBe(HOURLY);
   });
@@ -130,15 +198,26 @@ describe("POST /api/coach, under the safety limit", () => {
     expect(refused.status).toBe(429);
     expect(await refused.json()).toEqual({ error: dict("en").errors.coachDailyLimit });
     expect(refused.headers.get("retry-after")).toBe("3600");
-    expect(state.created).toHaveLength(DAILY);
+    expect(state.asked).toHaveLength(DAILY);
   });
 
   it("charges a request whose provider call fails", async () => {
-    state.fail = true;
-    const response = await ask();
-    expect(response.status).toBe(502);
+    state.fail = 500;
+    expect((await ask()).status).toBe(502);
     // Failed, slow and abandoned calls cost money, so they cost allowance too.
     expect(await rowsForUser()).toBe(1);
+    expect(state.asked).toHaveLength(1);
+  });
+
+  it("charges a failed call enough to reach the limit", async () => {
+    state.fail = 500;
+    for (let i = 0; i < HOURLY; i++) expect((await ask()).status).toBe(502);
+    state.fail = false;
+    // Three failures have spent the hour's allowance; the fourth never reaches
+    // the provider at all.
+    const refused = await ask();
+    expect(refused.status).toBe(429);
+    expect(state.asked).toHaveLength(HOURLY);
   });
 
   it("refuses in the reader's language, and bilingually for both", async () => {
@@ -163,7 +242,7 @@ describe("POST /api/coach, under the safety limit", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: dict("en").errors.coachLimitUnavailable });
     // Unable to count means unable to guard: the provider is not called.
-    expect(state.created).toHaveLength(0);
+    expect(state.asked).toHaveLength(0);
   });
 
   it("charges nothing to someone who is not signed in", async () => {
@@ -172,10 +251,10 @@ describe("POST /api/coach, under the safety limit", () => {
     expect((await ask()).status).toBe(401);
     state.user = { id: signedIn };
     expect(await rowsForUser()).toBe(0);
-    expect(state.created).toHaveLength(0);
+    expect(state.asked).toHaveLength(0);
   });
 
-  it("charges nothing for a question that is refused before the provider", async () => {
+  it("charges nothing for a question refused before the provider", async () => {
     const long = await POST(new Request("http://localhost/api/coach", {
       method: "POST", body: JSON.stringify({ question: "x".repeat(5000) }),
     }));
@@ -185,11 +264,19 @@ describe("POST /api/coach, under the safety limit", () => {
     }));
     expect(empty.status).toBe(400);
     expect(await rowsForUser()).toBe(0);
+    expect(state.asked).toHaveLength(0);
   });
 
   it("limits admins too: this is a cost guard, not an entitlement", async () => {
     await sql(`update users set role = 'admin' where id = $1`, [state.user!.id]);
     for (let i = 0; i < HOURLY; i++) expect((await ask()).status).toBe(200);
     expect((await ask()).status).toBe(429);
+  });
+
+  it("stores nothing about the question or the answer", async () => {
+    await ask("Something private about my evenings");
+    const [row] = await sql(`select * from coach_requests where user_id = $1`, [state.user!.id]);
+    expect(Object.keys(row).sort()).toEqual(["id", "occurred_at", "user_id"]);
+    expect(JSON.stringify(row)).not.toMatch(/private|evenings|41%/i);
   });
 });

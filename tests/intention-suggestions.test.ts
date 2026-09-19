@@ -182,6 +182,9 @@ describe("the suggestion route", () => {
       }
       return answer;
     },
+    // Suggestions want a shape, never prose. Present so the fake satisfies the
+    // seam, and loud if this feature ever asks for text by mistake.
+    async generateText() { throw new Error("intention suggestions must not ask for text"); },
   };
 
   beforeEach(() => {

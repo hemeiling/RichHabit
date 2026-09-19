@@ -62,9 +62,16 @@ services:
       # blueprint is created; it is never written to this file.
       - key: DATABASE_URL
         sync: false
-      # SECRET, and optional. Without it /api/coach answers 501 and nothing
-      # else changes. Leave the prompt empty if you do not want the AI coach.
-      - key: OPENAI_API_KEY
+      # SECRET, and optional. Anthropic key, scoped to one workspace. It powers
+      # the AI coach, the AI habit recommendations, the Clarify Intention
+      # suggestions and the admin AI Workspace's Claude model. Without it those
+      # answer 501 and nothing else changes.
+      - key: CLAUDE_API_KEY
+        sync: false
+      # SECRET, and optional. Google key. When set, Gemini joins the admin AI
+      # Workspace's model selector and image generation is switched on.
+      # Image models need a Google project with billing enabled.
+      - key: GEMINI_API_KEY
         sync: false
       - key: NODE_VERSION
         value: "20"

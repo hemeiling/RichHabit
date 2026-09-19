@@ -1,5 +1,5 @@
-import OpenAI from "openai";
 import { coach as coachEnv } from "@/lib/env";
+import { coachProvider } from "@/lib/ai/provider";
 import { habitName } from "@/lib/templates";
 import type { Dict } from "@/lib/i18n";
 import type { AppState, Category, Habit, HabitKind } from "@/lib/types";
@@ -22,7 +22,19 @@ import type { AppState, Category, Habit, HabitKind } from "@/lib/types";
  *     changes. Tracking does not depend on a model being reachable.
  *
  * The provider lives behind `generate` so the model can be swapped without the
- * rest of the app knowing.
+ * rest of the app knowing. Claude answers, through the consumer seam in
+ * `@/lib/ai/provider` — the same seam, credential and configuration the coach
+ * uses. No provider SDK is imported here.
+ *
+ * **No rate limit of its own, deliberately, and this is a known gap.** The coach
+ * has a durable per-account limit in `coach_requests`; this does not, and it must
+ * not borrow that counter — the two are different features and one must not spend
+ * the other's allowance. What bounds this today is the work it needs: a request
+ * only reaches a model when the person has behaviours awaiting a decision that
+ * have no proposal yet, so an idle account cannot spend anything and a busy one
+ * spends once per behaviour. That is small but not nothing. Whether
+ * recommendations get their own allowance is a Phase 6 AI cost decision, to be
+ * taken with the Free/Pro AI allowances rather than bolted on here.
  */
 
 export interface Proposal {
@@ -59,28 +71,30 @@ Rules:
 - Keep the category the person chose unless the behaviour clearly belongs to a
   different time of day.`;
 
+/**
+ * The shape asked of the model. Every property is described, and only the ones
+ * that must always be present are required: a habit usually needs no number, so
+ * `target` and `unit` are simply left out rather than sent as null. `parse`
+ * below still treats anything missing or malformed as absent — a schema the
+ * model was asked to follow is not a guarantee that it did.
+ */
 const SCHEMA = {
   type: "object",
-  additionalProperties: false,
   required: ["proposals"],
   properties: {
     proposals: {
       type: "array",
       items: {
         type: "object",
-        additionalProperties: false,
-        // Strict mode requires every property to be listed. Optional values are
-        // expressed as a nullable type instead — `target: null` means "no
-        // number helps here", which is the common case.
-        required: ["behaviourId", "name", "category", "weight", "target", "unit", "rationale"],
+        required: ["behaviourId", "name", "category", "weight", "rationale"],
         properties: {
-          behaviourId: { type: "string" },
-          name: { type: "string" },
+          behaviourId: { type: "string", description: "The id of the behaviour this replaces, exactly as given." },
+          name: { type: "string", description: "The replacement habit, in the person's language." },
           category: { type: "string", enum: CATEGORIES },
           weight: { type: "integer", minimum: 1, maximum: 3 },
-          target: { type: ["number", "null"] },
-          unit: { type: ["string", "null"] },
-          rationale: { type: "string" },
+          target: { type: "number", description: "Only when a number genuinely helps. Omit otherwise." },
+          unit: { type: "string", description: "The unit for target, e.g. minutes. Omit when there is no target." },
+          rationale: { type: "string", description: "One short sentence, addressed to the person." },
         },
       },
     },
@@ -101,9 +115,9 @@ export async function generate(
   behaviours: Habit[], state: AppState, t: Dict, locale: string,
 ): Promise<Proposal[]> {
   if (behaviours.length === 0) return [];
-  if (!coachEnv.apiKey) throw new RecommendationsUnavailable();
 
-  const client = new OpenAI({ apiKey: coachEnv.apiKey });
+  const provider = await coachProvider();
+  if (!provider) throw new RecommendationsUnavailable();
 
   // Only what is needed to judge: the behaviour, and what they already track so
   // the model does not propose something they are doing.
@@ -121,31 +135,32 @@ export async function generate(
     goals: state.goals.map((g) => g.name),
   });
 
-  const response = await client.responses.create({
-    model: coachEnv.model,
-    reasoning: { effort: "medium" },
-    instructions: `${INSTRUCTIONS}\n\n${LANGUAGE[locale] ?? LANGUAGE.en}`,
-    input,
-    text: {
-      format: { type: "json_schema", name: "proposals", schema: SCHEMA, strict: true },
-    },
+  /*
+   * One forced tool call, the same mechanism intention suggestions use: the
+   * model is given a tool whose input schema is the shape we want. What comes
+   * back is already an object, so there is no JSON string to parse and no
+   * malformed-text branch — anything that is not the expected shape falls
+   * through the validation below and is dropped.
+   */
+  const raw = await provider.generateStructured({
+    system: `${INSTRUCTIONS}\n\n${LANGUAGE[locale] ?? LANGUAGE.en}`,
+    prompt: input,
+    toolName: "propose_habits",
+    toolDescription: "Return one replacement habit for each behaviour, for the person to review.",
+    schema: SCHEMA as unknown as Record<string, unknown>,
+    maxTokens: coachEnv.maxOutputTokens,
+    timeoutMs: coachEnv.timeoutSeconds * 1000,
   });
 
-  const raw = response.output_text?.trim();
-  if (!raw) return [];
-
-  let parsed: { proposals?: unknown[] };
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
+  const list = (raw as { proposals?: unknown } | null)?.proposals;
+  // No tool call, or a shape we cannot read: no proposals, and nothing written.
+  if (!Array.isArray(list)) return [];
 
   const byId = new Map(behaviours.map((h) => [h.id, h]));
   const out: Proposal[] = [];
 
-  for (const item of parsed.proposals ?? []) {
-    const p = item as Record<string, unknown>;
+  for (const item of list) {
+    const p = (item ?? {}) as Record<string, unknown>;
     const source = byId.get(String(p.behaviourId));
     // A proposal that does not correspond to a behaviour the caller sent is
     // discarded rather than guessed at: it would otherwise attach itself to

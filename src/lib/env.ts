@@ -2,7 +2,7 @@
  * Every environment variable the application reads, in one place.
  *
  * **Server-only.** Nothing here may be imported from a client component: it
- * exposes the database URL and the OpenAI key. There is deliberately not a
+ * exposes the database URL and the provider keys. There is deliberately not a
  * single `NEXT_PUBLIC_*` variable in this project — the browser needs no
  * configuration, because it only ever talks to same-origin `/api` routes.
  *
@@ -125,10 +125,23 @@ export const auth = {
 
 // ─────────────────────────────── AI coach ────────────────────────────────────
 
+/**
+ * The AI coach, and the habit recommendations that share its configuration.
+ *
+ * Claude, through the same server-only `CLAUDE_API_KEY` as intention
+ * suggestions: one provider architecture and one credential, read lazily here
+ * and handed to the provider in src/lib/ai. Absent, `/api/coach` and
+ * `/api/recommendations` answer 501 and nothing else is affected.
+ *
+ * `COACH_MODEL` overrides the model without touching code. It is separate from
+ * `INTENTION_AI_MODEL` because the coach reasons over an account's whole history
+ * while a suggestion is one short list, so the two may want different models.
+ */
 export const coach = {
-  /** Absent, the coach route answers 501 and nothing else is affected. */
-  apiKey: process.env.OPENAI_API_KEY?.trim() || null,
-  model: str("OPENAI_MODEL", "gpt-5.6-terra"),
+  get apiKey(): string | null { return process.env.CLAUDE_API_KEY?.trim() || null; },
+  model: str("COACH_MODEL", "claude-sonnet-5"),
+  /** Enough for a few grounded paragraphs, or a short list. Not an essay. */
+  maxOutputTokens: num("COACH_MAX_OUTPUT_TOKENS", 1200),
   maxQuestionLength: num("COACH_MAX_QUESTION_LENGTH", 500),
   /** Serverless timeout for the route; reasoning models outlast the default. */
   timeoutSeconds: num("COACH_TIMEOUT_SECONDS", 60),

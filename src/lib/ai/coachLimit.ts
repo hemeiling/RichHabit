@@ -6,7 +6,7 @@ import { coach as coachEnv } from "@/lib/env";
  *
  * **This is a platform cost guard, not a plan entitlement.** It applies to
  * everyone — Free, Pro and admin alike — because its job is to stop one account
- * from running up an unbounded OpenAI bill, not to sell anything. The Free/Pro
+ * from running up an unbounded provider bill, not to sell anything. The Free/Pro
  * AI allowance is a separate, later decision that will sit in front of this
  * rather than replace it.
  *

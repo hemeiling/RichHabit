@@ -1258,6 +1258,9 @@ export const en = {
     tooManyAttempts: "Too many attempts. Wait a few minutes and try again.",
     coachUnavailable: "The AI coach isn't switched on for this app yet.",
     coachEmpty: "The coach didn't return anything. Try asking again.",
+    /* A provider failure, said in our own words. The provider's message is
+       never shown: this string is rendered straight onto the screen. */
+    coachFailed: "The coach didn't answer. Please try again in a moment.",
     questionTooLong: "That question is too long.",
     /* The coach's safety limit. Says what happened and when it lifts, without
        scolding and without implying anything is wrong with the account. */

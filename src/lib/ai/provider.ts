@@ -1,4 +1,4 @@
-import { intentionAi } from "@/lib/env";
+import { coach, intentionAi } from "@/lib/env";
 
 /**
  * The seam between RichHabit and whichever model produces suggestions.
@@ -7,10 +7,20 @@ import { intentionAi } from "@/lib/env";
  * this is where the provider credential is used. The browser only ever calls
  * same-origin API routes.
  *
- * One capability, deliberately small: given instructions, a prompt and a JSON
- * schema, return one structured object. Claude implements it today; another
- * provider (Gemini, for example) can implement the same interface later without
- * the feature code changing.
+ * Two capabilities, deliberately small:
+ *
+ *   - `generateStructured` — given instructions, a prompt and a JSON schema,
+ *     return one structured object. Suggested habits and priorities, and the
+ *     habit recommendations, both want a shape they can validate.
+ *   - `generateText` — given instructions and a prompt, return prose. The AI
+ *     coach wants an answer a person reads, not a record.
+ *
+ * Claude implements both today; another provider (Gemini, for example) can
+ * implement the same interface later without the feature code changing. This is
+ * the consumer seam. The admin AI Workspace has its own richer runtime
+ * (streaming, files, images, model catalogue) and the two stay separate on
+ * purpose — a habit coach needs none of that, and the workspace's boundary tests
+ * exist to keep it admin-only.
  */
 
 export interface StructuredRequest {
@@ -25,10 +35,22 @@ export interface StructuredRequest {
   timeoutMs: number;
 }
 
+/** Prose, not a record. No schema, and no tool. */
+export interface TextRequest {
+  /** Standing instructions. Never contains the user's words. */
+  system: string;
+  /** The user-derived context, already reduced to what the task needs. */
+  prompt: string;
+  maxTokens: number;
+  timeoutMs: number;
+}
+
 export interface AiProvider {
   readonly name: string;
   /** The structured object, or null when the model returned none. */
   generateStructured(request: StructuredRequest): Promise<unknown>;
+  /** The answer as text, or "" when the model returned none. */
+  generateText(request: TextRequest): Promise<string>;
 }
 
 /**
@@ -71,4 +93,23 @@ export async function intentionAiProvider(): Promise<AiProvider | null> {
   if (!apiKey) return null;
   const { createClaudeProvider } = await import("./claude");
   return createClaudeProvider(apiKey, intentionAi.model);
+}
+
+/**
+ * The provider for the AI coach and for habit recommendations, or null when no
+ * credential is configured. The same server-side Claude credential as intention
+ * suggestions — one provider architecture, not a second one — with its own model
+ * setting, because the coach reasons over a whole account's history while a
+ * suggestion is one short list.
+ *
+ * Both features share this factory because they always shared their
+ * configuration: the coach's own `coach.*` block has covered the habit
+ * recommendations since they were written.
+ */
+export async function coachProvider(): Promise<AiProvider | null> {
+  if (testProvider !== undefined) return testProvider;
+  const apiKey = coach.apiKey;
+  if (!apiKey) return null;
+  const { createClaudeProvider } = await import("./claude");
+  return createClaudeProvider(apiKey, coach.model);
 }
