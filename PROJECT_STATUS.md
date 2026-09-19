@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-19
 >
-> **PHASE 3 — ADMIN → USERS MODERNIZED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → DESKTOP PRODUCTION VISUALLY VERIFIED · `bf2d13c` ON `main` → DEPLOYED TO RENDER → DESKTOP QA BY THE PRODUCT OWNER 2026-09-19 · GROUPED TABLE (ACCOUNT · RICH HABITS · PRIORITY COMPASS · COMMUNITY · CLARIFY INTENTION · PLANNING) · GOALS AND REVIEWS REMOVED · ACTIVE HABITS NOW MEANS `status = 'active'` · COMMUNITY RANK/% READ FROM THE EXISTING CACHE AND NEVER COMPUTED · PLAN IS PRESENTATION ONLY (ADMIN / FREE) · NO MIGRATION · NO SCHEMA CHANGE · NO PRODUCTION DATA TOUCHED · MOBILE/NARROW-CARD QA NOT YET OBSERVED**
+> **PHASE 3 — ADMIN → USERS MODERNIZED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `bf2d13c` ON `main` → DEPLOYED TO RENDER → DESKTOP **AND** MOBILE VISUAL QA BY THE PRODUCT OWNER 2026-09-19 · GROUPED TABLE (ACCOUNT · RICH HABITS · PRIORITY COMPASS · COMMUNITY · CLARIFY INTENTION · PLANNING) · GOALS AND REVIEWS REMOVED · ACTIVE HABITS NOW MEANS `status = 'active'` · COMMUNITY RANK/% READ FROM THE EXISTING CACHE AND NEVER COMPUTED · PLAN IS PRESENTATION ONLY (ADMIN / FREE) · NO MIGRATION · NO SCHEMA CHANGE · NO PRODUCTION DATA TOUCHED**
 > **PHASE 2 — EARLY-ACCESS ACCOUNT CAP REMOVED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `80da10b` ON `main` → DEPLOYED TO RENDER → `EARLY_ACCESS_USER_LIMIT=0` SET IN RENDER (WHICH TRIGGERED A SECOND DEPLOY) → PRODUCTION VERIFIED 2026-09-19 · SIGN-UP IS OPEN · NO MIGRATION · NO SCHEMA CHANGE · NO USER DATA TOUCHED · THE CAP MACHINERY IS INTACT AND RE-ENABLED BY SETTING A POSITIVE NUMBER**
 > **PHASE 1B — CONSUMER AI ON CLAUDE: PRODUCTION DEPLOYED + VERIFIED · `9fa4684` PUSHED TO `main` (fast-forward from `b903dd7`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · AI COACH AND AI HABIT RECOMMENDATIONS MIGRATED OpenAI → CLAUDE (`claude-sonnet-5`) · OPENAI RUNTIME DEPENDENCY REMOVED ENTIRELY · COACH ANSWERED FOR THE FIRST TIME IN PRODUCTION (ENGLISH AND 中文, THROWAWAY ACCOUNT ONLY) · NO MIGRATION · NO RENDER VARIABLE CHANGED**
 > **PHASE 1 — AI COACH DURABLE SAFETY LIMIT: PRODUCTION DEPLOYED + MIGRATED + VERIFIED · `ee0761a` PUSHED TO `main` (fast-forward from `d905d4e`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · `coach_requests` MIGRATION APPLIED (36 → 37 TABLES) · 20/HOUR AND 50/DAY PER ACCOUNT · LIMITER CURRENTLY DORMANT IN PRODUCTION: COACH STILL RUNS THE LEGACY OPENAI PATH · PHASE 1B (COACH + HABIT RECOMMENDATIONS → CLAUDE) NOT IMPLEMENTED**
@@ -126,7 +126,7 @@ unlimited. Prefer capacity-specific parsing or handling; do **not** change
 caller (pool sizes, TTLs, password bounds, timeouts, AI limits), where `0` is
 genuinely invalid and the fallback is the safety net.
 
-## Phase 3 — Admin → Users modernized (PRODUCTION DEPLOYED · DESKTOP VERIFIED)
+## Phase 3 — Admin → Users modernized (PRODUCTION DEPLOYED · VERIFIED)
 
 Admin → Users described the product as it was a month ago: it counted Goals and
 Weekly Reviews, and its "Habits" column counted every habit row — candidates,
@@ -137,8 +137,8 @@ statuses only.
 | Item | State |
 | --- | --- |
 | deployed commit | `bf2d13c1927f662906982a22b7f3fb343a0b93b1`, fast-forwarded onto `main` from `fa8be5f` |
-| release path | IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → **DESKTOP PRODUCTION VISUALLY VERIFIED** (Product Owner, 2026-09-19) |
-| **mobile / narrow-card QA** | **NOT YET OBSERVED.** The only visual check nobody has performed. The cards are covered by static verification (container query, scoped `max-width`, cell counts) but not by a human or a browser |
+| release path | IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → **PRODUCTION VERIFIED** (Product Owner, 2026-09-19 — desktop and mobile both visually checked in production) |
+| mobile / narrow-card QA | **PASS** (Product Owner, 2026-09-19). The card layout below 760px of list width was verified in production and reads well |
 | desktop groups | ACCOUNT (user, status, role, plan, joined, verified, last active, active days, sessions) · RICH HABITS (active habits, completions) · PRIORITY COMPASS (priorities, with a muted count of those still open, accomplishments) · COMMUNITY (rank, %) · CLARIFY INTENTION (status) · PLANNING (Important Dates) |
 | removed | **Goals and Reviews**, from the row type, the query and both screens |
 | Active Habits | now `status = 'active'` — the old column counted every habit row |
@@ -169,6 +169,7 @@ controls proving a real leak beside or after a comment is still caught.
 | --- | --- |
 | serving `bf2d13c` | **yes** — all seven Phase 3 CSS classes present in the served stylesheet, including `@container (min-width: 760px)` and the sticky `.au-user`; `.chip` as the control proves the probe reads the CSS |
 | desktop visual QA | **PASS** (Product Owner): grouped headers, ACCOUNT / RICH HABITS / PRIORITY COMPASS groups rendering, Plan showing Admin / Free, Active Habits replacing Habits, Completions replacing Done, the muted open-priority count beneath the total, Goals and Reviews gone, aligned numerics, horizontal layout preserved rather than crushed |
+| mobile visual QA | **PASS** (Product Owner): the narrow-width card layout was checked in production and reads well |
 | accounts | **15**, unchanged — 5 admin, 0 disabled, 2 verified. **0 created** |
 | verification stamping | unchanged: 1 requires verification, 14 grandfathered — new-account verification still applies to new accounts only |
 | schema | **37 tables**, unchanged; no column added, removed or altered |
