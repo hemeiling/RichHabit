@@ -90,21 +90,24 @@ smoke test. That finding is history; the Phase 1B section below is current.
 
 - **Claude is the primary text and reasoning provider. Gemini keeps its
   capabilities, including the existing image generation.**
-- **OpenAI is legacy**, scheduled for complete removal once both callers above
-  have migrated: the SDK dependency, `OPENAI_API_KEY`, `OPENAI_MODEL`, the
-  `.env.example`, `render.yaml` and README references, and any test or mock that
-  exists only for it.
-- `render.yaml` is stale — it declares `OPENAI_API_KEY` and declares neither
+- **OpenAI is gone**, removed in `9fa4684` once both callers above had migrated:
+  the SDK dependency, `OPENAI_API_KEY`, `OPENAI_MODEL`, the `.env.example`,
+  `render.yaml` and README references, and the mocks that existed only for it.
+  `tests/no-openai.test.ts` fails if any of it returns.
+- `render.yaml` **was** stale — it declared `OPENAI_API_KEY` and declared neither
   `CLAUDE_API_KEY` nor `GEMINI_API_KEY`, both of which are dashboard-managed.
-  Phase 1B corrects the blueprint only; no Render secret is created, changed or
-  rotated.
+  Corrected in `9fa4684`: the blueprint now declares the two credentials the
+  application actually uses, both `sync: false`. No Render secret was created,
+  changed or rotated.
 - **Stripe and payment processing are deferred to a separate future project.**
   Entitlements stay billing-independent: a feature asks what an account is
   entitled to, never whether it paid.
 
 **Phase 2 — not started.** Removing the 50-user platform cap and the "first 50
-users" copy. It must not begin until Phase 1 **and** Phase 1B are both production
-verified. Phase 2 must also fix capacity configuration so that
+users" copy. Its precondition is now **met** — Phase 1 (`ee0761a`) and Phase 1B
+(`9fa4684`) are both deployed and production verified — so Phase 2 is unblocked
+and awaits the Product Owner's go-ahead. Phase 2 must also fix capacity
+configuration so that
 `EARLY_ACCESS_USER_LIMIT=0` genuinely means unlimited: today it is read through
 the shared `num()` helper, which rejects any value `<= 0`, warns and returns the
 default — so setting `0` in Render silently leaves the cap at 50, while
