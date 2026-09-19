@@ -1,9 +1,10 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-09-17
+> Last updated: 2026-09-19
 >
+> **PHASE 1 — AI COACH DURABLE SAFETY LIMIT: PRODUCTION DEPLOYED + MIGRATED + VERIFIED · `ee0761a` PUSHED TO `main` (fast-forward from `d905d4e`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · `coach_requests` MIGRATION APPLIED (36 → 37 TABLES) · 20/HOUR AND 50/DAY PER ACCOUNT · LIMITER CURRENTLY DORMANT IN PRODUCTION: COACH STILL RUNS THE LEGACY OPENAI PATH · PHASE 1B (COACH + HABIT RECOMMENDATIONS → CLAUDE) NOT IMPLEMENTED**
 > **PUBLIC FRONT PAGE: PRODUCTION VERIFIED · IMPLEMENTED ON `feature/landing-page` → PUSHED TO `main` (`83e7ebb`, fast-forward from `5eb1a92`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-17 (21/21 SMOKE CHECKS) · NO SCHEMA OR MIGRATION**
-> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: RELEASE CANDIDATE ON `feature/ai-workspace-models` · REAL GEMINI IMAGE GENERATION: PASS (FINAL ACCEPTANCE ON `74d2eb3`, ENGLISH AND CHINESE) · REAL GEMINI CHAT PASS · IMPLEMENTATION TESTS PASS · INCLUDES `1375082f` BY MERGE · NOT MERGED INTO `main` · NOT DEPLOYED · NO MIGRATION**
+> **AI WORKSPACE → GENERAL-PURPOSE, MULTI-MODEL, IMAGE GENERATION: MERGED INTO `main` AND DEPLOYED (`74d2eb3` is an ancestor of the deployed `ee0761a`) · REAL GEMINI IMAGE GENERATION: PASS (FINAL ACCEPTANCE ON `74d2eb3`, ENGLISH AND CHINESE) · REAL GEMINI CHAT PASS · IMPLEMENTATION TESTS PASS · INCLUDES `1375082f` BY MERGE · NO MIGRATION · PRODUCTION EVIDENCE 2026-09-19: `ai_messages` HOLDS 5 CLAUDE AND 3 GEMINI-IMAGE REPLIES, SO BOTH CREDENTIALS WORK IN PRODUCTION** *(corrected 2026-09-19: the earlier "NOT MERGED · NOT DEPLOYED" was stale)*
 > **AI WORKSPACE V1 — IMAGE UNDERSTANDING: VERIFIED · EXISTING CAPABILITY OF `f7499fc` · 30/30 LIVE CLAUDE CHECKS · 46/46 IMAGE-PATH UNIT TESTS · NO CODE, SCHEMA, CONFIG OR PRODUCTION CHANGE · DO NOT REBUILD**
 > **AI WORKSPACE CHATBOT (ADMIN ONLY): RELEASE CLOSED · RELEASED IN `f7499fc` · MERGED INTO `main` · PRODUCTION MIGRATION APPLIED AND VERIFIED (24/24, 2026-09-13 15:21 UTC; not re-run) · DEPLOYED TO RENDER · PUBLIC PRODUCTION CHECKS 21/21 · PRODUCT OWNER SIGNED-IN SMOKE TEST PASSED**
 > **CLAUDE KEY-ONLY CONFIGURATION + PRIORITY SUGGESTION FIX: RELEASED IN `dd7bec0` · DEPLOYED TO RENDER · PRODUCTION VERIFIED (AUTOMATED + PRODUCT OWNER SIGNED-IN) · NO MIGRATION**
@@ -11,20 +12,124 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `f7499fc`, fast-forwarded from `f0a8e28`.
-> Later status-only commits may sit on `feature/ai-workspace` ahead of `main`.
+> **Repository:** `origin/main` is `ee0761a` (Phase 1), fast-forwarded from
+> `d905d4e`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
+> `83e7ebb` (front page), `9444828`, `6c49f9e` (email verification for an address
+> an account already has), `d905d4e` (password recovery), `ee0761a` (Phase 1).
+> `f7499fc`, `0f02a6e` and `74d2eb3` are all ancestors of it.
 >
-> **Production database:** the seven AI Workspace tables exist in production
-> (additive, created empty on 2026-09-13). Every pre-existing table, index,
-> constraint and row was verified unchanged.
+> **Production database:** 37 tables. The seven AI Workspace tables (additive,
+> created empty 2026-09-13), `password_resets` (the password-recovery release) and
+> `coach_requests` (2026-09-19) were each added additively and created empty;
+> every pre-existing table, index, constraint and row was verified unchanged
+> after each.
 >
-> **Deployed application:** `f7499fca52bca2bfebc75faca4b3a505e6a18830` (AI
-> Workspace), deployed manually by the Product Owner. Render has not
-> auto-deployed recent releases, and it deploys only what is on `main`.
+> **Deployed application:** `ee0761aa6c15cd3002e6563d4f32227796b52b9f` (Phase 1),
+> deployed on Render by the Product Owner. Render has not auto-deployed recent
+> releases — Phase 1 was still serving the previous build seven minutes after the
+> push — and it deploys only what is on `main`.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Phase 1 — AI Coach durable safety limit (PRODUCTION DEPLOYED · MIGRATED · VERIFIED)
+
+`/api/coach` had no rate limit of any kind. The limit is now counted in the
+database, so a deploy cannot hand everybody a fresh allowance and two instances
+cannot disagree about what an account has spent.
+
+| Item | State |
+| --- | --- |
+| deployed commit | `ee0761aa6c15cd3002e6563d4f32227796b52b9f`, fast-forwarded onto `main` from `d905d4e`, deployed on Render by the Product Owner |
+| migration | **applied to production 2026-09-19 19:04 UTC**: one `create table` and one `create index`, inside a single transaction, with guards that roll back if any watched row count or account figure moves |
+| production schema | **37 tables** (36 before). `coach_requests` is the only addition anywhere in the public schema |
+| columns | exactly three: `id` (bigserial), `user_id` (uuid not null), `occurred_at` (timestamptz not null, default `now()`) |
+| index | `coach_requests_user_time_idx` on `(user_id, occurred_at DESC)`, plus the primary key |
+| foreign key | `coach_requests_user_id_fkey` → `users(id)` **ON DELETE CASCADE** |
+| limits | **20 an hour and 50 a day, per account**, from `COACH_HOURLY_LIMIT` / `COACH_DAILY_LIMIT`; the defaults live in code and nothing was set in Render |
+| ordering | the request is charged **before** the provider call, so a timeout, a provider error or an abandoned request still consumes allowance |
+| fails closed | a counter that cannot be read answers 503 and does **not** call the provider |
+| serialisation | `pg_advisory_xact_lock` per account, so a burst of parallel requests cannot all pass the check together. Transaction-scoped, so it is safe behind a connection pooler |
+| privacy | no question, no answer and no tokens are stored — the table records only that a request happened. A test fails if the column list ever stops being exactly `id, occurred_at, user_id` |
+| housekeeping | rows older than 30 days are swept for that account on each allowed request |
+| applies to | every account, admins included. It is a platform cost guard, **not** a plan entitlement; a future Free/Pro AI allowance sits in front of it rather than replacing it |
+| production data | **unchanged**: every pre-existing table has an identical row count, and accounts stayed at 15 (5 admin, 10 non-admin, 0 disabled, 2 verified, 1 requiring verification) before and after |
+| Render environment | **no variable changed or added.** No OpenAI credential was added anywhere |
+| early-access cap | **unchanged**: still 50. `EARLY_ACCESS_USER_LIMIT` was not modified |
+| Phase 1B | **not implemented, not committed, not deployed, not verified** |
+
+**Verification**
+
+| Check | Result |
+| --- | --- |
+| local | typecheck and lint clean; **1001 of 1001** unit tests, 27 of them new (11 limiter, 7 migration, 9 route), all against real Postgres through PGlite; production build compiles |
+| migration safety | additive and idempotent — a second run reports 0 changes, the result matches a fresh `db/schema.sql` install, and it is a no-op on a database with no `users` table |
+| deployed commit is live | a self-validating probe of the served bundles: a coach string already in production is found, proving the probe can see dictionary text, and all three new Phase 1 strings are present (English hourly, English daily, and 最近一小时你向教练提问较多) |
+| application health | no 5xx. `/`, `/login`, `/terms`, `/verify`, `/reset` answer 200; protected routes redirect a signed-out visitor to `/login`; `POST /api/coach` and `POST /api/recommendations` answer 401 *before* the limiter, so an unauthenticated probe consumes no allowance |
+| `coach_requests` in production | verified absolutely against the live schema, not only by diff: table present, three columns, both indexes with the reviewed definitions, FK cascade present, 0 rows, 16 kB |
+| unrelated production change | none: 21 of 21 structural checks pass against the pre-migration baseline |
+
+**Architectural finding: the deployed limiter is currently dormant in production.**
+
+`/api/coach` still runs the legacy OpenAI path and checks `OPENAI_API_KEY`, which
+is not configured. Coach therefore answers 501 before the limiter is reached, and
+`coach_requests` is empty. Production analytics confirm it: `coach_question_asked`
+has **never** been recorded, and neither has `recommendations_generated`. The
+limiter is correct code sitting in front of a route that refuses earlier, and it
+becomes load-bearing the moment Phase 1B makes Coach work.
+
+**Phase 1B — the intended provider migration. NOT implemented.**
+
+| Feature | From | To |
+| --- | --- | --- |
+| AI Coach (`/api/coach`) | OpenAI | **Claude**, default model `claude-sonnet-5` |
+| AI habit recommendations (`/api/recommendations`, `src/lib/recommend.ts`) | OpenAI | **Claude**, default model `claude-sonnet-5` |
+
+Both reuse the lightweight consumer abstraction `src/lib/ai/provider.ts`: Coach
+needs a minimal text-generation capability added to it, and recommendations reuse
+the existing structured-generation capability. The AI Workspace runtime is **not**
+repurposed and its provider boundary stays intact. The durable `coach_requests`
+limiter stays provider-independent, unchanged, and upstream of the provider call.
+
+Because neither OpenAI-backed feature has ever run in production, Phase 1B is a
+real product release rather than a refactor.
+
+**Provider architecture**
+
+| Feature | Route | Provider | Model | Credential |
+| --- | --- | --- | --- | --- |
+| AI Coach | `/api/coach` | OpenAI today → Claude | `gpt-5.6-terra` → `claude-sonnet-5` | `OPENAI_API_KEY` → `CLAUDE_API_KEY` |
+| AI habit recommendations | `/api/recommendations` | OpenAI today → Claude | as above | as above |
+| Clarify Intention AI | `/api/intention/suggestions` | Claude | `claude-sonnet-5` | `CLAUDE_API_KEY` |
+| AI Workspace chat | workspace message routes | Claude or Gemini | `claude-sonnet-5` / `gemini-3.8-flash` | `CLAUDE_API_KEY` / `GEMINI_API_KEY` |
+| AI Workspace image generation | same routes, chosen by capability | Gemini | `gemini-3.1-flash-image` (Nano Banana 2) | `GEMINI_API_KEY` |
+
+- **Claude is the primary text and reasoning provider. Gemini keeps its
+  capabilities, including the existing image generation.**
+- **OpenAI is legacy**, scheduled for complete removal once both callers above
+  have migrated: the SDK dependency, `OPENAI_API_KEY`, `OPENAI_MODEL`, the
+  `.env.example`, `render.yaml` and README references, and any test or mock that
+  exists only for it.
+- `render.yaml` is stale — it declares `OPENAI_API_KEY` and declares neither
+  `CLAUDE_API_KEY` nor `GEMINI_API_KEY`, both of which are dashboard-managed.
+  Phase 1B corrects the blueprint only; no Render secret is created, changed or
+  rotated.
+- **Stripe and payment processing are deferred to a separate future project.**
+  Entitlements stay billing-independent: a feature asks what an account is
+  entitled to, never whether it paid.
+
+**Phase 2 — not started.** Removing the 50-user platform cap and the "first 50
+users" copy. It must not begin until Phase 1 **and** Phase 1B are both production
+verified. Phase 2 must also fix capacity configuration so that
+`EARLY_ACCESS_USER_LIMIT=0` genuinely means unlimited: today it is read through
+the shared `num()` helper, which rejects any value `<= 0`, warns and returns the
+default — so setting `0` in Render silently leaves the cap at 50, while
+`src/lib/db/capacity.ts` and the comment on `capacity.limit` both treat `0` as
+unlimited. Prefer capacity-specific parsing or handling; do **not** change
+`num()`'s behaviour globally unless that can be proven safe for every other
+caller (pool sizes, TTLs, password bounds, timeouts, AI limits), where `0` is
+genuinely invalid and the fallback is the safety net.
 
 ## Public front page
 
