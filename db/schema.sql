@@ -862,6 +862,30 @@ create index feedback_status_idx on feedback (status, created_at desc);
 create index feedback_created_idx on feedback (created_at desc);
 
 
+-- ---------------------------- AI coach requests -----------------------------
+--
+-- One row per AI coach request, so the per-account safety limit is counted in
+-- the database rather than in a process's memory: a deploy must not hand
+-- everybody a fresh allowance, and two instances must agree on the count.
+--
+-- Records only that a request happened — no question, no answer, no tokens.
+-- This is a cost guard, not a transcript and not a usage ledger. The row is
+-- written before the model is called, so a request that times out or is
+-- abandoned still counts; rows are swept per account after 30 days. See
+-- src/lib/ai/coachLimit.ts.
+--
+-- bigserial rather than uuid: nothing references a row by id, none is ever sent
+-- to a browser, and this is the one table written purely to be counted.
+create table coach_requests (
+  id          bigserial primary key,
+  user_id     uuid not null references users on delete cascade,
+  occurred_at timestamptz not null default now()
+);
+-- Every read is "this account's, within the last hour or day", and the
+-- per-account sweep deletes by the same shape.
+create index coach_requests_user_time_idx on coach_requests (user_id, occurred_at desc);
+
+
 -- ---- AI workspace, admin only -------------------------------------------
 -- Seven tables for the admin-only AI Workspace. Kept identical to
 -- scripts/migrations/ai-workspace.mjs, which creates them on existing databases;

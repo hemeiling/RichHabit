@@ -132,6 +132,19 @@ export const coach = {
   maxQuestionLength: num("COACH_MAX_QUESTION_LENGTH", 500),
   /** Serverless timeout for the route; reasoning models outlast the default. */
   timeoutSeconds: num("COACH_TIMEOUT_SECONDS", 60),
+  /**
+   * Per-account safety limit, counted in the database so it survives a deploy
+   * and is shared between instances (src/lib/ai/coachLimit.ts).
+   *
+   * A platform cost guard, not a plan entitlement: it applies to every account,
+   * Pro and admin included, because its job is to bound the provider bill. Any
+   * Free/Pro AI allowance will sit in front of it rather than replace it.
+   *
+   * `num` treats 0 as invalid and falls back, so lifting the limit is a code
+   * change, not a stray environment value — deliberate for a cost control.
+   */
+  hourlyLimit: num("COACH_HOURLY_LIMIT", 20),
+  dailyLimit: num("COACH_DAILY_LIMIT", 50),
 };
 
 // ──────────────────────── Intention suggestions (Claude) ─────────────────────

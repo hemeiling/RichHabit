@@ -6,6 +6,7 @@ import { coach } from "@/lib/coach";
 import { getDict, getLocale } from "@/lib/i18n/server";
 import { trackEvent } from "@/lib/analytics/track";
 import { coach as coachEnv } from "@/lib/env";
+import { takeCoachRequest, type CoachAllowance } from "@/lib/ai/coachLimit";
 
 /**
  * The AI coach. The client sends a question and nothing else; this route reads
@@ -78,6 +79,32 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: msg.coachUnavailable },
       { status: 501 },
+    );
+  }
+
+  /**
+   * The safety limit, charged *before* the provider call: a request that times
+   * out, errors or is abandoned still costs money, so it still costs allowance.
+   * Durable and shared between instances, which the in-memory limiter used for
+   * intention suggestions is not.
+   *
+   * This is a platform cost guard, not a plan entitlement — Pro accounts and
+   * admins are limited too. Any Free/Pro AI allowance will sit in front of it.
+   */
+  let allowance: CoachAllowance;
+  try {
+    allowance = await takeCoachRequest(user.id);
+  } catch {
+    // Unable to count means unable to guarantee the guard. Fail closed rather
+    // than calling a paid provider without a limit behind it.
+    return NextResponse.json({ error: msg.coachLimitUnavailable }, { status: 503 });
+  }
+  if (!allowance.ok) {
+    return NextResponse.json(
+      { error: allowance.reason === "hour" ? msg.coachHourlyLimit : msg.coachDailyLimit },
+      // A hint, not a promise: the exact moment depends on when the oldest
+      // request in the window falls out of it.
+      { status: 429, headers: { "retry-after": allowance.reason === "hour" ? "600" : "3600" } },
     );
   }
 

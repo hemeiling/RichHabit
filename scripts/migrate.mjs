@@ -20,6 +20,7 @@ import { connect } from "./lib.mjs";
 import { migrateIntentionLinks } from "./migrations/intention-links.mjs";
 import { migrateAiWorkspace } from "./migrations/ai-workspace.mjs";
 import { migratePasswordResets } from "./migrations/password-resets.mjs";
+import { migrateCoachRequests } from "./migrations/coach-requests.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -864,6 +865,15 @@ try {
    */
   changed += await migrateAiWorkspace(client, console.log);
   changed += await migratePasswordResets(client, console.log);
+
+  /*
+   * ---- 10. AI coach request log ---------------------------------------------
+   *
+   * One table, created only if absent, so the coach's per-account safety limit
+   * is counted in the database instead of in a process's memory. Additive and
+   * guarded. See scripts/migrations/coach-requests.mjs.
+   */
+  changed += await migrateCoachRequests(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

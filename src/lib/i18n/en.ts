@@ -1259,6 +1259,11 @@ export const en = {
     coachUnavailable: "The AI coach isn't switched on for this app yet.",
     coachEmpty: "The coach didn't return anything. Try asking again.",
     questionTooLong: "That question is too long.",
+    /* The coach's safety limit. Says what happened and when it lifts, without
+       scolding and without implying anything is wrong with the account. */
+    coachHourlyLimit: "You've asked the coach a lot in the past hour. Give it a little while and ask again.",
+    coachDailyLimit: "You've reached today's limit for coach questions. It lifts within a day — your habits and history are unaffected.",
+    coachLimitUnavailable: "We couldn't check your coach usage just now. Please try again in a moment.",
     /* An account that would not load, said plainly. Never "no habits yet":
        the whole point is that a failure must not read as an empty account. */
     loadFailedReason: "The server could not read your account from the database.",
