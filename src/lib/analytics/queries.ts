@@ -385,12 +385,37 @@ export interface AdminUserRow {
   /** Null means active. Shown in the list so a disabled account is visible. */
   disabledAt: string | null;
   firstActive: string | null; lastActive: string | null;
-  activeDays: number; sessions: number; habits: number;
-  completions: number; goals: number; reviews: number;
+  /** Distinct UTC days with at least one tracked event, all time. */
+  activeDays: number;
+  /** Rows in `user_sessions` — the existing session semantics, unchanged. */
+  sessions: number;
+  /** Habits on the sheet (`status = 'active'`), not every candidate or retired row. */
+  activeHabits: number;
+  /** Habit completion rows: one per habit per day marked done, all time. */
+  completions: number;
+  /** Every Priority Compass priority, open and completed. */
+  priorities: number;
+  /** Of those, the ones still open — shown as a quiet secondary figure. */
+  openPriorities: number;
+  /** Priorities with `completed_on` set: the rule Insights and Community count by. */
+  accomplishments: number;
+  /**
+   * Clarify Intention progress, from the `intention_started` and
+   * `intention_completed` analytics events. The `intentions` table — which holds
+   * what the person actually wrote — is never read here.
+   */
+  intention: IntentionStatus;
+  /** How many Important Dates exist. Never their titles, notes or dates. */
+  importantDates: number;
   status: EngagementStatus;
 }
 
-export type UserSort = "active" | "least_active" | "newest" | "oldest" | "last_active";
+/** Status only. No intention text ever reaches this type. */
+export type IntentionStatus = "none" | "started" | "completed";
+
+export type UserSort =
+  | "active" | "least_active" | "newest" | "oldest" | "last_active"
+  | "habits" | "completions" | "priorities" | "accomplishments" | "sessions";
 export type RoleFilter = "all" | "user" | "admin";
 export type StatusFilter = "all" | "active" | "pending" | "disabled";
 export type KindFilter = "all" | "email" | "username";
@@ -423,26 +448,28 @@ const SORT_SQL: Record<UserSort, string> = {
   newest: "u.created_at desc",
   oldest: "u.created_at asc",
   last_active: "last_active desc nulls last",
+  /* Adoption sorts. Each falls back to account age so equal counts — and there
+     are many zeros — never reshuffle between reloads. */
+  habits: "active_habits desc, u.created_at asc",
+  completions: "completions desc, u.created_at asc",
+  priorities: "priorities desc, u.created_at asc",
+  accomplishments: "accomplishments desc, u.created_at asc",
+  sessions: "sessions desc, u.created_at asc",
 };
 
 /**
- * Counts and dates only. No habit name, note, metric or goal text is selected —
- * the admin view answers "is this person using it", not "what are they doing
- * with their life".
+ * The `where` clause every users query shares, and the one place a filter is
+ * expressed.
+ *
+ * Extracted so the listing, the count and the id-only query cannot disagree
+ * about which accounts a filter matches — three copies of this logic is three
+ * chances for "select all matching" to select something the list never showed.
+ *
+ * Only keys from the filter unions ever reach the SQL text; the search term
+ * travels as `$1`.
  */
-export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
-  const {
-    search = "", sort = "active", role = "all", status = "all",
-    kind = "all", source = "all",
-  } = q;
-  const pageSize = Math.min(200, Math.max(10, q.pageSize ?? 50));
-  const page = Math.max(1, q.page ?? 1);
-
-  /*
-   * Filters are built as fragments with numbered parameters rather than
-   * interpolated — the only thing that ever reaches the SQL text is a key from
-   * these maps, and the values travel as bound parameters.
-   */
+function userFilter(q: UserQuery): string {
+  const { role = "all", status = "all", kind = "all", source = "all" } = q;
   const where: string[] = [
     "($1 = '' or u.email ilike '%' || $1 || '%' or u.username ilike '%' || $1 || '%'"
     + " or p.display_name ilike '%' || $1 || '%')",
@@ -464,7 +491,29 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
   if (source === "test") where.push("u.created_via = 'test'");
   if (source === "real") where.push("u.created_via in ('self_signup','admin')");
   if (source === "unclassified") where.push("u.created_via is null");
-  const clause = where.join(" and ");
+  return where.join(" and ");
+}
+
+/**
+ * Counts, dates and status only.
+ *
+ * Nothing a person wrote is selected here: no habit name, description, anchor,
+ * environment or friction; no priority body; no intention, ownership note or
+ * vision; no Important Date title or note; no journal, reflection, review or
+ * spending text; no AI Workspace content; and not `analytics_events.properties`.
+ * The admin view answers "is this person using it", never "what are they doing
+ * with their life". `tests/admin-users.test.ts` records every statement these
+ * functions run and fails if one so much as names a private column or table.
+ *
+ * Intention is the one non-count, and it is a status derived from event *names*
+ * (`intention_started`, `intention_completed`) — the `intentions` table is not
+ * joined at all.
+ */
+export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
+  const { search = "", sort = "active" } = q;
+  const pageSize = Math.min(200, Math.max(10, q.pageSize ?? 50));
+  const page = Math.max(1, q.page ?? 1);
+  const clause = userFilter(q);
 
   const counted = await query<{ n: string }>(
     `select count(*) as n from users u
@@ -480,20 +529,38 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
            u.role::text as role, u.created_at, u.disabled_at,
            ev.first_active, ev.last_active, coalesce(ev.active_days, 0) as active_days,
            coalesce(s.sessions, 0) as sessions,
-           coalesce(h.habits, 0) as habits,
+           coalesce(h.active_habits, 0) as active_habits,
            coalesce(hc.completions, 0) as completions,
-           coalesce(g.goals, 0) as goals,
-           coalesce(wr.reviews, 0) as reviews
+           coalesce(pr.priorities, 0) as priorities,
+           coalesce(pr.open_priorities, 0) as open_priorities,
+           coalesce(pr.accomplishments, 0) as accomplishments,
+           case when it.completed then 'completed'
+                when it.user_id is not null then 'started'
+                else 'none' end as intention,
+           coalesce(idt.important_dates, 0) as important_dates
       from users u
       left join profiles p on p.id = u.id
       left join (select user_id, min(occurred_at) first_active, max(occurred_at) last_active,
                         count(distinct occurred_at::date) active_days
                    from analytics_events group by user_id) ev on ev.user_id = u.id
       left join (select user_id, count(*) sessions from user_sessions group by user_id) s on s.user_id = u.id
-      left join (select user_id, count(*) habits from habits group by user_id) h on h.user_id = u.id
+      -- Only habits on the sheet. A candidate, recommended, paused or retired
+      -- row is not something the person is tracking today.
+      left join (select user_id, count(*) active_habits from habits
+                  where status = 'active' group by user_id) h on h.user_id = u.id
       left join (select user_id, count(*) completions from habit_completions group by user_id) hc on hc.user_id = u.id
-      left join (select user_id, count(*) goals from goals group by user_id) g on g.user_id = u.id
-      left join (select user_id, count(*) reviews from weekly_reviews group by user_id) wr on wr.user_id = u.id
+      -- One pass over priorities for all three figures, so they cannot disagree.
+      left join (select user_id, count(*) priorities,
+                        count(*) filter (where completed_on is null) open_priorities,
+                        count(*) filter (where completed_on is not null) accomplishments
+                   from priorities group by user_id) pr on pr.user_id = u.id
+      -- Event names only. The intentions table holds what they wrote; it is not read.
+      left join (select user_id, bool_or(event_name = 'intention_completed') completed
+                   from analytics_events
+                  where event_name in ('intention_started', 'intention_completed')
+                  group by user_id) it on it.user_id = u.id
+      left join (select user_id, count(*) important_dates from important_dates group by user_id) idt
+             on idt.user_id = u.id
      where ${clause}
      order by ${SORT_SQL[sort] ?? SORT_SQL.active}
      limit $2 offset $3
@@ -512,8 +579,11 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
       createdAt: r.created_at, disabledAt: r.disabled_at ?? null,
       firstActive: r.first_active, lastActive: r.last_active,
       activeDays: Number(r.active_days), sessions: Number(r.sessions),
-      habits: Number(r.habits), completions: Number(r.completions),
-      goals: Number(r.goals), reviews: Number(r.reviews),
+      activeHabits: Number(r.active_habits), completions: Number(r.completions),
+      priorities: Number(r.priorities), openPriorities: Number(r.open_priorities),
+      accomplishments: Number(r.accomplishments),
+      intention: r.intention as IntentionStatus,
+      importantDates: Number(r.important_dates),
       status: classify({
         createdAt: r.created_at, lastActive: r.last_active, activeDays: Number(r.active_days),
       }),
@@ -534,16 +604,27 @@ export async function adminUserById(id: string): Promise<AdminUserRow | null> {
   return page.rows.find((r) => r.id === id) ?? null;
 }
 
-/** Every id the current filters match, for "select all matching". */
+/**
+ * Every id the current filters match, for "select all matching".
+ *
+ * Ids and nothing else: one statement over `users` and `profiles`, sharing the
+ * exact `where` clause the listing uses. It used to page the full listing query
+ * 200 rows at a time — computing every adoption aggregate for accounts whose
+ * numbers nobody was going to look at — which got slower with each metric the
+ * table gained. There are no joins to aggregate here, so the cost no longer
+ * depends on how much the table shows.
+ *
+ * Unordered on purpose: this feeds a Set of selected ids, and ordering it would
+ * be work with nothing reading it. `tests/admin-users.test.ts` asserts it
+ * returns exactly the ids the listing returns for the same filters.
+ */
 export async function adminUserIds(q: UserQuery = {}): Promise<string[]> {
-  const page = await adminUsers({ ...q, page: 1, pageSize: 200 });
-  if (page.total <= 200) return page.rows.map((r) => r.id);
-  const all: string[] = [];
-  for (let p = 1; p <= page.pages; p++) {
-    const chunk = await adminUsers({ ...q, page: p, pageSize: 200 });
-    all.push(...chunk.rows.map((r) => r.id));
-  }
-  return all;
+  const clause = userFilter(q);
+  const rows = await query<{ id: string }>(
+    `select u.id from users u
+       left join profiles p on p.id = u.id
+      where ${clause}`, [q.search ?? ""]);
+  return rows.map((r) => r.id);
 }
 
 const daysSince = (d: string | Date | null) =>

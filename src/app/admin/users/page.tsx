@@ -6,6 +6,7 @@ import { adminUserIds, adminUsers } from "@/lib/analytics/queries";
 import type {
   KindFilter, RoleFilter, SourceFilter, StatusFilter, UserSort,
 } from "@/lib/analytics/queries";
+import { communityStandings, type Standing } from "@/lib/community";
 import AddAccount from "./AddAccount";
 import UsersTable from "./UsersTable";
 
@@ -55,6 +56,22 @@ export default async function Users({ searchParams }: {
   const result = await adminUsers({ ...filters, page, pageSize: 50 });
   const allMatchingIds = await adminUserIds(filters);
   const seats = await currentCapacity();
+
+  /*
+   * Community places, read from the cache the Community board already fills.
+   *
+   * This screen must never compute them: scoring one member costs a full state
+   * load, so doing it for a page of accounts would turn an operational list into
+   * the most expensive query in the app. `communityStandings` reads and never
+   * computes, so a cold cache simply yields nothing and every row shows a dash.
+   * Serialised to a plain object because a Map cannot cross into a client
+   * component.
+   */
+  const board = communityStandings();
+  const standings: Record<string, Standing> = board
+    ? Object.fromEntries(board.byUser) : {};
+  const standingsAsOf = board
+    ? `${board.month}, ${new Date(board.updatedAt).toISOString().slice(11, 16)} UTC` : null;
   const verificationOn = capacity.requireEmailVerification;
   const mailReady = transport() !== null;
 
@@ -169,6 +186,19 @@ export default async function Users({ searchParams }: {
       <UsersTable
         rows={result.rows} total={result.total} page={result.page} pages={result.pages}
         allMatchingIds={allMatchingIds} currentAdminId={admin.id}
+        standings={standings} standingsAsOf={standingsAsOf}
+        sort={sort}
+        /* Precomputed: a client component cannot receive `href` itself. */
+        sortLinks={{
+          newest: href({ sort: "newest" }),
+          last_active: href({ sort: "last_active" }),
+          active: href({ sort: "active" }),
+          sessions: href({ sort: "sessions" }),
+          habits: href({ sort: "habits" }),
+          completions: href({ sort: "completions" }),
+          priorities: href({ sort: "priorities" }),
+          accomplishments: href({ sort: "accomplishments" }),
+        }}
       />
 
       {result.pages > 1 && (
@@ -190,7 +220,12 @@ export default async function Users({ searchParams }: {
       )}
 
       <p className="faint text-center" style={{ fontSize: 12, lineHeight: 1.5 }}>
-        Counts and dates only. Habit names, notes, metrics and goal text are never selected here.
+        Counts, dates and status only. Habit names, priority text, intentions and ownership
+        notes, Important Date titles and notes, journal and reflection entries, and AI
+        Workspace content are never selected here.
+        {standingsAsOf
+          ? ` Community figures are the existing month-to-date board as of ${standingsAsOf}.`
+          : " Community figures appear only once the Community board has been computed for someone; this screen never computes it."}
       </p>
     </div>
   );

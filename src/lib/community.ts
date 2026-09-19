@@ -515,3 +515,70 @@ export async function communitySnapshot(meId: string, today = todayISO()): Promi
 
 /** Exposed for tests; also lets an admin action drop a stale snapshot. */
 export function clearCommunityCache() { cache.clear(); }
+
+/* ───────────────────── read-only standings, for Admin ────────────────────── */
+
+/**
+ * One member's place, as far as an already-computed board can say.
+ *
+ * Deliberately only two states. `ranked` and `none` are things a board knows;
+ * "hidden" is not — an opted-out member is dropped inside `scoreMember` before
+ * the board exists, so their absence is indistinguishable from never having been
+ * scored. Calling that "hidden" would be asserting a private preference from
+ * missing data, so absent members are simply not in the map and the caller shows
+ * a dash.
+ */
+export type Standing =
+  | { state: "ranked"; rank: number; pct: number }
+  | { state: "none" };
+
+export interface Standings {
+  /** 'YYYY-MM' the figures were measured over. */
+  month: string;
+  /** When the board was last computed, for an "as of" tooltip. */
+  updatedAt: string;
+  byUser: Map<string, Standing>;
+}
+
+/**
+ * The standings from the cache, or null when there are none.
+ *
+ * **This never computes anything.** No `loadState`, no `computeAll`, no
+ * `refreshStale`, no query, and no mutation of the cache — the whole point is
+ * that an admin screen can show Community figures without paying the ~16
+ * queries per member that producing them costs. A cold or expired cache returns
+ * null, and the caller shows "—" rather than a manufactured rank. The cache is
+ * filled only by people reading their own Community board.
+ *
+ * With no argument it returns the freshest live entry whatever date it is keyed
+ * by. That is deliberate: entries are keyed by the *reader's* calendar date, and
+ * a page request carries no time-zone header, so insisting on the server's UTC
+ * date would miss the entry the app actually populated for most of the day. The
+ * month and timestamp come back with it so the screen can say what it is showing.
+ *
+ * Stale members are not refreshed — `entry.stale` is left exactly as it is for
+ * the next real reader, so nothing an admin does changes what anybody else sees.
+ */
+export function communityStandings(today?: string): Standings | null {
+  const live = (e: CacheEntry) => Date.now() - e.at <= CACHE_MS;
+
+  let entry: CacheEntry | undefined;
+  if (today !== undefined) {
+    const found = cache.get(today);
+    entry = found && live(found) ? found : undefined;
+  } else {
+    for (const e of cache.values()) {
+      if (live(e) && (!entry || e.at > entry.at)) entry = e;
+    }
+  }
+  if (!entry) return null;
+
+  const { board } = entry;
+  const byUser = new Map<string, Standing>();
+  // Nothing scheduled this month is a real, reportable state: the member was
+  // scored, and the habit ranking has no place for them.
+  for (const m of board.members) byUser.set(m.id, { state: "none" });
+  for (const h of board.habits) byUser.set(h.id, { state: "ranked", rank: h.rank, pct: h.pct });
+
+  return { month: board.month, updatedAt: board.updatedAt, byUser };
+}
