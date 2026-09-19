@@ -2,6 +2,7 @@
 
 > Last updated: 2026-09-19
 >
+> **PHASE 3 — ADMIN → USERS MODERNIZED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → DESKTOP PRODUCTION VISUALLY VERIFIED · `bf2d13c` ON `main` → DEPLOYED TO RENDER → DESKTOP QA BY THE PRODUCT OWNER 2026-09-19 · GROUPED TABLE (ACCOUNT · RICH HABITS · PRIORITY COMPASS · COMMUNITY · CLARIFY INTENTION · PLANNING) · GOALS AND REVIEWS REMOVED · ACTIVE HABITS NOW MEANS `status = 'active'` · COMMUNITY RANK/% READ FROM THE EXISTING CACHE AND NEVER COMPUTED · PLAN IS PRESENTATION ONLY (ADMIN / FREE) · NO MIGRATION · NO SCHEMA CHANGE · NO PRODUCTION DATA TOUCHED · MOBILE/NARROW-CARD QA NOT YET OBSERVED**
 > **PHASE 2 — EARLY-ACCESS ACCOUNT CAP REMOVED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `80da10b` ON `main` → DEPLOYED TO RENDER → `EARLY_ACCESS_USER_LIMIT=0` SET IN RENDER (WHICH TRIGGERED A SECOND DEPLOY) → PRODUCTION VERIFIED 2026-09-19 · SIGN-UP IS OPEN · NO MIGRATION · NO SCHEMA CHANGE · NO USER DATA TOUCHED · THE CAP MACHINERY IS INTACT AND RE-ENABLED BY SETTING A POSITIVE NUMBER**
 > **PHASE 1B — CONSUMER AI ON CLAUDE: PRODUCTION DEPLOYED + VERIFIED · `9fa4684` PUSHED TO `main` (fast-forward from `b903dd7`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · AI COACH AND AI HABIT RECOMMENDATIONS MIGRATED OpenAI → CLAUDE (`claude-sonnet-5`) · OPENAI RUNTIME DEPENDENCY REMOVED ENTIRELY · COACH ANSWERED FOR THE FIRST TIME IN PRODUCTION (ENGLISH AND 中文, THROWAWAY ACCOUNT ONLY) · NO MIGRATION · NO RENDER VARIABLE CHANGED**
 > **PHASE 1 — AI COACH DURABLE SAFETY LIMIT: PRODUCTION DEPLOYED + MIGRATED + VERIFIED · `ee0761a` PUSHED TO `main` (fast-forward from `d905d4e`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · `coach_requests` MIGRATION APPLIED (36 → 37 TABLES) · 20/HOUR AND 50/DAY PER ACCOUNT · LIMITER CURRENTLY DORMANT IN PRODUCTION: COACH STILL RUNS THE LEGACY OPENAI PATH · PHASE 1B (COACH + HABIT RECOMMENDATIONS → CLAUDE) NOT IMPLEMENTED**
@@ -14,12 +15,12 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `80da10b` (Phase 2), fast-forwarded from
-> `1d3997d`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
+> **Repository:** `origin/main` is `bf2d13c` (Phase 3), fast-forwarded from
+> `fa8be5f`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
 > `83e7ebb` (front page), `9444828`, `6c49f9e` (email verification for an address
 > an account already has), `d905d4e` (password recovery), `ee0761a` (Phase 1),
 > `b903dd7` (status), `9fa4684` (Phase 1B), `fd06064` and `1d3997d` (status),
-> `80da10b` (Phase 2).
+> `80da10b` (Phase 2), `fa8be5f` (status), `bf2d13c` (Phase 3).
 > `f7499fc`, `0f02a6e` and `74d2eb3` are all ancestors of it.
 >
 > **Production database:** 37 tables. The seven AI Workspace tables (additive,
@@ -28,12 +29,14 @@
 > every pre-existing table, index, constraint and row was verified unchanged
 > after each.
 >
-> **Deployed application:** `80da10b0060e9f6f02e434baecf23245cce44cbb` (Phase 2),
-> deployed on Render by the Product Owner. Setting `EARLY_ACCESS_USER_LIMIT=0`
-> triggered a second deploy of the same commit, which also completed. Render has
-> not auto-deployed recent releases — both Phase 1 and Phase 1B were still serving
-> the previous build minutes after the push — and it deploys only what is on
-> `main`.
+> **Deployed application:** `bf2d13c1927f662906982a22b7f3fb343a0b93b1` (Phase 3),
+> deployed on Render by the Product Owner and confirmed live 2026-09-19 22:05 UTC
+> — the Phase 3 stylesheet classes (`.au-table`, `.au-plan`, `.au-sub`,
+> `.au-sort`, `.au-cards`, `.au-metrics`, the `@container (min-width: 760px)` rule
+> and the sticky `.au-user`) are all present in the served CSS, and none of them
+> existed in production before this commit. Render has not auto-deployed recent
+> releases — Phase 1, 1B and 2 were each still serving the previous build minutes
+> after the push — and it deploys only what is on `main`.
 >
 > **Production Render configuration:** `EARLY_ACCESS_USER_LIMIT=0`. No other
 > environment variable was changed in Phase 2, and no value was read or printed
@@ -123,6 +126,64 @@ unlimited. Prefer capacity-specific parsing or handling; do **not** change
 caller (pool sizes, TTLs, password bounds, timeouts, AI limits), where `0` is
 genuinely invalid and the fallback is the safety net.
 
+## Phase 3 — Admin → Users modernized (PRODUCTION DEPLOYED · DESKTOP VERIFIED)
+
+Admin → Users described the product as it was a month ago: it counted Goals and
+Weekly Reviews, and its "Habits" column counted every habit row — candidates,
+paused and retired included — so an account with three habits on its sheet could
+read as ten. It is now grouped the way the product is, and it shows counts and
+statuses only.
+
+| Item | State |
+| --- | --- |
+| deployed commit | `bf2d13c1927f662906982a22b7f3fb343a0b93b1`, fast-forwarded onto `main` from `fa8be5f` |
+| release path | IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → **DESKTOP PRODUCTION VISUALLY VERIFIED** (Product Owner, 2026-09-19) |
+| **mobile / narrow-card QA** | **NOT YET OBSERVED.** The only visual check nobody has performed. The cards are covered by static verification (container query, scoped `max-width`, cell counts) but not by a human or a browser |
+| desktop groups | ACCOUNT (user, status, role, plan, joined, verified, last active, active days, sessions) · RICH HABITS (active habits, completions) · PRIORITY COMPASS (priorities, with a muted count of those still open, accomplishments) · COMMUNITY (rank, %) · CLARIFY INTENTION (status) · PLANNING (Important Dates) |
+| removed | **Goals and Reviews**, from the row type, the query and both screens |
+| Active Habits | now `status = 'active'` — the old column counted every habit row |
+| priorities | total, open and accomplishments come from one pass over the table, so they cannot disagree; accomplishments use the same `completed_on` rule Insights and Community count by |
+| intention | a status from the `intention_started` / `intention_completed` event names. The `intentions` table, which holds what the person wrote, is not read at all |
+| Community rank / % | read from the existing month-to-date board through `communityStandings`, a synchronous accessor that contains no `computeAll`, `refreshStale`, `scoreMember`, `loadState`, `query` or `await`, and mutates nothing — not even other readers' stale marks. A cold or expired cache yields null and every row shows a dash rather than a manufactured rank. Two states only, `ranked` and `none`; an absent member is simply absent, because an opted-out member is dropped before the board exists and calling that "hidden" would assert a private preference from missing data |
+| `adminUserIds` | no longer pages the full listing query to collect ids. One extracted filter builder is shared by the listing, the count and the id query, so the three cannot disagree about which accounts a filter matches; parity is asserted across twelve filter combinations and a disabled-account transition |
+| Plan | presentation only — `Admin` for administrators, `Free` for everyone else, read from `users.role`. No entitlement store, no database, no environment; a test asserts `plan.ts` references no `user_plans`, `priority_quota_usage`, `ai_usage`, Stripe or subscription, and reads neither database nor environment |
+| migration | **none.** No schema change, no data write, no configuration change |
+
+**Local verification before release:** typecheck clean, lint clean, **1079 of
+1079** unit tests across 61 files (34 new: 21 admin metrics/privacy, 13 Community
+standings), production build compiled with 64/64 pages.
+
+**Privacy is enforced by a recorder, not a promise.** `tests/admin-users.test.ts`
+captures every statement these screens run — across all filter permutations and
+all nine sorts — and fails if one names a private column, a private table, an
+`ai_*` identifier or a star select, now including `analytics_events.properties`
+and `day_notes.gratitude`. Text planted in habits, priorities, intentions, goals,
+reviews, reflections, day notes and event properties appears in no payload. That
+detector caught one of its own false positives during this work — it was reading
+prose inside a SQL comment — so it now strips comments and carries negative
+controls proving a real leak beside or after a comment is still caught.
+
+**Production verification, 2026-09-19 22:05 UTC, read-only**
+
+| Check | Result |
+| --- | --- |
+| serving `bf2d13c` | **yes** — all seven Phase 3 CSS classes present in the served stylesheet, including `@container (min-width: 760px)` and the sticky `.au-user`; `.chip` as the control proves the probe reads the CSS |
+| desktop visual QA | **PASS** (Product Owner): grouped headers, ACCOUNT / RICH HABITS / PRIORITY COMPASS groups rendering, Plan showing Admin / Free, Active Habits replacing Habits, Completions replacing Done, the muted open-priority count beneath the total, Goals and Reviews gone, aligned numerics, horizontal layout preserved rather than crushed |
+| accounts | **15**, unchanged — 5 admin, 0 disabled, 2 verified. **0 created** |
+| verification stamping | unchanged: 1 requires verification, 14 grandfathered — new-account verification still applies to new accounts only |
+| schema | **37 tables**, unchanged; no column added, removed or altered |
+| production content data | **not modified by the deployment.** habits 172, habit_completions 128, priorities 86, goals 45, intentions 2, day_notes 9, user_preferences 15, habit_schedules 177, profiles 15, community_month_scores 10, email_verifications 2, password_resets 1, coach_requests 2 — all unchanged |
+| Community recomputation | **none.** `community_month_scores` gained 0 rows, so no board was computed or archived by the admin screen |
+| auth, verification, recovery | unaffected: 0 password-reset rows, 0 verification rows; `/api/admin/users` and `/api/admin/users/bulk` answer **404** to a signed-out caller (they must not announce themselves), consumer APIs 401, public pages 200 |
+| bundle privacy | no `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `sk-ant-`, provider host, connection string, `password_hash`, `ownership_note` or `why_chain` in any served bundle |
+| Phase 4 | no `user_plans`, `priority_quota_usage`, `ai_usage`, subscription or Stripe table exists |
+| incidental rows | 2 `important_dates`, 3 `important_date_saved` events, 2 `app_opened` events and 1 session — **all belonging to one admin account** (`2b2a9237…`, handle `hippo`) at 21:32 UTC while inspecting production. Ordinary product use, not caused by the deployment |
+
+**Known non-defect.** The Product Owner's screenshot showed through Priority
+Compass only; Community, Clarify Intention and Planning were horizontally
+off-screen. That is the intended behaviour — the table scrolls rather than
+crushing columns.
+
 ## Phase 2 — early-access account cap removed (PRODUCTION DEPLOYED · VERIFIED)
 
 Sign-up is open. `EARLY_ACCESS_USER_LIMIT` now defaults to `0`, meaning no limit,
@@ -175,9 +236,10 @@ the cap machinery survives), production build compiled with 64/64 pages.
 | `coach_requests` | still the 2 Phase 1B smoke rows, one account |
 | rows that did appear | fully accounted for: **1** session (my own sign-in probe at 20:50:29) and **2** `app_opened` events from one admin account browsing. Nothing else |
 
-**Phase 3 — not started.** Modernising Admin → Users. Entitlements,
-Grandfathered Pro, Free-plan enforcement, AI allowances and Stripe all remain
-later phases; Stripe stays deferred to a separate future project.
+**Phase 3 — done** (`bf2d13c`, deployed and desktop-verified; see its own
+section). Entitlements, Grandfathered Pro, Free-plan enforcement, AI allowances
+and Stripe all remain later phases; Stripe stays deferred to a separate future
+project.
 
 ## Phase 1B — consumer AI on Claude (PRODUCTION DEPLOYED · VERIFIED)
 
