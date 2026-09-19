@@ -2,6 +2,7 @@
 
 > Last updated: 2026-09-19
 >
+> **PHASE 2 — EARLY-ACCESS ACCOUNT CAP REMOVED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `80da10b` ON `main` → DEPLOYED TO RENDER → `EARLY_ACCESS_USER_LIMIT=0` SET IN RENDER (WHICH TRIGGERED A SECOND DEPLOY) → PRODUCTION VERIFIED 2026-09-19 · SIGN-UP IS OPEN · NO MIGRATION · NO SCHEMA CHANGE · NO USER DATA TOUCHED · THE CAP MACHINERY IS INTACT AND RE-ENABLED BY SETTING A POSITIVE NUMBER**
 > **PHASE 1B — CONSUMER AI ON CLAUDE: PRODUCTION DEPLOYED + VERIFIED · `9fa4684` PUSHED TO `main` (fast-forward from `b903dd7`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · AI COACH AND AI HABIT RECOMMENDATIONS MIGRATED OpenAI → CLAUDE (`claude-sonnet-5`) · OPENAI RUNTIME DEPENDENCY REMOVED ENTIRELY · COACH ANSWERED FOR THE FIRST TIME IN PRODUCTION (ENGLISH AND 中文, THROWAWAY ACCOUNT ONLY) · NO MIGRATION · NO RENDER VARIABLE CHANGED**
 > **PHASE 1 — AI COACH DURABLE SAFETY LIMIT: PRODUCTION DEPLOYED + MIGRATED + VERIFIED · `ee0761a` PUSHED TO `main` (fast-forward from `d905d4e`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · `coach_requests` MIGRATION APPLIED (36 → 37 TABLES) · 20/HOUR AND 50/DAY PER ACCOUNT · LIMITER CURRENTLY DORMANT IN PRODUCTION: COACH STILL RUNS THE LEGACY OPENAI PATH · PHASE 1B (COACH + HABIT RECOMMENDATIONS → CLAUDE) NOT IMPLEMENTED**
 > **PUBLIC FRONT PAGE: PRODUCTION VERIFIED · IMPLEMENTED ON `feature/landing-page` → PUSHED TO `main` (`83e7ebb`, fast-forward from `5eb1a92`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-17 (21/21 SMOKE CHECKS) · NO SCHEMA OR MIGRATION**
@@ -13,11 +14,12 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `9fa4684` (Phase 1B), fast-forwarded from
-> `b903dd7`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
+> **Repository:** `origin/main` is `80da10b` (Phase 2), fast-forwarded from
+> `1d3997d`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
 > `83e7ebb` (front page), `9444828`, `6c49f9e` (email verification for an address
 > an account already has), `d905d4e` (password recovery), `ee0761a` (Phase 1),
-> `b903dd7` (status), `9fa4684` (Phase 1B).
+> `b903dd7` (status), `9fa4684` (Phase 1B), `fd06064` and `1d3997d` (status),
+> `80da10b` (Phase 2).
 > `f7499fc`, `0f02a6e` and `74d2eb3` are all ancestors of it.
 >
 > **Production database:** 37 tables. The seven AI Workspace tables (additive,
@@ -26,10 +28,16 @@
 > every pre-existing table, index, constraint and row was verified unchanged
 > after each.
 >
-> **Deployed application:** `9fa4684e15eb66bf090ca41e07b3b9719f4fd33c` (Phase 1B),
-> deployed on Render by the Product Owner. Render has not auto-deployed recent
-> releases — both Phase 1 and Phase 1B were still serving the previous build
-> minutes after the push — and it deploys only what is on `main`.
+> **Deployed application:** `80da10b0060e9f6f02e434baecf23245cce44cbb` (Phase 2),
+> deployed on Render by the Product Owner. Setting `EARLY_ACCESS_USER_LIMIT=0`
+> triggered a second deploy of the same commit, which also completed. Render has
+> not auto-deployed recent releases — both Phase 1 and Phase 1B were still serving
+> the previous build minutes after the push — and it deploys only what is on
+> `main`.
+>
+> **Production Render configuration:** `EARLY_ACCESS_USER_LIMIT=0`. No other
+> environment variable was changed in Phase 2, and no value was read or printed
+> by the agent.
 >
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
@@ -58,7 +66,7 @@ cannot disagree about what an account has spent.
 | applies to | every account, admins included. It is a platform cost guard, **not** a plan entitlement; a future Free/Pro AI allowance sits in front of it rather than replacing it |
 | production data | **unchanged**: every pre-existing table has an identical row count, and accounts stayed at 15 (5 admin, 10 non-admin, 0 disabled, 2 verified, 1 requiring verification) before and after |
 | Render environment | **no variable changed or added.** No OpenAI credential was added anywhere |
-| early-access cap | **unchanged**: still 50. `EARLY_ACCESS_USER_LIMIT` was not modified |
+| early-access cap | 50 and active at the time of this release. **Removed later the same day in Phase 2** (`80da10b`) — see the Phase 2 section |
 | Phase 1B | **deployed and verified** in `9fa4684` — see the Phase 1B section below |
 
 **Verification**
@@ -103,11 +111,9 @@ smoke test. That finding is history; the Phase 1B section below is current.
   Entitlements stay billing-independent: a feature asks what an account is
   entitled to, never whether it paid.
 
-**Phase 2 — not started.** Removing the 50-user platform cap and the "first 50
-users" copy. Its precondition is now **met** — Phase 1 (`ee0761a`) and Phase 1B
-(`9fa4684`) are both deployed and production verified — so Phase 2 is unblocked
-and awaits the Product Owner's go-ahead. Phase 2 must also fix capacity
-configuration so that
+**Phase 2 — done** (`80da10b`, deployed and verified; see its own section). It
+removed the 50-user platform cap and the "first 50 users" copy, and fixed the
+capacity configuration bug described below, so that
 `EARLY_ACCESS_USER_LIMIT=0` genuinely means unlimited: today it is read through
 the shared `num()` helper, which rejects any value `<= 0`, warns and returns the
 default — so setting `0` in Render silently leaves the cap at 50, while
@@ -116,6 +122,62 @@ unlimited. Prefer capacity-specific parsing or handling; do **not** change
 `num()`'s behaviour globally unless that can be proven safe for every other
 caller (pool sizes, TTLs, password bounds, timeouts, AI limits), where `0` is
 genuinely invalid and the fallback is the safety net.
+
+## Phase 2 — early-access account cap removed (PRODUCTION DEPLOYED · VERIFIED)
+
+Sign-up is open. `EARLY_ACCESS_USER_LIMIT` now defaults to `0`, meaning no limit,
+and production has it set to `0` explicitly.
+
+**The cap could not be switched off before.** `capacity.limit` was read through
+the shared `num()` helper, which rejects anything `<= 0` and falls back — so
+`EARLY_ACCESS_USER_LIMIT=0` quietly meant *fifty*, while `capacity.ts`, its own
+comment and all four enforcement sites already treated `0` as unlimited. The
+infrastructure was right; the parser and the default were wrong.
+
+| Item | State |
+| --- | --- |
+| deployed commit | `80da10b0060e9f6f02e434baecf23245cce44cbb`, fast-forwarded onto `main` from `1d3997d` |
+| release path | IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → **PRODUCTION VERIFIED** (2026-09-19) |
+| Render configuration | `EARLY_ACCESS_USER_LIMIT=0`, set by the Product Owner; that change triggered a second successful deploy of the same commit. No other variable changed |
+| new parsing | its own small parser, not the shared one: unset or empty → 0 · `0` → unlimited · a positive whole number → enforced · negative, fractional or not a number → unlimited with one warning naming the value |
+| invalid values | **fail open**, deliberately: a cap is a restriction, and a typo must not close the door on everyone. Falling back to a number is what caused the original bug |
+| `num()` | **left exactly as it was.** For all 26 of its other callers — pool sizes, TTLs, timeouts, password bounds, attempt counts, token budgets, AI allowances — `0` is nonsense or a footgun and the fallback is the safety net. A test asserts `num()` still refuses `0` *and* that capacity no longer routes through it |
+| `capacity.limit` | now a getter, read where it is used rather than frozen at import. Nothing spreads or destructures the `capacity` object, so all five reads go through it |
+| what was **not** deleted | `OCCUPIES_A_SLOT`, `AWAITING_VERIFICATION`, `currentCapacity`, `withCapacityLock`, `withReservedSlot`, `withCapacityFor`, `withRoleLock`, the single `CAPACITY_LOCK` advisory lock, sign-up's `409 {full:true}`, the `"full"` outcome when a verification link is redeemed, all four admin refusals and both last-admin protections. Each short-circuits while the limit is `0`; setting a positive number restores enforcement with no code change |
+| migration | **none.** No schema change, no data write, no backfill |
+| authentication | untouched. Mandatory verification for new accounts, password recovery and existing-account grandfathering all unchanged — the only change under `src/app/api/auth/` is one comment |
+
+**Copy removed, in both languages.** The early-access notice, the paused-sign-up
+message, the terms facts, four admin role dialogs and one admin refusal no longer
+claim a 50-account limit; the copy names no number, because the number is
+configuration. Negative guards in the tests fail if a "first 50" claim returns.
+No paid-plan messaging replaced it. The admin capacity panel needed no change: it
+already rendered "no limit set" when the limit is `0`.
+
+**Local verification:** typecheck clean, lint clean, **1045 of 1045** unit tests
+across 59 files (28 capacity tests, including unset / `0` / positive / negative /
+fractional / non-numeric and the `num()`-unchanged guard, plus seven asserting
+the cap machinery survives), production build compiled with 64/64 pages.
+
+**Production verification, 2026-09-19 20:50–20:51 UTC, read-only**
+
+| Check | Result |
+| --- | --- |
+| serving `80da10b` | **yes** — self-validating bundle probe: all four new strings present (`free while it is in early access`, `Sign-ups are paused`, 早期体验阶段免费开放使用, 注册暂时关闭), the Phase 1B control string present, and **every** old 50-cap claim absent in both languages. No "50" claim remains anywhere in the served copy |
+| application health | `/`, `/login`, `/terms`, `/verify`, `/reset` all 200; `/habits`, `/insights`, `/admin` redirect a signed-out visitor; `POST /api/coach` and `/api/recommendations` 401; no 5xx |
+| capacity reported as unlimited | the deployed commit defaults to `0`, its parser maps `0` to unlimited (28 tests), and Render holds `EARLY_ACCESS_USER_LIMIT=0`. **Not observable from outside**: at 10 of 50 places used, a capped and an uncapped production behave identically, and the panel that prints "no limit set" is admin-only. Admin → Users should read "Users: 10 · no limit set" |
+| accounts | **15**, unchanged — 5 admin, 10 member, 0 disabled, 2 verified. **0 created** during Phase 2 |
+| verification stamping | unchanged: **1** account requires verification (stamped at sign-up), **14** grandfathered. Mandatory verification still applies to new accounts only |
+| grandfathering, live | the throwaway account — `verification_required=false`, address never verified, created 2026-09-17 — **signed in with 200**, so a pre-verification account still works |
+| password recovery | `/api/auth/forgot` answered 200 for a deliberate non-account and wrote **nothing**: `password_resets` still holds exactly 1 row, 0 created during Phase 2, and no mail could be sent to an address that owns no account. `/reset` still served |
+| schema | **37 tables**, unchanged; no column added, removed or altered; `coach_requests` still exactly `id, user_id, occurred_at` with its index and cascade |
+| existing application data | **nothing created or modified**: habits 172, habit_completions 128, priorities 86, goals 45, intentions 2, important_dates 26, day_notes 9, user_preferences 15, habit_schedules 177, profiles 15, community_month_scores 10, email_verifications 2 |
+| `coach_requests` | still the 2 Phase 1B smoke rows, one account |
+| rows that did appear | fully accounted for: **1** session (my own sign-in probe at 20:50:29) and **2** `app_opened` events from one admin account browsing. Nothing else |
+
+**Phase 3 — not started.** Modernising Admin → Users. Entitlements,
+Grandfathered Pro, Free-plan enforcement, AI allowances and Stripe all remain
+later phases; Stripe stays deferred to a separate future project.
 
 ## Phase 1B — consumer AI on Claude (PRODUCTION DEPLOYED · VERIFIED)
 
@@ -178,7 +240,7 @@ verification stayed isolated from real personal data.
 | rows that did appear | fully accounted for: `coach_requests` +2 (the two smoke calls), `sessions` +3 and `user_sessions` +2 and `analytics_events` +6 — of which 2 are the smoke events and the rest is one admin account browsing (`app_opened` only, zero writes, zero coach rows) |
 | OpenAI | not required by the deployed application; no trace in any served bundle |
 | credentials | no `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `sk-ant-` or provider host in any served bundle; **no key value was ever printed or committed** |
-| `EARLY_ACCESS_USER_LIMIT` | **unchanged**; the 50-user cap remains active |
+| `EARLY_ACCESS_USER_LIMIT` | unchanged by Phase 1B; the 50-user cap was still active then. Phase 2 set it to `0` |
 | entitlements and payments | no `user_plans`, `priority_quota_usage`, `ai_usage`, or any Stripe table exists. No entitlement or payment work occurred |
 
 **Phase 2 — NOT started.** Removing the 50-user platform cap and the "first 50
