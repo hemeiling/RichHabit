@@ -104,9 +104,9 @@ export interface CommunitySnapshot {
  *
  * Deliberately NOT the same rule as `OCCUPIES_A_SLOT` in db/capacity.ts, and
  * the difference is the point. That one answers "does this account consume one
- * of the fifty early-access places", and exempts admins because an admin is
- * staff rather than a member. This one answers "is this a person building
- * habits", and an admin building habits is exactly that.
+ * of the early-access places", and exempts admins because an admin is staff
+ * rather than a member. This one answers "is this a person building habits",
+ * and an admin building habits is exactly that.
  *
  * Conflating the two is how a role meant to grant permissions quietly becomes
  * a role that removes you from your own progress. A disabled account is still

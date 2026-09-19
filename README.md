@@ -124,12 +124,27 @@ future native client gets identical numbers without a second implementation to k
 **Schedules are versioned.** `habit_schedules` rows carry `effective_from`, so changing a habit
 from daily to three-times-a-week doesn't silently rewrite what last month was supposed to look like.
 
-### The 50-account limit
+### The account cap, off by default
 
-RichHabit is free for a limited number of people, so registration stops at a
-configurable number of **active, non-admin accounts** — `EARLY_ACCESS_USER_LIMIT`,
-default 50, `0` for unlimited. Admins are exempt by decision: the cap is on
-people using it, and running it should not cost a place.
+Sign-up is open. `EARLY_ACCESS_USER_LIMIT` can cap the number of **active,
+non-admin accounts**, and **its default is `0`, meaning no limit**. Set a
+positive whole number to switch enforcement on; anything else (negative,
+fractional, not a number) leaves it unlimited and logs one warning, because a
+cap is a restriction and a typo should not close the door on everyone. Admins
+are exempt by decision: the cap is on people using it, and running it should
+not cost a place.
+
+It reads through its own small parser rather than the shared `num` helper. That
+helper rejects anything `<= 0` and falls back — correct for pool sizes, TTLs,
+password bounds and AI allowances, where 0 is nonsense — but applied here it made
+`EARLY_ACCESS_USER_LIMIT=0` mean *fifty*, so the cap could not be turned off by
+configuration at all.
+
+**Turning the limit off removed no machinery.** The predicate, the advisory lock,
+the reservation, the 409 refusals in sign-up and admin, and the "full" outcome
+when a verification link is redeemed are all still there and still tested; every
+one of them short-circuits while the limit is 0. Setting the variable brings the
+cap back with no code change.
 
 **The count and the door share one definition**, `OCCUPIES_A_SLOT` in
 `src/lib/db/capacity.ts`, so the number the owner reads on Admin → Users and the
@@ -174,8 +189,8 @@ keep their nulls and are never locked out.
 
 Off by default. `REQUIRE_EMAIL_VERIFICATION=true` makes a **new** registration
 create a *pending* account: it reserves the email and username, receives a
-confirmation link, and takes **no place** in the fifty. Clicking the link is
-what activates the account and consumes the place.
+confirmation link, and takes **no place** against the cap. Clicking the link is
+what activates the account and consumes a place, when a cap is set.
 
 **Existing accounts are untouched, and not by convention — by construction.**
 Whether verification applies is stamped on the account as

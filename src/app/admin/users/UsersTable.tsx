@@ -75,9 +75,9 @@ export default function UsersTable({
    *
    * The same endpoint the detail page uses, so both routes into this action
    * get the same refusals: you cannot demote yourself, you cannot remove the
-   * last active admin, and a demotion that would exceed the fifty places is
-   * declined. Every one of those is decided by the server — this component
-   * only asks.
+   * last active admin, and a demotion that would exceed the account cap — when
+   * one is set — is declined. Every one of those is decided by the server —
+   * this component only asks.
    */
   const changeRole = async (row: AdminUserRow, next: "user" | "admin") => {
     setBusy("role");
@@ -263,8 +263,8 @@ export default function UsersTable({
                   <td className="muted" style={{ padding: "8px 10px" }}>{u.address ?? "—"}</td>
                   {/*
                     * Three states, not two. A pending account is neither active
-                    * nor disabled: it exists, holds its username, and occupies
-                    * none of the fifty until its address is confirmed.
+                    * nor disabled: it exists, holds its username, and counts
+                    * towards no cap until its address is confirmed.
                     */}
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap",
                     color: u.disabledAt ? "var(--warn)"
@@ -335,15 +335,15 @@ export default function UsersTable({
                 <>
                   <b>{roleFor.email}</b> loses access to these admin screens. They keep
                   every habit, completion, goal, journal entry and spending record, and
-                  carry on appearing in Community Progress — and they begin taking one of
-                  the fifty early-access places.
+                  carry on appearing in Community Progress — and they begin counting
+                  towards the account cap, if one is set.
                 </>
               ) : (
                 <>
                   <b>{roleFor.email}</b> gains access to every account in this system,
                   including the ability to disable and delete them. Their own habits and
-                  history are untouched, and they stop taking one of the fifty
-                  early-access places.
+                  history are untouched, and they stop counting towards the account
+                  cap.
                 </>
               )}
             </p>

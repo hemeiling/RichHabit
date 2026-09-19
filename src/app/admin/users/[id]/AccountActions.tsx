@@ -97,15 +97,15 @@ export default function AccountActions({
                 <>
                   Remove admin from <b>{email}</b>? They keep every habit, completion,
                   goal, journal entry and spending record, and carry on appearing in
-                  Community Progress. They lose these admin screens, and begin taking
-                  one of the fifty early-access places.
+                  Community Progress. They lose these admin screens, and begin counting
+                  towards the account cap, if one is set.
                 </>
               ) : (
                 <>
                   Make <b>{email}</b> an admin? They gain access to every account in
                   this system, including disabling and deleting them. Their own habits
-                  and history are untouched, and they stop taking one of the fifty
-                  early-access places.
+                  and history are untouched, and they stop counting towards the
+                  account cap.
                 </>
               )}
             </p>

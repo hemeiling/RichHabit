@@ -101,14 +101,14 @@ describe("the monthly window", () => {
 /**
  * Two rules that look similar and must not merge.
  *
- * "Does this account use one of the fifty early-access places" and "is this a
- * person building habits" are different questions. An admin is staff, so it
- * answers no to the first — but an admin with habits answers yes to the
- * second, and conflating them turns a permissions role into an exclusion from
- * your own progress.
+ * "Does this account use one of the early-access places" and "is this a person
+ * building habits" are different questions. An admin is staff, so it answers no
+ * to the first — but an admin with habits answers yes to the second, and
+ * conflating them turns a permissions role into an exclusion from your own
+ * progress.
  */
 describe("ranking eligibility is not capacity eligibility", () => {
-  it("keeps admins out of the fifty early-access places", () => {
+  it("keeps admins out of the early-access places", () => {
     expect(OCCUPIES_A_SLOT).toMatch(/role\s*<>\s*'admin'/);
   });
 

@@ -88,14 +88,17 @@ describe("the product name and tagline", () => {
 describe("the free early access notice", () => {
   it("says exactly what the product asked for, in English", () => {
     expect(en.earlyAccess.title).toBe("Free Early Access");
-    expect(en.earlyAccess.body).toContain("free for our first 50 users");
+    // No number: the cap is configuration, and it is off by default.
+    expect(en.earlyAccess.body).toContain("free while it is in early access");
+    expect(en.earlyAccess.body).not.toMatch(/first 50|50 users/);
     expect(en.earlyAccess.body).toContain("limit, suspend, or delete accounts");
     expect(en.earlyAccess.body).toContain("Free access may also change as RichHabit evolves");
   });
 
   it("says exactly what the product asked for, in Chinese", () => {
     expect(zh.earlyAccess.title).toBe("免费早期体验");
-    expect(zh.earlyAccess.body).toContain("前 50 位用户");
+    expect(zh.earlyAccess.body).toContain("早期体验阶段免费开放使用");
+    expect(zh.earlyAccess.body).not.toMatch(/前 ?50|50 位/);
     expect(zh.earlyAccess.body).toContain("限制、暂停或删除相关账户的权利");
     expect(zh.earlyAccess.body).toContain("免费使用政策也可能进行调整");
   });

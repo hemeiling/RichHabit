@@ -341,8 +341,9 @@ export async function setDisabled(admin: AdminUser, id: string, disabled: boolea
  *   · you cannot remove your own admin role — the one mistake with no undo
  *     from inside the app
  *   · you cannot remove the last active admin
- *   · a demotion that would exceed the early-access limit is refused, since an
- *     admin who becomes a user starts occupying one of the fifty places
+ *   · a demotion that would exceed the account cap is refused, since an admin
+ *     who becomes a user starts occupying a place. Only when a cap is set —
+ *     there is none by default.
  *
  * The middle one is why this runs under a lock. The count and the write have
  * to be one step: checked separately, two simultaneous demotions each see one
@@ -379,8 +380,9 @@ export async function setRole(admin: AdminUser, id: string, role: "user" | "admi
   }
   if (problem === "full") {
     throw new ApiError(
-      "Early access is full, and demoting this admin would take one of the fifty "
-      + "places. Disable another account first, or raise EARLY_ACCESS_USER_LIMIT.", 409);
+      "Early access is full, and demoting this admin would take one of the remaining "
+      + "places. Disable another account first, or raise EARLY_ACCESS_USER_LIMIT "
+      + "(0 removes the cap).", 409);
   }
 
   await audit(admin, "user_role_changed", { id: target.id, email: target.email },

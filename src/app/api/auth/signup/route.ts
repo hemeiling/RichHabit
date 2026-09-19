@@ -65,8 +65,8 @@ export async function POST(request: Request) {
   /*
    * With verification on, an account is created but takes no place: it reserves
    * its email and username, and nothing more. Clicking the link is what
-   * consumes one of the fifty — see lib/email/verify.ts, which does that count
-   * behind the same lock this route uses.
+   * consumes a place, when a cap is set — see lib/email/verify.ts, which does
+   * that count behind the same lock this route uses.
    *
    * `verification_required` is written from the flag here, once. Nothing reads
    * the flag again for this account afterwards, which is what leaves every

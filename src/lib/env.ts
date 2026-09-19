@@ -231,13 +231,56 @@ export const isTestInstance = process.env.RH_TEST_INSTANCE === "true";
 
 // ────────────────────────── early access capacity ────────────────────────────
 
+/**
+ * The early-access cap: the one number in this file where `0` is a real
+ * setting rather than a mistake, so it needs its own parser.
+ *
+ * `num` above rejects anything `<= 0` and falls back, which is right for every
+ * other value it reads — a pool of 0 connections, a 0-character minimum
+ * password, a 0-request AI allowance are all either nonsense or a footgun, and
+ * the fallback is the safety net. Applying that rule here made
+ * `EARLY_ACCESS_USER_LIMIT=0` mean *fifty*: the cap could not be turned off by
+ * configuration at all, which is the bug this replaces. `num` is deliberately
+ * left exactly as it was.
+ *
+ * - unset, or empty        → 0, unlimited. This is the shipped default.
+ * - `0`                    → unlimited; enforcement is skipped entirely.
+ * - a positive whole number → enforced at that number.
+ * - negative, fractional, or not a number → unlimited, with one warning.
+ *
+ * That last case fails **open**, and deliberately: a cap is a restriction, and
+ * a typo in configuration should not close the door on everyone who wants to
+ * sign up. The warning names the value so it can be found and fixed.
+ */
+let capacityWarned = false;
+function capacityLimit(): number {
+  const raw = process.env.EARLY_ACCESS_USER_LIMIT?.trim();
+  if (raw == null || raw === "") return 0;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    if (!capacityWarned) {
+      capacityWarned = true;
+      console.warn(
+        `[env] EARLY_ACCESS_USER_LIMIT="${raw}" is not 0 or a positive whole number; `
+        + "leaving the account cap unlimited.",
+      );
+    }
+    return 0;
+  }
+  return parsed;
+}
+
 export const capacity = {
   /**
-   * How many active non-admin accounts may exist. Configuration rather than a
-   * literal, so lifting or removing the cap when RichHabit stops being free is
-   * an environment change and not a code change. `0` means unlimited.
+   * How many active non-admin accounts may exist, or 0 for no limit.
+   *
+   * A getter, so the value is read when it is used rather than frozen at
+   * import: one fewer way for a process to disagree with its own configuration.
+   * The cap machinery — the predicates, the advisory lock, the refusal paths —
+   * stays in place whatever this returns, so a limit can be reintroduced by
+   * setting this variable and nothing else.
    */
-  limit: num("EARLY_ACCESS_USER_LIMIT", 50),
+  get limit(): number { return capacityLimit(); },
   /**
    * Whether a **newly registered** account must prove its address before it
    * becomes active and takes a place.

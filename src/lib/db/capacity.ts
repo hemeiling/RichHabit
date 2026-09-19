@@ -2,7 +2,14 @@ import { capacity } from "@/lib/env";
 import { query, transaction } from "@/lib/db/pool";
 
 /**
- * How many places are left in the free early-access programme.
+ * How many places are left, when there is a limit at all.
+ *
+ * **The cap is off by default** (`EARLY_ACCESS_USER_LIMIT` unset or 0), so
+ * sign-up is open and every function here short-circuits to "there is room".
+ * Nothing in this module was removed to achieve that: the predicates, the
+ * advisory lock, the reservation and the refusal paths are all intact, and
+ * setting the variable to a positive number re-enables enforcement with no code
+ * change. The limit was disabled, not the capability.
  *
  * One definition of "counts towards the limit", used by the sign-up route, by
  * email verification, by re-enabling an account, and by the admin dashboard —
@@ -10,7 +17,7 @@ import { query, transaction } from "@/lib/db/pool";
  * disagree.
  *
  * Admins are exempt, by decision: the cap is on people using RichHabit, and the
- * person running it should not have to spend one of the fifty to administer it.
+ * person running it should not have to spend a place to administer it.
  *
  * An account that has not yet proved its address takes no place. It is a
  * reservation of a username and an email, nothing more. Verifying is what
@@ -89,7 +96,7 @@ const CAPACITY_LOCK = 8_243_119;
  *
  * It reuses the capacity lock rather than adding a second one. Demotion
  * genuinely touches both concerns, since an admin who becomes a user starts
- * occupying one of the fifty places, and two locks acquired in different
+ * occupying a place, and two locks acquired in different
  * orders by different callers is how deadlocks are made. At this scale the
  * extra serialisation costs nothing.
  */

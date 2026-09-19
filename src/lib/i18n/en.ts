@@ -1140,10 +1140,14 @@ export const en = {
    */
   earlyAccess: {
     title: "Free Early Access",
-    body: "RichHabit is currently free for our first 50 users. To keep the service fair and reliable, we reserve the right to limit, suspend, or delete accounts in cases of excessive or abusive usage, misuse, attempts to exploit the service, or other activity that may negatively affect the platform or its users. Free access may also change as RichHabit evolves.",
-    /** Shown when the programme is full. The exact wording the product asked for. */
+    body: "RichHabit is currently free while it is in early access. To keep the service fair and reliable, we reserve the right to limit, suspend, or delete accounts in cases of excessive or abusive usage, misuse, attempts to exploit the service, or other activity that may negatively affect the platform or its users. Free access may also change as RichHabit evolves.",
+    /**
+     * Shown only if a sign-up limit is switched back on and reached. There is no
+     * limit by default, so this is dormant — and it deliberately names no
+     * number, because the number is configuration.
+     */
     fullTitle: "RichHabit Early Access Is Full",
-    fullBody: "Thank you for your interest in RichHabit. Our free early-access program is currently limited to the first 50 users, and all available spots have been filled.\n\nWe are working on the next version of RichHabit and future access options. Please check back later.",
+    fullBody: "Thank you for your interest in RichHabit. Sign-ups are paused for now, because the free programme has reached the number of accounts it can support.\n\nWe are working on the next version of RichHabit and future access options. Please check back later.",
     learnMore: "Learn more",
     agree: "I agree to the Free Early Access terms.",
     mustAgree: "Please accept the Free Early Access terms to create an account.",
@@ -1155,7 +1159,7 @@ export const en = {
       "Your habits, notes, journal and spending records are yours. Nothing you write is read by an administrator.",
       "You can export everything as JSON at any time, from More → Your data.",
       "You can ask for your account to be deleted, which removes it and everything it owns.",
-      "Free access is limited to the first 50 accounts while RichHabit is in early access, and may change later.",
+      "Free access is available while RichHabit is in early access, and may change later.",
       "If you ask for suggestions in Clarify Your Intention, your intention, why and vision are securely sent to Claude, Anthropic's AI model, to generate them. Nothing else is sent. Suggestions are optional, and nothing is added unless you choose to add it.",
     ],
   },
