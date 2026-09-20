@@ -2,8 +2,9 @@
 
 > Last updated: 2026-09-20
 >
-> **PHASE 4C — GRANDFATHERED PRO GRANTED: EXECUTED AND PRODUCTION VERIFIED 2026-09-20 02:58:15 UTC · FIXED LITERAL CUTOFF `2026-09-20T00:00:00Z` · **8** EXISTING NON-ADMIN ACCOUNTS NOW `plan='pro'`, `source='grandfathered'`, `expires_at=NULL`, `granted_by=NULL`, `note=NULL` · PERMANENT AND $0, NO PAYMENT PROVIDER · TWO TEST ACCOUNTS EXCLUDED BY EXACT UUID CONFIRMED BY THE PRODUCT OWNER AND REMAIN FREE · 5 ADMINS HOLD NO PLAN ROW AND STAY UNLIMITED THROUGH THE CENTRAL BYPASS · FUTURE ACCOUNTS DEFAULT FREE · RUN AS A STANDALONE ONE-OFF OPERATION, **NOT** ADDED TO `scripts/migrate.mjs` · `user_plans` IS THE ONLY TABLE THAT CHANGED · NO PRODUCT/CONTENT ROW CHANGED · NO SCHEMA CHANGE · NO DEPLOY · NO RENDER CHANGE · PHASE 5 ENFORCEMENT STILL NOT IMPLEMENTED**
-> **PHASE 4A/4B — ENTITLEMENT FOUNDATION: IMPLEMENTED → COMMITTED → PUSHED → LOCAL MIGRATION REHEARSAL VERIFIED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `37217f4` ON `main` → MIGRATION APPLIED TO PRODUCTION 2026-09-20 ~02:02 UTC (37 → 38 TABLES) → DEPLOYED TO RENDER (`dep-dank5iijnfac738tlc00`) → PRODUCTION VERIFIED 2026-09-20 · `user_plans` CREATED **EMPTY** (0 ROWS THROUGHOUT PHASE 4B; PHASE 4C LATER GRANTED 8) · NO FREE LIMITS ENFORCED · TWO PRE-EXISTING RUNNER BACKFILLS UNEXPECTEDLY BECAME PENDING AND WERE APPLIED AND ACCEPTED (ONE NULL `users.username`, ONE NULL `habits.template_key`) · NO ROW CREATED OR DELETED · EVERY PRODUCT ROW COUNT UNCHANGED · PHASE 5 (ENFORCEMENT) STILL PENDING**
+> **PHASE 5 — FREE PLAN ENFORCEMENT: IMPLEMENTED → COMMITTED → PUSHED → REHEARSED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `2410bd3` ON `main` → MIGRATION APPLIED 2026-09-20, SHORTLY BEFORE THE 04:44 UTC HEALTH CHECK (38 → 39 TABLES) → DEPLOYED TO RENDER (`dep-danmdsmk1f9s73979ceg`) → PRODUCTION VERIFIED 2026-09-20 · **MIGRATION BEFORE DEPLOY**, BECAUSE THE DEPLOYED CODE READS `priority_quota_usage` FOR FREE PRIORITY CREATION · FREE = **15 ACTIVE HABITS** AND **5 NEW PRIORITIES PER SERVER-DERIVED LOCAL DAY** · GRANDFATHERED PRO (8) AND ADMIN (5) UNLIMITED AND WRITE NO QUOTA ROW · ONLY TRANSITIONS *INTO* ACTIVE ARE GATED; AN ACCOUNT OVER THE LIMIT KEEPS EVERYTHING · `priority_quota_usage` CREATED **EMPTY** AND STILL 0 ROWS · NO EXISTING USER DATA MIGRATED, MODIFIED OR DELETED · NO PAYMENT INFRASTRUCTURE · KNOWN **VERIFICATION GAP** (NOT A DEFECT): SIMULTANEOUS MULTI-SESSION LOCK CONTENTION NOT YET EXECUTED**
+> **PHASE 4C — GRANDFATHERED PRO GRANTED: EXECUTED AND PRODUCTION VERIFIED 2026-09-20 02:58:15 UTC · FIXED LITERAL CUTOFF `2026-09-20T00:00:00Z` · **8** EXISTING NON-ADMIN ACCOUNTS NOW `plan='pro'`, `source='grandfathered'`, `expires_at=NULL`, `granted_by=NULL`, `note=NULL` · PERMANENT AND $0, NO PAYMENT PROVIDER · TWO TEST ACCOUNTS EXCLUDED BY EXACT UUID CONFIRMED BY THE PRODUCT OWNER AND REMAIN FREE · 5 ADMINS HOLD NO PLAN ROW AND STAY UNLIMITED THROUGH THE CENTRAL BYPASS · FUTURE ACCOUNTS DEFAULT FREE · RUN AS A STANDALONE ONE-OFF OPERATION, **NOT** ADDED TO `scripts/migrate.mjs` · `user_plans` IS THE ONLY TABLE THAT CHANGED · NO PRODUCT/CONTENT ROW CHANGED · NO SCHEMA CHANGE · NO DEPLOY · NO RENDER CHANGE · PHASE 5 ENFORCEMENT SHIPPED SEPARATELY IN `2410bd3`**
+> **PHASE 4A/4B — ENTITLEMENT FOUNDATION: IMPLEMENTED → COMMITTED → PUSHED → LOCAL MIGRATION REHEARSAL VERIFIED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `37217f4` ON `main` → MIGRATION APPLIED TO PRODUCTION 2026-09-20 ~02:02 UTC (37 → 38 TABLES) → DEPLOYED TO RENDER (`dep-dank5iijnfac738tlc00`) → PRODUCTION VERIFIED 2026-09-20 · `user_plans` CREATED **EMPTY** (0 ROWS THROUGHOUT PHASE 4B; PHASE 4C LATER GRANTED 8) · NO FREE LIMITS ENFORCED · TWO PRE-EXISTING RUNNER BACKFILLS UNEXPECTEDLY BECAME PENDING AND WERE APPLIED AND ACCEPTED (ONE NULL `users.username`, ONE NULL `habits.template_key`) · NO ROW CREATED OR DELETED · EVERY PRODUCT ROW COUNT UNCHANGED · PHASE 5 (ENFORCEMENT) SHIPPED IN `2410bd3`**
 > **PHASE 3 — ADMIN → USERS MODERNIZED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `bf2d13c` ON `main` → DEPLOYED TO RENDER → DESKTOP **AND** MOBILE VISUAL QA BY THE PRODUCT OWNER 2026-09-19 · GROUPED TABLE (ACCOUNT · RICH HABITS · PRIORITY COMPASS · COMMUNITY · CLARIFY INTENTION · PLANNING) · GOALS AND REVIEWS REMOVED · ACTIVE HABITS NOW MEANS `status = 'active'` · COMMUNITY RANK/% READ FROM THE EXISTING CACHE AND NEVER COMPUTED · PLAN IS PRESENTATION ONLY (ADMIN / FREE) · NO MIGRATION · NO SCHEMA CHANGE · NO PRODUCTION DATA TOUCHED**
 > **PHASE 2 — EARLY-ACCESS ACCOUNT CAP REMOVED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `80da10b` ON `main` → DEPLOYED TO RENDER → `EARLY_ACCESS_USER_LIMIT=0` SET IN RENDER (WHICH TRIGGERED A SECOND DEPLOY) → PRODUCTION VERIFIED 2026-09-19 · SIGN-UP IS OPEN · NO MIGRATION · NO SCHEMA CHANGE · NO USER DATA TOUCHED · THE CAP MACHINERY IS INTACT AND RE-ENABLED BY SETTING A POSITIVE NUMBER**
 > **PHASE 1B — CONSUMER AI ON CLAUDE: PRODUCTION DEPLOYED + VERIFIED · `9fa4684` PUSHED TO `main` (fast-forward from `b903dd7`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · AI COACH AND AI HABIT RECOMMENDATIONS MIGRATED OpenAI → CLAUDE (`claude-sonnet-5`) · OPENAI RUNTIME DEPENDENCY REMOVED ENTIRELY · COACH ANSWERED FOR THE FIRST TIME IN PRODUCTION (ENGLISH AND 中文, THROWAWAY ACCOUNT ONLY) · NO MIGRATION · NO RENDER VARIABLE CHANGED**
@@ -17,34 +18,40 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `37217f4` (Phase 4A), fast-forwarded from
-> `dc168d3`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
+> **Repository:** `origin/main` is `2410bd3` (Phase 5), fast-forwarded from
+> `84eb5bc`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
 > `83e7ebb` (front page), `9444828`, `6c49f9e` (email verification for an address
 > an account already has), `d905d4e` (password recovery), `ee0761a` (Phase 1),
 > `b903dd7` (status), `9fa4684` (Phase 1B), `fd06064` and `1d3997d` (status),
 > `80da10b` (Phase 2), `fa8be5f` (status), `bf2d13c` (Phase 3), `f45ab74` and
-> `dc168d3` (status), `37217f4` (Phase 4A).
+> `dc168d3` (status), `37217f4` (Phase 4A), `75e8c3a` and `84eb5bc` (status),
+> `2410bd3` (Phase 5).
 > `f7499fc`, `0f02a6e` and `74d2eb3` are all ancestors of it.
 >
-> **Production database:** 38 tables. The seven AI Workspace tables (additive,
+> **Production database:** 39 tables. The seven AI Workspace tables (additive,
 > created empty 2026-09-13), `password_resets` (the password-recovery release),
-> `coach_requests` (2026-09-19) and `user_plans` (2026-09-20, Phase 4B) were each
-> added additively and created empty; every pre-existing table, index, constraint
-> and row was verified unchanged after each. `user_plans` was created empty and
-> stayed empty for all of Phase 4B; it holds **8 rows** since the Phase 4C grant
-> of 2026-09-20 02:58:15 UTC — eight permanent Grandfathered Pro grants, one per
-> eligible account, and nothing else has ever been written to it.
+> `coach_requests` (2026-09-19), `user_plans` (2026-09-20, Phase 4B) and
+> `priority_quota_usage` (2026-09-20, Phase 5) were each added additively and
+> created empty; every pre-existing table, index, constraint and row was verified
+> unchanged after each. `user_plans` was created empty and stayed empty for all of
+> Phase 4B; it holds **8 rows** since the Phase 4C grant of 2026-09-20 02:58:15
+> UTC — eight permanent Grandfathered Pro grants, one per eligible account, and
+> nothing else has ever been written to it (lifetime `ins/upd/del = 8/0/0`).
+> `priority_quota_usage` holds **0 rows** (`0/0/0`): only a Free account creating a
+> priority writes there, and the two Free accounts are dormant test accounts.
 >
-> **Deployed application:** `37217f44a5dc25245d3192a62edc1d239de9dc42` (Phase 4A),
-> deployed on Render by the Product Owner as `dep-dank5iijnfac738tlc00` and
-> confirmed live 2026-09-20. Render reported the exact commit, the Product Owner
-> visually confirmed the new Plan column in Admin → Users, and a read-only probe
-> proves it server-side: `pg_stat_user_tables.seq_scan` for `user_plans` moved
-> above its pre-deploy baseline, which only the `left join user_plans` added in
-> this commit can do. Phase 3 (`bf2d13c`) remains an ancestor and its seven
-> stylesheet classes are still served. Render has not auto-deployed recent
-> releases — Phase 1, 1B and 2 were each still serving the previous build minutes
-> after the push — and it deploys only what is on `main`.
+> **Deployed application:** `2410bd314c791d1d9377d414b3f5113e100d2af7` (Phase 5),
+> deployed on Render by the Product Owner as `dep-danmdsmk1f9s73979ceg` and
+> confirmed live 2026-09-20. Render reported the exact commit, and a
+> self-validating served-bundle probe proves it: all six new limit strings
+> (English and 中文) were **absent** from the bundle before the deploy and are
+> **present** after, with four control strings found in both runs — including
+> server-only `errors.*` entries, which is what establishes that the dictionary
+> ships to the client wholesale and therefore that this probe can see the new
+> copy at all. Phase 4A (`37217f4`, `dep-dank5iijnfac738tlc00`) and Phase 3
+> (`bf2d13c`) remain ancestors. Render has not auto-deployed recent releases —
+> Phase 1, 1B and 2 were each still serving the previous build minutes after the
+> push — and it deploys only what is on `main`.
 >
 > **Note for future production migrations:** a schema comparison alone is not a
 > sufficient preflight. See the Phase 4B section — two long-standing data
@@ -58,6 +65,100 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Phase 5 — Free plan enforcement (PRODUCTION MIGRATED · DEPLOYED · VERIFIED)
+
+The entitlements defined in Phase 4 are now enforced. Free accounts are held to
+**15 active habits** and **5 new priorities per their own local calendar day**;
+Grandfathered Pro and Admin are unlimited. Nothing existing was migrated, paused,
+retired or deleted to make that true.
+
+| Item | State |
+| --- | --- |
+| app commit | `2410bd314c791d1d9377d414b3f5113e100d2af7` (`feat: enforce Free plan limits`), fast-forwarded onto `main` from `84eb5bc` |
+| release path | IMPLEMENTED → COMMITTED → PUSHED → LOCAL REHEARSAL → **PRODUCTION MIGRATION** → DEPLOYED → **PRODUCTION VERIFIED** (2026-09-20) |
+| scope | 18 files, +1320/−46: 5 new (the migration module and its types, three test files) and 13 modified |
+| Render deployment | `dep-danmdsmk1f9s73979ceg`, LIVE. **No environment variable, configuration, build or start command changed** |
+| **release order** | **MIGRATION BEFORE DEPLOY**, and this one mattered: the deployed code reads `priority_quota_usage` on every Free priority creation, so shipping the code first would have broken priority creation for Free accounts while leaving Pro and Admin working — an easy failure to miss |
+| production schema | **39 tables** (38 before). `priority_quota_usage` is the only addition |
+| the quota table | `user_id` + `local_day` composite primary key, `created integer not null default 0 check (created >= 0)`, FK to `users` **ON DELETE CASCADE**, no index beyond the primary key, no `updated_at` and therefore no trigger |
+| no reset job | the local day is half the primary key, so tomorrow is a different row and yesterday's count simply stops being consulted |
+| rows | **0**, lifetime `ins/upd/del = 0/0/0`. Only a Free account creating a priority writes here |
+| habit limit | gated **only** on a transition *into* active (`h.status === "active" && !wasActive`). Editing, renaming, rescheduling, completing, pausing, retiring and editing an inactive habit are never refused |
+| already over the limit | keeps everything, stays fully editable, may reduce. Nothing is ever auto-paused, auto-retired or deleted — a test seeds an account at **17** active habits and proves every one survives |
+| habit concurrency | a per-account `pg_advisory_xact_lock(8_243_122, hashtext(userId))` inside the write's own transaction. Without it two concurrent creations both read 14 and commit 16 |
+| priority quota | charged in the same transaction as the insert, by `on conflict (user_id, local_day) do update set created = created + 1 where created < $limit returning created` — the row lock serialises, and zero rows returned *is* the refusal |
+| order of operations | duplicate check → insert → charge. That ordering is what makes a retry free; atomicity is unaffected because a refused charge rolls the insert back with it |
+| retry safety | the priority id is the client's, so a resent POST returns as a no-op: nothing inserted, **nothing charged**. Another account's id returns the shared non-disclosing 404 |
+| never consumes quota | rollover, editing, planning, reordering, quadrant changes, completion, reopening — and **deleting does not refund**, because the day was spent creating the line |
+| rollover | unchanged and still a pure client-side derivation in `lib/priorities.ts` (`createdOn <= date && (completedOn === null || completedOn >= date)`). That file contains no SQL and imports no database module at all |
+| the local day | derived on the **server** from `x-rh-timezone` through `viewerToday`, never from the `created_on` the browser sends. `created_on` still records which day a line belongs to |
+| Pro and Admin | resolve to an unlimited entitlement and return **before** any lock is taken, anything is counted, or any quota row is written — they pay nothing and leave no trace |
+| the boundary | enforcement exists in exactly two functions, `saveHabit` and `addPriority`, both asking `limitFor(await getActor(userId, q), …)`. `getActor` gained an optional scoped query so the plan and the count are read in one snapshot |
+| API | **409** with `{error: <localized sentence>, code: "plan_limit_reached", feature, limit}`. The machine fields sit *beside* `error` because the browser renders `error` verbatim — a code in that field would have put `plan_limit_reached` on somebody's screen |
+| UX | the existing dismissible banner, in both languages, with the number taken from the entitlement. The store does **not** append "that change wasn't saved" to an allowance. No modal, no pricing, no upgrade button, **no payment infrastructure of any kind** |
+| existing data | **nothing migrated, modified or deleted.** No backfill; absence of a row means nothing used |
+| Phase 4C grants | untouched: still 8 rows, 8 Grandfathered Pro, lifetime `8/0/0` |
+
+**Local verification:** **1172 of 1172** tests across 66 files (48 new: 17 habit
+limit, 19 priority quota, 12 quota migration), typecheck and lint clean,
+production build **64/64** pages. The Phase 4 guard tests that asserted *nothing*
+enforces were **inverted rather than deleted** — what mattered was never "nothing
+enforces", it was that enforcement cannot leak out of the entitlement boundary,
+and that is still what fails the build.
+
+**Migration rehearsal, disposable database over TCP: 16/16.** Seeded at the
+pre-Phase-5 schema with a Free account deliberately holding **17** active habits,
+a Pro account with 20, and an admin. The quota table was created empty; no
+existing column, index, constraint or trigger changed; every row count stayed
+identical; habits were byte-identical with all 17 active preserved; the
+Grandfathered Pro grant was untouched; a second run reported `Nothing to do`; and
+the migrated table was identical to a fresh install.
+
+**Production migration, 2026-09-20.** Gate 1 re-ran **every** data-writing
+predicate in the runner read-only first — username NULL 0, habit template-key
+backfills across 15 keys 0, nighttime read mapping 0, unit canonicalization
+**evaluated exactly per key** (`min`/`glasses`/`tasks`/`hr` all 0), goal
+template-key backfills 0, legacy priority conversion skipped because 86
+priorities exist. The runner then reported exactly `created priority_quota_usage`
+and **`Done — 1 change(s).`**
+
+*Why the per-key evaluation mattered:* a flattened superset of the unit aliases
+matched **68 rows**, which looked like a pending backfill. It was not — all 68
+already hold a canonical unit, so the `unit <> $1` half of the real predicate
+excludes every one. Reporting "0/skipped" off a matched superset would have
+repeated the Phase 4B mistake precisely.
+
+**Production verification after deployment, read-only.** 39 tables ·
+`priority_quota_usage` present with the approved key, CHECK and cascade, **0
+rows**, `0/0/0` · `user_plans` still 8/8 at `8/0/0` · accounts 15 / 5 admin / 10
+non-admin / 0 disabled · every product row count identical to pre-migration ·
+`/` 200 and `/api/health` 200 with `db: up`, protected routes redirecting,
+unauthenticated writes refused · no `priority_quota_usage`, `user_plans`,
+`pg_advisory_xact_lock`, credential or host string anywhere in the served bundle.
+Entitlement resolution computed by query without mutating anything: **Admin 5 +
+Pro · Grandfathered 8 + Free 2 = 15**, no quota row for any admin or Pro account,
+and neither Free account near its habit limit (20 active between them, 10 each).
+**No production content was created to verify any of this.**
+
+**Known verification gap — not a defect.** Real **simultaneous** multi-session
+PostgreSQL lock contention has not been executed. It is a gap in *verification*
+coverage, not a known bug and not a failed mechanism: the implementation uses
+ordinary PostgreSQL transactional locking, and it is covered by sequential and
+invariant tests, by source-level assertions on the ordering of lock/count and
+insert/charge, and by the migration rehearsal. It could not be run because no
+isolated multi-connection PostgreSQL environment was available — both pre-existing
+Neon rehearsal branches reject authentication, there is no Neon API key, and
+Docker, Homebrew and a local `postgres` binary are all absent, while PGlite serves
+a single connection even over TCP. **Do not run this experiment against
+production.** Carry it out when an isolated environment exists; the worst case it
+would catch is a benign overshoot (16 active habits rather than 15, or 6
+priorities in a day rather than 5) with no data loss, self-correcting on the next
+attempt.
+
+**Blast radius today: two accounts.** With 5 Admin and 8 Pro unlimited, only
+`rhsmoke64t0ru` and `meimei` can meet a limit, and each holds 10 active habits
+and 0 priorities. Neither was deleted.
 
 ## Phase 4C — Grandfathered Pro granted (EXECUTED · PRODUCTION VERIFIED)
 
