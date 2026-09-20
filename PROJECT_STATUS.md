@@ -1,7 +1,8 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-09-19
+> Last updated: 2026-09-20
 >
+> **PHASE 4A/4B — ENTITLEMENT FOUNDATION: IMPLEMENTED → COMMITTED → PUSHED → LOCAL MIGRATION REHEARSAL VERIFIED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `37217f4` ON `main` → MIGRATION APPLIED TO PRODUCTION 2026-09-20 ~02:02 UTC (37 → 38 TABLES) → DEPLOYED TO RENDER (`dep-dank5iijnfac738tlc00`) → PRODUCTION VERIFIED 2026-09-20 · `user_plans` CREATED **EMPTY** AND STILL HOLDS 0 ROWS · NO ENTITLEMENT GRANT · NO FREE LIMITS ENFORCED · TWO PRE-EXISTING RUNNER BACKFILLS UNEXPECTEDLY BECAME PENDING AND WERE APPLIED AND ACCEPTED (ONE NULL `users.username`, ONE NULL `habits.template_key`) · NO ROW CREATED OR DELETED · EVERY PRODUCT ROW COUNT UNCHANGED · PHASE 4C (GRANDFATHERED PRO) AND PHASE 5 (ENFORCEMENT) STILL PENDING**
 > **PHASE 3 — ADMIN → USERS MODERNIZED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `bf2d13c` ON `main` → DEPLOYED TO RENDER → DESKTOP **AND** MOBILE VISUAL QA BY THE PRODUCT OWNER 2026-09-19 · GROUPED TABLE (ACCOUNT · RICH HABITS · PRIORITY COMPASS · COMMUNITY · CLARIFY INTENTION · PLANNING) · GOALS AND REVIEWS REMOVED · ACTIVE HABITS NOW MEANS `status = 'active'` · COMMUNITY RANK/% READ FROM THE EXISTING CACHE AND NEVER COMPUTED · PLAN IS PRESENTATION ONLY (ADMIN / FREE) · NO MIGRATION · NO SCHEMA CHANGE · NO PRODUCTION DATA TOUCHED**
 > **PHASE 2 — EARLY-ACCESS ACCOUNT CAP REMOVED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `80da10b` ON `main` → DEPLOYED TO RENDER → `EARLY_ACCESS_USER_LIMIT=0` SET IN RENDER (WHICH TRIGGERED A SECOND DEPLOY) → PRODUCTION VERIFIED 2026-09-19 · SIGN-UP IS OPEN · NO MIGRATION · NO SCHEMA CHANGE · NO USER DATA TOUCHED · THE CAP MACHINERY IS INTACT AND RE-ENABLED BY SETTING A POSITIVE NUMBER**
 > **PHASE 1B — CONSUMER AI ON CLAUDE: PRODUCTION DEPLOYED + VERIFIED · `9fa4684` PUSHED TO `main` (fast-forward from `b903dd7`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · AI COACH AND AI HABIT RECOMMENDATIONS MIGRATED OpenAI → CLAUDE (`claude-sonnet-5`) · OPENAI RUNTIME DEPENDENCY REMOVED ENTIRELY · COACH ANSWERED FOR THE FIRST TIME IN PRODUCTION (ENGLISH AND 中文, THROWAWAY ACCOUNT ONLY) · NO MIGRATION · NO RENDER VARIABLE CHANGED**
@@ -15,28 +16,38 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `bf2d13c` (Phase 3), fast-forwarded from
-> `fa8be5f`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
+> **Repository:** `origin/main` is `37217f4` (Phase 4A), fast-forwarded from
+> `dc168d3`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
 > `83e7ebb` (front page), `9444828`, `6c49f9e` (email verification for an address
 > an account already has), `d905d4e` (password recovery), `ee0761a` (Phase 1),
 > `b903dd7` (status), `9fa4684` (Phase 1B), `fd06064` and `1d3997d` (status),
-> `80da10b` (Phase 2), `fa8be5f` (status), `bf2d13c` (Phase 3).
+> `80da10b` (Phase 2), `fa8be5f` (status), `bf2d13c` (Phase 3), `f45ab74` and
+> `dc168d3` (status), `37217f4` (Phase 4A).
 > `f7499fc`, `0f02a6e` and `74d2eb3` are all ancestors of it.
 >
-> **Production database:** 37 tables. The seven AI Workspace tables (additive,
-> created empty 2026-09-13), `password_resets` (the password-recovery release) and
-> `coach_requests` (2026-09-19) were each added additively and created empty;
-> every pre-existing table, index, constraint and row was verified unchanged
-> after each.
+> **Production database:** 38 tables. The seven AI Workspace tables (additive,
+> created empty 2026-09-13), `password_resets` (the password-recovery release),
+> `coach_requests` (2026-09-19) and `user_plans` (2026-09-20, Phase 4B) were each
+> added additively and created empty; every pre-existing table, index, constraint
+> and row was verified unchanged after each. `user_plans` still holds **0 rows**:
+> the entitlement store exists, and nothing has ever been written to it
+> (`n_tup_ins = n_tup_upd = n_tup_del = 0`).
 >
-> **Deployed application:** `bf2d13c1927f662906982a22b7f3fb343a0b93b1` (Phase 3),
-> deployed on Render by the Product Owner and confirmed live 2026-09-19 22:05 UTC
-> — the Phase 3 stylesheet classes (`.au-table`, `.au-plan`, `.au-sub`,
-> `.au-sort`, `.au-cards`, `.au-metrics`, the `@container (min-width: 760px)` rule
-> and the sticky `.au-user`) are all present in the served CSS, and none of them
-> existed in production before this commit. Render has not auto-deployed recent
+> **Deployed application:** `37217f44a5dc25245d3192a62edc1d239de9dc42` (Phase 4A),
+> deployed on Render by the Product Owner as `dep-dank5iijnfac738tlc00` and
+> confirmed live 2026-09-20. Render reported the exact commit, the Product Owner
+> visually confirmed the new Plan column in Admin → Users, and a read-only probe
+> proves it server-side: `pg_stat_user_tables.seq_scan` for `user_plans` moved
+> above its pre-deploy baseline, which only the `left join user_plans` added in
+> this commit can do. Phase 3 (`bf2d13c`) remains an ancestor and its seven
+> stylesheet classes are still served. Render has not auto-deployed recent
 > releases — Phase 1, 1B and 2 were each still serving the previous build minutes
 > after the push — and it deploys only what is on `main`.
+>
+> **Note for future production migrations:** a schema comparison alone is not a
+> sufficient preflight. See the Phase 4B section — two long-standing data
+> backfills in `scripts/migrate.mjs` were pending in production and invisible to a
+> schema diff.
 >
 > **Production Render configuration:** `EARLY_ACCESS_USER_LIMIT=0`. No other
 > environment variable was changed in Phase 2, and no value was read or printed
@@ -45,6 +56,114 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Phase 4A/4B — entitlement foundation (PRODUCTION DEPLOYED · MIGRATED · VERIFIED)
+
+The product had no notion of what an account is *entitled* to. It has one now: a
+`user_plans` table and a single module that answers the question. **Nothing is
+granted and nothing is enforced** — this phase exists so that Phase 4C can grant
+Grandfathered Pro and Phase 5 can enforce Free limits without either of them
+inventing its own idea of a plan.
+
+| Item | State |
+| --- | --- |
+| app commit | `37217f44a5dc25245d3192a62edc1d239de9dc42` (`feat: add entitlement foundation`), fast-forwarded onto `main` from `dc168d3` |
+| release path | IMPLEMENTED → COMMITTED → PUSHED → **LOCAL MIGRATION REHEARSAL VERIFIED** → **PRODUCTION MIGRATION APPLIED** → DEPLOYED → **PRODUCTION VERIFIED** (2026-09-20) |
+| scope | **13 files** — `src/lib/entitlements/{index,actor}.ts` (new), `src/lib/admin/plan.ts`, `src/lib/analytics/queries.ts`, `src/app/admin/users/UsersTable.tsx`, `src/app/admin/users/[id]/page.tsx`, `scripts/migrations/user-plans.{mjs,d.mts}`, `scripts/migrate.mjs`, `db/schema.sql` and three test files |
+| Render deployment | `dep-dank5iijnfac738tlc00`, LIVE. **No environment variable, configuration, build or start command changed** |
+| production schema | **38 tables** (37 before). `user_plans` is the only addition anywhere in the public schema |
+| columns | exactly eight: `user_id` (uuid, PK), `plan`, `source`, `granted_at`, `expires_at`, `note`, `granted_by`, `updated_at` |
+| constraints | `PRIMARY KEY (user_id)` · `user_id → users(id) ON DELETE CASCADE` · `granted_by → users(id) ON DELETE SET NULL` · `CHECK (plan IN ('free','pro'))` · `CHECK (source IS NULL OR source IN ('grandfathered','purchased','gifted','promotional','trial','support'))` · `CHECK (plan <> 'pro' OR source IS NOT NULL)` — a Pro row cannot exist without a provenance |
+| index and trigger | `user_plans_plan_idx` btree `(plan)`; `user_plans_touch` before update, reusing the existing `touch_updated_at()` |
+| rows | **0, and never anything else.** `n_tup_ins`, `n_tup_upd` and `n_tup_del` are all 0, so no row has ever been inserted, updated or deleted |
+| the boundary | one module decides: `entitlements(actor)` and `limitFor(actor, feature)`. `effectivePlan` is the single place expiry is applied, so an expired grant cannot read as Pro on one screen and Free to a feature. **No row means Free**, which is why introducing plans changed nobody |
+| admin bypass | central, in `entitlements()`. No feature branches on a role |
+| unlimited | `null` — never `0` (the Phase 2 cap bug) and never `Infinity` (which JSON cannot carry) |
+| Free limits defined | 15 active habits, 5 new priorities per local day. **Defined, not enforced** |
+| enforcement | **none.** No route calls `limitFor`, `entitlements()` or `getActor()`; nothing refuses a request on a plan; `priority_quota_usage` does not exist. Verified against the deployed tree, not only by test |
+| billing | **absent by construction.** No Stripe, customer, subscription, invoice, checkout or price field anywhere in the entitlement module, the admin badge or the migration. A feature asks what an account is entitled to, never whether it paid |
+| privacy | `user_plans.note` is admin prose about a person and is **never selected** by any query. The admin listing selects only `up.plan`, `up.source` and `up.expires_at` |
+| Admin → Users | gained a Plan column: `Admin` for administrators, `Free` for everyone else, and `Pro` with its source once grants exist. Presentation only — it reads no database and no environment |
+| Phase 4C | **pending.** The Grandfathered Pro grant is blocked on the two excluded test-account IDs, which must come from a read-only roster review with the Product Owner and must never be reconstructed heuristically |
+| Phase 5 | **pending.** `priority_quota_usage`, the server-derived local quota day, the transactional priority insert and Free-limit enforcement with bilingual UX |
+| `feedback_created_idx` | **known unrelated drift, intentionally untouched.** Present in `db/schema.sql`, absent from production, created by no migration step. Out of scope for Phase 4 and deliberately not fixed |
+
+**A real bug the tests found.** `planBadge`'s lapsed-plan branch tested
+`account.plan === "pro"`, but callers hand it the *effective* plan, so the branch
+was unreachable from the admin listing. It infers from `source` alone now, which
+is sound because the table's CHECK means a Free row needs no source at all.
+
+**Local verification before release:** typecheck clean, lint clean, **1119 of
+1119** unit tests across 63 files (61 targeted: 23 entitlements, 13 migration, 25
+admin), production build compiled with 64/64 pages.
+
+**Local migration rehearsal — PASS, twice.** First against the migration step
+directly (22/22), then a final **full-runner rehearsal over TCP** (18/18): a
+disposable PGlite database served on `127.0.0.1:5433`, seeded at the pre-Phase-4
+schema and migrated by the real `node scripts/migrate.mjs` rather than by calling
+the step — because that is the execution path production would use. It verified
+that `user_plans` is created empty with exactly the approved shape, that a second
+run reports `Nothing to do`, and that every seeded user, habit and priority row
+stayed byte-identical. The disposable database was deleted afterwards.
+
+**Two pre-existing runner backfills unexpectedly became pending — applied and
+accepted.** The preflight predicted `Done — 2 change(s)`. The runner reported
+**4**:
+
+| Change | What it did |
+| --- | --- |
+| `created user_plans` | expected |
+| `created trigger user_plans_touch` | expected |
+| `username → richhabituser01` | **unexpected.** One account had no username; a long-standing step filled it. `where username is null` means no chosen username could be overwritten, and `username` was the only column written |
+| `habits → exercise: 1` | **unexpected.** One habit named as an "Exercise" starter had no `template_key`; a long-standing step filled it. `template_key` was the only column written — no name, status, category, schedule, goal link or completion history |
+
+Both were reviewed and **accepted by the Product Owner**, who directed that
+neither be reverted. Neither created or deleted a row; every product row count is
+unchanged. The change budget closes exactly: 4 = table + trigger + username +
+`template_key`, which is what proves no other step wrote anything. One
+consequence is honest to record: keying a starter habit is what lets its
+displayed name follow the reader's locale instead of staying frozen as stored
+text, so that single habit's name may now localise — the intended behaviour of
+that step.
+
+**The preflight lesson, recorded so it is not repeated.** A schema comparison
+alone is **not** a sufficient production preflight. Before running the normal
+runner against production, inspect **both** the pending schema operations **and
+every data-backfill predicate the runner can execute** — for example
+`where username is null` and `where template_key is null and name = any(...)` —
+by running each as a read-only `count(*)`. A backfill step with rows still
+pending is indistinguishable from a no-op in a schema diff. Never assume an old
+step is a no-op merely because the schema object it creates already exists. Note
+also that `users` carries **no `updated_at`** column, so timestamp evidence
+cannot bound writes to that table; the runner's change-count arithmetic can.
+
+**Production migration, 2026-09-20, read-only preflight then one transaction**
+
+| Check | Result |
+| --- | --- |
+| target | the production Neon database, identified by host fingerprint without printing any credential, connection string or host |
+| preflight gate | table count 37, `user_plans` absent, no colliding relation/trigger/constraint/type, `users` has no `plan` column, accounts 15 / 5 admin / 10 non-admin / 0 disabled, `users.id` a uuid primary key so both foreign keys are supported, `touch_updated_at()` present and already used by 7 triggers, role may `CREATE` in `public` |
+| what would change | proved by diffing production against the post-migration rehearsal: the only table production lacked was `user_plans`; no column, no trigger, and no index other than the pre-existing `feedback_created_idx` drift |
+| locking | the two foreign keys take a brief `ShareRowExclusiveLock` on `users` — writes to `users` blocked for milliseconds, reads never, and no validation because the new table is empty |
+| runner result | exit code **0**, `Done — 4 change(s).` inside the runner's single `begin`/`commit` |
+
+**Production verification after deployment, 2026-09-20, read-only**
+
+| Check | Result |
+| --- | --- |
+| serving `37217f4` | **yes**, three independent ways: Render reported the exact commit for `dep-dank5iijnfac738tlc00`; the Product Owner confirmed the Plan column renders in Admin → Users, which is impossible on the previous build; and `user_plans` scan counters rose above their pre-deploy baseline, which only this commit's `left join user_plans` can cause |
+| Admin → Users | **PASS** (Product Owner): loads, Plan column present, admin accounts read `Admin`, regular accounts read `Free`, 15 users listed. No Pro or Grandfathered badge anywhere, because no grant exists |
+| schema | **38 tables**; `user_plans` present; every pre-existing table's columns, indexes and triggers byte-identical to the pre-migration baseline (0 added, 0 lost) |
+| `user_plans` | **0 rows**, 0 Pro rows, `n_tup_ins`/`n_tup_upd`/`n_tup_del` all 0, `n_live_tup`/`n_dead_tup` 0/0 |
+| accounts | **15**, unchanged — 5 admin, 10 non-admin, 0 disabled, 2 without an email address. 0 created |
+| product data | **every row count identical** to the Phase 4B baseline: profiles 15, habits 172, habit_completions 128, priorities 86, day_notes 9, goals 45, weekly_reviews 0, coach_requests 2, day_priorities 2, intentions 2, analytics_events 865, user_sessions 148. 1904 rows in total, unchanged |
+| deployment wrote nothing | **0 rows written anywhere in the 15 minutes covering the deploy and verification**, across all 18 tables carrying `updated_at`. The most recent write in the database is the migration's own `template_key` backfill |
+| Priority Compass and Rich Habits | **behaviour unchanged, proved by identity rather than by testing**: `src/app/api`, `src/app/(app)` and `src/lib/db/queries.ts` are byte-identical between the previously deployed `dc168d3` and `37217f4`, so `addPriority`, `saveHabit` and the completion routes cannot behave differently |
+| no enforcement | no route or page calls `limitFor`, `entitlements()` or `getActor()`; nothing in `src/app/api` refuses a request on a plan; `priority_quota_usage` exists neither as a migration nor in `db/schema.sql` |
+| no grant | `user_plans` holds 0 rows of any kind, so **no Grandfathered Pro grant occurred** |
+| application health | `/` 200, `/api/health` 200 with `db: up`; `/sign-in`, `/priorities`, `/habits`, `/admin/users` redirect a signed-out visitor; `/api/state` 401. No 5xx |
+| bundle privacy | no `user_plans`, `grandfathered`, `plan_source`, `entitlement` or `Pro ·` string in public HTML; plan presentation is imported only by the two admin screens |
+| payments | no Stripe, checkout, subscription or price identifier anywhere in `src/` |
 
 ## Phase 1 — AI Coach durable safety limit (PRODUCTION DEPLOYED · MIGRATED · VERIFIED)
 
