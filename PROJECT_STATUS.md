@@ -160,6 +160,41 @@ attempt.
 `rhsmoke64t0ru` and `meimei` can meet a limit, and each holds 10 active habits
 and 0 priorities. Neither was deleted.
 
+### Where things stand, and the next step
+
+**Nothing is pending in production.** Phases 1, 1B, 2, 3, 4A/4B, 4C and 5 are all
+migrated where applicable, deployed and verified. `origin/main` is `6ec2cf1`
+(this documentation commit) on top of the reviewed application commit `2410bd3`,
+which is what Render serves. No database action, Render change or deployment is
+outstanding, and the working tree is clean with no test artefacts or processes
+left behind.
+
+**Recommended next step: nothing is required.** When work resumes, the two open
+threads are, in the order I would take them:
+
+1. **The Phase 5 concurrency follow-up** — run the simultaneous multi-session
+   contention test described above. It is *blocked on an environment, not on code*.
+   To unblock, one of: an **empty** Neon project or database (not a branch of
+   production, which would clone real rows into a test environment); a Neon API
+   key so a disposable empty project can be created and dropped; refreshed
+   passwords on `REHEARSAL_DATABASE_URL` / `REHEARSAL_DATABASE_URL_TEST`, which
+   both currently fail authentication and are therefore misleading as they stand;
+   or authorization to install Docker or Postgres.app. Do **not** run it against
+   production.
+2. **Phase 6 — the AI allowance review**, including the deliberately unresolved
+   question recorded in `src/lib/recommend.ts`: habit recommendations have no
+   limiter of their own and must not borrow `coach_requests`. Then **Phase 7**, a
+   final production-readiness review. **Payments and Stripe remain deferred
+   indefinitely**, and entitlements stay billing-independent: a feature asks what
+   an account is entitled to, never whether it paid.
+
+**Carried, unchanged, none of them blocking:** `feedback_created_idx` remains
+known unrelated drift and is intentionally untouched; `rhsmoke64t0ru` is still
+live and is now permanently Free; two admin accounts have no email address and so
+cannot use password recovery; the sign-in throttle is still in process memory; and
+sign-up still reveals whether an address is registered, which was a deliberate
+product decision rather than an oversight.
+
 ## Phase 4C — Grandfathered Pro granted (EXECUTED · PRODUCTION VERIFIED)
 
 Everyone who was already using RichHabit before it had plans keeps everything,
@@ -240,7 +275,7 @@ inventing its own idea of a plan.
 | privacy | `user_plans.note` is admin prose about a person and is **never selected** by any query. The admin listing selects only `up.plan`, `up.source` and `up.expires_at` |
 | Admin → Users | gained a Plan column: `Admin` for administrators, `Free` for everyone else, and `Pro` with its source once grants exist. Presentation only — it reads no database and no environment |
 | Phase 4C | **done** (2026-09-20): eight permanent Grandfathered Pro grants, with two test accounts excluded by exact UUID confirmed by the Product Owner. See the Phase 4C section |
-| Phase 5 | **pending.** `priority_quota_usage`, the server-derived local quota day, the transactional priority insert and Free-limit enforcement with bilingual UX |
+| Phase 5 | **done** (2026-09-20), shipped separately in `2410bd3`: `priority_quota_usage`, the server-derived local quota day, the transactional priority insert and Free-limit enforcement with bilingual UX. See the Phase 5 section |
 | `feedback_created_idx` | **known unrelated drift, intentionally untouched.** Present in `db/schema.sql`, absent from production, created by no migration step. Out of scope for Phase 4 and deliberately not fixed |
 
 **A real bug the tests found.** `planBadge`'s lapsed-plan branch tested
