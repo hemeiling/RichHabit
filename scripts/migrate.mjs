@@ -21,6 +21,7 @@ import { migrateIntentionLinks } from "./migrations/intention-links.mjs";
 import { migrateAiWorkspace } from "./migrations/ai-workspace.mjs";
 import { migratePasswordResets } from "./migrations/password-resets.mjs";
 import { migrateCoachRequests } from "./migrations/coach-requests.mjs";
+import { migrateUserPlans } from "./migrations/user-plans.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -874,6 +875,15 @@ try {
    * guarded. See scripts/migrations/coach-requests.mjs.
    */
   changed += await migrateCoachRequests(client, console.log);
+
+  /*
+   * ---- 11. Plans ------------------------------------------------------------
+   *
+   * One table, created only if absent, plus the shared updated_at trigger. No
+   * row means Free, so nothing is backfilled and no existing account is read or
+   * written. Additive and guarded. See scripts/migrations/user-plans.mjs.
+   */
+  changed += await migrateUserPlans(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

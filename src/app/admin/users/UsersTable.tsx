@@ -331,7 +331,9 @@ export default function UsersTable({
 
   /** The plan word. Today it reads off the role; the shape is ready for more. */
   const plan = (u: AdminUserRow) => {
-    const badge = planBadge(u);
+    /* The row carries effective plan and source; the badge only words them. No
+       entitlement logic lives in this component. */
+    const badge = planBadge({ role: u.role, plan: u.plan, source: u.planSource });
     return (
       <span className="au-plan" title={badge.title}
         data-admin={badge.label === "Admin" || undefined}>
@@ -456,7 +458,7 @@ export default function UsersTable({
                   </th>
                   <th>Status</th>
                   <th>Role</th>
-                  <th title="Today this reads from the account's role: administrators bypass consumer limits, everyone else is Free. Paid and granted plans arrive with the entitlement layer.">Plan</th>
+                  <th title="The effective plan: Admin, Free, or Pro with where it came from. An expired Pro grant reads as Free. Resolved centrally in the entitlement module, never here.">Plan</th>
                   <th className="au-n">{sortable("Joined", "newest", "When the account was created")}</th>
                   <th title="Whether the email address has been confirmed. “not asked” means the account predates verification.">Verified</th>
                   <th className="au-n">{sortable("Last Active", "last_active", "Most recent tracked action")}</th>
@@ -518,7 +520,7 @@ export default function UsersTable({
                     <div className="au-badges">{status(u)}{role(u)}</div>
                   </div>
                   <div className="au-meta">
-                    {planText(planBadge(u))} · joined {date(u.createdAt)} · verified {verifiedText(u)}
+                    {planText(planBadge({ role: u.role, plan: u.plan, source: u.planSource }))}{" · joined "}{date(u.createdAt)} · verified {verifiedText(u)}
                   </div>
                   <div className="au-meta">
                     Last active {date(u.lastActive)} · {u.activeDays} active day{u.activeDays === 1 ? "" : "s"}

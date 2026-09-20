@@ -38,7 +38,7 @@ export default async function UserProfile({ params }: { params: { id: string } }
           {admin.id === u.id ? " · this is you" : ""}
         </div>
         <div className="faint mt-0.5" style={{ fontSize: 12 }}>
-          {planText(planBadge(u))}
+          {planText(planBadge({ role: u.role, plan: u.plan, source: u.planSource }))}
           {" · verified: "}
           {u.emailVerifiedAt ? "yes"
             : u.address == null ? "—" : u.verificationRequired ? "not yet" : "not asked"}

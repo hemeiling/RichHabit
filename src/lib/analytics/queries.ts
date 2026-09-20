@@ -1,5 +1,6 @@
 import { query } from "@/lib/db/pool";
 import { ACTIVATION, ENGAGEMENT, FEATURES, RETENTION_DAYS, type EngagementStatus } from "./config";
+import { effectivePlan, type Plan, type PlanSource } from "@/lib/entitlements";
 
 /**
  * Every admin metric, computed from the events that were actually recorded.
@@ -407,6 +408,19 @@ export interface AdminUserRow {
   intention: IntentionStatus;
   /** How many Important Dates exist. Never their titles, notes or dates. */
   importantDates: number;
+  /**
+   * The **effective** plan, with expiry already applied by the shared rule in
+   * `@/lib/entitlements` — an expired Pro row reads as "free" here exactly as a
+   * feature would treat it. No row in `user_plans` means "free".
+   */
+  plan: Plan;
+  /**
+   * Where a plan came from, kept even when it has expired so the screen can say
+   * "Free, and the trial ran out" rather than losing the explanation.
+   * `user_plans.note` is deliberately NOT here: it is admin prose about a
+   * person, and the privacy test fails if the listing query even names it.
+   */
+  planSource: PlanSource | null;
   status: EngagementStatus;
 }
 
@@ -537,9 +551,14 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
            case when it.completed then 'completed'
                 when it.user_id is not null then 'started'
                 else 'none' end as intention,
-           coalesce(idt.important_dates, 0) as important_dates
+           coalesce(idt.important_dates, 0) as important_dates,
+           -- Plan state, resolved to an effective plan in the mapper below.
+           -- The note column is never selected: it is admin prose about a person.
+           up.plan, up.source as plan_source, up.expires_at as plan_expires_at
       from users u
       left join profiles p on p.id = u.id
+      -- No row means Free, which is why this is a left join and nothing else.
+      left join user_plans up on up.user_id = u.id
       left join (select user_id, min(occurred_at) first_active, max(occurred_at) last_active,
                         count(distinct occurred_at::date) active_days
                    from analytics_events group by user_id) ev on ev.user_id = u.id
@@ -584,6 +603,10 @@ export async function adminUsers(q: UserQuery = {}): Promise<AdminUserPage> {
       accomplishments: Number(r.accomplishments),
       intention: r.intention as IntentionStatus,
       importantDates: Number(r.important_dates),
+      /* One rule for "is this Pro today", shared with the entitlement module, so
+         an expired row cannot read as Pro on this screen and Free to a feature. */
+      plan: effectivePlan({ plan: r.plan, expires_at: r.plan_expires_at }),
+      planSource: (r.plan_source ?? null) as PlanSource | null,
       status: classify({
         createdAt: r.created_at, lastActive: r.last_active, activeDays: Number(r.active_days),
       }),

@@ -201,23 +201,87 @@ describe("Admin → Users product metrics", () => {
   });
 });
 
+/**
+ * The Plan column now reads real entitlement state. What matters is that the
+ * listing and a feature agree: the row carries the **effective** plan, so an
+ * expired grant reads as Free on this screen exactly as `limitFor` would treat
+ * it — and the source survives the expiry so the screen can say why.
+ */
 describe("the Plan column", () => {
-  it("is Admin for an administrator and Free for everyone else", async () => {
-    expect(planText(planBadge(await find(admin)))).toBe("Admin");
-    expect(planText(planBadge(await find(busy)))).toBe("Free");
-    expect(planText(planBadge(await find(idle)))).toBe("Free");
+  const plan = async (userId: string) => {
+    const row = await find(userId);
+    return { badge: planBadge({ role: row.role, plan: row.plan, source: row.planSource }), row };
+  };
+  const grant = (userId: string, source: string, expiresAt: string | null = null) =>
+    sql(`insert into user_plans (user_id, plan, source, expires_at, note)
+         values ($1, 'pro', $2, $3::timestamptz, $4)
+         on conflict (user_id) do update set source = excluded.source,
+           expires_at = excluded.expires_at, note = excluded.note`,
+    [userId, source, expiresAt, SECRET("plan-note")]);
+  const ungrant = (userId: string) => sql(`delete from user_plans where user_id = $1`, [userId]);
+
+  it("is Free when the account has no plan row", async () => {
+    const { badge, row } = await plan(busy);
+    expect(planText(badge)).toBe("Free");
+    expect(row.plan).toBe("free");
+    expect(row.planSource).toBeNull();
   });
 
-  it("carries a tooltip, and renders a future source without a layout change", () => {
-    expect(planBadge({ role: "user" }).title).toBeTruthy();
-    expect(planText({ label: "Pro", source: "Grandfathered", title: "x" })).toBe("Pro · Grandfathered");
+  it("is Admin for an administrator, plan row or not", async () => {
+    expect(planText((await plan(admin)).badge)).toBe("Admin");
+    await grant(admin, "grandfathered");
+    expect(planText((await plan(admin)).badge)).toBe("Admin");
+    await ungrant(admin);
   });
 
-  it("resolves nothing: it reads the role and consults no entitlement store", async () => {
+  it("renders every Pro source the product defines", async () => {
+    const expected: Record<string, string> = {
+      grandfathered: "Pro · Grandfathered", purchased: "Pro · Paid", gifted: "Pro · Gifted",
+      promotional: "Pro · Promotional", trial: "Pro · Trial", support: "Pro · Support",
+    };
+    for (const [source, text] of Object.entries(expected)) {
+      await grant(busy, source);
+      const { badge, row } = await plan(busy);
+      expect(planText(badge), source).toBe(text);
+      expect(row.plan, source).toBe("pro");
+      expect(row.planSource, source).toBe(source);
+      expect(badge.title, source).toBeTruthy();
+    }
+    await ungrant(busy);
+  });
+
+  it("reads an expired Pro grant as Free, and still explains it", async () => {
+    await grant(busy, "trial", "2020-01-01T00:00:00Z");
+    const { badge, row } = await plan(busy);
+    expect(planText(badge)).toBe("Free");
+    // The effective plan is what a feature would see.
+    expect(row.plan).toBe("free");
+    // …and the source survives, so the tooltip can say the trial ran out.
+    expect(row.planSource).toBe("trial");
+    expect(badge.title).toMatch(/expired/i);
+    await ungrant(busy);
+  });
+
+  it("treats a future expiry as live Pro", async () => {
+    await grant(busy, "gifted", "2099-01-01T00:00:00Z");
+    expect(planText((await plan(busy)).badge)).toBe("Pro · Gifted");
+    await ungrant(busy);
+  });
+
+  it("never lets a plan note reach the listing", async () => {
+    await grant(busy, "support");
+    const page = await adminUsers({ search: RUN, pageSize: 200 });
+    expect(JSON.stringify(page)).not.toContain("SECRET");
+    expect(JSON.stringify(page)).not.toContain("plan-note");
+    await ungrant(busy);
+  });
+
+  it("decides nothing itself: it words what the entitlement module resolved", async () => {
     const src = fs.readFileSync(path.resolve(__dirname, "..", "src", "lib", "admin", "plan.ts"), "utf8");
     expect(src).not.toMatch(/user_plans|priority_quota|ai_usage|stripe|subscription/i);
-    // No database, no environment: a pure function of the role.
+    // No database, no environment — and the expiry rule comes from one place.
     expect(src).not.toMatch(/from "@\/lib\/db|process\.env/);
+    expect(src).toMatch(/from "@\/lib\/entitlements"/);
   });
 });
 
@@ -410,9 +474,12 @@ describe("Admin → Users privacy boundary", () => {
       "accomplishments", "activeDays", "activeHabits", "address", "completions", "createdAt",
       "createdVia", "disabledAt", "displayName", "email", "emailVerifiedAt", "firstActive",
       "firstName", "id", "importantDates", "intention", "lastActive", "lastName",
-      "openPriorities", "priorities", "role", "sessions", "status", "username",
-      "verificationRequired",
+      "openPriorities", "plan", "planSource", "priorities", "role", "sessions", "status",
+      "username", "verificationRequired",
     ]);
+    /* The plan's note is admin prose about a person. It is not in the key list
+       above, and it must not arrive under any other name either. */
+    expect(JSON.stringify({ page, profile })).not.toContain("note");
     // Everything planted in the fixtures, in one assertion.
     expect(JSON.stringify({ page, profile })).not.toContain("SECRET");
   });

@@ -862,6 +862,48 @@ create index feedback_status_idx on feedback (status, created_at desc);
 create index feedback_created_idx on feedback (created_at desc);
 
 
+-- -------------------------------- plans -------------------------------------
+--
+-- One row per account that has a plan, and NO ROW AT ALL for everybody else.
+--
+-- No row means Free. That is what let plans be introduced without touching a
+-- single existing account: every account was Free already, so an empty table is
+-- the correct answer for all of them. Nothing was backfilled.
+--
+-- A Pro row must say where it came from (`plan <> 'pro' or source is not null`).
+-- A Pro row with no provenance is unauditable, and "why does this account have
+-- Pro" is the one question somebody will ask in a year.
+--
+-- No billing fields: no customer id, no subscription id, no price, no provider.
+-- Billing and entitlement are different concepts and this is the entitlement
+-- one. `source = 'purchased'` is a valid value with no payment implementation
+-- attached to it.
+--
+-- Read through src/lib/entitlements: effective Pro is `plan = 'pro' and
+-- (expires_at is null or expires_at > now())`. Grandfathered Pro is permanent
+-- and holds null.
+create table user_plans (
+  user_id     uuid primary key references users(id) on delete cascade,
+  plan        text not null check (plan in ('free', 'pro')),
+  -- Null only for a 'free' row.
+  source      text check (source is null or source in
+                ('grandfathered', 'purchased', 'gifted', 'promotional', 'trial', 'support')),
+  granted_at  timestamptz not null default now(),
+  -- Null means it does not expire.
+  expires_at  timestamptz,
+  -- Admin prose: why this plan exists. Never shown in Admin -> Users' listing.
+  note        text,
+  granted_by  uuid references users(id) on delete set null,
+  updated_at  timestamptz not null default now(),
+  check (plan <> 'pro' or source is not null)
+);
+create index user_plans_plan_idx on user_plans (plan);
+-- The same mechanism the older tables use. Written here as well as in the
+-- migration so a fresh install and a migrated database agree.
+create trigger user_plans_touch before update on user_plans
+  for each row execute function touch_updated_at();
+
+
 -- ---------------------------- AI coach requests -----------------------------
 --
 -- One row per AI coach request, so the per-account safety limit is counted in
