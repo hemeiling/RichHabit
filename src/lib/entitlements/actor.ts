@@ -17,9 +17,16 @@ import { effectivePlan, type Actor, type PlanSource } from "./index";
  * caller therefore cannot forget to check it — the actor it receives is already
  * the truth. A row that has expired resolves to Free while keeping its `source`
  * for the admin screens to explain *why* somebody is no longer Pro.
+ *
+ * `run` exists so entitlement can be resolved **inside a caller's transaction**,
+ * by passing that transaction's scoped query. An enforcement path must read the
+ * plan and count what it is limiting in one snapshot; reading the plan on a
+ * separate connection would let a plan change land between the two and pair a
+ * Pro answer with a Free count. It defaults to the pool, so every existing
+ * caller is unaffected.
  */
-export async function getActor(userId: string): Promise<Actor> {
-  const rows = await query<{
+export async function getActor(userId: string, run: typeof query = query): Promise<Actor> {
+  const rows = await run<{
     role: string; plan: string | null; source: string | null; expires_at: string | null;
   }>(
     `select u.role::text as role, up.plan, up.source, up.expires_at

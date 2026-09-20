@@ -422,6 +422,23 @@ create table priorities (
 create index priorities_user_order on priorities (user_id, category, sort_order, created_on);
 create index priorities_user_open  on priorities (user_id) where completed_on is null;
 
+-- How many new priorities an account has created on one of its own calendar
+-- days. Free accounts are allowed five; Pro and Admin never reach this table,
+-- because the write path returns on an unlimited entitlement before it gets here.
+--
+-- The day is the server's answer, derived from x-rh-timezone through
+-- viewerToday() — never the created_on the browser sends. It is half the primary
+-- key, which is why there is no nightly reset job: tomorrow is a different key.
+--
+-- Never decremented. Deleting a priority does not give the day back, because the
+-- allowance was spent creating it.
+create table priority_quota_usage (
+  user_id    uuid    not null references users on delete cascade,
+  local_day  date    not null,
+  created    integer not null default 0 check (created >= 0),
+  primary key (user_id, local_day)
+);
+
 -- A reflection on a whole month, written from the Insights review. Kept apart
 -- from the daily journal: it is about the month, not about a day, and it is
 -- written weeks after the days it describes.

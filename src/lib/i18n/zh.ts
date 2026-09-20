@@ -1078,6 +1078,11 @@ export const zh: Dict = {
     coachHourlyLimit: "最近一小时你向教练提问较多，稍等一会儿再问。",
     coachDailyLimit: "今天向教练提问的次数已经用完，一天之内会恢复，你的习惯和记录不受影响。",
     coachLimitUnavailable: "暂时无法确认你的教练使用情况，请稍后再试。",
+    // 方案额度，不是故障。先说明现状，再给出做法，最后说明不会丢失内容；不提价格。
+    activeHabitLimit: (n: number) =>
+      `你正在进行 ${n} 个习惯，已达当前方案的上限。暂停一个即可腾出位置——不会删除任何内容。`,
+    newPriorityLimit: (n: number) =>
+      `今天的 ${n} 个新优先事项已用完。未完成的会自动延续，明天可以继续添加。`,
     loadFailedReason: "服务器无法从数据库读取你的账户。",
     loadFailedRetry: "重试",
     loadFailedTitle: "无法加载你的账户",

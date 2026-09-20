@@ -192,36 +192,152 @@ describe("the entitlement boundary is the only way in", () => {
   });
 });
 
-describe("Phase 4 establishes the policy and enforces nothing", () => {
-  it("no route calls limitFor or entitlements yet", () => {
-    const callers = walk(path.join("src", "app"))
-      .filter((f) => /\blimitFor\(|\bentitlements\(|getActor\(/.test(read(f)));
+/**
+ * Phase 5 turned enforcement on, so the four assertions that used to stand here
+ * — no caller of `limitFor`, no entitlement reference in the priority path, no
+ * `priority_quota_usage` — are now false by design. They are **inverted rather
+ * than deleted**: what mattered about them was never "nothing enforces", it was
+ * "enforcement cannot leak out of the entitlement boundary", and that is still
+ * the property worth failing a build over.
+ */
+describe("Phase 5 enforces the policy in exactly two write paths", () => {
+  const queries = () => read(path.join("src", "lib", "db", "queries.ts"));
+  const QUERIES = path.join("src", "lib", "db", "queries.ts");
+
+  /** One function's body, by name. Comments kept unless a test strips them. */
+  const fnBody = (src: string, name: string) => {
+    const from = src.slice(src.indexOf(`function ${name}`));
+    return from.slice(0, from.indexOf("\n}"));
+  };
+
+  it("saveHabit gates only a transition INTO active", () => {
+    const body = stripComments(fnBody(queries(), "saveHabit"));
+    expect(body).toContain("guardActiveHabitLimit");
+    // The `!wasActive` half is the whole of "editing an active habit is free".
+    expect(body).toMatch(/h\.status === "active" && !wasActive/);
+  });
+
+  it("the active-habit gate reads the entitlement, then locks, then counts", () => {
+    const body = stripComments(fnBody(queries(), "guardActiveHabitLimit"));
+    expect(body).toContain('limitFor(await getActor(userId, q), "activeHabits")');
+    expect(body).toContain("pg_advisory_xact_lock");
+    expect(body).toMatch(/status = 'active'/);
+    expect(body).toContain("PlanLimitError");
+    // Unlimited leaves before the lock is taken and before anything is counted.
+    expect(body).toMatch(/if \(limit == null\) return;[\s\S]*pg_advisory_xact_lock/);
+  });
+
+  it("addPriority charges the day in the same transaction as the insert", () => {
+    const body = stripComments(fnBody(queries(), "addPriority"));
+    expect(body).toContain("transaction(");
+    expect(body).toContain("priority_quota_usage");
+    expect(body).toContain('limitFor(await getActor(userId, q), "newPrioritiesPerDay")');
+    // Insert first, charge second: that ordering is what makes a retry free.
+    expect(body.indexOf("insert into priorities"))
+      .toBeLessThan(body.indexOf("priority_quota_usage"));
+    // The retry check comes before either, and reuses the shared 404.
+    expect(body).toContain('assertOwns(q, "priorities", id, userId)');
+    // The allowance is never decremented, and the day is never derived here.
+    expect(body).not.toMatch(/created = .*- 1|viewerToday|new Date\(/);
+  });
+
+  it("the quota day is the server's, never the client's created_on", () => {
+    const route = stripComments(read(path.join("src", "app", "api", "priorities", "route.ts")));
+    expect(route).toContain('viewerToday(request.headers.get("x-rh-timezone"))');
+    // `date` still sets created_on; the local day is a separate argument.
+    expect(route).toMatch(/addPriority\(userId, id, text, date, category,/);
+  });
+
+  it("only the two write paths can raise a plan limit", () => {
+    const allowed = [QUERIES, path.join("src", "lib", "http.ts"), path.join("src", "lib", "api.ts")];
+    const others = walk("src")
+      .filter((f) => !allowed.includes(f))
+      .filter((f) => /PlanLimitError/.test(code(f)));
+    expect(others).toEqual([]);
+  });
+
+  it("entitlement logic stays centralized — nothing else resolves an actor", () => {
+    const callers = walk("src")
+      .filter((f) => !f.startsWith(path.join("src", "lib", "entitlements")))
+      .filter((f) => f !== QUERIES)
+      .filter((f) => /\blimitFor\(|\bentitlements\(|getActor\(/.test(code(f)));
     expect(callers).toEqual([]);
   });
 
-  it("nothing refuses a request on a plan", () => {
-    const offenders = walk(path.join("src", "app", "api"))
-      .filter((f) => /limitFor|FREE_LIMITS|activeHabits >|newPrioritiesPerDay/.test(read(f)));
+  it("no route or component decides entitlement for itself", () => {
+    /*
+     * Identifiers that belong to entitlement *state*, not the English words
+     * "plan" and "source". An earlier version of this guard matched `\bsource ===`
+     * and flagged `p.source === "upload"` in the AI Workspace composer — a file's
+     * origin, which has nothing to do with a plan. Matching a bare word here is
+     * how a guard stops meaning anything: it either gets weakened until it passes
+     * or it trains people to ignore it.
+     */
+    const ENTITLEMENT_STATE = new RegExp([
+      "user_plans", "effectivePlan", "planSource",
+      '\\bplan === "(pro|free)"',
+      '\\bsource === "(grandfathered|purchased|gifted|promotional|trial|support)"',
+      "stripe", "checkout_session", "subscription_id",
+    ].join("|"), "i");
+
+    /*
+     * Admin → Users is allowed to *show* a plan. It is handed `plan` and
+     * `planSource` by the listing query and turns them into a word through
+     * `lib/admin/plan.ts`; it reads no database, calls no entitlement function and
+     * decides nothing. Display is not a decision — and the two tests either side
+     * of this one are what keep that true.
+     */
+    const PRESENTATION_ONLY = [
+      path.join("src", "app", "admin", "users", "UsersTable.tsx"),
+      path.join("src", "app", "admin", "users", "[id]", "page.tsx"),
+    ];
+
+    const offenders = [...walk(path.join("src", "app")), ...walk(path.join("src", "components"))]
+      .filter((f) => !PRESENTATION_ONLY.includes(f))
+      .filter((f) => ENTITLEMENT_STATE.test(code(f)));
     expect(offenders).toEqual([]);
+
+    // The allowlisted screens present; they must not resolve or enforce.
+    for (const f of PRESENTATION_ONLY) {
+      expect(code(f), f).not.toMatch(/\blimitFor\(|\bentitlements\(|getActor\(|PlanLimitError/);
+    }
+
+    // The detector still catches every real leak…
+    for (const leak of [
+      'if (actor.plan === "pro") allow()',
+      'if (row.source === "grandfathered") skip()',
+      "select plan from user_plans",
+      "const p = effectivePlan(row)",
+      "stripe.checkout.sessions.create()",
+    ]) expect(leak, leak).toMatch(ENTITLEMENT_STATE);
+
+    // …and no longer flags words that merely look like one.
+    for (const innocent of [
+      'if (p.source === "upload" && p.status === "ready") attach()',
+      "if (plan === current) return",
+      "const source = await readFile(name)",
+    ]) expect(innocent, innocent).not.toMatch(ENTITLEMENT_STATE);
   });
 
-  it("the priority write path is untouched by plans", () => {
-    const route = read(path.join("src", "app", "api", "priorities", "route.ts"));
-    expect(route).not.toMatch(/entitlement|limitFor|getActor|quota|user_plans/i);
-
-    const queries = read(path.join("src", "lib", "db", "queries.ts"));
-    const addPriority = queries.slice(queries.indexOf("export async function addPriority"));
-    const body = addPriority.slice(0, addPriority.indexOf("\n}"));
-    /* Identifiers, not substrings: `planned_on` is a legitimate column in this
-       function and contains "plan". What must be absent is quota accounting and
-       any entitlement lookup. */
-    expect(body).not.toMatch(/priority_quota_usage|\bquota\b|limitFor|getActor|entitlements\(|user_plans/i);
-    // And it must still be a single statement, not a transaction — Phase 5's job.
-    expect(body).not.toContain("transaction(");
+  it("gates nothing but active habits and new priorities", () => {
+    const src = queries();
+    for (const name of ["setCompletion", "saveGoal", "saveDayNote", "saveJournal", "saveSpending",
+      "saveMetrics", "saveReview", "saveStack", "saveAwareness", "saveImportantDate",
+      "saveIntention", "setPriorityText", "setPriorityDone", "setPriorityPlannedOn",
+      "deletePriority", "reorderPriorities", "savePriorityLayout", "deleteHabit", "savePrefs"]) {
+      const body = stripComments(fnBody(src, name));
+      expect(body, name).not.toMatch(/PlanLimitError|limitFor|getActor|priority_quota_usage/);
+    }
   });
 
-  it("priority_quota_usage does not exist yet — that is Phase 5", () => {
-    expect(fs.existsSync(path.join(ROOT, "scripts", "migrations", "priority-quota-usage.mjs"))).toBe(false);
-    expect(read(path.join("db", "schema.sql"))).not.toContain("priority_quota_usage");
+  it("the quota migration is additive: no update, insert, delete, drop or alter", () => {
+    const file = path.join("scripts", "migrations", "priority-quota-usage.mjs");
+    expect(fs.existsSync(path.join(ROOT, file))).toBe(true);
+    expect(read(path.join("db", "schema.sql"))).toContain("priority_quota_usage");
+    const m = stripComments(read(file));
+    expect(m).not.toMatch(/\bupdate \w+ set|\binsert into|\bdelete from|\bdrop \b|\balter table/i);
+    expect(m).toContain("create table if not exists priority_quota_usage");
+    // The detector is real: it would catch a backfill if one were added.
+    expect(stripComments("-- ok\ninsert into x (a) values (1)")).toMatch(/\binsert into/i);
   });
 });

@@ -1,6 +1,8 @@
-import { ApiError } from "@/lib/http";
+import { ApiError, PlanLimitError } from "@/lib/http";
 import { isSchemaBehind } from "@/lib/db/diagnose";
 import { query, transaction } from "@/lib/db/pool";
+import { limitFor } from "@/lib/entitlements";
+import { getActor } from "@/lib/entitlements/actor";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, Priority,
@@ -327,12 +329,62 @@ export async function loadState(userId: string): Promise<AppState> {
 
 // ------------------------------ mutations ----------------------------------
 
+/*
+ * Advisory-lock keys for the two entitlement gates. Distinct from the coach
+ * limiter's (8_243_121) so the three never serialise against each other.
+ */
+const ACTIVE_HABIT_LOCK = 8_243_122;
+
+/**
+ * Refuses one more active habit than the account is entitled to.
+ *
+ * Called **only** when an operation would increase the active count, so editing,
+ * renaming, rescheduling, completing, pausing and retiring never reach it, and an
+ * account already over its limit keeps everything it has.
+ *
+ * The lock is what makes this correct rather than merely usually correct. Under
+ * READ COMMITTED two concurrent creations would both read 14, both decide there
+ * is room, and both commit — 16 active habits from a limit of 15. Serialising per
+ * account makes the second one read the first one's committed row. It is
+ * transaction-scoped, so it is released on commit and is safe behind a pooler.
+ *
+ * Pro and Admin resolve to an unlimited entitlement and return before the lock is
+ * taken and before anything is counted: they pay nothing for this.
+ */
+async function guardActiveHabitLimit(q: Q, userId: string): Promise<void> {
+  const limit = limitFor(await getActor(userId, q), "activeHabits");
+  if (limit == null) return;
+
+  await q("select pg_advisory_xact_lock($1, hashtext($2))", [ACTIVE_HABIT_LOCK, userId]);
+  const [{ n }] = await q<{ n: number }>(
+    "select count(*)::int n from habits where user_id = $1 and status = 'active'", [userId]);
+  if (n >= limit) throw new PlanLimitError("activeHabits", limit);
+}
+
 /** Returns true when the row did not exist before — i.e. this was a create. */
 export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
   return transaction(async (q) => {
-    const existed = await assertOwns(q, "habits", h.id, userId);
+    /*
+     * The previous status, read in the same breath as ownership, because the
+     * entitlement gate needs to know whether this write *increases* the active
+     * count. `assertOwns` answers only "is it yours", and a second read to learn
+     * the status would be a second round trip for the same row.
+     *
+     * The 404 is the same one `assertOwns` raises, and for the same reason: a
+     * missing row and someone else's row must be indistinguishable.
+     */
+    const before = await q<{ user_id: string; status: string }>(
+      "select user_id, status from habits where id = $1", [h.id]);
+    if (before[0] && before[0].user_id !== userId) throw new ApiError("Not found", 404);
+    const existed = before[0]?.user_id === userId;
+    const wasActive = existed && before[0].status === "active";
+
     // A habit may only point at a goal the same account owns.
     if (h.goalId) await assertRef(q, "goals", h.goalId, userId);
+
+    // Only a transition *into* active can exceed an allowance. A habit that was
+    // already active stays editable however far over the limit the account is.
+    if (h.status === "active" && !wasActive) await guardActiveHabitLimit(q, userId);
 
     await q(
       `insert into habits (id, user_id, name, template_key, description, category, kind,
@@ -429,6 +481,13 @@ export async function deleteGoal(userId: string, id: string) {
  */
 export async function addPriority(
   userId: string, id: string, text: string, date: string, category: PriorityCategory,
+  /**
+   * The account's own calendar day, derived on the **server** from the
+   * `x-rh-timezone` header. Deliberately not `date`: that one is the day the
+   * line belongs to and arrives from the browser, and an allowance a caller can
+   * date for itself is not an allowance.
+   */
+  localDay: string,
 ): Promise<void> {
   /*
    * The quadrant arrives from the two questions the user answered; there is no
@@ -442,13 +501,62 @@ export async function addPriority(
    * `planned_on` is deliberately not set. A line is scheduled because someone
    * chose a day, never because it was filed under Q2.
    */
-  await query(
-    `insert into priorities (id, user_id, body, created_on, category, sort_order)
-     values ($1, $2, $3, $4::date, $5,
-             (select coalesce(max(sort_order), 0) + 1 from priorities
-               where user_id = $2 and category = $5))`,
-    [id, userId, text, date, category],
-  );
+  await transaction(async (q) => {
+    /*
+     * A retry of a request that already landed. The id is the client's, so a
+     * timed-out POST resent by hand or by a double tap arrives with the same one
+     * — and the honest answer to "create this" for something that exists is
+     * "done", not a duplicate and not an error. Nothing is inserted and, because
+     * this returns before the charge below, nothing is spent either.
+     *
+     * `assertOwns` throws the shared 404 when the id belongs to somebody else, so
+     * this cannot be used to discover which ids exist on other accounts.
+     */
+    if (await assertOwns(q, "priorities", id, userId)) return;
+
+    await q(
+      `insert into priorities (id, user_id, body, created_on, category, sort_order)
+       values ($1, $2, $3, $4::date, $5,
+               (select coalesce(max(sort_order), 0) + 1 from priorities
+                 where user_id = $2 and category = $5))`,
+      [id, userId, text, date, category],
+    );
+
+    /*
+     * Charged after the insert, both in this one transaction.
+     *
+     * The order is what makes a retry free: the duplicate check above returns
+     * before anything is spent. Atomicity is unaffected — a failed charge rolls
+     * the insert back with it, and a failed insert never reaches the charge — so
+     * a day's count can never drift from the lines that were actually created.
+     *
+     * Pro and Admin return here, which is why this table holds no row for them.
+     */
+    const limit = limitFor(await getActor(userId, q), "newPrioritiesPerDay");
+    if (limit == null) return;
+    // Defensive: `null` is how unlimited is said. A non-positive limit would
+    // otherwise let the `values (…, 1)` branch through on a fresh day.
+    if (limit <= 0) throw new PlanLimitError("newPrioritiesPerDay", limit);
+
+    /*
+     * The upsert is the lock. `on conflict … do update … where` takes the row
+     * lock, increments atomically, and — when the guard fails — returns **zero
+     * rows without raising**, which is what a refusal looks like here. Two
+     * concurrent creations at 4 of 5 therefore cannot both succeed: the second
+     * blocks on the row, re-reads 5 after the first commits, and its `where`
+     * fails.
+     */
+    const charged = await q<{ created: number }>(
+      `insert into priority_quota_usage (user_id, local_day, created)
+       values ($1, $2::date, 1)
+       on conflict (user_id, local_day) do update
+          set created = priority_quota_usage.created + 1
+        where priority_quota_usage.created < $3
+       returning created`,
+      [userId, localDay, limit],
+    );
+    if (charged.length === 0) throw new PlanLimitError("newPrioritiesPerDay", limit);
+  });
 }
 
 /**

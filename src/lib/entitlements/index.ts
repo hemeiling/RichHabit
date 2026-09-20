@@ -24,12 +24,17 @@
  * `null` reads as "no limit" at every call site and cannot be mistaken for a
  * limit of none.
  *
- * ## Phase 4 establishes; it does not enforce
+ * ## Where enforcement happens
  *
- * These numbers are the policy, and no route consults them yet. Free limits are
- * switched on in Phase 5, deliberately as its own change, so that turning
- * enforcement on is a decision somebody makes rather than a side effect of
- * introducing plans.
+ * In exactly two places, both in `lib/db/queries.ts`, both inside the
+ * transaction that performs the write: `saveHabit` gates a transition **into**
+ * active, and `addPriority` charges a day's quota. Nothing else consults these
+ * numbers — no route, no component, no screen — which is what keeps the policy
+ * here rather than scattered across the features it governs.
+ *
+ * A limit is checked only by an operation that would *increase* what it counts.
+ * Editing, renaming, rescheduling, completing, pausing and retiring are never
+ * gated, and an account already over a limit keeps everything it has.
  */
 
 export type Plan = "free" | "pro";

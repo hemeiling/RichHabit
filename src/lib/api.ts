@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { getDict } from "@/lib/i18n/server";
-import { ApiError, isUuid } from "@/lib/http";
+import { ApiError, PlanLimitError, isUuid } from "@/lib/http";
 
-export { ApiError, check, isUuid } from "@/lib/http";
+export { ApiError, PlanLimitError, check, isUuid } from "@/lib/http";
 
 /**
  * The guard every data route goes through. The user id comes from the session
@@ -30,6 +30,26 @@ export async function withUser(
     const data = await fn(user.id);
     return NextResponse.json(data ?? { ok: true });
   } catch (e) {
+    /*
+     * Before the ApiError branch, because a plan limit is one of those and would
+     * otherwise be answered as a bare 409 with an unlocalized message.
+     *
+     * The wording is built here rather than where the limit was found: the
+     * dictionary is a server concern of this layer, and `lib/db` has no business
+     * importing it. The machine-readable fields sit *beside* `error` rather than
+     * replacing it — the browser renders `error` verbatim, so a code in that
+     * field would put "plan_limit_reached" on somebody's screen.
+     */
+    if (e instanceof PlanLimitError) {
+      const d = getDict();
+      const message = e.feature === "activeHabits"
+        ? d.errors.activeHabitLimit(e.limit)
+        : d.errors.newPriorityLimit(e.limit);
+      return NextResponse.json(
+        { error: message, code: e.code, feature: e.feature, limit: e.limit },
+        { status: e.status },
+      );
+    }
     if (e instanceof ApiError) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }

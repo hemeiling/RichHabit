@@ -3,12 +3,36 @@
  * the validation layer can be imported and tested on its own, and so nothing
  * here can accidentally pull a database connection into a client bundle.
  */
+import type { Feature } from "@/lib/entitlements";
 
 /** An error whose message is safe to show the user, with the status to send. */
 export class ApiError extends Error {
   constructor(message: string, readonly status = 400) {
     super(message);
     this.name = "ApiError";
+  }
+}
+
+/**
+ * A plan's allowance is used up. **409, not 403**: the request was understood
+ * and the caller is perfectly entitled to make it — it just conflicts with the
+ * state of the account. 403 would claim an authorization failure, 429 would
+ * promise that waiting helps, and 402 would imply a payment path that
+ * deliberately does not exist.
+ *
+ * It deliberately carries **no message**. The wording is localized, and the
+ * dictionary lives on the other side of this layer — `withUser` fills it in from
+ * `feature` and `limit`, so nothing under `lib/db` has to know about i18n. The
+ * fallback below is never shown to a user.
+ *
+ * The `Feature` import is type-only, so this file stays free of runtime imports.
+ */
+export class PlanLimitError extends ApiError {
+  readonly code = "plan_limit_reached" as const;
+
+  constructor(readonly feature: Feature, readonly limit: number) {
+    super("Plan limit reached", 409);
+    this.name = "PlanLimitError";
   }
 }
 

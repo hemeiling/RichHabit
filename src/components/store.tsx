@@ -142,7 +142,13 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       .then(() => setError(null))
       .catch((e: Error) => {
         setState(previous!);
-        setError(`${e.message}. That change wasn't saved.`);
+        /*
+         * An allowance is not a malfunction. Its message already says what
+         * happened and what to do, so appending "that change wasn't saved" would
+         * turn a calm sentence into an error report — and the rollback above has
+         * already made the outcome visible.
+         */
+        setError(db.isPlanLimit(e) ? e.message : `${e.message}. That change wasn't saved.`);
       })
       .finally(() => setPending((n) => n - 1));
   }, []);
@@ -172,7 +178,8 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       delete debounced.current[key];
       write()
         .then(() => setError(null))
-        .catch((e: Error) => setError(`${e.message}. That change wasn't saved.`))
+        .catch((e: Error) =>
+          setError(db.isPlanLimit(e) ? e.message : `${e.message}. That change wasn't saved.`))
         .finally(() => setPending((n) => n - 1));
     }, 600);
   }, []);

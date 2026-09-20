@@ -1,6 +1,6 @@
 import { body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
-import { markMemberStale } from "@/lib/community";
+import { markMemberStale, viewerToday } from "@/lib/community";
 import {
   addPriority, deletePriority, reorderPriorities, savePriorityLayout, setPriorityDone,
   setPriorityPlannedOn, setPriorityText,
@@ -19,7 +19,14 @@ import { parseNewPriority, parsePriorityDone, parsePriorityPlan, parsePriorityTe
 export async function POST(request: Request) {
   return withUser(async (userId) => {
     const { id, text, date, category } = parseNewPriority(await body(request));
-    await addPriority(userId, id, text, date, category);
+    /*
+     * The day the allowance is counted against is the server's answer, from the
+     * reader's own time zone — the same `viewerToday` the Community board uses.
+     * `date` continues to set `created_on`, because which day a line belongs to
+     * is the user's business; how many were created today is not.
+     */
+    await addPriority(userId, id, text, date, category,
+      viewerToday(request.headers.get("x-rh-timezone")));
     // That one was written, and on which day. Never a word of what it says.
     await trackEvent({
       userId, event: "priority_added", entityType: "priority", entityId: id, page: "/priorities",

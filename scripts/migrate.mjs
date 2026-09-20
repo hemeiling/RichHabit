@@ -22,6 +22,7 @@ import { migrateAiWorkspace } from "./migrations/ai-workspace.mjs";
 import { migratePasswordResets } from "./migrations/password-resets.mjs";
 import { migrateCoachRequests } from "./migrations/coach-requests.mjs";
 import { migrateUserPlans } from "./migrations/user-plans.mjs";
+import { migratePriorityQuota } from "./migrations/priority-quota-usage.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -884,6 +885,18 @@ try {
    * written. Additive and guarded. See scripts/migrations/user-plans.mjs.
    */
   changed += await migrateUserPlans(client, console.log);
+
+  /*
+   * ---- 12. Priority quota ---------------------------------------------------
+   *
+   * One table, created only if absent. It counts new priorities per account per
+   * local day so the Free allowance is enforced in the database rather than in a
+   * process's memory. No row means nothing used, so nothing is backfilled and no
+   * existing account is read or written. The day is half the primary key, so
+   * there is no reset job. Additive and guarded. See
+   * scripts/migrations/priority-quota-usage.mjs.
+   */
+  changed += await migratePriorityQuota(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

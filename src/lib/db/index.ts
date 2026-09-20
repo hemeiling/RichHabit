@@ -15,6 +15,16 @@ import type { CommunitySnapshot } from "@/lib/community";
  * Signatures no longer take a user id. The server will not accept one.
  */
 
+/**
+ * A rejected write, with the machine-readable fields the server sends beside the
+ * message. Only `plan_limit_reached` sets them today.
+ */
+export type PlanLimitFailure = Error & { code?: string; feature?: string; limit?: number };
+
+/** Whether a rejected write was an allowance, rather than something going wrong. */
+export const isPlanLimit = (e: unknown): boolean =>
+  (e as PlanLimitFailure | null)?.code === "plan_limit_reached";
+
 /** IANA zone name, so the server can report activity in the user's local time. */
 const timezone = () => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; }
@@ -26,7 +36,21 @@ async function send(path: string, init: RequestInit): Promise<any> {
     headers: { "Content-Type": "application/json", "x-rh-timezone": timezone(), ...init.headers },
   });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    /*
+     * `error` is the sentence to show; the rest is for the caller to branch on.
+     * A plan limit is not a failure to save, and the store reads `code` to say so
+     * without appending "that change wasn't saved" to a message that already
+     * explains itself.
+     */
+    const failure: PlanLimitFailure = new Error(data?.error || `Request failed (${res.status})`);
+    if (data?.code) {
+      failure.code = data.code;
+      failure.feature = data.feature;
+      failure.limit = data.limit;
+    }
+    throw failure;
+  }
   return data;
 }
 

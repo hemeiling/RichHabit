@@ -1271,6 +1271,19 @@ export const en = {
     coachHourlyLimit: "You've asked the coach a lot in the past hour. Give it a little while and ask again.",
     coachDailyLimit: "You've reached today's limit for coach questions. It lifts within a day — your habits and history are unaffected.",
     coachLimitUnavailable: "We couldn't check your coach usage just now. Please try again in a moment.",
+    /*
+     * A plan allowance, not a failure. Each leads with the state, then the way
+     * forward, then the reassurance — and names no price, because there is
+     * currently nowhere to pay and a nudge towards a door that does not exist
+     * would be worse than the limit itself. The number comes from the entitlement,
+     * never from the copy.
+     */
+    activeHabitLimit: (n: number) =>
+      `You're tracking ${n} active habits, which is the most your current plan includes. `
+      + "Pause one to make room — nothing is deleted.",
+    newPriorityLimit: (n: number) =>
+      `That's all ${n} new priorities for today. Unfinished ones keep rolling forward, `
+      + "and you can add more tomorrow.",
     /* An account that would not load, said plainly. Never "no habits yet":
        the whole point is that a failure must not read as an empty account. */
     loadFailedReason: "The server could not read your account from the database.",
