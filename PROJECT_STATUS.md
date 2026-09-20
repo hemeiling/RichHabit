@@ -160,33 +160,114 @@ attempt.
 `rhsmoke64t0ru` and `meimei` can meet a limit, and each holds 10 active habits
 and 0 priorities. Neither was deleted.
 
-### Where things stand, and the next step
+### FORMAL PAUSE POINT — before the payment/monetization method is decided
+
+This is the agreed stopping place. Everything below is written so a future
+session can resume from this file alone, without any conversation history.
 
 **Nothing is pending in production.** Phases 1, 1B, 2, 3, 4A/4B, 4C and 5 are all
-migrated where applicable, deployed and verified. `origin/main` is `6ec2cf1`
-(this documentation commit) on top of the reviewed application commit `2410bd3`,
-which is what Render serves. No database action, Render change or deployment is
-outstanding, and the working tree is clean with no test artefacts or processes
-left behind.
+migrated where applicable, deployed and verified. No database action, Render
+change or deployment is outstanding, and the working tree is clean with no test
+artefacts or processes left behind.
 
-**Recommended next step: nothing is required.** When work resumes, the two open
-threads are, in the order I would take them:
+The state to resume from, in one place:
 
-1. **The Phase 5 concurrency follow-up** — run the simultaneous multi-session
-   contention test described above. It is *blocked on an environment, not on code*.
-   To unblock, one of: an **empty** Neon project or database (not a branch of
-   production, which would clone real rows into a test environment); a Neon API
-   key so a disposable empty project can be created and dropped; refreshed
-   passwords on `REHEARSAL_DATABASE_URL` / `REHEARSAL_DATABASE_URL_TEST`, which
-   both currently fail authentication and are therefore misleading as they stand;
-   or authorization to install Docker or Postgres.app. Do **not** run it against
-   production.
-2. **Phase 6 — the AI allowance review**, including the deliberately unresolved
-   question recorded in `src/lib/recommend.ts`: habit recommendations have no
-   limiter of their own and must not borrow `coach_requests`. Then **Phase 7**, a
-   final production-readiness review. **Payments and Stripe remain deferred
-   indefinitely**, and entitlements stay billing-independent: a feature asks what
-   an account is entitled to, never whether it paid.
+| | |
+| --- | --- |
+| deployed application commit | `2410bd314c791d1d9377d414b3f5113e100d2af7` (Phase 5) |
+| Render deployment | `dep-danmdsmk1f9s73979ceg`, LIVE |
+| `origin/main` | documentation commits sit on top of that application commit; it is the deployed SHA above, not the newest commit, that Render serves |
+| production schema | **39 tables**; `priority_quota_usage` holds 0 rows, `user_plans` holds 8 |
+| accounts | **15 total — 5 Admin, 8 Pro · Grandfathered, 2 Free** |
+| Free allowance | 15 active habits · 5 new priorities per server-derived local day |
+| Grandfathered Pro | permanent Pro entitlement, **$0, no expiration** (`expires_at = NULL`), no payment provider involved |
+| Admin | unlimited through the **centralized bypass** in `entitlements()`, with no plan row |
+| payment integration | **none, and none chosen** |
+
+#### The payment posture, which is a decision and not an oversight
+
+- **Stripe, and payment integration generally, is NOT implemented.** It is
+  deliberately deferred, not forgotten or half-built. Nothing in the codebase
+  imports a payment SDK, reads a payment credential, or references a customer,
+  subscription, invoice, checkout or price identifier.
+- **No payment provider should be selected or assumed yet.** Stripe is named
+  throughout this file only because it is the option that was discussed and
+  deferred — that is not a decision. The provider is an open business question,
+  and no code, schema or configuration should presuppose an answer.
+- **No prices belong in entitlement logic.** `src/lib/entitlements/` answers
+  "what is this account entitled to" and must never learn what anything costs. A
+  limit is a number of habits or priorities; a price is a billing concern that
+  lives on the other side of that boundary. The user-facing limit copy takes its
+  number from the entitlement and names no amount.
+- **Billing and entitlement stay separate concepts.** `user_plans.source` records
+  provenance — `grandfathered`, `gifted`, `trial`, `support`, and eventually
+  `purchased` — and `purchased` is already a valid value with no payment
+  implementation behind it. A feature asks what an account is entitled to, never
+  whether it paid.
+- **Future billing must never overwrite, expire, downgrade or revoke
+  Grandfathered Pro.** Those 8 rows hold `expires_at = NULL` and are permanent at
+  no charge. This is enforced by the write boundary and its tests, deliberately
+  **not** by a database trigger (Phase 4 decision). Any billing system that
+  reconciles plans must treat a `grandfathered` row as untouchable.
+
+#### Pending phases
+
+- **Phase 6 — AI allowance review: PENDING.** Covers Free vs Pro AI allowances and
+  cost, including the deliberately unresolved question recorded in
+  `src/lib/recommend.ts`: habit recommendations have no limiter of their own and
+  must not borrow `coach_requests`, because one feature must not spend another's
+  allowance.
+- **Phase 7 — monetization and billing: PENDING.** The Pro package, pricing, the
+  provider choice and the billing integration. Nothing about it has been designed,
+  and it must not begin before the business approach is decided.
+
+#### The one open verification item
+
+The **simultaneous multi-session PostgreSQL contention test** described earlier in
+this section remains a **verification gap, not a known defect**. It is blocked on
+an environment, not on code.
+
+**It must never be performed against production.** To carry it out, an isolated
+multi-connection PostgreSQL environment is needed: an **empty** Neon project or
+database (not a branch of production, which would clone real rows into a test
+environment), a Neon API key so a disposable empty project can be created and
+dropped, or authorization to install Docker or Postgres.app.
+
+`REHEARSAL_DATABASE_URL` and `REHEARSAL_DATABASE_URL_TEST` in `.env.local` both
+fail authentication and are therefore **known-stale**. They are to be **left
+exactly as they are for now** — do not change, rotate or remove them at this
+pause. Restoring a rehearsal environment is step 5 of the resume order below.
+
+#### Recommended resume order
+
+Nothing is required today. When work resumes, in this order:
+
+1. **Decide the business/payment approach.**
+2. **Review AI usage and cost**, and Free vs Pro allowances (Phase 6).
+3. **Finalize the Pro product/package and pricing.**
+4. **Design the billing integration**, keeping billing separate from entitlements.
+5. **Restore an isolated rehearsal PostgreSQL environment.**
+6. **Implement and test billing in isolation.**
+7. **Only then** consider a production billing rollout.
+
+Steps 1–3 are business decisions and need no code. Step 5 is also what unblocks
+the outstanding contention test.
+
+#### Safety rules that still apply on resumption
+
+`CLAUDE.md` is authoritative; these are the ones this work depended on most.
+Production user data must survive every deployment and migration: never delete,
+reset, overwrite, reseed or recreate it, and migrations are non-destructive by
+default — `CREATE TABLE`, `ADD COLUMN`, `ADD INDEX`, nullable columns, safe
+backfills only, with anything destructive stopping for explicit approval. Two
+lessons were learned the hard way here and are recorded in full above: a
+**schema-only preflight is insufficient**, because a data-backfill predicate with
+rows still pending is indistinguishable from a no-op in a schema diff, so every
+such predicate must be counted read-only first and **evaluated exactly, never as a
+flattened superset**; and **migration must precede deployment** whenever deployed
+code reads a new table. Production access for verification is read-only inside an
+explicit read-only transaction, and no production content is created to test
+anything.
 
 **Carried, unchanged, none of them blocking:** `feedback_created_idx` remains
 known unrelated drift and is intentionally untouched; `rhsmoke64t0ru` is still
