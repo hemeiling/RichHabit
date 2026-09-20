@@ -2,7 +2,8 @@
 
 > Last updated: 2026-09-20
 >
-> **PHASE 4A/4B — ENTITLEMENT FOUNDATION: IMPLEMENTED → COMMITTED → PUSHED → LOCAL MIGRATION REHEARSAL VERIFIED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `37217f4` ON `main` → MIGRATION APPLIED TO PRODUCTION 2026-09-20 ~02:02 UTC (37 → 38 TABLES) → DEPLOYED TO RENDER (`dep-dank5iijnfac738tlc00`) → PRODUCTION VERIFIED 2026-09-20 · `user_plans` CREATED **EMPTY** AND STILL HOLDS 0 ROWS · NO ENTITLEMENT GRANT · NO FREE LIMITS ENFORCED · TWO PRE-EXISTING RUNNER BACKFILLS UNEXPECTEDLY BECAME PENDING AND WERE APPLIED AND ACCEPTED (ONE NULL `users.username`, ONE NULL `habits.template_key`) · NO ROW CREATED OR DELETED · EVERY PRODUCT ROW COUNT UNCHANGED · PHASE 4C (GRANDFATHERED PRO) AND PHASE 5 (ENFORCEMENT) STILL PENDING**
+> **PHASE 4C — GRANDFATHERED PRO GRANTED: EXECUTED AND PRODUCTION VERIFIED 2026-09-20 02:58:15 UTC · FIXED LITERAL CUTOFF `2026-09-20T00:00:00Z` · **8** EXISTING NON-ADMIN ACCOUNTS NOW `plan='pro'`, `source='grandfathered'`, `expires_at=NULL`, `granted_by=NULL`, `note=NULL` · PERMANENT AND $0, NO PAYMENT PROVIDER · TWO TEST ACCOUNTS EXCLUDED BY EXACT UUID CONFIRMED BY THE PRODUCT OWNER AND REMAIN FREE · 5 ADMINS HOLD NO PLAN ROW AND STAY UNLIMITED THROUGH THE CENTRAL BYPASS · FUTURE ACCOUNTS DEFAULT FREE · RUN AS A STANDALONE ONE-OFF OPERATION, **NOT** ADDED TO `scripts/migrate.mjs` · `user_plans` IS THE ONLY TABLE THAT CHANGED · NO PRODUCT/CONTENT ROW CHANGED · NO SCHEMA CHANGE · NO DEPLOY · NO RENDER CHANGE · PHASE 5 ENFORCEMENT STILL NOT IMPLEMENTED**
+> **PHASE 4A/4B — ENTITLEMENT FOUNDATION: IMPLEMENTED → COMMITTED → PUSHED → LOCAL MIGRATION REHEARSAL VERIFIED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `37217f4` ON `main` → MIGRATION APPLIED TO PRODUCTION 2026-09-20 ~02:02 UTC (37 → 38 TABLES) → DEPLOYED TO RENDER (`dep-dank5iijnfac738tlc00`) → PRODUCTION VERIFIED 2026-09-20 · `user_plans` CREATED **EMPTY** (0 ROWS THROUGHOUT PHASE 4B; PHASE 4C LATER GRANTED 8) · NO FREE LIMITS ENFORCED · TWO PRE-EXISTING RUNNER BACKFILLS UNEXPECTEDLY BECAME PENDING AND WERE APPLIED AND ACCEPTED (ONE NULL `users.username`, ONE NULL `habits.template_key`) · NO ROW CREATED OR DELETED · EVERY PRODUCT ROW COUNT UNCHANGED · PHASE 5 (ENFORCEMENT) STILL PENDING**
 > **PHASE 3 — ADMIN → USERS MODERNIZED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `bf2d13c` ON `main` → DEPLOYED TO RENDER → DESKTOP **AND** MOBILE VISUAL QA BY THE PRODUCT OWNER 2026-09-19 · GROUPED TABLE (ACCOUNT · RICH HABITS · PRIORITY COMPASS · COMMUNITY · CLARIFY INTENTION · PLANNING) · GOALS AND REVIEWS REMOVED · ACTIVE HABITS NOW MEANS `status = 'active'` · COMMUNITY RANK/% READ FROM THE EXISTING CACHE AND NEVER COMPUTED · PLAN IS PRESENTATION ONLY (ADMIN / FREE) · NO MIGRATION · NO SCHEMA CHANGE · NO PRODUCTION DATA TOUCHED**
 > **PHASE 2 — EARLY-ACCESS ACCOUNT CAP REMOVED: IMPLEMENTED → COMMITTED → PUSHED → DEPLOYED → PRODUCTION VERIFIED · `80da10b` ON `main` → DEPLOYED TO RENDER → `EARLY_ACCESS_USER_LIMIT=0` SET IN RENDER (WHICH TRIGGERED A SECOND DEPLOY) → PRODUCTION VERIFIED 2026-09-19 · SIGN-UP IS OPEN · NO MIGRATION · NO SCHEMA CHANGE · NO USER DATA TOUCHED · THE CAP MACHINERY IS INTACT AND RE-ENABLED BY SETTING A POSITIVE NUMBER**
 > **PHASE 1B — CONSUMER AI ON CLAUDE: PRODUCTION DEPLOYED + VERIFIED · `9fa4684` PUSHED TO `main` (fast-forward from `b903dd7`) → DEPLOYED TO RENDER → PRODUCTION VERIFIED 2026-09-19 · AI COACH AND AI HABIT RECOMMENDATIONS MIGRATED OpenAI → CLAUDE (`claude-sonnet-5`) · OPENAI RUNTIME DEPENDENCY REMOVED ENTIRELY · COACH ANSWERED FOR THE FIRST TIME IN PRODUCTION (ENGLISH AND 中文, THROWAWAY ACCOUNT ONLY) · NO MIGRATION · NO RENDER VARIABLE CHANGED**
@@ -29,9 +30,10 @@
 > created empty 2026-09-13), `password_resets` (the password-recovery release),
 > `coach_requests` (2026-09-19) and `user_plans` (2026-09-20, Phase 4B) were each
 > added additively and created empty; every pre-existing table, index, constraint
-> and row was verified unchanged after each. `user_plans` still holds **0 rows**:
-> the entitlement store exists, and nothing has ever been written to it
-> (`n_tup_ins = n_tup_upd = n_tup_del = 0`).
+> and row was verified unchanged after each. `user_plans` was created empty and
+> stayed empty for all of Phase 4B; it holds **8 rows** since the Phase 4C grant
+> of 2026-09-20 02:58:15 UTC — eight permanent Grandfathered Pro grants, one per
+> eligible account, and nothing else has ever been written to it.
 >
 > **Deployed application:** `37217f44a5dc25245d3192a62edc1d239de9dc42` (Phase 4A),
 > deployed on Render by the Product Owner as `dep-dank5iijnfac738tlc00` and
@@ -57,6 +59,58 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
+## Phase 4C — Grandfathered Pro granted (EXECUTED · PRODUCTION VERIFIED)
+
+Everyone who was already using RichHabit before it had plans keeps everything,
+permanently and at no charge. The grant is a **one-time data operation**, not a
+feature and not a payment: eight rows in `user_plans`, and nothing else.
+
+| Item | State |
+| --- | --- |
+| executed | 2026-09-20 **02:58:15 UTC**, one transaction, committed after every guard passed |
+| how | a **standalone one-off script**, deliberately **not** added to `scripts/migrate.mjs` — a grant policy is a one-time business decision, not schema, and must not run on every deploy. No committed code inserts plan rows; a grep for `insert into user_plans` across `src/` and `scripts/` finds nothing |
+| fixed cutoff | **`2026-09-20T00:00:00Z`**, a literal in the SQL, never `now()`. Later than every existing account (newest `2026-09-19T17:47:43.951Z`) and already in the past, so it can neither drift forward nor capture a future signup |
+| eligibility | `role <> 'admin'` **and** `created_at < cutoff` **and** not one of the two excluded UUIDs. No activity, engagement, verification, email-domain or username criterion was used — the Product Owner explicitly ruled those out |
+| granted | **8** accounts: `plan='pro'`, `source='grandfathered'`, `expires_at=NULL`, `granted_by=NULL`, `note=NULL` |
+| the 8 | `fc5005dd…bffd5` richhabituser03 · `24f84581…4daa1` richhabituser04 · `aca5eff2…988fcb` richhabituser05 · `222ca61d…09eaf5` richhabituser06 · `a24087f2…8cf051` richhabituser07 · `ee701e47…f8918b` richhabituser08 · `024bc2aa…de70be` richhabituser09 · `9d70963e…524d0b` gazarfar |
+| excluded, remain **Free** | `d2aeb944-dacb-4c68-91b8-f2743c7f7718` (rhsmoke64t0ru, the documented release/front-page smoke-test account) and `48b3c3d9-b880-4f82-af6f-07a702168074` (meimei, the 2026-09-19 mandatory-verification throwaway). **Exact UUIDs supplied and confirmed by the Product Owner** — never reconstructed heuristically. Neither account was deleted |
+| how Free is represented | **by the absence of a row**, not by a `plan='free'` row. No row means Free, which is why introducing plans changed nobody and why the excluded accounts needed no write at all |
+| admins | **no plan row for any of the 5.** They are unlimited through the central bypass in `entitlements()`, not through a Pro grant — giving an admin a Pro row would have duplicated policy in two places |
+| future accounts | **Free** by default: they have no row, and the cutoff is in the past |
+| permanence | `expires_at = NULL`. No payment provider, no subscription, no billing field. A future billing system must never silently expire, downgrade or revoke these — that is enforced by the write boundary and its tests, deliberately not by a database trigger |
+| what changed | **`user_plans` only.** Every other table's row count is byte-identical to the Phase 4B baseline. No `users` row, no content row, no schema object, no deletion, no account cleanup |
+| deploy / Render | **neither.** No code shipped and no configuration changed; the grant is data read by the already-deployed `37217f4` |
+| Phase 5 | **still not implemented.** No route calls `limitFor`, `entitlements()` or `getActor()`; nothing refuses a request on a plan; `priority_quota_usage` exists neither as a migration nor in `db/schema.sql`. The 8 accounts are Pro, and *nobody* is limited yet |
+
+**Guards enforced inside the transaction, before `commit`.** Any failure would
+have rolled the whole thing back: exactly 8 rows inserted · the inserted ids an
+exact match for the reviewed 8 · `user_plans` totalling 8 · 8 `pro` · 8
+`grandfathered` · 8 with `expires_at IS NULL` · 8 with `granted_by IS NULL` · 8
+with `note IS NULL` · 0 rows for either excluded UUID · 0 rows for any admin ·
+users still 15 / 5 admin / 10 non-admin / 0 disabled · every product and content
+row count identical to the Phase 4B baseline. The statement was
+`insert … on conflict (user_id) do nothing` — never `do update`, so a
+pre-existing plan row of any kind could not have been modified, and a re-run
+inserts 0.
+
+**Post-commit verification, read-only.** `user_plans` = 8 rows, all
+Pro · Grandfathered, all `expires_at`/`granted_by`/`note` NULL, all non-admin,
+and the set of `user_id`s is exactly the reviewed 8 with no other account
+holding a row. 0 rows for the excluded UUIDs, 0 for admins, 0 for any account
+created at or after the cutoff. Accounts 15 / 5 / 10 / 0. Schema **38 tables**.
+Every product row count identical to the Phase 4B baseline, so `user_plans` is
+the only table that changed anywhere in the database.
+
+**Admin → Users now resolves, from the data alone, to Admin × 5 ·
+Pro · Grandfathered × 8 · Free × 2 — 15 accounts, every one accounted for.**
+Verified by query rather than by creating any test content.
+
+**One policy judgement recorded, because it was deliberate.** Seven of the eight
+granted accounts have 0 completions and 0 priorities and hold only the untouched
+10 starter habits; the eighth has 22 completions. The Product Owner was shown
+this and directed that eligibility must **not** depend on activity or
+engagement. The rule as executed is exactly the rule as approved.
+
 ## Phase 4A/4B — entitlement foundation (PRODUCTION DEPLOYED · MIGRATED · VERIFIED)
 
 The product had no notion of what an account is *entitled* to. It has one now: a
@@ -75,7 +129,7 @@ inventing its own idea of a plan.
 | columns | exactly eight: `user_id` (uuid, PK), `plan`, `source`, `granted_at`, `expires_at`, `note`, `granted_by`, `updated_at` |
 | constraints | `PRIMARY KEY (user_id)` · `user_id → users(id) ON DELETE CASCADE` · `granted_by → users(id) ON DELETE SET NULL` · `CHECK (plan IN ('free','pro'))` · `CHECK (source IS NULL OR source IN ('grandfathered','purchased','gifted','promotional','trial','support'))` · `CHECK (plan <> 'pro' OR source IS NOT NULL)` — a Pro row cannot exist without a provenance |
 | index and trigger | `user_plans_plan_idx` btree `(plan)`; `user_plans_touch` before update, reusing the existing `touch_updated_at()` |
-| rows | **0, and never anything else.** `n_tup_ins`, `n_tup_upd` and `n_tup_del` are all 0, so no row has ever been inserted, updated or deleted |
+| rows | created **empty** and still 0 at the close of Phase 4B — `n_tup_ins`, `n_tup_upd` and `n_tup_del` were all 0, so nothing had ever been inserted, updated or deleted. The Phase 4C grant later inserted 8 rows; see its section |
 | the boundary | one module decides: `entitlements(actor)` and `limitFor(actor, feature)`. `effectivePlan` is the single place expiry is applied, so an expired grant cannot read as Pro on one screen and Free to a feature. **No row means Free**, which is why introducing plans changed nobody |
 | admin bypass | central, in `entitlements()`. No feature branches on a role |
 | unlimited | `null` — never `0` (the Phase 2 cap bug) and never `Infinity` (which JSON cannot carry) |
@@ -84,7 +138,7 @@ inventing its own idea of a plan.
 | billing | **absent by construction.** No Stripe, customer, subscription, invoice, checkout or price field anywhere in the entitlement module, the admin badge or the migration. A feature asks what an account is entitled to, never whether it paid |
 | privacy | `user_plans.note` is admin prose about a person and is **never selected** by any query. The admin listing selects only `up.plan`, `up.source` and `up.expires_at` |
 | Admin → Users | gained a Plan column: `Admin` for administrators, `Free` for everyone else, and `Pro` with its source once grants exist. Presentation only — it reads no database and no environment |
-| Phase 4C | **pending.** The Grandfathered Pro grant is blocked on the two excluded test-account IDs, which must come from a read-only roster review with the Product Owner and must never be reconstructed heuristically |
+| Phase 4C | **done** (2026-09-20): eight permanent Grandfathered Pro grants, with two test accounts excluded by exact UUID confirmed by the Product Owner. See the Phase 4C section |
 | Phase 5 | **pending.** `priority_quota_usage`, the server-derived local quota day, the transactional priority insert and Free-limit enforcement with bilingual UX |
 | `feedback_created_idx` | **known unrelated drift, intentionally untouched.** Present in `db/schema.sql`, absent from production, created by no migration step. Out of scope for Phase 4 and deliberately not fixed |
 
