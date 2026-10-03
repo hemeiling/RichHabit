@@ -901,6 +901,36 @@ export const zh: Dict = {
     none: "这里还没有内容。",
     focusHint: "条目有点多了。把最重要的两三件挪到最前面——其余的不会丢。",
   },
+  language: {
+    label: "语言",
+  },
+
+  whatsNew: {
+    title: "最近更新",
+    open: "最近更新",
+    openUnread: "最近更新，有新内容",
+    newTag: "新",
+    shownTo: {
+      grandfatheredPro: "仅向 Grandfathered Pro 会员显示",
+    },
+    notDeployed: "「最近更新」暂时无法记住你已读的内容——数据库更新还没有应用。其他功能不受影响。",
+    releases: {
+      "life-calendar": {
+        title: "更好用的人生日历",
+        body: "现在可以添加时间、重复生日和纪念日，并通过「每日安排」查看一天的重要事项。",
+        cta: "查看重要日程",
+      },
+      "richhabit-pro": {
+        title: "RichHabit Pro 来了",
+        body: "作为早期用户，你已享有 Grandfathered Pro 权益：不限数量的活跃习惯，以及在「优先罗盘」中不限数量地创建优先事项。",
+      },
+      "ai-refresh": {
+        title: "更懂你的 AI 助手",
+        body: "AI Coach 和智能推荐体验现已升级，帮助你把反思和意图更自然地转化为下一步行动。",
+      },
+    },
+  },
+
   importantDates: {
     title: "重要日程",
     previousMonth: "上一个月",

@@ -4,6 +4,7 @@ import { isOccurrenceStart } from "@/lib/recurrence";
 import { query, transaction } from "@/lib/db/pool";
 import { limitFor } from "@/lib/entitlements";
 import { getActor } from "@/lib/entitlements/actor";
+import { isReleaseId, releaseById, visibleReleases } from "@/lib/releases";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, Priority,
@@ -157,7 +158,8 @@ function importantDateFrom(d: any): ImportantDate {
 
 export async function loadState(userId: string): Promise<AppState> {
   const [habits, schedules, goalLinks, goals, completions, notes, reflections, priorities,
-    importantDates, awareness, stacks, metrics, reviews, spending, prefs, intention] =
+    importantDates, awareness, stacks, metrics, reviews, spending, prefs, intention,
+    actor, account] =
     await Promise.all([
       query("select * from habits where user_id = $1 order by sort_order, created_at", [userId]),
       query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
@@ -198,6 +200,10 @@ export async function loadState(userId: string): Promise<AppState> {
            from intentions
           where user_id = $1 and archived_at is null
           order by created_at limit 1`, [userId]),
+      // What's New: who this is (for audiences) and when they joined (where
+      // "unread" starts). The same actor the entitlement gates use.
+      getActor(userId),
+      query<{ created_at: Date | string }>("select created_at from users where id = $1", [userId]),
     ]);
 
   const state = emptyState();
@@ -379,8 +385,24 @@ export async function loadState(userId: string): Promise<AppState> {
       communityVisible: prefs[0].community_visible !== false,
     };
   }
+
+  /*
+   * What's New. Release ids the server has decided this account may see, the
+   * account's seen mark, and when it joined — nothing else. `select *` above, so
+   * a database without the column yet reads the mark as never set; the account
+   * creation time then still keeps anything older than the account from looking
+   * new.
+   */
+  state.whatsNew = {
+    releases: visibleReleases(actor),
+    seenAt: isoOrNull(prefs[0]?.whats_new_seen_at),
+    accountCreatedAt: isoOrNull(account[0]?.created_at),
+  };
   return state;
 }
+
+const isoOrNull = (v: unknown): string | null =>
+  (v == null ? null : new Date(v as string | Date).toISOString());
 
 // ------------------------------ mutations ----------------------------------
 
@@ -1138,6 +1160,51 @@ export async function savePrefs(userId: string, p: Prefs) {
        community_visible = excluded.community_visible`,
     [userId, p.theme, p.weighted, p.goalWeight, p.locale, p.communityVisible],
   );
+}
+
+/**
+ * What's New was shown, up to and including `releaseId`.
+ *
+ * Deliberately not part of `savePrefs`, which rewrites every preference from the
+ * browser's copy: a theme toggled in another tab must not be able to roll this
+ * mark back, and this must not be able to roll the theme back.
+ *
+ * The mark is that release's publication time, from the code — never "now" and
+ * never anything the browser sent but an id. It only ever moves forward, so two
+ * tabs, a retry or a stale page can only leave it where it is or advance it. It
+ * is one UPDATE of this account's own row: no row is created (every account has
+ * one from sign-up), and an account without one simply keeps no mark.
+ *
+ * The id must be one this account may see. An unknown id, or an audience release
+ * shown to someone outside its audience, is refused exactly as a missing record.
+ */
+export async function markWhatsNewSeen(userId: string, releaseId: string): Promise<{
+  seenAt: string | null; previous: string | null; advanced: boolean;
+}> {
+  if (!isReleaseId(releaseId)) throw new ApiError("Not found", 404);
+  const visible = visibleReleases(await getActor(userId));
+  if (!visible.some((v) => v.id === releaseId)) throw new ApiError("Not found", 404);
+  const through = releaseById(releaseId)!.publishedAt;
+
+  const [before] = await query<{ whats_new_seen_at: Date | string | null }>(
+    "select whats_new_seen_at from user_preferences where user_id = $1", [userId]);
+  const updated = await query<{ whats_new_seen_at: Date | string }>(
+    `update user_preferences set whats_new_seen_at = $2::timestamptz
+      where user_id = $1 and (whats_new_seen_at is null or whats_new_seen_at < $2::timestamptz)
+      returning whats_new_seen_at`,
+    [userId, through]);
+  const previous = isoOrNull(before?.whats_new_seen_at);
+  return {
+    seenAt: updated.length ? isoOrNull(updated[0].whats_new_seen_at) : previous,
+    previous,
+    advanced: updated.length > 0,
+  };
+}
+
+/** Whether a release may be named in this account's analytics: one it can see. */
+export async function canSeeRelease(userId: string, releaseId: string): Promise<boolean> {
+  if (!isReleaseId(releaseId)) return false;
+  return visibleReleases(await getActor(userId)).some((v) => v.id === releaseId);
 }
 
 /**

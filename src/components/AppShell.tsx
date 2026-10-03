@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { HabitsProvider, useHabits } from "@/components/store";
-import LanguageToggle from "@/components/LanguageToggle";
+import { LanguageMenu, WhatsNew } from "@/components/HeaderControls";
 import Sidebar, { SidebarToggle, type NavItem, type NavNode } from "@/components/Sidebar";
 import { useSignOut } from "@/components/useSignOut";
 import FeedbackSheet from "@/components/FeedbackSheet";
@@ -226,6 +226,21 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
 function Chrome({ email, localDb, children }:
   { email: string; localDb: boolean; children: React.ReactNode }) {
   const { state, actions, loading, saving, error, loadFailed, reload, dismissError } = useHabits();
+
+  /*
+   * The theme on <html> as well, for as long as the app is on screen.
+   *
+   * Sheets render into <body> through a portal (see Sheet), outside the themed
+   * div below, so in dark mode every bottom sheet — What's New on a phone, the
+   * event editor, feedback — painted with the light tokens. Mirroring the
+   * attribute onto the root puts portals inside the theme too. Removed again on
+   * unmount, so a signed-out page reached from here is never left dark.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-theme", state.prefs.theme);
+    return () => root.removeAttribute("data-theme");
+  }, [state.prefs.theme]);
   const t = useT();
   const locale = useLocale();
   const en = dict("en");
@@ -297,10 +312,18 @@ function Chrome({ email, localDb, children }:
                 a corner that gets skipped. */}
             {localDb && <LocalDbBadge />}
           </div>
-          <div className="flex items-center gap-2" style={{ flex: "none" }}>
-            <span className="eyebrow" style={{ opacity: saving ? 1 : 0, transition: "opacity .2s" }}>{t.common.saving}</span>
-            <LanguageToggle />
-            <button className="btn btn-quiet" style={{ padding: "6px 10px" }} aria-label={t.common.toggleDarkMode}
+          {/*
+            * What's New, then Language, then the theme. Text controls from
+            * 900px, 44px icon buttons below it (see HeaderControls). "Saving"
+            * takes no room of its own on a phone, where the title needs it.
+            */}
+          <div className="hdr-controls">
+            <span className="eyebrow hdr-saving" style={{ opacity: saving ? 1 : 0, transition: "opacity .2s" }}
+              aria-hidden={!saving}>{t.common.saving}</span>
+            <WhatsNew />
+            <LanguageMenu />
+            <button type="button" className="hdr-ctl hdr-theme" aria-label={t.common.toggleDarkMode}
+              title={t.common.toggleDarkMode}
               onClick={() => actions.setPrefs({ theme: state.prefs.theme === "dark" ? "light" : "dark" })}>
               {state.prefs.theme === "dark" ? "☾" : "☀"}
             </button>

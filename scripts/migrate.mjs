@@ -24,6 +24,7 @@ import { migrateCoachRequests } from "./migrations/coach-requests.mjs";
 import { migrateUserPlans } from "./migrations/user-plans.mjs";
 import { migratePriorityQuota } from "./migrations/priority-quota-usage.mjs";
 import { migrateImportantDatesV2 } from "./migrations/important-dates-v2.mjs";
+import { migrateWhatsNew } from "./migrations/whats-new.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -909,6 +910,15 @@ try {
    * scripts/migrations/important-dates-v2.mjs.
    */
   changed += await migrateImportantDatesV2(client, console.log);
+
+  /*
+   * ---- 14. What's New: a per-account seen mark ------------------------------
+   *
+   * One nullable column on user_preferences, with no default and no backfill:
+   * every existing account reads "never opened". No row is read, rewritten or
+   * deleted. Additive and guarded. See scripts/migrations/whats-new.mjs.
+   */
+  changed += await migrateWhatsNew(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

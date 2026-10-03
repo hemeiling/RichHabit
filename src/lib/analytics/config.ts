@@ -101,6 +101,14 @@ export const FEATURES = {
       "intention_ai_suggestion_edited",
     ],
   },
+  /*
+   * What's New. Each event names a release id and, for opening, whether that
+   * cleared anything new — never what the person was doing or looking at.
+   */
+  whatsNew: {
+    label: "What's New",
+    events: ["whats_new_opened", "whats_new_cta_clicked"],
+  },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

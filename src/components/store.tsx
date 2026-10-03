@@ -59,6 +59,13 @@ interface Actions {
    */
   setIntention: (i: Intention) => void;
   setPrefs: (p: Partial<Prefs>) => void;
+  /**
+   * What's New was shown up to `releaseId`. Resolves true once the server has
+   * recorded it — and only then is the seen mark updated here, so the unread
+   * dot never clears for something that was not actually recorded. A failure
+   * changes nothing on screen and shows no error: the dot simply stays.
+   */
+  markWhatsNewSeen: (releaseId: string) => Promise<boolean>;
 }
 
 interface Ctx {
@@ -540,6 +547,23 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
     setPrefs: (p) => {
       const next = { ...state.prefs, ...p };
       run((s) => ({ ...s, prefs: next }), () => db.savePrefs(next));
+    },
+
+    markWhatsNewSeen: async (releaseId) => {
+      try {
+        const { seenAt } = await db.whatsNewOpened(releaseId);
+        // Forward only, as on the server: a slower reply cannot move it back.
+        setState((s) => ({
+          ...s,
+          whatsNew: {
+            ...s.whatsNew,
+            seenAt: !s.whatsNew.seenAt || (seenAt && seenAt > s.whatsNew.seenAt) ? seenAt : s.whatsNew.seenAt,
+          },
+        }));
+        return true;
+      } catch {
+        return false;
+      }
     },
   };
 

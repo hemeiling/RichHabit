@@ -116,6 +116,16 @@ export const deleteSpending = (id: string) => remove("/api/spending", id);
  * §26. One call for create and for edit: the id is the identity, so changing an
  * event's dates updates the row rather than adding a second one.
  */
+/**
+ * What's New. A release id and nothing else; the server decides what it means.
+ * The link click is sent with `keepalive` so it survives the navigation it causes.
+ */
+export const whatsNewOpened = (release: string): Promise<{ seenAt: string | null }> =>
+  post("/api/whats-new", { action: "opened", release });
+export const whatsNewCta = (release: string) =>
+  send("/api/whats-new", { method: "POST", keepalive: true, body: JSON.stringify({ action: "cta", release }) })
+    .catch(() => undefined);
+
 export const saveImportantDate = (e: ImportantDate) => {
   /*
    * `v: 2` says this client knows about times and repeats, so the server

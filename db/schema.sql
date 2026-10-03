@@ -195,6 +195,14 @@ create table user_preferences (
   community_visible boolean not null default true,
   updated_at    timestamptz not null default now()
 );
+-- ---- What's New: a per-account seen mark ---------------------------------
+-- Added rather than written into the table above, so a fresh install has the
+-- same columns in the same order as a migrated production database, and
+-- scripts/migrations/whats-new.mjs is the same statement. The publication time
+-- of the newest release this account has been shown in What's New; null means
+-- never opened. Written only by its own route, never by the preferences save.
+alter table user_preferences add column whats_new_seen_at timestamptz;
+-- ---- end What's New --------------------------------------------------------
 
 -- -------------------------------- goals ------------------------------------
 create table goals (

@@ -97,6 +97,18 @@ export function limitFor(actor: Actor, feature: Feature): number | null {
 }
 
 /**
+ * Whether this account holds Grandfathered Pro right now — the one definition,
+ * for anything that has to say so to the person (What's New does).
+ *
+ * Read-only: it grants nothing and limits nothing. `actor.plan` is already the
+ * effective plan, so an expired grant reads as Free here, and an admin — who
+ * holds no plan row — is not Grandfathered Pro.
+ */
+export function isGrandfatheredPro(actor: Pick<Actor, "plan" | "source">): boolean {
+  return actor.plan === "pro" && actor.source === "grandfathered";
+}
+
+/**
  * Whether a stored plan row is Pro *right now*.
  *
  * Pure, and shared by everything that needs the answer — the actor, the admin

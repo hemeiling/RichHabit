@@ -355,6 +355,20 @@ export interface AppState {
    * case, including a brand-new account.
    */
   unavailable: string[];
+  /**
+   * What's New, as this account may see it. Ids and times only — the wording
+   * lives in the dictionaries and the definitions in lib/releases.
+   */
+  whatsNew: WhatsNewState;
+}
+
+export interface WhatsNewState {
+  /** The releases this account may be shown, newest first, decided on the server. */
+  releases: { id: string; preview: boolean }[];
+  /** Publication time of the newest release this account has been shown, if any. */
+  seenAt: string | null;
+  /** When the account was created: releases before it are history, never unread. */
+  accountCreatedAt: string | null;
 }
 
 /** §27. The suggested set. Stored as these keys; translated on render. */
@@ -368,6 +382,8 @@ export const emptyState = (): AppState => ({
   priorities: [], importantDates: [], intention: null,
   awareness: [], stacks: [], metrics: {}, reviews: [], spending: [], unavailable: [],
   prefs: { theme: "light", weighted: true, goalWeight: null, locale: "en", communityVisible: true },
+  // Nothing to show until the account has loaded, so nothing can look unread.
+  whatsNew: { releases: [], seenAt: null, accountCreatedAt: null },
 });
 
 /**

@@ -1056,6 +1056,49 @@ export const en = {
    * §26. The small calendar in Today's rail. System wording only — an event's
    * title and note are the user's own words and are never touched.
    */
+  /**
+   * The language control in the app header. The options are written in their
+   * own languages and never translated (see LanguageMenu), so this is only the
+   * control's own label.
+   */
+  language: {
+    label: "Language",
+  },
+
+  /**
+   * What's New — the release history. Release wording is keyed by the stable
+   * ids in lib/releases.ts; a new release adds one entry here and one in zh.ts.
+   * Benefit-first and plain: no model names, providers or version numbers.
+   */
+  whatsNew: {
+    title: "What's New",
+    open: "What's New",
+    /** The trigger's accessible name while something is unread. */
+    openUnread: "What's New, new updates",
+    newTag: "New",
+    /** Shown to admins on releases they see only as a preview. */
+    shownTo: {
+      grandfatheredPro: "Shown to Grandfathered Pro members",
+    },
+    notDeployed:
+      "What's New can't remember what you've read yet — the database update hasn't been applied. Nothing else is affected.",
+    releases: {
+      "life-calendar": {
+        title: "A smarter Life Calendar",
+        body: "Add times, repeat birthdays and anniversaries, and see each day at a glance in the new Day Agenda.",
+        cta: "Explore Important Dates",
+      },
+      "richhabit-pro": {
+        title: "RichHabit Pro is here",
+        body: "As an early member, you have Grandfathered Pro: unlimited active habits and unlimited new priorities in Priority Compass.",
+      },
+      "ai-refresh": {
+        title: "A refreshed AI experience",
+        body: "AI Coach and habit recommendations have been upgraded to help turn reflection and intention into practical next steps.",
+      },
+    },
+  },
+
   importantDates: {
     title: "Important dates",
     /** The two-month window, and the way back to it. */
