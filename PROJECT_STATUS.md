@@ -2,6 +2,8 @@
 
 > Last updated: 2026-10-03
 >
+> **WHAT'S NEW + LANGUAGE MENU: RELEASED · `424c11f` ON `main` (fast-forward from `5cf5bb9`) · GATE A PASS (REVIEW, READ-ONLY PRODUCTION PREFLIGHT, NEON REHEARSAL ON A FRESH BRANCH, REHEARSAL TESTS 10/10) · PRODUCTION MIGRATION STEP 14 APPLIED 2026-10-03 21:49:16 UTC — EXACTLY 1 CHANGE (`user_preferences.whats_new_seen_at`, NULLABLE, NO DEFAULT, NO BACKFILL), SECOND RUN "NOTHING TO DO" · ALL 16 PREFERENCE ROWS AND EVERY OTHER TABLE BYTE-IDENTICAL · RENDER AUTO-DEPLOY DID NOT START; MANUAL DEPLOY OF `424c11f` BY THE PRODUCT OWNER, SERVED FROM 22:05 UTC · SIGNED-OUT 97/97 · SIGNED-IN VERIFIED BY THE PRODUCT OWNER · PRODUCTION VERIFIED.** See the first section below.
+>
 > **IMPORTANT DATES V2 — OPTIONAL TIMES, REPEATING EVENTS, DAY AGENDA: RELEASED · `9dc9b65` ON `main` (fast-forward from `bea8bb1`) · GATE A PASS (INDEPENDENT REVIEW, READ-ONLY PRODUCTION PREFLIGHT, NEON REHEARSAL ON `important-dates-v2-rehearsal`) · PRODUCTION MIGRATION APPLIED 2026-10-03 19:36:48 UTC — EXACTLY 14 CHANGES (7 COLUMNS + 7 CHECKS), SECOND RUN "NOTHING TO DO" · ALL 35 EXISTING EVENTS BYTE-IDENTICAL, ALL STILL ALL-DAY AND ONCE · DEPLOYED ON RENDER BY THE PRODUCT OWNER (MANUAL; AUTO-DEPLOY DID NOT START) · SERVED BUILD PROVEN BY BUNDLE PROBE · SIGNED-OUT CHECKS PASS · SIGNED-IN VERIFIED BY THE PRODUCT OWNER ON THEIR OWN ACCOUNT · PRODUCTION VERIFIED.** See the first section below.
 >
 > **PHASE 5 — FREE PLAN ENFORCEMENT: IMPLEMENTED → COMMITTED → PUSHED → REHEARSED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `2410bd3` ON `main` → MIGRATION APPLIED 2026-09-20, SHORTLY BEFORE THE 04:44 UTC HEALTH CHECK (38 → 39 TABLES) → DEPLOYED TO RENDER (`dep-danmdsmk1f9s73979ceg`) → PRODUCTION VERIFIED 2026-09-20 · **MIGRATION BEFORE DEPLOY**, BECAUSE THE DEPLOYED CODE READS `priority_quota_usage` FOR FREE PRIORITY CREATION · FREE = **15 ACTIVE HABITS** AND **5 NEW PRIORITIES PER SERVER-DERIVED LOCAL DAY** · GRANDFATHERED PRO (8) AND ADMIN (5) UNLIMITED AND WRITE NO QUOTA ROW · ONLY TRANSITIONS *INTO* ACTIVE ARE GATED; AN ACCOUNT OVER THE LIMIT KEEPS EVERYTHING · `priority_quota_usage` CREATED **EMPTY** AND STILL 0 ROWS · NO EXISTING USER DATA MIGRATED, MODIFIED OR DELETED · NO PAYMENT INFRASTRUCTURE · KNOWN **VERIFICATION GAP** (NOT A DEFECT): SIMULTANEOUS MULTI-SESSION LOCK CONTENTION NOT YET EXECUTED**
@@ -20,9 +22,10 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `9dc9b65` (Important Dates V2), fast-forwarded
-> from `bea8bb1`, plus the separate documentation commit recording that release.
-> Before it: `2410bd3` (Phase 5), fast-forwarded from `84eb5bc`, then the status
+> **Repository:** `origin/main` is `424c11f` (What's New + Language), fast-forwarded
+> from `5cf5bb9`; the documentation commit recording that release is separate (see
+> the What's New section). Before it: `9dc9b65` (Important Dates V2), fast-forwarded
+> from `bea8bb1`, plus its documentation commit `5cf5bb9`. Before that: `2410bd3` (Phase 5), fast-forwarded from `84eb5bc`, then the status
 > commits up to `bea8bb1`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
 > `83e7ebb` (front page), `9444828`, `6c49f9e` (email verification for an address
 > an account already has), `d905d4e` (password recovery), `ee0761a` (Phase 1),
@@ -45,8 +48,15 @@
 > priority writes there, and the two Free accounts are dormant test accounts.
 > `important_dates` gained seven columns and seven named CHECKs on 2026-10-03
 > (Important Dates V2), additively; every existing row was verified unchanged.
+> `user_preferences` gained one nullable column, `whats_new_seen_at`, on
+> 2026-10-03 (What's New, step 14); every existing row was verified unchanged.
 >
-> **Deployed application:** `9dc9b65cdd15ae0ae86d3967bd225b9ee7a49ba5` (Important
+> **Deployed application:** `424c11fc52ed59f8c0fe8c1f954d8be544b38407` (What's New +
+> Language), deployed manually on Render by the Product Owner on 2026-10-03 after the
+> auto-deploy did not start; served from 22:05 UTC, proven by a bundle probe (seven
+> strings unique to the release absent before, present after; four controls in both).
+> Render is configured to auto-deploy `main` on commit; when it does not start within
+> a few minutes, report it and ask for Manual Deploy. Before it: `9dc9b65cdd15ae0ae86d3967bd225b9ee7a49ba5` (Important
 > Dates V2), deployed manually on Render by the Product Owner on 2026-10-03 after
 > 22 minutes without an auto-deploy; live by 20:06 UTC. The agent has no Render
 > access, so the deployment id was not reported to it. A served-bundle probe
@@ -77,6 +87,59 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## What's New + Language menu (RELEASED · MIGRATED · DEPLOYED · VERIFIED)
+
+The signed-in header's `双语 | EN | 中文` became one **Language** menu, beside a
+permanent **What's New** entry (release history; subtle unread dot). Signed-out
+pages keep their toggle. Design approved 2026-10-03.
+
+| Item | State |
+| --- | --- |
+| deployed application commit | `424c11fc52ed59f8c0fe8c1f954d8be544b38407` (`c4bc6c0` feature + `424c11f` review fixes), fast-forwarded `5cf5bb9..424c11f` on `main` |
+| documentation commit | the commit adding this section — docs only; it is **not** the deployed application SHA |
+| migration | step 14, `scripts/migrations/whats-new.mjs`: one nullable `timestamptz`, no default, no backfill |
+| restore point | Neon production restore-point branch created by the Product Owner before the migration (B2). Keep until the next release runs cleanly |
+| rehearsal branch | fresh Neon branch from production (`REHEARSAL_DATABASE_URLV3`, `ep-dawn-cell-…`) — now migrated, may be deleted |
+
+**How it works.** Releases are defined in `src/lib/releases.ts` with wording in
+`en.ts`/`zh.ts`; adding release #4 = one entry + its wording. One seen mark per
+account, `user_preferences.whats_new_seen_at` = publication time of the newest
+release actually shown, written by `POST /api/whats-new` after the panel has been
+painted, forward-only, never creating a row, never touched by the preferences
+save. Releases older than the account are history, not unread. The server decides
+audiences from the entitlement `Actor`: only Grandfathered Pro gets the Pro
+announcement; admins see every release with "Shown to Grandfathered Pro members".
+Analytics: `whats_new_opened {release, cleared}`, `whats_new_cta_clicked {release}`.
+Also: the theme is mirrored onto `<html>` while the app is mounted, so every bottom
+sheet now follows dark mode.
+
+**Gate A — PASS.** Independent review (no blockers; six findings fixed in
+`424c11f`). Read-only production preflight: only step 14 pending. Rehearsal on a
+fresh Neon branch matching production (identical schema, all row counts equal):
+exactly one change, then "Nothing to do"; 16 preference rows, all data identical;
+10/10 rehearsal tests in rolled-back transactions, fingerprint unchanged after.
+
+**Gate B — PASS (2026-10-03).**
+
+| Step | Result |
+| --- | --- |
+| B1 preflight (21:45; re-gated 21:49:08) | 39 tables; 16 preference rows (ids `158559…`, original-column `e8040e…`), Important Dates 36, `day_priorities` 2; column absent; only step 14 pending; every backfill 0 rows |
+| B3 migration (21:49:16) | "user_preferences.whats_new_seen_at added" (+ informational priorities line), "Done — 1 change(s)."; second run "Nothing to do" |
+| B4 preservation (21:49:53) | 39 tables; schema 881 → 882, the one column only; 16 preference rows byte-identical per row, 0 marked; Important Dates, `day_priorities` and every other table identical |
+| B5/B6 release | `main` fast-forwarded and pushed 21:50:40; auto-deploy did not start; Product Owner deployed `424c11f` manually; served from 22:05 |
+| B7 signed-out | 97/97: public pages 200, public toggle unchanged, no What's New/Language menu on signed-out pages, `/api/whats-new` 401 signed out, no secrets in assets, no console errors |
+| B8 signed-in | Product Owner, own admin account: header, What's New (3 releases, Pro preview note), dot clears and stays cleared, CTA to Important Dates, EN/中文/双语 persistence, dark mode, phone sheet — all passed |
+| B9/B10 final read-only (22:09) | every change since the baseline is that one admin account: 1 mark = `2026-10-03T20:00:00Z` (the newest release's publication time), 8 analytics events (4 `app_opened`, 3 `whats_new_opened`, 1 `whats_new_cta_clicked`; properties are only release id + boolean), 1 session; a preferences save after marking left the mark intact; no plan rows changed; Important Dates and `day_priorities` unchanged |
+
+**Known limitations / follow-ups:** bilingual "Priority Compass · 优先罗盘" ends in
+an ellipsis at 390px (pre-existing, improved); another open tab keeps its dot until
+reload; the Pro wording ships in the client bundle (accepted — not sensitive);
+`loadState` makes two small extra queries (future optimization, not merged into the
+entitlement read to keep behavior identical).
+
+**Next step:** none required. Optional: delete the V3 rehearsal branch; keep the
+restore point until the next release has run cleanly.
 
 ## Important Dates V2 — optional times, repeating events, Day Agenda (RELEASED · MIGRATED · DEPLOYED · VERIFIED)
 
