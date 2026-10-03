@@ -4,7 +4,7 @@ import { isOccurrenceStart } from "@/lib/recurrence";
 import { query, transaction } from "@/lib/db/pool";
 import { limitFor } from "@/lib/entitlements";
 import { getActor } from "@/lib/entitlements/actor";
-import { isReleaseId, releaseById, visibleReleases } from "@/lib/releases";
+import { isReleaseId, releaseById, unreadReleases, visibleReleases } from "@/lib/releases";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, Priority,
@@ -1180,24 +1180,42 @@ export async function savePrefs(userId: string, p: Prefs) {
  */
 export async function markWhatsNewSeen(userId: string, releaseId: string): Promise<{
   seenAt: string | null; previous: string | null; advanced: boolean;
+  /** Whether anything was actually unread before this — what analytics calls "cleared". */
+  hadUnread: boolean;
 }> {
   if (!isReleaseId(releaseId)) throw new ApiError("Not found", 404);
   const visible = visibleReleases(await getActor(userId));
   if (!visible.some((v) => v.id === releaseId)) throw new ApiError("Not found", 404);
   const through = releaseById(releaseId)!.publishedAt;
 
-  const [before] = await query<{ whats_new_seen_at: Date | string | null }>(
-    "select whats_new_seen_at from user_preferences where user_id = $1", [userId]);
+  const [before] = await query<{ whats_new_seen_at: Date | string | null; created_at: Date | string | null }>(
+    `select p.whats_new_seen_at, u.created_at
+       from users u left join user_preferences p on p.user_id = u.id
+      where u.id = $1`, [userId]);
   const updated = await query<{ whats_new_seen_at: Date | string }>(
     `update user_preferences set whats_new_seen_at = $2::timestamptz
       where user_id = $1 and (whats_new_seen_at is null or whats_new_seen_at < $2::timestamptz)
       returning whats_new_seen_at`,
     [userId, through]);
   const previous = isoOrNull(before?.whats_new_seen_at);
+  /*
+   * When the update changed nothing, report what is stored *now* rather than
+   * what was read a moment ago: another tab may have advanced it in between,
+   * and this tab should learn that and clear its dot too.
+   */
+  let seenAt: string | null;
+  if (updated.length) {
+    seenAt = isoOrNull(updated[0].whats_new_seen_at);
+  } else {
+    const [now] = await query<{ whats_new_seen_at: Date | string | null }>(
+      "select whats_new_seen_at from user_preferences where user_id = $1", [userId]);
+    seenAt = isoOrNull(now?.whats_new_seen_at);
+  }
   return {
-    seenAt: updated.length ? isoOrNull(updated[0].whats_new_seen_at) : previous,
+    seenAt,
     previous,
     advanced: updated.length > 0,
+    hadUnread: unreadReleases(visible, previous, isoOrNull(before?.created_at)).length > 0,
   };
 }
 

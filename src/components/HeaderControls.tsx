@@ -210,6 +210,8 @@ export function WhatsNew() {
   const [newWhenOpened, setNewWhenOpened] = useState<string[]>([]);
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  /** One report per opening, even if the panel re-mounts (sheet ↔ popover). */
+  const reported = useRef(false);
 
   const { releases, seenAt, accountCreatedAt } = state.whatsNew;
   // Only releases this build can show: never mark seen something not on screen.
@@ -225,9 +227,19 @@ export function WhatsNew() {
   // The sheet has its own scrim; outside presses only matter for the popover.
   useOutsidePress(wrap, open && !phone, outside);
 
+  // The popover answers Escape wherever focus is while it is open. (The sheet
+  // handles its own.)
+  useEffect(() => {
+    if (!open || phone) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(true); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, phone, close]);
+
   const toggle = () => {
     if (open) { close(true); return; }
     setNewWhenOpened(unread);
+    reported.current = false;
     setOpen(true);
   };
 
@@ -237,6 +249,8 @@ export function WhatsNew() {
       newIds={newWhenOpened}
       locale={locale}
       onShown={(ids) => {
+        if (reported.current) return;
+        reported.current = true;
         const newest = newestShown(ids);
         if (newest) void actions.markWhatsNewSeen(newest.id);
       }}
@@ -247,7 +261,14 @@ export function WhatsNew() {
   );
 
   return (
-    <div className="hdr-anchor" ref={wrap}>
+    <div
+      className="hdr-anchor"
+      ref={wrap}
+      // The popover is non-modal: tabbing out of it closes it, as clicking out does.
+      onBlur={(e) => {
+        if (open && !phone && !wrap.current?.contains(e.relatedTarget as Node | null)) close(false);
+      }}
+    >
       <button
         ref={trigger}
         type="button"

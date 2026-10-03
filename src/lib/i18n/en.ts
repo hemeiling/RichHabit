@@ -1053,10 +1053,6 @@ export const en = {
     focusHint: "Longer than a post-it. Move the two or three that really matter to the top — the rest will keep.",
   },
   /**
-   * §26. The small calendar in Today's rail. System wording only — an event's
-   * title and note are the user's own words and are never touched.
-   */
-  /**
    * The language control in the app header. The options are written in their
    * own languages and never translated (see LanguageMenu), so this is only the
    * control's own label.
@@ -1099,6 +1095,10 @@ export const en = {
     },
   },
 
+  /**
+   * §26. The small calendar in Today's rail. System wording only — an event's
+   * title and note are the user's own words and are never touched.
+   */
   importantDates: {
     title: "Important dates",
     /** The two-month window, and the way back to it. */

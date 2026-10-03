@@ -70,6 +70,10 @@ describe("the release registry", () => {
     expect(component).toContain('id="important-dates-title"');
   });
 
+  it("never dates a release in the future — it is published when it ships", () => {
+    for (const r of RELEASES) expect(Date.parse(r.publishedAt), r.id).toBeLessThanOrEqual(Date.now());
+  });
+
   it("knows its own ids and nothing else", () => {
     expect(isReleaseId("life-calendar")).toBe(true);
     for (const v of ["", "life_calendar", "LIFE-CALENDAR", 4, null, "__proto__"]) expect(isReleaseId(v)).toBe(false);

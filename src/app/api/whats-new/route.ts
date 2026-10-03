@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       }
       await trackEvent({
         userId, event: "whats_new_opened", page: "/whats-new",
-        properties: { release, cleared: result.advanced },
+        properties: { release, cleared: result.advanced && result.hadUnread },
       });
       return { seenAt: result.seenAt };
     }

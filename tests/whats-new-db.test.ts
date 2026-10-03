@@ -134,7 +134,7 @@ describe("after the migration", () => {
     const [u] = await sql("insert into users (email, password_hash) values ('np@example.com', 'x') returning id");
     const before = (await sql("select count(*)::int n from user_preferences"))[0].n;
     const r = await markWhatsNewSeen(u.id, "life-calendar");
-    expect(r).toEqual({ seenAt: null, previous: null, advanced: false });
+    expect(r).toMatchObject({ seenAt: null, previous: null, advanced: false });
     expect((await sql("select count(*)::int n from user_preferences"))[0].n).toBe(before);
   });
 
@@ -194,6 +194,20 @@ describe("the route", () => {
       ["whats_new_cta_clicked", { release: "life-calendar" }],
     ]);
     expect(JSON.stringify(tracked)).not.toMatch(/secret|Mom|@example/);
+  });
+
+  it("records 'cleared' only when something was actually unread", async () => {
+    signedIn = await account("free", "2026-10-10T09:00:00Z");   // joined after every release
+    await post({ action: "opened", release: "life-calendar" });
+    expect(tracked.at(-1)?.properties).toEqual({ release: "life-calendar", cleared: false });
+  });
+
+  it("returns the mark as stored now, even when another tab got there first", async () => {
+    const u = await account("grandfathered");
+    await markWhatsNewSeen(u, "life-calendar");            // tab A, the newest
+    const late = await markWhatsNewSeen(u, "ai-refresh");   // tab B, an older panel
+    expect(late.advanced).toBe(false);
+    expect(late.seenAt).toBe(new Date(releaseById("life-calendar")!.publishedAt).toISOString());
   });
 
   it("refuses an audience release, an unknown id and an unknown action, recording nothing", async () => {

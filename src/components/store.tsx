@@ -151,7 +151,10 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
     write()
       .then(() => setError(null))
       .catch((e: Error) => {
-        setState(previous!);
+        // Roll back this write — but not What's New's seen mark, which is not
+        // written through here and may have been recorded since; restoring the
+        // older snapshot would bring back a dot the server has already cleared.
+        setState((s) => ({ ...previous!, whatsNew: s.whatsNew }));
         /*
          * An allowance is not a malfunction. Its message already says what
          * happened and what to do, so appending "that change wasn't saved" would
