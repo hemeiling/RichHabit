@@ -576,10 +576,10 @@ create index spending_user_date_idx on spending_records (user_id, spent_on desc)
 -- §26. Important Dates — the small calendar beside Today.
 --
 -- The dates one person considers important: a trip, a customer visit, a
--- deadline, a family occasion. Deliberately not a diary: whole days only, no
--- times, no attendees, no recurrence, no reminders.
+-- deadline, a family occasion. Deliberately not a diary: whole days by default,
+-- an optional time, an optional repeat — and no attendees, no reminders.
 --
--- Two dates and nothing else describe when it happens. Which days it occupies
+-- Two dates describe which days it happens on. Which days it occupies
 -- is derived by comparing them, never stored per day, so a range crossing a
 -- month, a quarter or a year is the same row as any other — the same reasoning
 -- that lets `priorities` roll forward with no rollover job.
@@ -616,6 +616,46 @@ create table important_dates (
 -- Every read is "this account's, in date order"; a range query against the
 -- displayed months uses the same index.
 create index important_dates_user_range on important_dates (user_id, starts_on, ends_on);
+
+-- ---- important dates: optional times, and repeating events ----------------
+-- Added to the table above rather than written into it, so a fresh install has
+-- exactly the structure a migrated production table has — the same columns in
+-- the same order — and scripts/migrations/important-dates-v2.mjs is the same
+-- statements. Every column is nullable or has a constant default, so an event
+-- written before these existed reads as what it was: all day, once.
+--
+-- Times are a wall clock plus the IANA zone they were meant in — never a UTC
+-- instant: a weekly 7 PM has to stay 7 PM across a daylight-saving change, and
+-- only the clock and the zone can say that. A null zone with a time is
+-- floating (the same clock time wherever the reader is). An all-day event has
+-- no time and no zone: a birthday is a date.
+--
+-- A repeating event is still one row. Its own dates are the first occurrence;
+-- the rest are computed from them (src/lib/recurrence.ts), never stored. A
+-- single occurrence deleted from a series is remembered in `excluded_on`, by
+-- its start date in the series' own calendar.
+alter table important_dates add column start_time time;
+alter table important_dates add column end_time time;
+alter table important_dates add column time_zone text;
+alter table important_dates add column repeat_unit text;
+alter table important_dates add column repeat_interval smallint not null default 1;
+alter table important_dates add column repeat_until date;
+alter table important_dates add column excluded_on date[] not null default '{}'::date[];
+alter table important_dates add constraint important_dates_repeat_unit_check
+  check (repeat_unit is null or repeat_unit in ('week','month','year'));
+alter table important_dates add constraint important_dates_repeat_interval_check
+  check (repeat_interval between 1 and 99);
+alter table important_dates add constraint important_dates_repeat_until_check
+  check (repeat_until is null or repeat_until >= starts_on);
+alter table important_dates add constraint important_dates_excluded_on_check
+  check (cardinality(excluded_on) <= 500);
+alter table important_dates add constraint important_dates_time_check
+  check (start_time is not null or (end_time is null and time_zone is null));
+alter table important_dates add constraint important_dates_time_order_check
+  check (start_time is null or end_time is null or ends_on > starts_on or end_time > start_time);
+alter table important_dates add constraint important_dates_time_zone_check
+  check (time_zone is null or length(time_zone) between 1 and 64);
+-- ---- end important dates: optional times, and repeating events ------------
 
 -- --------------------------- bounded text arrays ----------------------------
 -- Whether a text[] holds at most `max_items` entries, none longer than

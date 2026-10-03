@@ -23,6 +23,7 @@ import { migratePasswordResets } from "./migrations/password-resets.mjs";
 import { migrateCoachRequests } from "./migrations/coach-requests.mjs";
 import { migrateUserPlans } from "./migrations/user-plans.mjs";
 import { migratePriorityQuota } from "./migrations/priority-quota-usage.mjs";
+import { migrateImportantDatesV2 } from "./migrations/important-dates-v2.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -897,6 +898,17 @@ try {
    * scripts/migrations/priority-quota-usage.mjs.
    */
   changed += await migratePriorityQuota(client, console.log);
+
+  /*
+   * ---- 13. Important Dates: optional times, and repeating events ------------
+   *
+   * Seven columns on important_dates and the CHECKs that keep them coherent.
+   * Every new column is nullable or has a constant default, so every existing
+   * event reads as what it already was — all day, once. No row is read,
+   * rewritten, backfilled or deleted. Additive and guarded. See
+   * scripts/migrations/important-dates-v2.mjs.
+   */
+  changed += await migrateImportantDatesV2(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

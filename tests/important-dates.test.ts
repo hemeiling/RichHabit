@@ -28,7 +28,8 @@ let n = 0;
 const ev = (
   startDate: string, endDate = startDate, title = `event ${++n}`, extra: Partial<ImportantDate> = {},
 ): ImportantDate => ({
-  id: `id-${title}`, title, startDate, endDate, note: "", color: "blue", kind: "none", ...extra,
+  id: `id-${title}`, title, startDate, endDate, note: "", color: "blue", kind: "none",
+  startTime: null, endTime: null, timeZone: null, repeat: null, excludedOn: [], ...extra,
 });
 
 describe("months", () => {
@@ -353,9 +354,12 @@ describe("the request parser", () => {
   };
 
   it("takes a well-formed event", () => {
+    // A request without `v: 2` — what every client before times and repeats
+    // sends — reads as exactly what it always meant: all day, once.
     expect(parseImportantDate(good)).toEqual({
       id: ID, title: "Battery Show — Detroit", startDate: "2026-09-09", endDate: "2026-09-11",
       note: "Booth 412", color: "teal", kind: "travel",
+      startTime: null, endTime: null, timeZone: null, repeat: null, excludedOn: [],
     });
   });
 

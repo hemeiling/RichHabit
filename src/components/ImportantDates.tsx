@@ -4,31 +4,43 @@ import { memo, useCallback, useMemo, useState } from "react";
 import { useHabits } from "@/components/store";
 import { Field, GrowingTextarea, Sheet } from "@/components/ui";
 import { uid } from "@/lib/habits";
-import { addMonths, monthFirst, monthGrid, monthOf } from "@/lib/dates";
-import { dateRangeFor, monthTitleFor, prettyDateFor } from "@/lib/i18n";
+import { addDays, addMonths, monthFirst, monthGrid, monthOf } from "@/lib/dates";
+import {
+  clockTimeFor, dateRangeFor, monthTitleFor, prettyDateFor, shortDateFor,
+} from "@/lib/i18n";
 import { useLocale, useT } from "@/lib/i18n/context";
 import {
-  DEFAULT_EVENT_COLOR, EVENT_COLORS, EVENT_KINDS, MAX_EVENT_NOTE, MAX_EVENT_TITLE,
-  colorHex, covers, eventLength, eventProblem, eventsOn, layoutWeekCapped, upcomingEvents,
-  withEnd, withStart,
+  DEFAULT_EVENT_COLOR, EVENT_COLORS, EVENT_KINDS, KIND_EMOJI, MAX_EVENT_NOTE, MAX_EVENT_TITLE,
+  ONE_OFF_ALL_DAY, REPEAT_PRESETS,
+  colorHex, covers, eventLength, eventProblem, isAllDay, layoutWeekCapped, repeatPreset, ruleFor,
+  suggestedStartTime, withAllDay, withEnd, withEndTime, withKind, withStart,
 } from "@/lib/importantDates";
 import type { EventBar, EventKind } from "@/lib/importantDates";
-import type { Dict } from "@/lib/i18n";
-import type { ImportantDate } from "@/lib/types";
+import { MAX_REPEAT_INTERVAL, addMonthsClamped } from "@/lib/recurrence";
+import { dayAgenda, importantDateItems, upcomingItems } from "@/lib/calendar";
+import type { AgendaRow, CalendarItem } from "@/lib/calendar";
+import { deviceTimeZone, zoneCity } from "@/lib/zonedTime";
+import type { Dict, Locale } from "@/lib/i18n";
+import type { ImportantDate, RepeatRule, RepeatUnit } from "@/lib/types";
 
 /**
- * §26. Important Dates — the trips, deadlines and occasions this person cares
- * about, beside the day they are working through.
+ * §26. Important Dates — the trips, birthdays, deadlines and appointments this
+ * person cares about, beside the day they are working through.
  *
- * Deliberately small. One month at a time — it showed two, and the second was
- * costing more vertical space than it earned: what people actually scan for is
- * what is coming up, and that list is not limited to the month on screen. The
- * arrows reach any month, forwards or back, so nothing is out of reach; there
- * are just no times, invitations, recurrence or reminders. A calendar you
- * glance at, not one you administer. Everything here is private: nothing
- * reaches Community Progress, another account, or an admin screen.
+ * Still deliberately small. The month is an overview: bars, never times or
+ * titles crammed into cells. Tapping any date opens that day's agenda, which is
+ * where times are read — all-day things first, because a birthday or a trip
+ * frames the whole day, then everything with a time, in time order. An event
+ * can repeat (every week, month or year, or every N of them), and a repeating
+ * event is still one row; its occurrences are computed.
  *
- * The rules live in lib/importantDates.ts. This file is the interaction.
+ * Everything drawn here is a `CalendarItem` (lib/calendar), not an
+ * `ImportantDate`: this panel draws a calendar, and Important Dates are its one
+ * source today. Everything here is private: nothing reaches Community
+ * Progress, another account, an admin screen or an AI provider.
+ *
+ * The rules live in lib/importantDates.ts, lib/recurrence.ts and
+ * lib/calendar.ts. This file is the interaction.
  */
 
 /** How many bars one day cell can show before it says "+n" instead. */
@@ -41,12 +53,21 @@ const MAX_LANES = 3;
  */
 const UPCOMING = 5;
 
-
 /** A stored kind, as a label. Unknown keys (an older or newer build) read as
  *  no kind at all rather than as a bare key on screen. */
 const kindLabel = (kind: string, t: Dict): string | null =>
   (kind && kind !== "none" && kind in t.importantDates.kinds
     ? t.importantDates.kinds[kind as EventKind] : null);
+
+/** The title as shown: the kind's emoji in front, the person's words untouched. */
+const shownTitle = (title: string, kind: string) =>
+  (KIND_EMOJI[kind] ? `${KIND_EMOJI[kind]} ${title}` : title);
+
+const repeatText = (rule: RepeatRule | null, t: Dict, locale: Locale): string | null => {
+  if (!rule) return null;
+  const every = t.importantDates.repeatSummary[rule.unit](rule.interval);
+  return rule.until ? `${every} ${t.importantDates.repeatUntil(shortDateFor(rule.until, locale))}` : every;
+};
 
 const blankEvent = (date: string): ImportantDate => ({
   id: uid(),
@@ -56,7 +77,11 @@ const blankEvent = (date: string): ImportantDate => ({
   note: "",
   color: DEFAULT_EVENT_COLOR,
   kind: "none",
+  ...ONE_OFF_ALL_DAY,
 });
+
+/** What the editor is open on: the series, and which occurrence was tapped. */
+interface Editing { event: ImportantDate; isNew: boolean; occurrence: string | null }
 
 /* ------------------------------ the calendar ------------------------------ */
 
@@ -64,22 +89,24 @@ const blankEvent = (date: string): ImportantDate => ({
  * Memoised, and not as a reflex.
  *
  * Today re-renders on every tick of a habit — the store hands out a new state
- * object each time — and a month grid formats a date per cell for its label:
- * 42 across the month, 84 in bilingual mode, measured at 3-4ms for twice that
- * on a laptop and several times more on a phone. None of it can have changed
- * because a habit was ticked, so none of it should be redone. `onPickDay` is
- * wrapped in `useCallback` below to make this hold; the language still repaints
- * it, because that arrives through context rather than through props.
+ * object each time — and a month grid formats a date per cell for its label and
+ * now expands every repeating event for the six weeks it shows. None of it can
+ * have changed because a habit was ticked, so none of it should be redone.
+ * `onPickDay` is wrapped in `useCallback` below to make this hold; the language
+ * still repaints it, because that arrives through context rather than props.
  */
 const MonthGrid = memo(function MonthGrid({
-  month, events, today, onPickDay,
+  month, events, viewerZone, today, onPickDay,
 }: {
-  month: string; events: ImportantDate[]; today: string;
+  month: string; events: ImportantDate[]; viewerZone: string | null; today: string;
   onPickDay: (date: string) => void;
 }) {
   const t = useT();
   const locale = useLocale();
   const weeks = useMemo(() => monthGrid(month), [month]);
+  const items = useMemo(
+    () => importantDateItems(events, weeks[0][0], weeks[weeks.length - 1][6], viewerZone),
+    [events, weeks, viewerZone]);
 
   return (
     <div className="cal" role="group" aria-label={t.importantDates.monthGrid(monthTitleFor(month, locale))}>
@@ -89,13 +116,13 @@ const MonthGrid = memo(function MonthGrid({
       </div>
 
       {weeks.map((week) => {
-        const { bars, hidden } = layoutWeekCapped(events, week, MAX_LANES);
+        const { bars, hidden } = layoutWeekCapped(items, week, MAX_LANES);
         const lanes = Math.min(MAX_LANES, Math.max(0, ...bars.map((b) => b.lane + 1)));
         return (
           <div key={week[0]}>
             <div className="cal-row">
               {week.map((date) => {
-                const count = events.filter((e) => covers(e, date)).length;
+                const count = items.filter((e) => covers(e, date)).length;
                 return (
                   <button
                     key={date}
@@ -137,7 +164,7 @@ const MonthGrid = memo(function MonthGrid({
   );
 });
 
-function Bar({ bar }: { bar: EventBar }) {
+function Bar({ bar }: { bar: EventBar<CalendarItem> }) {
   const hex = colorHex(bar.event.color);
   return (
     <span
@@ -162,39 +189,102 @@ function Bar({ bar }: { bar: EventBar }) {
 /* ------------------------------- the editor ------------------------------- */
 
 function EventEditor({
-  event, isNew, onSave, onDelete, onClose, onBack,
+  editing, viewerZone, today, onSave, onDelete, onDeleteOccurrence, onClose, onBack,
 }: {
-  event: ImportantDate; isNew: boolean;
+  editing: Editing;
+  viewerZone: string | null;
+  today: string;
   onSave: (e: ImportantDate) => void;
   onDelete: (id: string) => void;
+  onDeleteOccurrence: (id: string, on: string) => void;
   onClose: () => void;
-  /** Present only when this was opened from a day that had other events on it. */
+  /** Present only when this was opened from a day's agenda. */
   onBack?: () => void;
 }) {
   const t = useT();
+  const locale = useLocale();
+  const { event, isNew, occurrence } = editing;
   const [draft, setDraft] = useState(event);
   const [tried, setTried] = useState(false);
   const [custom, setCustom] = useState(draft.color.startsWith("#"));
+  /** Whether the person has chosen a repeat here — a birthday then never overrides it. */
+  const [repeatChosen, setRepeatChosen] = useState(!isNew);
+  const [customOpen, setCustomOpen] = useState(repeatPreset(draft.repeat) === "custom");
+  /** The times last typed, kept while All day is on so turning it off again restores them. */
+  const [lastTimes, setLastTimes] = useState({ start: draft.startTime, end: draft.endTime });
+  const [askDelete, setAskDelete] = useState(false);
   const problem = eventProblem(draft);
+  const timed = !isAllDay(draft);
+  const wasRepeating = !isNew && event.repeat != null;
 
   const save = () => {
     setTried(true);
     if (problem) return;
-    onSave({ ...draft, title: draft.title.trim(), note: draft.note.trim() });
+    onSave({
+      ...draft,
+      title: draft.title.trim(),
+      note: draft.note.trim(),
+      // A time is meant somewhere. The event keeps the zone it was set in; a
+      // new time takes this device's.
+      timeZone: timed ? draft.timeZone ?? viewerZone : null,
+    });
     onClose();
   };
+
+  const setAllDay = (allDay: boolean) => {
+    if (allDay) {
+      setLastTimes({ start: draft.startTime, end: draft.endTime });
+      setDraft(withAllDay(draft, true, "", null, null));
+    } else {
+      setDraft(withAllDay(draft, false,
+        lastTimes.start ?? suggestedStartTime(draft.startDate, today), lastTimes.end, viewerZone));
+    }
+  };
+
+  const pickPreset = (preset: (typeof REPEAT_PRESETS)[number]) => {
+    setRepeatChosen(true);
+    setCustomOpen(preset === "custom");
+    setDraft({ ...draft, repeat: ruleFor(preset, draft.repeat) });
+  };
+  const setRule = (patch: Partial<RepeatRule>) =>
+    setDraft({ ...draft, repeat: { ...(draft.repeat ?? { unit: "week", interval: 1, until: null }), ...patch } });
+
+  const preset = customOpen ? "custom" : repeatPreset(draft.repeat);
+  const otherZone = timed && draft.timeZone && viewerZone && draft.timeZone !== viewerZone
+    ? draft.timeZone : null;
 
   return (
     <Sheet
       open
       onClose={onClose}
       title={isNew ? t.importantDates.newTitle : t.importantDates.editTitle}
-      footer={
+      footer={askDelete && occurrence ? (
+        /*
+         * The two deletes a repeating event has, and nothing else: this one
+         * date, or the whole series. Shown in place of the footer so the
+         * choice sits where the Delete button was.
+         */
+        <div className="w-full">
+          <div className="eyebrow mb-2">{t.importantDates.deleteWhich}</div>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button className="btn" onClick={() => setAskDelete(false)}>{t.common.cancel}</button>
+            <button className="btn btn-danger"
+              onClick={() => { onDeleteOccurrence(event.id, occurrence); onClose(); }}>
+              {t.importantDates.deleteThisOnly(shortDateFor(occurrence, locale))}
+            </button>
+            <button className="btn btn-danger"
+              onClick={() => { onDelete(event.id); onClose(); }}>
+              {t.importantDates.deleteAll}
+            </button>
+          </div>
+        </div>
+      ) : (
         <>
           {!isNew && (
             <button
               className="btn btn-danger" style={{ marginRight: "auto" }}
               onClick={() => {
+                if (wasRepeating && occurrence) { setAskDelete(true); return; }
                 if (window.confirm(t.importantDates.confirmDelete)) { onDelete(event.id); onClose(); }
               }}
             >
@@ -205,11 +295,18 @@ function EventEditor({
           <button className="btn" onClick={onClose}>{t.common.cancel}</button>
           <button className="btn btn-primary" onClick={save}>{t.common.save}</button>
         </>
-      }
+      )}
     >
+      {/* Editing a repeating event edits all of it — said before anything is changed. */}
+      {wasRepeating && (
+        <p className="faint" style={{ fontSize: 12.5, marginTop: -8, marginBottom: 12 }}>
+          ↻ {repeatText(event.repeat, t, locale)} · {t.importantDates.editsAll}
+        </p>
+      )}
+
       <Field label={t.importantDates.eventTitle}>
         <input
-          className="input" autoFocus maxLength={MAX_EVENT_TITLE}
+          className="input" autoFocus={isNew} maxLength={MAX_EVENT_TITLE}
           placeholder={t.importantDates.titlePlaceholder}
           value={draft.title}
           onChange={(e) => setDraft({ ...draft, title: e.target.value })}
@@ -218,9 +315,9 @@ function EventEditor({
       </Field>
 
       {/*
-        * Two dates, always both shown. A "runs more than one day" toggle would
-        * be one fewer control and one more thing to discover; a range that is
-        * already visible can be extended by typing into it.
+        * Two dates, always both shown, and a time under each once the event is
+        * not all day — a time belongs to its date, which is also what makes an
+        * evening that runs past midnight read correctly.
         */}
       <div className="grid grid-cols-2 gap-3">
         <Field label={t.importantDates.start}>
@@ -228,19 +325,138 @@ function EventEditor({
             className="input num" type="date" value={draft.startDate}
             onChange={(e) => e.target.value && setDraft(withStart(draft, e.target.value))}
           />
+          {timed && (
+            <input
+              className="input num mt-2" type="time" required value={draft.startTime ?? ""}
+              aria-label={t.importantDates.startTime}
+              onChange={(e) => e.target.value && setDraft(withEndTime(
+                { ...draft, startTime: e.target.value }, draft.endTime))}
+            />
+          )}
         </Field>
         <Field label={t.importantDates.end}>
           <input
             className="input num" type="date" value={draft.endDate} min={draft.startDate}
             onChange={(e) => e.target.value && setDraft(withEnd(draft, e.target.value))}
           />
+          {timed && (draft.endTime != null ? (
+            <div className="time-with-clear mt-2">
+              <input
+                className="input num" type="time" value={draft.endTime}
+                aria-label={t.importantDates.endTime}
+                onChange={(e) => setDraft(withEndTime(draft, e.target.value || null))}
+              />
+              <button type="button" className="btn btn-quiet" aria-label={t.importantDates.removeEndTime}
+                title={t.importantDates.removeEndTime}
+                onClick={() => setDraft({ ...draft, endTime: null })}>×</button>
+            </div>
+          ) : (
+            <button type="button" className="btn btn-quiet mt-2 time-add"
+              onClick={() => setDraft(withEndTime(draft, addHour(draft.startTime!)))}>
+              + {t.importantDates.addEndTime}
+            </button>
+          ))}
         </Field>
       </div>
-      <p className="faint" style={{ fontSize: 12, marginTop: -6, marginBottom: 12 }}>
-        {t.importantDates.length(Math.max(1, eventLength(draft)))}
-      </p>
 
-      <Field label={t.importantDates.colour}>
+      <div className="flex items-center justify-between gap-3" style={{ marginTop: -4, marginBottom: 12 }}>
+        <span className="faint" style={{ fontSize: 12 }}>
+          {t.importantDates.length(Math.max(1, eventLength(draft)))}
+          {timed && draft.endTime && draft.endDate !== draft.startDate && eventLength(draft) === 2
+            && ` · ${t.importantDates.endsNextDay}`}
+        </span>
+        <label className="switch-row">
+          <span>{t.importantDates.allDay}</span>
+          <input type="checkbox" role="switch" className="switch" checked={!timed}
+            onChange={(e) => setAllDay(e.target.checked)} />
+        </label>
+      </div>
+      {otherZone && (
+        <p className="faint" style={{ fontSize: 12, marginTop: -6, marginBottom: 12 }}>
+          {t.importantDates.timesIn(zoneCity(otherZone))}
+        </p>
+      )}
+
+      {/* Before Repeat on purpose: picking 🎂 visibly sets "Every year" just below. */}
+      <ChoiceGroup label={`${t.importantDates.kind} · ${t.common.optional}`}>
+        <div className="flex flex-wrap gap-1.5">
+          {EVENT_KINDS.map((k) => (
+            <button
+              key={k} type="button" className="chip" data-on={draft.kind === k}
+              style={{ padding: "5px 11px", fontSize: 12.5 }}
+              onClick={() => {
+                const next = withKind(draft, k, repeatChosen);
+                if (next.repeat !== draft.repeat) setCustomOpen(false);
+                setDraft(next);
+              }}
+            >
+              {KIND_EMOJI[k] ? `${KIND_EMOJI[k]} ` : ""}{t.importantDates.kinds[k]}
+            </button>
+          ))}
+        </div>
+      </ChoiceGroup>
+
+      <ChoiceGroup label={t.importantDates.repeat}>
+        <div className="flex flex-wrap gap-1.5">
+          {REPEAT_PRESETS.map((p) => (
+            <button
+              key={p} type="button" className="chip" data-on={preset === p}
+              style={{ padding: "5px 11px", fontSize: 12.5 }}
+              aria-pressed={preset === p}
+              onClick={() => pickPreset(p)}
+            >
+              {t.importantDates.repeatOptions[p]}
+            </button>
+          ))}
+        </div>
+      </ChoiceGroup>
+
+      {/* Only after Custom: every N of a unit, and an optional last date. */}
+      {preset === "custom" && draft.repeat && (
+        <div className="repeat-custom">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ fontSize: 13.5 }}>{t.importantDates.every}</span>
+            <input
+              className="input num" type="number" inputMode="numeric" min={1} max={MAX_REPEAT_INTERVAL}
+              style={{ width: 72 }} aria-label={t.importantDates.intervalLabel}
+              value={Number.isFinite(draft.repeat.interval) && draft.repeat.interval > 0 ? draft.repeat.interval : ""}
+              onChange={(e) => setRule({ interval: e.target.value === "" ? 0 : Math.trunc(Number(e.target.value)) })}
+            />
+            <select
+              className="select" style={{ width: "auto" }} aria-label={t.importantDates.unitLabel}
+              value={draft.repeat.unit}
+              onChange={(e) => setRule({ unit: e.target.value as RepeatUnit })}
+            >
+              {(["week", "month", "year"] as const).map((u) => (
+                <option key={u} value={u}>{t.importantDates.units[u](draft.repeat!.interval || 1)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap mt-3">
+            <span className="eyebrow" style={{ marginRight: 2 }}>{t.importantDates.repeatEnds}</span>
+            <button type="button" className="chip" data-on={!draft.repeat.until}
+              style={{ padding: "5px 11px", fontSize: 12.5 }}
+              onClick={() => setRule({ until: null })}>
+              {t.importantDates.endsNever}
+            </button>
+            <button type="button" className="chip" data-on={!!draft.repeat.until}
+              style={{ padding: "5px 11px", fontSize: 12.5 }}
+              onClick={() => setRule({ until: draft.repeat!.until ?? addMonthsClamped(draft.startDate, 12) })}>
+              {t.importantDates.endsOn}
+            </button>
+            {draft.repeat.until && (
+              <input
+                className="input num" type="date" style={{ width: "auto" }}
+                aria-label={t.importantDates.repeatEndDate}
+                value={draft.repeat.until} min={draft.startDate}
+                onChange={(e) => e.target.value && setRule({ until: e.target.value })}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      <ChoiceGroup label={t.importantDates.colour}>
         <div className="flex flex-wrap items-center gap-2">
           {EVENT_COLORS.map((c) => (
             <button
@@ -265,21 +481,7 @@ function EventEditor({
             />
           </label>
         </div>
-      </Field>
-
-      <Field label={`${t.importantDates.kind} · ${t.common.optional}`}>
-        <div className="flex flex-wrap gap-1.5">
-          {EVENT_KINDS.map((k) => (
-            <button
-              key={k} type="button" className="chip" data-on={draft.kind === k}
-              style={{ padding: "5px 11px", fontSize: 12.5 }}
-              onClick={() => setDraft({ ...draft, kind: k })}
-            >
-              {t.importantDates.kinds[k]}
-            </button>
-          ))}
-        </div>
-      </Field>
+      </ChoiceGroup>
 
       {/*
         * The note is where the event actually gets written down — flights, an
@@ -318,45 +520,141 @@ function EventEditor({
   );
 }
 
-/* -------------------------------- the day --------------------------------- */
+/**
+ * A labelled row of choices — chips or swatches.
+ *
+ * Not a `Field`: that is a `<label>`, and a label lends its whole text to the
+ * first control inside it, so the first chip of a row was announced as the
+ * heading plus every other chip. A group with a heading names the row and
+ * leaves each button its own name.
+ */
+function ChoiceGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="block mb-3" role="group" aria-label={label}>
+      <div className="eyebrow mb-1.5" aria-hidden="true">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+/** An hour later, stopping at 23:59 rather than wrapping into tomorrow. */
+function addHour(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  return h >= 23 ? "23:59" : `${String(h + 1).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/* ------------------------------ the agenda -------------------------------- */
 
 /**
- * What is on one day.
+ * One day, read in order: what frames the day first (birthdays, trips,
+ * holidays, and the middle days of anything long), then everything with a
+ * time, earliest first. Nobody arranges this by hand.
  *
- * Shown for any day that has something on it, whether that is one thing or
- * five, and it always offers to add another — which is the point. A day with
- * nothing on it skips this and opens a new event directly, because there is
- * nothing to choose between.
+ * Tapping any date opens this, empty or not — one interaction for the whole
+ * month. An empty day says so plainly and puts Add right there, so the extra
+ * tap is the obvious next step rather than a detour.
  */
-function DaySheet({
-  date, events, onPick, onAdd, onClose,
+function DayAgendaSheet({
+  date, items, today, onPick, onAdd, onMove, onClose,
 }: {
-  date: string; events: ImportantDate[];
-  onPick: (e: ImportantDate) => void; onAdd: () => void; onClose: () => void;
+  date: string; items: CalendarItem[]; today: string;
+  onPick: (item: CalendarItem) => void; onAdd: () => void;
+  onMove: (date: string) => void; onClose: () => void;
 }) {
   const t = useT();
   const locale = useLocale();
+  const agenda = useMemo(() => dayAgenda(items, date), [items, date]);
+  const empty = agenda.allDay.length === 0 && agenda.timed.length === 0;
+
   return (
     <Sheet open onClose={onClose} title={t.importantDates.dayTitle(prettyDateFor(date, locale))}>
-      <div className="divide">
-        {events.map((e) => (
-          <button key={e.id} className="event-row" onClick={() => onPick(e)}
-            aria-label={t.importantDates.open(e.title)}>
-            <span className="event-dot" style={{ background: colorHex(e.color) }} aria-hidden="true" />
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 15, overflowWrap: "anywhere" }}>{e.title}</span>
-              <span className="faint num block" style={{ fontSize: 12 }}>
-                {dateRangeFor(e.startDate, e.endDate, locale)}
-                {kindLabel(e.kind, t) && ` · ${kindLabel(e.kind, t)}`}
-                {/* Which of the day's events is the one with the details in it. */}
-                {e.note.trim() && ` · ${t.importantDates.hasNote}`}
-              </span>
-            </span>
-          </button>
-        ))}
+      <div className="flex items-center gap-1" style={{ marginTop: -8, marginBottom: 10 }}>
+        <button className="btn btn-quiet" style={{ padding: "3px 10px", fontSize: 15 }}
+          onClick={() => onMove(addDays(date, -1))} aria-label={t.importantDates.previousDay}>‹</button>
+        <button className="btn btn-quiet" style={{ padding: "3px 10px", fontSize: 12 }}
+          onClick={() => onMove(today)} disabled={date === today}>{t.importantDates.todayTag}</button>
+        <button className="btn btn-quiet" style={{ padding: "3px 10px", fontSize: 15 }}
+          onClick={() => onMove(addDays(date, 1))} aria-label={t.importantDates.nextDay}>›</button>
       </div>
-      <button className="btn w-full mt-4" onClick={onAdd}>+ {t.importantDates.add}</button>
+
+      {empty ? (
+        <div className="agenda-empty">
+          <p className="muted">{t.importantDates.nothingPlanned}</p>
+          <button className="btn btn-primary agenda-add" onClick={onAdd} autoFocus>
+            + {t.importantDates.add}
+          </button>
+        </div>
+      ) : (
+        <>
+          {agenda.allDay.length > 0 && (
+            <section className="agenda-band" aria-label={t.importantDates.agendaAllDay}>
+              <div className="eyebrow" style={{ fontSize: 10 }}>{t.importantDates.agendaAllDay}</div>
+              {agenda.allDay.map((row) => (
+                <AgendaLine key={row.item.id} row={row} onPick={onPick} />
+              ))}
+            </section>
+          )}
+          {agenda.timed.length > 0 && (
+            <ol className="agenda-timed">
+              {agenda.timed.map((row) => (
+                <li key={row.item.id}><AgendaLine row={row} onPick={onPick} /></li>
+              ))}
+            </ol>
+          )}
+          <button className="btn w-full mt-4" onClick={onAdd}>+ {t.importantDates.add}</button>
+        </>
+      )}
     </Sheet>
+  );
+}
+
+function AgendaLine({ row, onPick }: { row: AgendaRow; onPick: (item: CalendarItem) => void }) {
+  const t = useT();
+  const locale = useLocale();
+  const { item, part } = row;
+  const time = (v: string) => clockTimeFor(v, locale);
+
+  /* The left column: a time for anything that has one today, nothing for all day. */
+  const when = part === "single" || part === "start" ? time(item.startTime!)
+    : part === "end" ? t.importantDates.untilTime(time(item.endTime!)) : null;
+
+  /* The line under the title says only what the left column could not. */
+  const details: string[] = [];
+  if (part === "single" && item.endTime) {
+    details.push(t.importantDates.timeRange(time(item.startTime!), time(item.endTime)));
+  } else if (part === "start") {
+    details.push(item.endTime
+      ? `${t.importantDates.timeRange(time(item.startTime!), time(item.endTime))} · ${dateRangeFor(item.startDate, item.endDate, locale)}`
+      : dateRangeFor(item.startDate, item.endDate, locale));
+  } else if (part === "allDay" && !item.allDay) {
+    details.push(t.importantDates.continues);
+  }
+  if (part === "allDay" && row.days > 1) details.push(t.importantDates.dayOf(row.day, row.days));
+  if (item.original && (part === "single" || part === "start")) {
+    details.push(t.importantDates.zoneTime(time(item.original.startTime), zoneCity(item.original.timeZone)));
+  }
+  const repeat = repeatText(item.repeat, t, locale);
+  if (repeat) details.push(`↻ ${repeat}`);
+  const kind = kindLabel(item.kind, t);
+  if (kind && !KIND_EMOJI[item.kind]) details.push(kind);
+  if (item.hasNote) details.push(t.importantDates.hasNote);
+
+  return (
+    <button className="agenda-row" onClick={() => onPick(item)}
+      aria-label={t.importantDates.open(item.title)}>
+      {when !== null || part !== "allDay"
+        ? <span className="agenda-time num">{when}</span>
+        : null}
+      <span className="event-dot" style={{ background: colorHex(item.color) }} aria-hidden="true" />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span className="block" style={{ fontSize: 15, overflowWrap: "anywhere" }}>
+          {shownTitle(item.title, item.kind)}
+        </span>
+        {details.length > 0 && (
+          <span className="faint num block" style={{ fontSize: 12 }}>{details.join(" · ")}</span>
+        )}
+      </span>
+    </button>
   );
 }
 
@@ -367,6 +665,8 @@ export default function ImportantDates() {
   const t = useT();
   const locale = useLocale();
   const today = useToday();
+  /** Read once per mount. Times are shown in the zone this device is in now. */
+  const viewerZone = useMemo(() => deviceTimeZone(), []);
 
   /**
    * The month is an offset from the current one, never an absolute month. That
@@ -376,32 +676,26 @@ export default function ImportantDates() {
   const [offset, setOffset] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [day, setDay] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ event: ImportantDate; isNew: boolean } | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
 
   const events = state.importantDates;
   const unavailable = state.unavailable.includes("importantDates");
   const month = addMonths(monthOf(today), offset);
 
-  const all = useMemo(() => upcomingEvents(events, today, Number.MAX_SAFE_INTEGER), [events, today]);
+  const all = useMemo(() => upcomingItems(events, today, viewerZone), [events, today, viewerZone]);
   const upcoming = expanded ? all : all.slice(0, UPCOMING);
+  const dayItems = useMemo(
+    () => (day ? importantDateItems(events, day, day, viewerZone) : []),
+    [events, day, viewerZone]);
 
-  /**
-   * One rule for tapping a day: an empty day is a new event on it, and a day
-   * with anything on it shows what that is.
-   *
-   * The obvious shortcut — open the single event directly when there is only
-   * one — was there and is deliberately gone. It saved a tap and cost a way
-   * out: a day already holding one event had no path to a second, because
-   * every tap on it landed in the existing event's editor. Editing in one tap
-   * is what the upcoming list is for.
-   */
-  const pickDay = useCallback((date: string) => {
-    if (eventsOn(events, date).length === 0) {
-      setEditing({ event: blankEvent(date), isNew: true });
-    } else {
-      setDay(date);
-    }
-  }, [events]);
+  /** One rule for tapping a day: it opens that day's agenda, empty or not. */
+  const pickDay = useCallback((date: string) => setDay(date), []);
+
+  /** An item is a view of its source; editing it edits the series it came from. */
+  const openItem = (item: CalendarItem) => {
+    const event = events.find((e) => e.id === item.sourceId);
+    if (event) setEditing({ event, isNew: false, occurrence: item.occurrenceDate });
+  };
 
   /**
    * Where "+ Add an event" starts.
@@ -444,11 +738,9 @@ export default function ImportantDates() {
         </p>
       ) : (
         <>
-          {/* One column in the 300px rail, two wherever the panel is wider —
-              which is what a phone or a tablet gives it once the rail has
-              collapsed into the page. No breakpoint to keep in step. */}
           <div className="mt-3">
-            <MonthGrid month={month} events={events} today={today} onPickDay={pickDay} />
+            <MonthGrid month={month} events={events} viewerZone={viewerZone} today={today}
+              onPickDay={pickDay} />
           </div>
 
           <div className="mt-3">
@@ -460,12 +752,13 @@ export default function ImportantDates() {
             ) : (
               <div className="mt-1">
                 {upcoming.map((e) => (
-                  <button key={e.id} className="event-row" onClick={() => setEditing({ event: e, isNew: false })}
+                  <button key={e.id} className="event-row" onClick={() => openItem(e)}
                     aria-label={t.importantDates.open(e.title)}>
                     <span className="event-dot" style={{ background: colorHex(e.color) }} aria-hidden="true" />
                     <span className="event-line">
                       <span className="num faint event-when" style={{ fontSize: 11.5 }}>
                         {dateRangeFor(e.startDate, e.endDate, locale)}
+                        {e.startTime && ` · ${clockTimeFor(e.startTime, locale)}`}
                         {covers(e, today) && (
                           <span style={{ color: "var(--accent)", marginLeft: 5 }}>
                             {e.startDate === e.endDate
@@ -473,7 +766,13 @@ export default function ImportantDates() {
                           </span>
                         )}
                       </span>
-                      <span className="event-what" style={{ fontSize: 13.5 }}>{e.title}</span>
+                      <span className="event-what" style={{ fontSize: 13.5 }}>
+                        {shownTitle(e.title, e.kind)}
+                        {e.repeat && (
+                          <span className="faint" style={{ marginLeft: 5, fontSize: 11.5 }}
+                            title={repeatText(e.repeat, t, locale) ?? undefined}>↻</span>
+                        )}
+                      </span>
                     </span>
                   </button>
                 ))}
@@ -493,29 +792,33 @@ export default function ImportantDates() {
           </div>
 
           <button className="btn w-full mt-3" style={{ padding: "6px 12px", fontSize: 12.5 }}
-            onClick={() => setEditing({ event: blankEvent(addFrom), isNew: true })}>
+            onClick={() => setEditing({ event: blankEvent(addFrom), isNew: true, occurrence: null })}>
             + {t.importantDates.add}
           </button>
         </>
       )}
 
       {day && !editing && (
-        <DaySheet
+        <DayAgendaSheet
           date={day}
-          events={eventsOn(events, day)}
-          onPick={(e) => setEditing({ event: e, isNew: false })}
-          onAdd={() => setEditing({ event: blankEvent(day), isNew: true })}
+          items={dayItems}
+          today={today}
+          onPick={openItem}
+          onAdd={() => setEditing({ event: blankEvent(day), isNew: true, occurrence: null })}
+          onMove={setDay}
           onClose={close}
         />
       )}
 
       {editing && (
         <EventEditor
-          key={editing.event.id}
-          event={editing.event}
-          isNew={editing.isNew}
+          key={`${editing.event.id}@${editing.occurrence ?? ""}`}
+          editing={editing}
+          viewerZone={viewerZone}
+          today={today}
           onSave={actions.saveImportantDate}
           onDelete={actions.deleteImportantDate}
+          onDeleteOccurrence={actions.deleteImportantDateOccurrence}
           onClose={close}
           onBack={day ? () => setEditing(null) : undefined}
         />

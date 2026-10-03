@@ -116,8 +116,21 @@ export const deleteSpending = (id: string) => remove("/api/spending", id);
  * §26. One call for create and for edit: the id is the identity, so changing an
  * event's dates updates the row rather than adding a second one.
  */
-export const saveImportantDate = (e: ImportantDate) => post("/api/important-dates", e);
+export const saveImportantDate = (e: ImportantDate) => {
+  /*
+   * `v: 2` says this client knows about times and repeats, so the server
+   * writes them. Without it the server leaves them as stored — which is what
+   * keeps a tab still running the previous build from erasing them.
+   * `excludedOn` is not sent: only the occurrence delete writes it.
+   */
+  const { excludedOn: _excluded, ...rest } = e;
+  return post("/api/important-dates", { ...rest, v: 2 });
+};
 export const deleteImportantDate = (id: string) => remove("/api/important-dates", id);
+/** Only that occurrence of a repeating event; the series carries on. */
+export const deleteImportantDateOccurrence = (id: string, on: string) =>
+  send(`/api/important-dates?id=${encodeURIComponent(id)}&on=${encodeURIComponent(on)}`,
+    { method: "DELETE" });
 
 /**
  * Clarify Your Intention. One call for the whole reflection, create and edit

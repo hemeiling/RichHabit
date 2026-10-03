@@ -11,6 +11,10 @@ import { database, databaseUrl, isProduction, isTestInstance } from "@/lib/env";
 // 2026-08-12 to the 11th west of UTC. Every date in this app is a calendar day,
 // so take the string Postgres actually sent.
 types.setTypeParser(1082, (v) => v);
+// `date[]` has its own parser, which would make the same Dates element by
+// element. Its text form is `{2026-10-12,2027-10-12}`; a date never contains a
+// comma, a quote or a brace, so splitting it is exact.
+types.setTypeParser(1182 as Parameters<typeof types.setTypeParser>[0], (v) => (v === "{}" ? [] : v.slice(1, -1).split(",")));
 // numeric: keep the precision decision in the mapping layer rather than letting
 // pg hand back strings that silently concatenate.
 types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));

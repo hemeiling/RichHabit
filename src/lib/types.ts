@@ -150,14 +150,16 @@ export interface SpendingRecord {
  * §26. A date the user personally considers important: a trip, a customer
  * visit, a deadline, a family occasion.
  *
- * Whole days, never times — this is a calendar you glance at beside today's
- * habits, not a diary. A single-day event has `startDate === endDate`, so
- * everything that reads it can treat one shape; which days it occupies is
- * derived by comparison rather than stored, exactly as with a `Priority`, so a
- * range crossing a month or a year needs no special case.
+ * Whole days by default, with an optional time. A single-day event has
+ * `startDate === endDate`, so everything that reads it can treat one shape;
+ * which days it occupies is derived by comparison rather than stored, exactly
+ * as with a `Priority`, so a range crossing a month or a year needs no special
+ * case. A repeating event is still one row: its own dates are the first
+ * occurrence and the rest are computed (lib/recurrence).
  *
  * Private user content. It is never shown to another user, never scored, never
- * part of Community Progress, and never read by an admin screen.
+ * part of Community Progress, never read by an admin screen and never sent to
+ * an AI provider.
  */
 export interface ImportantDate {
   id: string;
@@ -171,6 +173,39 @@ export interface ImportantDate {
   color: string;
   /** An optional English key, translated on render. "none" when unset. */
   kind: string;
+  /**
+   * Null for an all-day event, which is every event created before times
+   * existed. Otherwise "HH:MM" on `startDate`, in `timeZone`'s wall clock.
+   */
+  startTime: string | null;
+  /** Optional, and only with a start time. "HH:MM" on `endDate`. */
+  endTime: string | null;
+  /**
+   * The IANA zone the times were meant in, captured from the device that set
+   * them. Null with a time means floating — the same clock time wherever the
+   * reader is — which the schema allows and V1 does not offer. Never set on an
+   * all-day event: a birthday is a date, not an instant.
+   */
+  timeZone: string | null;
+  /** Null for a one-off. See lib/recurrence. */
+  repeat: RepeatRule | null;
+  /**
+   * Occurrences deleted from a series, by their start date in the series' own
+   * calendar. Written only by "delete this occurrence", never by a save.
+   */
+  excludedOn: string[];
+}
+
+export type RepeatUnit = "week" | "month" | "year";
+
+/**
+ * How a series repeats: every `interval` weeks, months or years from the
+ * event's own start date, up to and including `until` when there is one.
+ */
+export interface RepeatRule {
+  unit: RepeatUnit;
+  interval: number;
+  until: string | null;
 }
 
 export interface Prefs {

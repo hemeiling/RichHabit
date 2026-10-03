@@ -1,6 +1,8 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-09-20
+> Last updated: 2026-10-03
+>
+> **IMPORTANT DATES V2 — OPTIONAL TIMES, REPEATING EVENTS, DAY AGENDA: IMPLEMENTED → COMMITTED ON `feature/important-dates-v2` (NOT PUSHED) · REHEARSED LOCALLY (PGLITE) · NEON REHEARSAL UNAVAILABLE (BOTH BRANCHES REFUSE AUTH) · NOT MIGRATED IN PRODUCTION · NOT DEPLOYED · AWAITING PRODUCT OWNER APPROVAL.** See the first section below.
 >
 > **PHASE 5 — FREE PLAN ENFORCEMENT: IMPLEMENTED → COMMITTED → PUSHED → REHEARSED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `2410bd3` ON `main` → MIGRATION APPLIED 2026-09-20, SHORTLY BEFORE THE 04:44 UTC HEALTH CHECK (38 → 39 TABLES) → DEPLOYED TO RENDER (`dep-danmdsmk1f9s73979ceg`) → PRODUCTION VERIFIED 2026-09-20 · **MIGRATION BEFORE DEPLOY**, BECAUSE THE DEPLOYED CODE READS `priority_quota_usage` FOR FREE PRIORITY CREATION · FREE = **15 ACTIVE HABITS** AND **5 NEW PRIORITIES PER SERVER-DERIVED LOCAL DAY** · GRANDFATHERED PRO (8) AND ADMIN (5) UNLIMITED AND WRITE NO QUOTA ROW · ONLY TRANSITIONS *INTO* ACTIVE ARE GATED; AN ACCOUNT OVER THE LIMIT KEEPS EVERYTHING · `priority_quota_usage` CREATED **EMPTY** AND STILL 0 ROWS · NO EXISTING USER DATA MIGRATED, MODIFIED OR DELETED · NO PAYMENT INFRASTRUCTURE · KNOWN **VERIFICATION GAP** (NOT A DEFECT): SIMULTANEOUS MULTI-SESSION LOCK CONTENTION NOT YET EXECUTED**
 > **PHASE 4C — GRANDFATHERED PRO GRANTED: EXECUTED AND PRODUCTION VERIFIED 2026-09-20 02:58:15 UTC · FIXED LITERAL CUTOFF `2026-09-20T00:00:00Z` · **8** EXISTING NON-ADMIN ACCOUNTS NOW `plan='pro'`, `source='grandfathered'`, `expires_at=NULL`, `granted_by=NULL`, `note=NULL` · PERMANENT AND $0, NO PAYMENT PROVIDER · TWO TEST ACCOUNTS EXCLUDED BY EXACT UUID CONFIRMED BY THE PRODUCT OWNER AND REMAIN FREE · 5 ADMINS HOLD NO PLAN ROW AND STAY UNLIMITED THROUGH THE CENTRAL BYPASS · FUTURE ACCOUNTS DEFAULT FREE · RUN AS A STANDALONE ONE-OFF OPERATION, **NOT** ADDED TO `scripts/migrate.mjs` · `user_plans` IS THE ONLY TABLE THAT CHANGED · NO PRODUCT/CONTENT ROW CHANGED · NO SCHEMA CHANGE · NO DEPLOY · NO RENDER CHANGE · PHASE 5 ENFORCEMENT SHIPPED SEPARATELY IN `2410bd3`**
@@ -65,6 +67,60 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Important Dates V2 — optional times, repeating events, Day Agenda (IMPLEMENTED · NOT MIGRATED · NOT DEPLOYED)
+
+Design approved by the Product Owner on 2026-10-03 (all-day items on top of the
+Day Agenda; tapping any date opens the agenda; timed events stored as local date
++ local clock time + IANA zone; source-neutral `CalendarItem`; V1 edits apply to
+the whole series; deletes are "this date only" or "all repeats").
+
+| Item | State |
+| --- | --- |
+| branch | `feature/important-dates-v2`, from `origin/main` `bea8bb1`, worktree `/Users/meilinghe/dev/rich-habits-important-dates-v2` (outside OneDrive) |
+| commit | the commit recording this section, on that branch; **not pushed** |
+| migration | step 13, `scripts/migrations/important-dates-v2.mjs`: 7 `ADD COLUMN` + 7 named `CHECK`s on `important_dates`; nothing else. **Not applied to production** |
+| deployed | **no** |
+
+**What it does**
+
+- **Optional time:** `start_time`, `end_time` and `time_zone` (the device's IANA zone). Null `start_time` means all day, which is what every existing row is. A null zone with a time is reserved for "floating"; V1 never writes it except when a device reports no zone.
+- **Repeating:** `repeat_unit` (week, month or year), `repeat_interval` (1–99) and `repeat_until`. Occurrences are computed from the anchor, never stored. Feb 29 falls on Feb 28 in ordinary years, and the 29th–31st clamp to the month's last day.
+- **Deleting one date:** that occurrence is added to `excluded_on` (`DELETE /api/important-dates?id=…&on=YYYY-MM-DD`), guarded against a concurrent move of the series.
+- **Kinds:** Birthday 🎂, Anniversary ❤️ and Holiday 🎉. Birthday and Anniversary set "Every year" unless the person already chose a repeat.
+- **Day Agenda:** tapping any date opens it. All-day items are first, then timed items by start time. An empty day shows a large Add button.
+- **Rendering:** the panel draws `CalendarItem`s (`src/lib/calendar.ts`), not `ImportantDate`s; Important Dates are its only source.
+- **Old-client guard:** writes without `v: 2` run the previous build's SQL unchanged, so a stale tab cannot erase a time, a repeat or a deleted occurrence.
+
+**Verification (2026-10-03, local only)**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| unit and PGlite tests | 1262 of 1262 (69 files); new: `important-dates-v2` (63), `important-dates-migration` (11), `important-dates-db` (16), plus a `pool` date-array test |
+| local rehearsal | the old production build (`bea8bb1`) created 6 events on the pre-V2 schema; the real `npm run db:migrate` was run twice (14 V2 changes, then nothing to do); `md5` over every original column, the row count and the ids were identical before and after |
+| deploy window | the old build, running against the migrated database, read byte-identical state and could still edit and create events |
+| browser, new build | 46 of 46 checks: English, 中文 and bilingual at 390px, plus 1440px; New York viewer of a Chicago event; no console errors; no sideways scrolling |
+| Neon rehearsal | **not run**: `REHEARSAL_DATABASE_URL` and `REHEARSAL_DATABASE_URL_TEST` both fail `28P01`. Production was not used as a substitute |
+
+The local run also created `day_priorities`: a known, pre-existing step, because
+`db/schema.sql` lacks that legacy table. Production already has it (2 rows), so
+the step does nothing there.
+
+**Known limitations (by design for V1):** no single-occurrence editing and no "this and following"; no floating-time UI; no zone picker (the zone comes from the device). After a series' first date or rule changes, its deleted dates are cleared. A stale previous-build tab that edits a repeating event's dates moves the whole series, and its Delete removes the whole series.
+
+**Production actions remaining, all awaiting explicit approval**
+
+1. Push the branch, review the diff, then fast-forward `main`.
+2. Read-only production preflight. Run every pending step of `scripts/migrate.mjs` against production read-only, checking each backfill's `WHERE` clause and not just the schema diff (see Phase 4B). Record the `important_dates` count, ids and `md5`.
+3. A Neon rehearsal on a refreshed branch, if access is restored.
+4. A production restore-point branch.
+5. `npm run db:migrate` against production, **before** the deploy.
+6. Compare the `md5`, count and ids.
+7. Deploy on Render.
+8. Signed-in checks.
+
+**Next step:** the Product Owner reviews this and approves (or declines) the production sequence above.
 
 ## Phase 5 — Free plan enforcement (PRODUCTION MIGRATED · DEPLOYED · VERIFIED)
 

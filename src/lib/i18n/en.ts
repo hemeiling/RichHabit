@@ -1101,6 +1101,9 @@ export const en = {
     kind: "Type",
     kinds: {
       none: "None",
+      birthday: "Birthday",
+      anniversary: "Anniversary",
+      holiday: "Holiday",
       travel: "Travel",
       work: "Work",
       personal: "Personal",
@@ -1125,12 +1128,79 @@ export const en = {
     deleteEvent: "Delete",
     confirmDelete: "Delete this event? This cannot be undone.",
 
+    /** Times. Optional; an event is all day unless somebody says otherwise. */
+    allDay: "All day",
+    startTime: "Start time",
+    endTime: "End time",
+    noEndTime: "No end time",
+    addEndTime: "Add end time",
+    removeEndTime: "Remove end time",
+    endsNextDay: "Ends the next day",
+    /** Shown when the event's times were set in a zone other than this device's. */
+    timesIn: (city: string) => `Times are ${city} time`,
+    timeRange: (from: string, to: string) => `${from} – ${to}`,
+    /** The time as written, beside the reader's own: "7:00 PM Chicago". */
+    zoneTime: (time: string, city: string) => `${time} ${city}`,
+
+    /** Repeating. One row of choices; Custom reveals the rest. */
+    repeat: "Repeat",
+    repeatOptions: {
+      none: "Does not repeat",
+      year: "Every year",
+      month: "Every month",
+      week: "Every week",
+      custom: "Custom",
+    },
+    every: "Every",
+    units: {
+      week: (n: number): string => (n === 1 ? "week" : "weeks"),
+      month: (n: number): string => (n === 1 ? "month" : "months"),
+      year: (n: number): string => (n === 1 ? "year" : "years"),
+    },
+    intervalLabel: "How many",
+    unitLabel: "Repeat unit",
+    repeatEnds: "Ends",
+    endsNever: "Never",
+    endsOn: "On a date",
+    repeatEndDate: "Last date",
+    /** "Every 2 weeks", "Every year" — beside an event, and above it in the editor. */
+    repeatSummary: {
+      week: (n: number) => (n === 1 ? "Every week" : `Every ${n} weeks`),
+      month: (n: number) => (n === 1 ? "Every month" : `Every ${n} months`),
+      year: (n: number) => (n === 1 ? "Every year" : `Every ${n} years`),
+    },
+    repeatUntil: (date: string) => `until ${date}`,
+    /** Over the editor of a repeating event: what Save is about to change. */
+    editsAll: "Changes apply to every repeat",
+    deleteWhich: "Delete which?",
+    deleteThisOnly: (date: string) => `Only ${date}`,
+    deleteAll: "All repeats",
+    timesUnavailable:
+      "Times and repeating dates aren't switched on yet — the database update hasn't been applied. Nothing was saved; try again shortly.",
+    reloadToEdit:
+      "This event has a time or a repeat this page doesn't know about yet. Reload the page to edit it — nothing was changed.",
+    tooManyDeleted:
+      "This repeating event already has as many single dates removed as it can hold. Nothing was changed.",
+
+    /** The Day Agenda: what tapping a date opens. */
+    agendaAllDay: "All day",
+    nothingPlanned: "Nothing planned for this day.",
+    previousDay: "Previous day",
+    nextDay: "Next day",
+    dayOf: (n: number, of: number) => `Day ${n} of ${of}`,
+    untilTime: (time: string) => `Until ${time}`,
+    continues: "Continues",
+
     /** Mirrors `eventProblem` in lib/importantDates — one rule, two languages. */
     problems: {
       titleRequired: "Give it a name so you know what it is.",
       endBeforeStart: "The end date can't be before the start date.",
       tooLong: "That's longer than a year — worth splitting into separate dates.",
       noteTooLong: "That note is longer than the field can hold. Nothing has been cut — shorten it and it will save.",
+      endTimeBeforeStart: "The end time has to be after the start time.",
+      repeatTooShort: "Each repeat has to finish before the next one starts — shorten the event or repeat less often.",
+      untilBeforeStart: "The repeat can't end before the event starts.",
+      intervalRange: "Choose a number from 1 to 99.",
     },
   },
 

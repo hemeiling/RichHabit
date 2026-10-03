@@ -2,6 +2,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as db from "@/lib/db";
 import { isDone, uid } from "@/lib/habits";
+import { seriesAfterEdit } from "@/lib/importantDates";
 import { trimIntention } from "@/lib/intention";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
@@ -49,6 +50,8 @@ interface Actions {
   /** §26. Create and edit are one call: the id is the event's identity. */
   saveImportantDate: (e: ImportantDate) => void;
   deleteImportantDate: (id: string) => void;
+  /** Removes one occurrence of a repeating event; the series carries on. */
+  deleteImportantDateOccurrence: (id: string, on: string) => void;
   /**
    * Clarify Your Intention. Debounced, like the journal: this is a field being
    * written into over minutes, not a discrete act on a record, and the whole
@@ -489,18 +492,32 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
      * upcoming list do not reshuffle between the save and the next load.
      */
     saveImportantDate: (e) => run(
-      (s) => ({
-        ...s,
-        importantDates: s.importantDates.some((x) => x.id === e.id)
-          ? s.importantDates.map((x) => (x.id === e.id ? e : x))
-          : [...s.importantDates, e],
-      }),
+      (s) => {
+        // Deleted occurrences follow the same rule the server applies.
+        const before = s.importantDates.find((x) => x.id === e.id);
+        const next = seriesAfterEdit(before, e);
+        return {
+          ...s,
+          importantDates: before
+            ? s.importantDates.map((x) => (x.id === e.id ? next : x))
+            : [...s.importantDates, next],
+        };
+      },
       () => db.saveImportantDate(e),
     ),
 
     deleteImportantDate: (id) => run(
       (s) => ({ ...s, importantDates: s.importantDates.filter((e) => e.id !== id) }),
       () => db.deleteImportantDate(id),
+    ),
+
+    deleteImportantDateOccurrence: (id, on) => run(
+      (s) => ({
+        ...s,
+        importantDates: s.importantDates.map((e) => (e.id === id && !e.excludedOn.includes(on)
+          ? { ...e, excludedOn: [...e.excludedOn, on] } : e)),
+      }),
+      () => db.deleteImportantDateOccurrence(id, on),
     ),
 
     /*

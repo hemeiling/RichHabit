@@ -1,21 +1,37 @@
 import { addDays, daysBetween } from "@/lib/dates";
-import type { ImportantDate } from "@/lib/types";
+import {
+  MAX_REPEAT_INTERVAL, isRepeatUnit, sameRule, shortestPeriod,
+} from "@/lib/recurrence";
+import { minutesOf } from "@/lib/zonedTime";
+import type { ImportantDate, RepeatRule } from "@/lib/types";
 
 /**
  * Important Dates — the rules, with no React and no SQL in them.
  *
  * A deliberately small calendar: the dates *this person* considers important,
  * shown beside the day they are working through. It is not a diary and not a
- * meeting system — there are no times, no invitations, no recurrence and no
- * reminders, because every one of those turns a glanceable panel into an
+ * meeting system — there are no invitations, no reminders and no per-occurrence
+ * editing, because every one of those turns a glanceable panel into an
  * application that has to be maintained.
  *
  * An event is a title, a range of whole days, a colour the user picked, and
- * optionally a note and a kind. Which days it occupies is a comparison of two
- * date strings, exactly as with a priority's rollover — nothing is copied into
- * a day, so a range that crosses a month, a quarter or a year boundary needs no
- * special handling anywhere.
+ * optionally a note, a kind, a time and a repeat. Which days it occupies is a
+ * comparison of two date strings, exactly as with a priority's rollover —
+ * nothing is copied into a day, so a range that crosses a month, a quarter or a
+ * year boundary needs no special handling anywhere. A repeating event is one
+ * row; its occurrences are computed (lib/recurrence), never stored.
  */
+
+/**
+ * The fields V2 added, at the values every event had before they existed: all
+ * day, once. A row from before the migration, or a request from a client that
+ * has never heard of them, reads as exactly this.
+ */
+export const ONE_OFF_ALL_DAY: Pick<
+  ImportantDate, "startTime" | "endTime" | "timeZone" | "repeat" | "excludedOn"
+> = { startTime: null, endTime: null, timeZone: null, repeat: null, excludedOn: [] };
+
+export const isAllDay = (e: Pick<ImportantDate, "startTime">) => e.startTime == null;
 
 /* ------------------------------- colour ---------------------------------- */
 
@@ -67,8 +83,39 @@ export const colorHex = (color: string): string =>
  * same treatment goal areas and spending categories get, so an existing row
  * keeps its meaning after a language change.
  */
-export const EVENT_KINDS = ["none", "travel", "work", "personal", "deadline"] as const;
+export const EVENT_KINDS = [
+  "none", "birthday", "anniversary", "holiday", "travel", "work", "personal", "deadline",
+] as const;
 export type EventKind = (typeof EVENT_KINDS)[number];
+
+/** Shown beside the title. Derived from the kind, never written into the title. */
+export const KIND_EMOJI: Partial<Record<string, string>> = {
+  birthday: "🎂",
+  anniversary: "❤️",
+  holiday: "🎉",
+};
+
+/**
+ * Kinds that are, in practice, every year. Choosing one sets the repeat to
+ * yearly — but only while the person has not chosen a repeat themselves.
+ */
+export const YEARLY_KINDS: readonly string[] = ["birthday", "anniversary"];
+
+export const YEARLY: RepeatRule = { unit: "year", interval: 1, until: null };
+
+/**
+ * The kind chosen, and the repeat that should follow from it.
+ *
+ * `repeatChosen` is whether the person has touched the repeat control in this
+ * editor. A birthday on an event they already set to "every month" stays
+ * monthly; one they never touched becomes yearly. Choosing a different kind
+ * afterwards never undoes it — that would be a second surprise.
+ */
+export function withKind(e: ImportantDate, kind: string, repeatChosen: boolean): ImportantDate {
+  const next = { ...e, kind };
+  if (!repeatChosen && !e.repeat && YEARLY_KINDS.includes(kind)) next.repeat = YEARLY;
+  return next;
+}
 
 /* ------------------------------- limits ----------------------------------- */
 
@@ -100,12 +147,25 @@ export const eventLength = (e: Pick<ImportantDate, "startDate" | "endDate">) =>
 
 /* ------------------------------ selection --------------------------------- */
 
+/**
+ * The least anything drawn on the calendar has to be: an identity, a name and
+ * the whole days it touches. An `ImportantDate` is one; so is a `CalendarItem`
+ * (lib/calendar), which is what the panel actually draws — one per occurrence,
+ * from whichever source it came from. The functions below take either.
+ */
+export interface Span {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+}
+
 /** True when `date` falls inside the event's range, ends included. */
-export const covers = (e: ImportantDate, date: string) =>
+export const covers = (e: Span, date: string) =>
   e.startDate <= date && e.endDate >= date;
 
 /** True when the event touches the window [from, to] at all. */
-export const overlaps = (e: ImportantDate, from: string, to: string) =>
+export const overlaps = (e: Span, from: string, to: string) =>
   e.startDate <= to && e.endDate >= from;
 
 /**
@@ -113,14 +173,14 @@ export const overlaps = (e: ImportantDate, from: string, to: string) =>
  * where two start together, then by title so the result never depends on the
  * order rows came back in. The lane layout below relies on this being total.
  */
-export function compareEvents(a: ImportantDate, b: ImportantDate): number {
+export function compareEvents(a: Span, b: Span): number {
   return a.startDate.localeCompare(b.startDate)
     || b.endDate.localeCompare(a.endDate)
     || a.title.localeCompare(b.title)
     || a.id.localeCompare(b.id);
 }
 
-export const eventsOn = (all: ImportantDate[], date: string): ImportantDate[] =>
+export const eventsOn = <T extends Span>(all: T[], date: string): T[] =>
   all.filter((e) => covers(e, date)).sort(compareEvents);
 
 /**
@@ -132,10 +192,10 @@ export const eventsOn = (all: ImportantDate[], date: string): ImportantDate[] =>
  * shows it, which is what "past events stay available but stop cluttering"
  * has to mean if history is to be worth keeping.
  */
-export const upcomingEvents = (all: ImportantDate[], today: string, limit = 5) =>
+export const upcomingEvents = <T extends Span>(all: T[], today: string, limit = 5): T[] =>
   all.filter((e) => e.endDate >= today).sort(compareEvents).slice(0, limit);
 
-export const pastEvents = (all: ImportantDate[], today: string) =>
+export const pastEvents = <T extends Span>(all: T[], today: string): T[] =>
   all.filter((e) => e.endDate < today);
 
 /* ------------------------------- layout ----------------------------------- */
@@ -149,8 +209,8 @@ export const pastEvents = (all: ImportantDate[], today: string) =>
  * than per day: an event has to stay on the same line across all seven columns,
  * or a five-day bar reads as five unrelated marks.
  */
-export interface EventBar {
-  event: ImportantDate;
+export interface EventBar<T extends Span = ImportantDate> {
+  event: T;
   lane: number;
   startIndex: number;
   endIndex: number;
@@ -168,10 +228,10 @@ export interface EventBar {
  * events, so the same event lands on the same lane on every render, in both
  * months when its range spans two, and after any unrelated event is added.
  */
-export function layoutWeek(all: ImportantDate[], week: string[]): EventBar[] {
+export function layoutWeek<T extends Span>(all: T[], week: string[]): EventBar<T>[] {
   const from = week[0];
   const to = week[week.length - 1];
-  const bars: EventBar[] = [];
+  const bars: EventBar<T>[] = [];
   /** lanes[lane][column] — taken or not. */
   const lanes: boolean[][] = [];
 
@@ -210,9 +270,9 @@ const minDate = (a: string, b: string) => (a < b ? a : b);
  * question the person asking has: "is there anything else on the 9th?" — and
  * the day cell is where they can go and see.
  */
-export function layoutWeekCapped(
-  all: ImportantDate[], week: string[], maxLanes: number,
-): { bars: EventBar[]; hidden: Record<string, number> } {
+export function layoutWeekCapped<T extends Span>(
+  all: T[], week: string[], maxLanes: number,
+): { bars: EventBar<T>[]; hidden: Record<string, number> } {
   const laid = layoutWeek(all, week);
   const hidden: Record<string, number> = {};
   for (const bar of laid.filter((b) => b.lane >= maxLanes)) {
@@ -230,14 +290,38 @@ export function layoutWeekCapped(
  * the request parser so the form can never offer something the server refuses.
  * Returns a key the dictionaries translate, or null when the event is fine.
  */
-export type EventProblem = "titleRequired" | "endBeforeStart" | "tooLong" | "noteTooLong";
+export type EventProblem =
+  | "titleRequired" | "endBeforeStart" | "tooLong" | "noteTooLong"
+  | "endTimeBeforeStart" | "repeatTooShort" | "untilBeforeStart" | "intervalRange";
+
+/** "HH:MM", 00:00–23:59. Seconds are not a thing a personal calendar has. */
+export const isClockTime = (v: unknown): v is string =>
+  typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 
 export function eventProblem(e: {
   title: string; startDate: string; endDate: string; note?: string;
+  startTime?: string | null; endTime?: string | null; repeat?: RepeatRule | null;
 }): EventProblem | null {
   if (!e.title.trim()) return "titleRequired";
   if (e.endDate < e.startDate) return "endBeforeStart";
   if (daysBetween(e.startDate, e.endDate) + 1 > MAX_EVENT_DAYS) return "tooLong";
+  /*
+   * Same day, end not after start. "10 PM – 1 AM" is a real evening, so the
+   * editor moves the end to the next day as it is typed (`withEndTime`); this
+   * only catches what is left, such as an end time equal to the start.
+   */
+  if (e.startTime && e.endTime && e.startDate === e.endDate
+    && minutesOf(e.endTime) <= minutesOf(e.startTime)) return "endTimeBeforeStart";
+  if (e.repeat) {
+    const { interval, until } = e.repeat;
+    if (!Number.isInteger(interval) || interval < 1 || interval > MAX_REPEAT_INTERVAL) {
+      return "intervalRange";
+    }
+    if (until && until < e.startDate) return "untilBeforeStart";
+    /* An occurrence has to end before the next one starts, or the series
+       overlaps itself — a nine-day "weekly" event is not something anyone means. */
+    if (daysBetween(e.startDate, e.endDate) + 1 > shortestPeriod(e.repeat)) return "repeatTooShort";
+  }
   /*
    * Checked here rather than capped by the textarea's `maxLength`. A cap looks
    * tidier and is worse: pasting a 12,000-character agenda into a capped box
@@ -266,3 +350,82 @@ export function withStart(e: ImportantDate, startDate: string): ImportantDate {
 export function withEnd(e: ImportantDate, endDate: string): ImportantDate {
   return endDate < e.startDate ? { ...e, startDate: endDate, endDate } : { ...e, endDate };
 }
+
+/* -------------------------------- time ------------------------------------ */
+
+/**
+ * Where "All day" off starts: the next full hour when the event is today, and
+ * 9 AM otherwise. Either is a guess, and either is one tap from right.
+ */
+export function suggestedStartTime(eventDate: string, today: string, now = new Date()): string {
+  if (eventDate !== today) return "09:00";
+  const hour = Math.min(23, now.getHours() + 1);
+  return `${String(hour).padStart(2, "0")}:00`;
+}
+
+/**
+ * All day on or off.
+ *
+ * Off fills in a start time and the device's zone; on clears all three. The
+ * editor keeps the times it cleared in its own state, so toggling back and
+ * forth before saving loses nothing.
+ */
+export function withAllDay(
+  e: ImportantDate, allDay: boolean, startTime: string, endTime: string | null,
+  timeZone: string | null,
+): ImportantDate {
+  if (allDay) return { ...e, startTime: null, endTime: null, timeZone: null };
+  return withEndTime({ ...e, startTime, timeZone: e.timeZone ?? timeZone }, endTime);
+}
+
+/**
+ * An end time that is earlier than the start on the same day means the next
+ * day — "10 PM – 1 AM" — so the end date moves with it. That is the only date
+ * a time ever changes.
+ */
+export function withEndTime(e: ImportantDate, endTime: string | null): ImportantDate {
+  const next = { ...e, endTime };
+  if (endTime && e.startTime && e.startDate === e.endDate
+    && minutesOf(endTime) < minutesOf(e.startTime)) {
+    next.endDate = addDays(e.startDate, 1);
+  }
+  return next;
+}
+
+/* ------------------------------- repeat ----------------------------------- */
+
+export type RepeatPreset = "none" | "year" | "month" | "week" | "custom";
+export const REPEAT_PRESETS: readonly RepeatPreset[] = ["none", "year", "month", "week", "custom"];
+
+/** What the Repeat chips show for a stored rule. */
+export function repeatPreset(rule: RepeatRule | null): RepeatPreset {
+  if (!rule) return "none";
+  return rule.interval === 1 && !rule.until ? rule.unit : "custom";
+}
+
+/** The rule a preset chip stands for. Custom keeps whatever is there. */
+export function ruleFor(preset: RepeatPreset, current: RepeatRule | null): RepeatRule | null {
+  if (preset === "none") return null;
+  if (preset === "custom") return current ?? { unit: "week", interval: 1, until: null };
+  return { unit: preset, interval: 1, until: null };
+}
+
+/**
+ * The series as it should be after an edit to the whole of it.
+ *
+ * Deleted occurrences are remembered by date, so they stay meaningful only
+ * while the series lands on the same dates. Moving the first date, or changing
+ * the unit or the interval, moves every occurrence — and an old deletion could
+ * then hide a date that was never deleted. Those edits start the deletions
+ * afresh; a title, a time, a colour or an end date leaves them alone.
+ *
+ * The database applies exactly the same rule in `saveImportantDate`, so the
+ * screen and the stored row cannot disagree about what survived.
+ */
+export function seriesAfterEdit(before: ImportantDate | undefined, after: ImportantDate): ImportantDate {
+  if (!before) return { ...after, excludedOn: [] };
+  const moved = before.startDate !== after.startDate || !sameRule(before.repeat, after.repeat);
+  return { ...after, excludedOn: moved || !after.repeat ? [] : before.excludedOn };
+}
+
+export { isRepeatUnit };

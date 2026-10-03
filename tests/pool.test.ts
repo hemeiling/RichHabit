@@ -131,3 +131,19 @@ describe("a test instance cannot reach production", () => {
     });
   });
 });
+
+/**
+ * Calendar days come back as the strings Postgres sent. `date` has had this
+ * since the start; `date[]` (Important Dates' deleted occurrences) has its own
+ * parser in `pg`, which would otherwise build local-midnight Dates element by
+ * element and move a day for anybody west of Greenwich.
+ */
+describe("date parsing", () => {
+  it("keeps date and date[] as calendar-day strings", async () => {
+    const { types } = await import("pg");
+    expect(types.getTypeParser(1082)("2026-10-12")).toBe("2026-10-12");
+    const dates = types.getTypeParser(1182 as Parameters<typeof types.getTypeParser>[0]);
+    expect(dates("{2026-10-12,2027-10-12}")).toEqual(["2026-10-12", "2027-10-12"]);
+    expect(dates("{}")).toEqual([]);
+  });
+});

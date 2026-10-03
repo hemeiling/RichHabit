@@ -1,5 +1,6 @@
 import { ApiError, PlanLimitError } from "@/lib/http";
 import { isSchemaBehind } from "@/lib/db/diagnose";
+import { isOccurrenceStart } from "@/lib/recurrence";
 import { query, transaction } from "@/lib/db/pool";
 import { limitFor } from "@/lib/entitlements";
 import { getActor } from "@/lib/entitlements/actor";
@@ -81,6 +82,77 @@ async function optionalRead<T>(
   }
 }
 
+/**
+ * §26. Bounded like spending, and for the same reason: the panel shows the
+ * months around now, and an account that has been kept for years should not
+ * send a decade of dates on every load. Newest first, so the window is always
+ * the useful end — and the limit is far above any plausible personal calendar,
+ * so in practice it drops nothing.
+ *
+ * Repeating events come first, ahead of that ordering. A birthday entered with
+ * its real 1958 date is the oldest row anybody has and appears every year; it
+ * must be the last thing a limit could ever drop, not the first.
+ *
+ * `select *`, and a fallback to the original ordering, so this build reads a
+ * table that has not reached the repeat columns yet as all-day one-offs rather
+ * than reporting the whole module unavailable.
+ */
+async function readImportantDates(userId: string): Promise<{ rows: any[]; missing: string | null }> {
+  try {
+    return {
+      rows: await query(
+        `select * from important_dates where user_id = $1
+          order by (repeat_unit is not null) desc, starts_on desc, ends_on desc limit 1000`,
+        [userId]),
+      missing: null,
+    };
+  } catch (e) {
+    if (!isSchemaBehind(e)) throw e;
+    return optionalRead<any>("importantDates",
+      `select * from important_dates where user_id = $1
+        order by starts_on desc, ends_on desc limit 1000`, [userId]);
+  }
+}
+
+/**
+ * A `date[]` as calendar-day strings, whatever the driver handed back. The pool
+ * registers a string parser for it (lib/db/pool), so this is the defensive half:
+ * a JS Date here would be local midnight, and formatting it in UTC would move
+ * the day for anybody west of Greenwich.
+ */
+function dateList(v: unknown): string[] {
+  if (Array.isArray(v)) {
+    return v.map((d) => (d instanceof Date
+      ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+      : String(d)));
+  }
+  if (typeof v === "string" && v.startsWith("{")) {
+    return v === "{}" ? [] : v.slice(1, -1).split(",");
+  }
+  return [];
+}
+
+/** A stored row as the app reads it. Columns a pre-migration table lacks read as their defaults. */
+function importantDateFrom(d: any): ImportantDate {
+  const startTime = d.start_time ? String(d.start_time).slice(0, 5) : null;
+  return {
+    id: d.id,
+    title: d.title,
+    startDate: d.starts_on,
+    endDate: d.ends_on,
+    note: d.note ?? "",
+    color: d.color ?? "blue",
+    kind: d.kind ?? "none",
+    startTime,
+    endTime: startTime && d.end_time ? String(d.end_time).slice(0, 5) : null,
+    timeZone: startTime ? d.time_zone ?? null : null,
+    repeat: d.repeat_unit
+      ? { unit: d.repeat_unit, interval: Number(d.repeat_interval ?? 1), until: d.repeat_until ?? null }
+      : null,
+    excludedOn: dateList(d.excluded_on),
+  };
+}
+
 // ------------------------------- read --------------------------------------
 
 export async function loadState(userId: string): Promise<AppState> {
@@ -98,16 +170,7 @@ export async function loadState(userId: string): Promise<AppState> {
         `select id, body, created_on, completed_on, category, planned_on, sort_order
            from priorities
           where user_id = $1 order by category, sort_order, created_on, created_at`, [userId]),
-      /*
-       * §26. Bounded like spending, and for the same reason: the panel shows
-       * the months around now, and an account that has been kept for years
-       * should not send a decade of dates on every load. Newest first, so the
-       * window is always the useful end — and the limit is far above any
-       * plausible personal calendar, so in practice it drops nothing.
-       */
-      optionalRead<any>("importantDates",
-        `select * from important_dates where user_id = $1
-          order by starts_on desc, ends_on desc limit 1000`, [userId]),
+      readImportantDates(userId),
       query("select * from habit_awareness_entries where user_id = $1", [userId]),
       query("select * from habit_stacks where user_id = $1", [userId]),
       query("select * from daily_metrics where user_id = $1", [userId]),
@@ -242,15 +305,7 @@ export async function loadState(userId: string): Promise<AppState> {
    * deterministic.
    */
   if (importantDates.missing) state.unavailable.push(importantDates.missing);
-  state.importantDates = importantDates.rows.map((d: any): ImportantDate => ({
-    id: d.id,
-    title: d.title,
-    startDate: d.starts_on,
-    endDate: d.ends_on,
-    note: d.note ?? "",
-    color: d.color ?? "blue",
-    kind: d.kind ?? "none",
-  }));
+  state.importantDates = importantDates.rows.map(importantDateFrom);
 
   /*
    * The intention. Private beyond even the journal: `unavailable` is what the
@@ -848,18 +903,91 @@ export async function deleteSpending(userId: string, id: string) {
  * protects an existing row, and `assertOwns` protects against inserting under
  * an id that belongs to somebody else.
  */
-export async function saveImportantDate(userId: string, e: ImportantDate) {
+export async function saveImportantDate(
+  userId: string, e: ImportantDate, { extended }: { extended: boolean },
+) {
   await assertOwns(query, "important_dates", e.id, userId);
+  if (!extended) {
+    /*
+     * A client from before times and repeats existed. This is the statement
+     * that build always ran, unchanged: it names none of the newer columns, so
+     * a new row gets their defaults (all day, once) and an existing row keeps
+     * whatever time, repeat and deleted occurrences it already has.
+     */
+    await query(
+      `insert into important_dates (id, user_id, title, starts_on, ends_on, note, color, kind)
+       values ($1,$2,$3,$4::date,$5::date,$6,$7,$8)
+       on conflict (id) do update set
+         title = excluded.title, starts_on = excluded.starts_on, ends_on = excluded.ends_on,
+         note = excluded.note, color = excluded.color, kind = excluded.kind,
+         updated_at = now()
+       where important_dates.user_id = $2`,
+      [e.id, userId, e.title, e.startDate, e.endDate, e.note || null, e.color, e.kind],
+    );
+    return;
+  }
+  /*
+   * Everything, from a client that knows about all of it — except
+   * `excluded_on`, which no save ever writes. It is kept, or cleared when this
+   * edit moves the series onto different dates (a new first date, unit or
+   * interval), so an old deletion cannot hide a date that was never deleted.
+   * `seriesAfterEdit` in lib/importantDates is the same rule for the screen.
+   */
   await query(
-    `insert into important_dates (id, user_id, title, starts_on, ends_on, note, color, kind)
-     values ($1,$2,$3,$4::date,$5::date,$6,$7,$8)
+    `insert into important_dates (id, user_id, title, starts_on, ends_on, note, color, kind,
+       start_time, end_time, time_zone, repeat_unit, repeat_interval, repeat_until)
+     values ($1,$2,$3,$4::date,$5::date,$6,$7,$8,$9::time,$10::time,$11,$12,$13,$14::date)
      on conflict (id) do update set
        title = excluded.title, starts_on = excluded.starts_on, ends_on = excluded.ends_on,
        note = excluded.note, color = excluded.color, kind = excluded.kind,
+       start_time = excluded.start_time, end_time = excluded.end_time,
+       time_zone = excluded.time_zone, repeat_unit = excluded.repeat_unit,
+       repeat_interval = excluded.repeat_interval, repeat_until = excluded.repeat_until,
+       excluded_on = case
+         when important_dates.starts_on is distinct from excluded.starts_on
+           or important_dates.repeat_unit is distinct from excluded.repeat_unit
+           or important_dates.repeat_interval is distinct from excluded.repeat_interval
+         then '{}'::date[]
+         else important_dates.excluded_on end,
        updated_at = now()
      where important_dates.user_id = $2`,
-    [e.id, userId, e.title, e.startDate, e.endDate, e.note || null, e.color, e.kind],
+    [e.id, userId, e.title, e.startDate, e.endDate, e.note || null, e.color, e.kind,
+      e.startTime, e.endTime, e.timeZone, e.repeat?.unit ?? null, e.repeat?.interval ?? 1,
+      e.repeat?.until ?? null],
   );
+}
+
+/**
+ * "Delete this event only" on a repeating series: the occurrence's date is
+ * added to the series' exclusions. One row, one statement, nothing else
+ * touched — the series and every other occurrence carry on.
+ *
+ * The date must be a real occurrence of the series as stored. The update is
+ * also conditioned on the series still landing where it did when that was
+ * checked, so a concurrent edit that moved it cannot leave behind an exclusion
+ * for a date it no longer has.
+ */
+export async function deleteImportantDateOccurrence(userId: string, id: string, on: string) {
+  const [row] = await query<any>(
+    "select * from important_dates where id = $1 and user_id = $2", [id, userId]);
+  if (!row) throw new ApiError("Not found", 404);
+  const series = importantDateFrom(row);
+  if (!series.repeat) throw new ApiError("This event does not repeat");
+  if (!isOccurrenceStart(series, on)) throw new ApiError("That date is not part of this series");
+
+  const updated = await query(
+    `update important_dates
+        set excluded_on = case when $3::date = any(excluded_on) then excluded_on
+                               else array_append(excluded_on, $3::date) end,
+            updated_at = now()
+      where id = $1 and user_id = $2
+        and starts_on = $4::date and repeat_unit = $5 and repeat_interval = $6
+      returning id`,
+    [id, userId, on, series.startDate, series.repeat.unit, series.repeat.interval],
+  );
+  if (updated.length === 0) {
+    throw new ApiError("This event changed while you were looking at it. Reload and try again.", 409);
+  }
 }
 
 /**

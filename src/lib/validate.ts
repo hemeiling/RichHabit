@@ -1,8 +1,10 @@
 import { ApiError, check, isUuid } from "@/lib/http";
 import {
   DEFAULT_EVENT_COLOR, EVENT_KINDS, MAX_EVENT_DAYS, MAX_EVENT_NOTE, MAX_EVENT_TITLE,
-  eventProblem, isEventColor,
+  eventProblem, isClockTime, isEventColor,
 } from "@/lib/importantDates";
+import { MAX_REPEAT_INTERVAL, isRepeatUnit } from "@/lib/recurrence";
+import { isTimeZone } from "@/lib/zonedTime";
 import { isTemplateWording } from "@/lib/templates";
 import { SPENDING_CATEGORIES } from "@/lib/types";
 import { QUADRANTS } from "@/lib/priorities";
@@ -12,6 +14,7 @@ import {
 } from "@/lib/intention";
 import type {
   AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, PriorityCategory,
+  RepeatRule,
   SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 
@@ -303,8 +306,22 @@ export function parseSpending(b: any): SpendingRecord {
  *
  * A missing end date means a single-day event rather than an error: that is
  * what the quick-add path sends, and it is unambiguous.
+ *
+ * Times and repeats are read only from a request that says it knows about them
+ * (`v: 2`, see `isExtendedWrite`). Anything else gets the all-day, one-off
+ * defaults here — and `saveImportantDate` then leaves those columns of an
+ * existing row alone, so a browser still running the previous build can rename
+ * a birthday without turning it back into a one-off.
+ *
+ * `excludedOn` is never read from a request. Deleted occurrences are written by
+ * the occurrence delete alone, so a save can never resurrect or invent one.
  */
 export function parseImportantDate(b: any): ImportantDate {
+  const extended = isExtendedWrite(b);
+  const startTime = extended ? clockTimeOrNull(b?.startTime, "startTime") : null;
+  const endTime = extended ? clockTimeOrNull(b?.endTime, "endTime") : null;
+  if (endTime && !startTime) throw new ApiError("An end time needs a start time");
+
   const event: ImportantDate = {
     id: check.uuid(b?.id, "id"),
     title: check.text(b?.title, "title", MAX_EVENT_TITLE).trim(),
@@ -316,6 +333,12 @@ export function parseImportantDate(b: any): ImportantDate {
     // know about is a version skew, not an attack.
     color: isEventColor(b?.color) ? b.color : DEFAULT_EVENT_COLOR,
     kind: check.oneOf(b?.kind || "none", EVENT_KINDS, "kind"),
+    startTime,
+    endTime,
+    // A zone only means something with a time. Null with a time is floating.
+    timeZone: startTime ? timeZoneOrNull(b?.timeZone) : null,
+    repeat: extended ? repeatOrNull(b?.repeat) : null,
+    excludedOn: [],
   };
 
   switch (eventProblem(event)) {
@@ -325,8 +348,49 @@ export function parseImportantDate(b: any): ImportantDate {
     // Unreachable in practice — `check.text` above enforces the same constant
     // and throws first. Kept so the two can never disagree silently.
     case "noteTooLong": throw new ApiError(`A note can be at most ${MAX_EVENT_NOTE} characters`);
+    case "endTimeBeforeStart": throw new ApiError("The end time must be after the start time");
+    case "intervalRange":
+      throw new ApiError(`A repeat interval must be between 1 and ${MAX_REPEAT_INTERVAL}`);
+    case "untilBeforeStart": throw new ApiError("A repeat cannot end before the event starts");
+    case "repeatTooShort": throw new ApiError("Each occurrence must end before the next one starts");
     default: return event;
   }
+}
+
+/**
+ * Whether a write comes from a client that knows about times and repeats.
+ *
+ * The marker rather than the presence of the fields: an older client sends
+ * none of them, and "absent" must mean "leave what is stored alone", not "set
+ * to nothing" — otherwise opening last year's birthday in a stale tab and
+ * fixing a typo would quietly stop it repeating.
+ */
+export const isExtendedWrite = (b: any): boolean => b?.v === 2;
+
+function clockTimeOrNull(v: unknown, field: string): string | null {
+  if (v == null || v === "") return null;
+  if (!isClockTime(v)) throw new ApiError(`${field} must be an HH:MM time`);
+  return v;
+}
+
+function timeZoneOrNull(v: unknown): string | null {
+  if (v == null || v === "") return null;
+  if (!isTimeZone(v)) throw new ApiError("timeZone must be an IANA time zone");
+  return v;
+}
+
+function repeatOrNull(v: any): RepeatRule | null {
+  if (v == null) return null;
+  if (!isRepeatUnit(v?.unit)) throw new ApiError("repeat.unit must be one of week, month, year");
+  const interval = Number(v?.interval ?? 1);
+  if (!Number.isInteger(interval) || interval < 1 || interval > MAX_REPEAT_INTERVAL) {
+    throw new ApiError(`A repeat interval must be between 1 and ${MAX_REPEAT_INTERVAL}`);
+  }
+  return {
+    unit: v.unit,
+    interval,
+    until: v?.until == null || v.until === "" ? null : check.date(v.until, "repeat.until"),
+  };
 }
 
 export function parsePrefs(b: any): Prefs {

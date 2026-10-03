@@ -49,6 +49,19 @@ export function shortDateFor(iso: string, locale: Locale): string {
 }
 
 /**
+ * A wall-clock "HH:MM" for reading: "7:00 PM" in English, "19:00" in Chinese.
+ *
+ * One format in bilingual mode, not two: the time column of the Day Agenda is
+ * a fixed narrow width, digits read the same in both languages, and "7:00 PM ·
+ * 19:00" would say the same thing twice.
+ */
+export function clockTimeFor(time: string, locale: Locale): string {
+  const [h, m] = time.split(":").map(Number);
+  return new Date(Date.UTC(2000, 0, 1, h, m)).toLocaleTimeString(
+    locale === "zh" ? "zh-CN" : "en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+}
+
+/**
  * A calendar month as a heading: "Aug 2026", "2026年8月".
  *
  * The year is always shown. A two-month window that rolls forward crosses New
