@@ -2,7 +2,7 @@
 
 > Last updated: 2026-10-03
 >
-> **IMPORTANT DATES V2 — OPTIONAL TIMES, REPEATING EVENTS, DAY AGENDA: GATE A DONE · PUSHED ON `feature/important-dates-v2` · INDEPENDENT REVIEW: NO BLOCKERS, FINDINGS FIXED · READ-ONLY PRODUCTION PREFLIGHT 2026-10-03: ONLY THE 14 V2 CHANGES WOULD RUN, EVERY BACKFILL MATCHES 0 ROWS · LOCAL PRODUCTION-SHAPED REHEARSAL PASSED · NEON REHEARSAL BLOCKED (BOTH BRANCHES REFUSE AUTH; NO API KEY) · NOT MIGRATED IN PRODUCTION · NOT MERGED · NOT DEPLOYED · GATE B AWAITS PRODUCT OWNER APPROVAL.** See the first section below.
+> **IMPORTANT DATES V2 — OPTIONAL TIMES, REPEATING EVENTS, DAY AGENDA: RELEASED · `9dc9b65` ON `main` (fast-forward from `bea8bb1`) · GATE A PASS (INDEPENDENT REVIEW, READ-ONLY PRODUCTION PREFLIGHT, NEON REHEARSAL ON `important-dates-v2-rehearsal`) · PRODUCTION MIGRATION APPLIED 2026-10-03 19:36:48 UTC — EXACTLY 14 CHANGES (7 COLUMNS + 7 CHECKS), SECOND RUN "NOTHING TO DO" · ALL 35 EXISTING EVENTS BYTE-IDENTICAL, ALL STILL ALL-DAY AND ONCE · DEPLOYED ON RENDER BY THE PRODUCT OWNER (MANUAL; AUTO-DEPLOY DID NOT START) · SERVED BUILD PROVEN BY BUNDLE PROBE · SIGNED-OUT CHECKS PASS · SIGNED-IN VERIFIED BY THE PRODUCT OWNER ON THEIR OWN ACCOUNT · PRODUCTION VERIFIED.** See the first section below.
 >
 > **PHASE 5 — FREE PLAN ENFORCEMENT: IMPLEMENTED → COMMITTED → PUSHED → REHEARSED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `2410bd3` ON `main` → MIGRATION APPLIED 2026-09-20, SHORTLY BEFORE THE 04:44 UTC HEALTH CHECK (38 → 39 TABLES) → DEPLOYED TO RENDER (`dep-danmdsmk1f9s73979ceg`) → PRODUCTION VERIFIED 2026-09-20 · **MIGRATION BEFORE DEPLOY**, BECAUSE THE DEPLOYED CODE READS `priority_quota_usage` FOR FREE PRIORITY CREATION · FREE = **15 ACTIVE HABITS** AND **5 NEW PRIORITIES PER SERVER-DERIVED LOCAL DAY** · GRANDFATHERED PRO (8) AND ADMIN (5) UNLIMITED AND WRITE NO QUOTA ROW · ONLY TRANSITIONS *INTO* ACTIVE ARE GATED; AN ACCOUNT OVER THE LIMIT KEEPS EVERYTHING · `priority_quota_usage` CREATED **EMPTY** AND STILL 0 ROWS · NO EXISTING USER DATA MIGRATED, MODIFIED OR DELETED · NO PAYMENT INFRASTRUCTURE · KNOWN **VERIFICATION GAP** (NOT A DEFECT): SIMULTANEOUS MULTI-SESSION LOCK CONTENTION NOT YET EXECUTED**
 > **PHASE 4C — GRANDFATHERED PRO GRANTED: EXECUTED AND PRODUCTION VERIFIED 2026-09-20 02:58:15 UTC · FIXED LITERAL CUTOFF `2026-09-20T00:00:00Z` · **8** EXISTING NON-ADMIN ACCOUNTS NOW `plan='pro'`, `source='grandfathered'`, `expires_at=NULL`, `granted_by=NULL`, `note=NULL` · PERMANENT AND $0, NO PAYMENT PROVIDER · TWO TEST ACCOUNTS EXCLUDED BY EXACT UUID CONFIRMED BY THE PRODUCT OWNER AND REMAIN FREE · 5 ADMINS HOLD NO PLAN ROW AND STAY UNLIMITED THROUGH THE CENTRAL BYPASS · FUTURE ACCOUNTS DEFAULT FREE · RUN AS A STANDALONE ONE-OFF OPERATION, **NOT** ADDED TO `scripts/migrate.mjs` · `user_plans` IS THE ONLY TABLE THAT CHANGED · NO PRODUCT/CONTENT ROW CHANGED · NO SCHEMA CHANGE · NO DEPLOY · NO RENDER CHANGE · PHASE 5 ENFORCEMENT SHIPPED SEPARATELY IN `2410bd3`**
@@ -20,8 +20,10 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `2410bd3` (Phase 5), fast-forwarded from
-> `84eb5bc`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
+> **Repository:** `origin/main` is `9dc9b65` (Important Dates V2), fast-forwarded
+> from `bea8bb1`, plus the separate documentation commit recording that release.
+> Before it: `2410bd3` (Phase 5), fast-forwarded from `84eb5bc`, then the status
+> commits up to `bea8bb1`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
 > `83e7ebb` (front page), `9444828`, `6c49f9e` (email verification for an address
 > an account already has), `d905d4e` (password recovery), `ee0761a` (Phase 1),
 > `b903dd7` (status), `9fa4684` (Phase 1B), `fd06064` and `1d3997d` (status),
@@ -41,8 +43,16 @@
 > nothing else has ever been written to it (lifetime `ins/upd/del = 8/0/0`).
 > `priority_quota_usage` holds **0 rows** (`0/0/0`): only a Free account creating a
 > priority writes there, and the two Free accounts are dormant test accounts.
+> `important_dates` gained seven columns and seven named CHECKs on 2026-10-03
+> (Important Dates V2), additively; every existing row was verified unchanged.
 >
-> **Deployed application:** `2410bd314c791d1d9377d414b3f5113e100d2af7` (Phase 5),
+> **Deployed application:** `9dc9b65cdd15ae0ae86d3967bd225b9ee7a49ba5` (Important
+> Dates V2), deployed manually on Render by the Product Owner on 2026-10-03 after
+> 22 minutes without an auto-deploy; live by 20:06 UTC. The agent has no Render
+> access, so the deployment id was not reported to it. A served-bundle probe
+> proves the build: seven strings unique to the release — including "Times are
+> in", which exists only in `9dc9b65` and not in `b24dd2e` — were absent before
+> and present after, with four control strings present in both. Before it: `2410bd314c791d1d9377d414b3f5113e100d2af7` (Phase 5),
 > deployed on Render by the Product Owner as `dep-danmdsmk1f9s73979ceg` and
 > confirmed live 2026-09-20. Render reported the exact commit, and a
 > self-validating served-bundle probe proves it: all six new limit strings
@@ -68,82 +78,81 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Important Dates V2 — optional times, repeating events, Day Agenda (GATE A DONE · NOT MIGRATED · NOT MERGED · NOT DEPLOYED)
+## Important Dates V2 — optional times, repeating events, Day Agenda (RELEASED · MIGRATED · DEPLOYED · VERIFIED)
 
-Design approved by the Product Owner on 2026-10-03 (all-day items on top of the
-Day Agenda; tapping any date opens the agenda; timed events stored as local date
-+ local clock time + IANA zone; source-neutral `CalendarItem`; V1 edits apply to
-the whole series; deletes are "this date only" or "all repeats").
+Design approved by the Product Owner on 2026-10-03. The decisions:
+
+- all-day items go on top of the Day Agenda;
+- tapping any date opens the agenda;
+- a timed event is stored as local date + local clock time + IANA zone, and shown by region ("Central Time") rather than by the zone's city;
+- the calendar renders a source-neutral `CalendarItem`;
+- in V1, an edit applies to the whole series, and a delete is "this date only" or "all repeats".
 
 | Item | State |
 | --- | --- |
-| branch | `feature/important-dates-v2`, from `origin/main` `bea8bb1`, worktree `/Users/meilinghe/dev/rich-habits-important-dates-v2` (outside OneDrive) |
-| commits | `b24dd2e` (the feature), then the commit recording this section (review fixes and the zone label); both **pushed** to `origin/feature/important-dates-v2`. `main` is untouched |
-| migration | step 13, `scripts/migrations/important-dates-v2.mjs`: 7 `ADD COLUMN` + 7 named `CHECK`s on `important_dates`; nothing else. **Not applied to production** |
-| deployed | **no** |
+| release commits | `b24dd2e` (feature) + `9dc9b65` (review fixes, zone label); release candidate `9dc9b65cdd15ae0ae86d3967bd225b9ee7a49ba5` |
+| `main` | fast-forwarded `bea8bb1..9dc9b65` on 2026-10-03, no merge commit; this record is a separate documentation commit |
+| migration | step 13, `scripts/migrations/important-dates-v2.mjs`: 7 `ADD COLUMN` + 7 named `CHECK`s on `important_dates` — applied to production 2026-10-03 19:36:48 UTC |
+| deployed | Render, manual deploy by the Product Owner (auto-deploy did not start within 22 minutes of the push); live by 20:06 UTC. Deployment id not reported to the agent (no Render access) |
+| restore point | a Neon production restore-point branch created by the Product Owner immediately before the migration. Keep it at least until the next release has run cleanly; delete it at the Product Owner's discretion after that |
+| rehearsal branch | `important-dates-v2-rehearsal` (`REHEARSAL_DATABASE_URLV2`) now holds the migrated state and can be deleted. The older `REHEARSAL_DATABASE_URL` and `REHEARSAL_DATABASE_URL_TEST` branches still refuse authentication |
 
 **What it does**
 
-- **Optional time:** `start_time`, `end_time` and `time_zone` (the device's IANA zone). Null `start_time` means all day, which is what every existing row is. A null zone with a time is reserved for "floating"; V1 never writes it except when a device reports no zone.
-- **Repeating:** `repeat_unit` (week, month or year), `repeat_interval` (1–99) and `repeat_until`. Occurrences are computed from the anchor, never stored. Feb 29 falls on Feb 28 in ordinary years, and the 29th–31st clamp to the month's last day.
-- **Deleting one date:** that occurrence is added to `excluded_on` (`DELETE /api/important-dates?id=…&on=YYYY-MM-DD`), guarded against a concurrent move of the series.
+- **Optional time:** `start_time` and `end_time`, plus `time_zone` (the device's IANA zone). A null `start_time` means all day, which is what every pre-existing row is. A null zone with a time is reserved for "floating", which V1 does not offer.
+- **Repeating:** `repeat_unit` (week, month or year), `repeat_interval` (1–99) and `repeat_until`. Occurrences are computed from the anchor and never stored. Feb 29 falls on Feb 28 in ordinary years; the 29th–31st clamp to the month's end.
+- **Deleting one date:** `excluded_on`, keyed by the occurrence's date in the series' own calendar. It is written only by `DELETE /api/important-dates?id=…&on=…`, and that write is guarded against a concurrent move of the series.
 - **Kinds:** Birthday 🎂, Anniversary ❤️ and Holiday 🎉. Birthday and Anniversary set "Every year" unless the person already chose a repeat.
-- **Day Agenda:** tapping any date opens it. All-day items are first, then timed items by start time. An empty day shows a large Add button.
-- **Rendering:** the panel draws `CalendarItem`s (`src/lib/calendar.ts`), not `ImportantDate`s; Important Dates are its only source.
-- **Old-client guard:** writes without `v: 2` run the previous build's SQL unchanged, so a stale tab cannot erase a time, a repeat or a deleted occurrence.
+- **Day Agenda:** opens from any date. All-day items come first, then timed items by time. An empty day shows a large Add button.
+- **Rendering:** the panel draws `CalendarItem`s (`src/lib/calendar.ts`); Important Dates are its only source.
+- **Old clients:** a write without `v: 2` runs the previous SQL unchanged, so a stale tab cannot erase a time, a repeat or a deleted date.
+- **Privacy:** analytics carry only the event's shape, and nothing reaches AI providers or admin screens beyond counts. Confirmed in production: the two `important_date_saved` rows after release hold kind, repeat, timed and hasNote, and no text.
 
-**Verification (2026-10-03, local only)**
+**Gate A — PASS (2026-10-03)**
 
 | Check | Result |
 | --- | --- |
-| typecheck, lint, production build | clean |
-| unit and PGlite tests | 1266 of 1266 (69 files); new: `important-dates-v2` (67), `important-dates-migration` (11), `important-dates-db` (16), plus a `pool` date-array test |
-| local rehearsal | the old production build (`bea8bb1`) created 6 events on the pre-V2 schema; the real `npm run db:migrate` was run twice (14 V2 changes, then nothing to do); `md5` over every original column, the row count and the ids were identical before and after |
-| deploy window | the old build, running against the migrated database, read byte-identical state and could still edit and create events |
-| browser, new build | 48 of 48 checks: English, 中文 and bilingual at 390px, plus 1440px; a New York viewer of a Chicago event, shown in "Central Time"; All day on then off keeps the event's own zone; no console errors; no sideways scrolling |
-| production-shaped local rehearsal | `.pgdata-deploy/rehearse.mjs` on a fresh PGlite seeded like production (39 tables, the legacy `day_priorities` with 2 rows, `priorities` non-empty, 35 Important Dates across 2 accounts). First run: exactly the 14 V2 lines. Second run: "Nothing to do". Count, ids `md5` and original-column `md5` identical; 35 of 35 rows all day and once; 39 → 39 tables |
-| Neon rehearsal | **blocked**: `REHEARSAL_DATABASE_URL` and `REHEARSAL_DATABASE_URL_TEST` both fail `28P01` (re-checked read-only 2026-10-03); there is no Neon API key and `neonctl` is not installed. Production was not used as a substitute |
+| tests, typecheck, lint, build | 1266 of 1266 unit and PGlite tests (69 files); clean |
+| browser (local) | 48 of 48: English, 中文 and bilingual at 390px and 1440px; New York viewer; All day on and off keeps the zone; no console errors |
+| independent review | no blockers. Five findings fixed in `9dc9b65`: Upcoming gap, All-day toggle re-stamping the zone, 00:00 end, start past end, 2-day zone padding |
+| read-only production preflight | every guard and backfill in `scripts/migrate.mjs` and its modules evaluated: all skip. Only the 7 + 7 V2 additions pending |
+| Neon rehearsal | `important-dates-v2-rehearsal`, branched from production ("data and schema") by the Product Owner; proven a distinct host and branch before any write; production refused by the script |
 
-**Gate A, 2026-10-03**
+Neon rehearsal details:
 
-- **Independent review** of `bea8bb1..b24dd2e`: no blockers. Confirmed sound: the migration, the old-client path, ownership, recurrence (fuzzed against brute force), DST, exclusion keys, the `CalendarItem` boundary and privacy. Fixed in the follow-up commit:
-  - a repeating timed event spanning midnight dropped out of Upcoming for a day;
-  - All day on then off re-stamped the event with the device's zone;
-  - an end at 00:00 spilled into the next day;
-  - moving an overnight event's start past its end made a 24½-hour event;
-  - the window padding was raised to 2 days for the furthest-apart zones.
-- **Zone label:** a converted time is now named by `Intl`'s generic long name ("Central Time", 北美中部时间), not the IANA city ("Chicago"). The IANA id is still what is stored.
-- **Read-only production preflight** (`.pgdata-deploy/preflight.mjs`, a read-only session and transaction, rolled back): Postgres 18.6, 39 tables. Every guard in `scripts/migrate.mjs` and its modules evaluates to skip:
-  - the backfills match 0 rows: `users.username`, habit and goal `template_key`, `read_for_learning_night`, `habits.unit`, intention `priority_ids`;
-  - the priorities conversion is skipped (`priorities` has 139 rows);
-  - every module table, index and trigger is present;
-  - the analytics FKs are already `SET NULL`;
-  - `day_priorities` exists (2 rows).
+- **Matched production:** schema identical to production line for line; 39 tables in both; every table's row count equal.
+- **Migration:** the real runner gave exactly the 14 V2 lines and "Done — 14 change(s)"; the second run said "Nothing to do".
+- **Preservation:** 35 Important Dates with identical ids and original-column `md5`; all all-day and once; schema outside V2 unchanged; no other table's data changed; `day_priorities` unchanged.
+- **Tests:** 8 of 8 V2 data-layer tests against the migrated rehearsal, each in a rolled-back transaction. A fingerprint afterwards was identical.
 
-  The only pending work is the 7 V2 columns and 7 V2 constraints; none exist yet, and no name collides. `important_dates` baseline: **35 rows, 2 accounts**, ids `md5` `845063dc8423e1c140907ef7cdf84086`, original-column `md5` `6a75434fd606fbf2d220cfbfa11b972e`. Users write to this table, so the baseline must be taken again immediately before the migration.
-- **`day_priorities` quirk:** on a raw `schema.sql` database the rehearsal script stops ("the runner would do more than the V2 change"); on production-shaped data and on production it is a no-op.
+**Gate B — production (2026-10-03)**
 
-**Known limitations (by design for V1):**
+| Step | Result |
+| --- | --- |
+| 1. fresh read-only preflight (19:36:40 UTC) | 39 tables; `important_dates` 35 rows, 2 accounts; ids `md5` `845063dc8423e1c140907ef7cdf84086`, original-column `md5` `6a75434fd606fbf2d220cfbfa11b972e`; 0 of 7 V2 columns and 0 of 7 constraints present; every other step and every backfill predicate skip; `day_priorities` 2 rows. Gate PASS |
+| 2. migration | first run: exactly the 7 columns + 7 constraints (and the informational "priorities: already converted, left alone"), "Done — 14 change(s)." Second run: "Nothing to do; already up to date." |
+| 3. preservation (19:37:14 UTC) | 35 → 35 rows; per-row check 0 added, 0 removed, 0 changed; ids and original-column `md5` identical; 35 of 35 all-day and once; 39 tables; schema outside V2 identical; no other table's data changed; `day_priorities` identical; nothing pending |
+| 4. release | `main` fast-forwarded to `9dc9b65` and pushed; deployed manually on Render by the Product Owner |
+| 5. served build | bundle probe at 20:10 UTC: all seven release-only strings present (including `9dc9b65`-only "Times are in"); all four controls present |
+| 5. signed-out checks | 35 of 35. Covered: `/api/health` up; public pages 200; protected routes redirect to `/login` (`/today` via the existing `/habits` redirect); `/api/state` and every Important Dates write 401 signed out; no connection string, key or server-only name in served assets; public pages in English, 中文 and bilingual at 390px and 1440px without sideways scrolling, 5xx or console errors |
+| 5. signed-in checks | by the Product Owner on their own account: works correctly. The agent created no account, reset no password and wrote no test data |
+| 6. final read-only check (20:11 UTC) | the 35 pre-existing events still byte-identical, all all-day and once. Everything else since the baseline is one admin account's activity at 20:06 UTC: 1 new event (a yearly, all-day Anniversary, saved then edited once), 5 `app_opened` and 2 `important_date_saved` analytics rows, 1 session. No other table changed; V2 schema correct; health 200 |
 
-- No single-occurrence editing and no "this and following"; no floating-time UI; no zone picker (the zone comes from the device).
-- After a series' first date or rule changes, its deleted dates are cleared.
-- A stale previous-build tab:
-  - that edits a repeating event's dates moves the whole series, and keeps the series' deleted dates (the old SQL is deliberately unchanged);
-  - can lengthen an occurrence beyond its repeat period (the next new-client save then asks for it to be shortened);
-  - deletes the whole series with its Delete.
+**Known limitations (V1, by design):**
 
-**Gate B — awaiting explicit Product Owner approval** (the exact procedure is in the Gate A report):
+- No single-occurrence editing and no "this and following".
+- No floating-time UI and no zone picker.
+- A series' deleted dates are cleared when its first date or rule changes.
+- A stale previous-build tab that moves a repeating event's dates moves the whole series and keeps its deleted dates. It can also lengthen an occurrence beyond its period; the next save asks for it to be shortened. Its Delete removes the whole series.
 
-1. Restore the Neon rehearsal and run `node .pgdata-deploy/rehearse.mjs REHEARSAL_DATABASE_URL` (or explicitly waive it).
-2. Production restore-point branch.
-3. Re-run the read-only preflight.
-4. `npm run db:migrate` against production, **before** the deploy.
-5. Re-run the preflight and compare the baseline.
-6. Fast-forward `main` and push.
-7. Deploy on Render.
-8. Signed-in checks.
+**Release tooling:** local and untracked, under `.pgdata-deploy/` in the feature worktree. It never prints a connection string.
 
-**Next step:** the Product Owner restores the Neon rehearsal access (or waives it) and approves Gate B.
+- `preflight.mjs`: read-only, every runner predicate, schema and data fingerprints.
+- `rehearse.mjs`: refuses production.
+- `release.mjs`: production gate, migrate, verify.
+- `probe.mjs` and `signed-out.mjs`.
+
+**Next step:** none required for this release. Optional: delete the `important-dates-v2-rehearsal` branch, and later the restore-point branch.
 
 ## Phase 5 — Free plan enforcement (PRODUCTION MIGRATED · DEPLOYED · VERIFIED)
 
