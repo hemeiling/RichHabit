@@ -972,9 +972,9 @@ export const zh: Dict = {
     addEndTime: "添加结束时间",
     removeEndTime: "移除结束时间",
     endsNextDay: "次日结束",
-    timesIn: (city: string) => `时间按 ${city} 时间计`,
+    timesIn: (zone: string) => `时间按${zone}计`,
     timeRange: (from: string, to: string) => `${from} – ${to}`,
-    zoneTime: (time: string, city: string) => `${city}时间 ${time}`,
+    zoneTime: (time: string, zone: string) => `${zone} ${time}`,
 
     repeat: "重复",
     repeatOptions: {

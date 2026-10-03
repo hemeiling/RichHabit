@@ -2,7 +2,7 @@
 
 > Last updated: 2026-10-03
 >
-> **IMPORTANT DATES V2 — OPTIONAL TIMES, REPEATING EVENTS, DAY AGENDA: IMPLEMENTED → COMMITTED ON `feature/important-dates-v2` (NOT PUSHED) · REHEARSED LOCALLY (PGLITE) · NEON REHEARSAL UNAVAILABLE (BOTH BRANCHES REFUSE AUTH) · NOT MIGRATED IN PRODUCTION · NOT DEPLOYED · AWAITING PRODUCT OWNER APPROVAL.** See the first section below.
+> **IMPORTANT DATES V2 — OPTIONAL TIMES, REPEATING EVENTS, DAY AGENDA: GATE A DONE · PUSHED ON `feature/important-dates-v2` · INDEPENDENT REVIEW: NO BLOCKERS, FINDINGS FIXED · READ-ONLY PRODUCTION PREFLIGHT 2026-10-03: ONLY THE 14 V2 CHANGES WOULD RUN, EVERY BACKFILL MATCHES 0 ROWS · LOCAL PRODUCTION-SHAPED REHEARSAL PASSED · NEON REHEARSAL BLOCKED (BOTH BRANCHES REFUSE AUTH; NO API KEY) · NOT MIGRATED IN PRODUCTION · NOT MERGED · NOT DEPLOYED · GATE B AWAITS PRODUCT OWNER APPROVAL.** See the first section below.
 >
 > **PHASE 5 — FREE PLAN ENFORCEMENT: IMPLEMENTED → COMMITTED → PUSHED → REHEARSED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `2410bd3` ON `main` → MIGRATION APPLIED 2026-09-20, SHORTLY BEFORE THE 04:44 UTC HEALTH CHECK (38 → 39 TABLES) → DEPLOYED TO RENDER (`dep-danmdsmk1f9s73979ceg`) → PRODUCTION VERIFIED 2026-09-20 · **MIGRATION BEFORE DEPLOY**, BECAUSE THE DEPLOYED CODE READS `priority_quota_usage` FOR FREE PRIORITY CREATION · FREE = **15 ACTIVE HABITS** AND **5 NEW PRIORITIES PER SERVER-DERIVED LOCAL DAY** · GRANDFATHERED PRO (8) AND ADMIN (5) UNLIMITED AND WRITE NO QUOTA ROW · ONLY TRANSITIONS *INTO* ACTIVE ARE GATED; AN ACCOUNT OVER THE LIMIT KEEPS EVERYTHING · `priority_quota_usage` CREATED **EMPTY** AND STILL 0 ROWS · NO EXISTING USER DATA MIGRATED, MODIFIED OR DELETED · NO PAYMENT INFRASTRUCTURE · KNOWN **VERIFICATION GAP** (NOT A DEFECT): SIMULTANEOUS MULTI-SESSION LOCK CONTENTION NOT YET EXECUTED**
 > **PHASE 4C — GRANDFATHERED PRO GRANTED: EXECUTED AND PRODUCTION VERIFIED 2026-09-20 02:58:15 UTC · FIXED LITERAL CUTOFF `2026-09-20T00:00:00Z` · **8** EXISTING NON-ADMIN ACCOUNTS NOW `plan='pro'`, `source='grandfathered'`, `expires_at=NULL`, `granted_by=NULL`, `note=NULL` · PERMANENT AND $0, NO PAYMENT PROVIDER · TWO TEST ACCOUNTS EXCLUDED BY EXACT UUID CONFIRMED BY THE PRODUCT OWNER AND REMAIN FREE · 5 ADMINS HOLD NO PLAN ROW AND STAY UNLIMITED THROUGH THE CENTRAL BYPASS · FUTURE ACCOUNTS DEFAULT FREE · RUN AS A STANDALONE ONE-OFF OPERATION, **NOT** ADDED TO `scripts/migrate.mjs` · `user_plans` IS THE ONLY TABLE THAT CHANGED · NO PRODUCT/CONTENT ROW CHANGED · NO SCHEMA CHANGE · NO DEPLOY · NO RENDER CHANGE · PHASE 5 ENFORCEMENT SHIPPED SEPARATELY IN `2410bd3`**
@@ -68,7 +68,7 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Important Dates V2 — optional times, repeating events, Day Agenda (IMPLEMENTED · NOT MIGRATED · NOT DEPLOYED)
+## Important Dates V2 — optional times, repeating events, Day Agenda (GATE A DONE · NOT MIGRATED · NOT MERGED · NOT DEPLOYED)
 
 Design approved by the Product Owner on 2026-10-03 (all-day items on top of the
 Day Agenda; tapping any date opens the agenda; timed events stored as local date
@@ -78,7 +78,7 @@ the whole series; deletes are "this date only" or "all repeats").
 | Item | State |
 | --- | --- |
 | branch | `feature/important-dates-v2`, from `origin/main` `bea8bb1`, worktree `/Users/meilinghe/dev/rich-habits-important-dates-v2` (outside OneDrive) |
-| commit | the commit recording this section, on that branch; **not pushed** |
+| commits | `b24dd2e` (the feature), then the commit recording this section (review fixes and the zone label); both **pushed** to `origin/feature/important-dates-v2`. `main` is untouched |
 | migration | step 13, `scripts/migrations/important-dates-v2.mjs`: 7 `ADD COLUMN` + 7 named `CHECK`s on `important_dates`; nothing else. **Not applied to production** |
 | deployed | **no** |
 
@@ -97,30 +97,53 @@ the whole series; deletes are "this date only" or "all repeats").
 | Check | Result |
 | --- | --- |
 | typecheck, lint, production build | clean |
-| unit and PGlite tests | 1262 of 1262 (69 files); new: `important-dates-v2` (63), `important-dates-migration` (11), `important-dates-db` (16), plus a `pool` date-array test |
+| unit and PGlite tests | 1266 of 1266 (69 files); new: `important-dates-v2` (67), `important-dates-migration` (11), `important-dates-db` (16), plus a `pool` date-array test |
 | local rehearsal | the old production build (`bea8bb1`) created 6 events on the pre-V2 schema; the real `npm run db:migrate` was run twice (14 V2 changes, then nothing to do); `md5` over every original column, the row count and the ids were identical before and after |
 | deploy window | the old build, running against the migrated database, read byte-identical state and could still edit and create events |
-| browser, new build | 46 of 46 checks: English, 中文 and bilingual at 390px, plus 1440px; New York viewer of a Chicago event; no console errors; no sideways scrolling |
-| Neon rehearsal | **not run**: `REHEARSAL_DATABASE_URL` and `REHEARSAL_DATABASE_URL_TEST` both fail `28P01`. Production was not used as a substitute |
+| browser, new build | 48 of 48 checks: English, 中文 and bilingual at 390px, plus 1440px; a New York viewer of a Chicago event, shown in "Central Time"; All day on then off keeps the event's own zone; no console errors; no sideways scrolling |
+| production-shaped local rehearsal | `.pgdata-deploy/rehearse.mjs` on a fresh PGlite seeded like production (39 tables, the legacy `day_priorities` with 2 rows, `priorities` non-empty, 35 Important Dates across 2 accounts). First run: exactly the 14 V2 lines. Second run: "Nothing to do". Count, ids `md5` and original-column `md5` identical; 35 of 35 rows all day and once; 39 → 39 tables |
+| Neon rehearsal | **blocked**: `REHEARSAL_DATABASE_URL` and `REHEARSAL_DATABASE_URL_TEST` both fail `28P01` (re-checked read-only 2026-10-03); there is no Neon API key and `neonctl` is not installed. Production was not used as a substitute |
 
-The local run also created `day_priorities`: a known, pre-existing step, because
-`db/schema.sql` lacks that legacy table. Production already has it (2 rows), so
-the step does nothing there.
+**Gate A, 2026-10-03**
 
-**Known limitations (by design for V1):** no single-occurrence editing and no "this and following"; no floating-time UI; no zone picker (the zone comes from the device). After a series' first date or rule changes, its deleted dates are cleared. A stale previous-build tab that edits a repeating event's dates moves the whole series, and its Delete removes the whole series.
+- **Independent review** of `bea8bb1..b24dd2e`: no blockers. Confirmed sound: the migration, the old-client path, ownership, recurrence (fuzzed against brute force), DST, exclusion keys, the `CalendarItem` boundary and privacy. Fixed in the follow-up commit:
+  - a repeating timed event spanning midnight dropped out of Upcoming for a day;
+  - All day on then off re-stamped the event with the device's zone;
+  - an end at 00:00 spilled into the next day;
+  - moving an overnight event's start past its end made a 24½-hour event;
+  - the window padding was raised to 2 days for the furthest-apart zones.
+- **Zone label:** a converted time is now named by `Intl`'s generic long name ("Central Time", 北美中部时间), not the IANA city ("Chicago"). The IANA id is still what is stored.
+- **Read-only production preflight** (`.pgdata-deploy/preflight.mjs`, a read-only session and transaction, rolled back): Postgres 18.6, 39 tables. Every guard in `scripts/migrate.mjs` and its modules evaluates to skip:
+  - the backfills match 0 rows: `users.username`, habit and goal `template_key`, `read_for_learning_night`, `habits.unit`, intention `priority_ids`;
+  - the priorities conversion is skipped (`priorities` has 139 rows);
+  - every module table, index and trigger is present;
+  - the analytics FKs are already `SET NULL`;
+  - `day_priorities` exists (2 rows).
 
-**Production actions remaining, all awaiting explicit approval**
+  The only pending work is the 7 V2 columns and 7 V2 constraints; none exist yet, and no name collides. `important_dates` baseline: **35 rows, 2 accounts**, ids `md5` `845063dc8423e1c140907ef7cdf84086`, original-column `md5` `6a75434fd606fbf2d220cfbfa11b972e`. Users write to this table, so the baseline must be taken again immediately before the migration.
+- **`day_priorities` quirk:** on a raw `schema.sql` database the rehearsal script stops ("the runner would do more than the V2 change"); on production-shaped data and on production it is a no-op.
 
-1. Push the branch, review the diff, then fast-forward `main`.
-2. Read-only production preflight. Run every pending step of `scripts/migrate.mjs` against production read-only, checking each backfill's `WHERE` clause and not just the schema diff (see Phase 4B). Record the `important_dates` count, ids and `md5`.
-3. A Neon rehearsal on a refreshed branch, if access is restored.
-4. A production restore-point branch.
-5. `npm run db:migrate` against production, **before** the deploy.
-6. Compare the `md5`, count and ids.
+**Known limitations (by design for V1):**
+
+- No single-occurrence editing and no "this and following"; no floating-time UI; no zone picker (the zone comes from the device).
+- After a series' first date or rule changes, its deleted dates are cleared.
+- A stale previous-build tab:
+  - that edits a repeating event's dates moves the whole series, and keeps the series' deleted dates (the old SQL is deliberately unchanged);
+  - can lengthen an occurrence beyond its repeat period (the next new-client save then asks for it to be shortened);
+  - deletes the whole series with its Delete.
+
+**Gate B — awaiting explicit Product Owner approval** (the exact procedure is in the Gate A report):
+
+1. Restore the Neon rehearsal and run `node .pgdata-deploy/rehearse.mjs REHEARSAL_DATABASE_URL` (or explicitly waive it).
+2. Production restore-point branch.
+3. Re-run the read-only preflight.
+4. `npm run db:migrate` against production, **before** the deploy.
+5. Re-run the preflight and compare the baseline.
+6. Fast-forward `main` and push.
 7. Deploy on Render.
 8. Signed-in checks.
 
-**Next step:** the Product Owner reviews this and approves (or declines) the production sequence above.
+**Next step:** the Product Owner restores the Neon rehearsal access (or waives it) and approves Gate B.
 
 ## Phase 5 — Free plan enforcement (PRODUCTION MIGRATED · DEPLOYED · VERIFIED)
 

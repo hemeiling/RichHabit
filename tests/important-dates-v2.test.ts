@@ -3,15 +3,15 @@ import {
   MAX_OCCURRENCES, addMonthsClamped, isOccurrenceStart, nextOccurrence, occurrencesBetween,
 } from "../src/lib/recurrence";
 import {
-  instantToZoned, inViewerZone, isTimeZone, zoneCity, zonedToInstant,
+  instantToZoned, inViewerZone, isTimeZone, zonedToInstant,
 } from "../src/lib/zonedTime";
 import {
   EVENT_KINDS, KIND_EMOJI, ONE_OFF_ALL_DAY, eventProblem, layoutWeek, repeatPreset, ruleFor,
-  seriesAfterEdit, suggestedStartTime, withAllDay, withEndTime, withKind,
+  seriesAfterEdit, suggestedStartTime, withAllDay, withEndTime, withKind, withStartTime,
 } from "../src/lib/importantDates";
 import { dayAgenda, importantDateItems, upcomingItems } from "../src/lib/calendar";
 import { isExtendedWrite, parseImportantDate } from "../src/lib/validate";
-import { LOCALES, clockTimeFor, dict } from "../src/lib/i18n";
+import { LOCALES, clockTimeFor, dict, zoneLabelFor } from "../src/lib/i18n";
 import type { ImportantDate, RepeatRule } from "../src/lib/types";
 
 /**
@@ -250,10 +250,19 @@ describe("clock times in a zone", () => {
     expect(new Date(london).toISOString()).toBe("2026-10-25T00:30:00.000Z");   // BST, the first
   });
 
-  it("names a zone by its own city", () => {
-    expect(zoneCity("America/Chicago")).toBe("Chicago");
-    expect(zoneCity("America/New_York")).toBe("New York");
-    expect(zoneCity("UTC")).toBe("UTC");
+  it("names a zone as a region, never as the city in its id", () => {
+    // A Houston event is stored as America/Chicago; nobody in Houston typed "Chicago".
+    const october = Date.UTC(2026, 9, 12, 12);
+    const january = Date.UTC(2027, 0, 12, 12);
+    expect(zoneLabelFor("America/Chicago", "en", october)).toBe("Central Time");
+    expect(zoneLabelFor("America/Chicago", "en", january)).toBe("Central Time");   // no daylight/standard flip
+    expect(zoneLabelFor("America/Chicago", "zh", october)).toBe("北美中部时间");
+    expect(zoneLabelFor("America/New_York", "en", october)).toBe("Eastern Time");
+    expect(zoneLabelFor("Asia/Shanghai", "zh", october)).toBe("中国标准时间");
+    expect(zoneLabelFor("America/Chicago", "both", october)).toBe("Central Time");
+    for (const locale of ["en", "zh", "both"] as const) {
+      expect(zoneLabelFor("America/Chicago", locale, october)).not.toMatch(/Chicago|芝加哥/);
+    }
   });
 });
 
@@ -317,6 +326,20 @@ describe("Upcoming", () => {
     expect(upcomingItems([yearly], "2026-10-03", null)[0]).toMatchObject({ startDate: "2026-10-02", endDate: "2026-10-04" });
   });
 
+  it("keeps a repeating overnight event listed the day after an occurrence ends", () => {
+    // Weekly, Monday 10 PM – Tuesday 1 AM. On Wednesday the next one is the 12th.
+    const late = ev({ title: "Night shift", startDate: "2026-10-05", endDate: "2026-10-06",
+      startTime: "22:00", endTime: "01:00", timeZone: "America/Chicago", repeat: rule("week") });
+    for (const [today, next] of [["2026-10-06", "2026-10-05"], ["2026-10-07", "2026-10-12"],
+      ["2026-10-08", "2026-10-12"]]) {
+      expect(upcomingItems([late], today, "America/Chicago").map((i) => i.startDate), today).toEqual([next]);
+    }
+    // And a three-day timed monthly event, the day after one occurrence ends.
+    const retreat = ev({ startDate: "2026-10-05", endDate: "2026-10-07", startTime: "09:00",
+      endTime: "17:00", timeZone: "America/Chicago", repeat: rule("month") });
+    expect(upcomingItems([retreat], "2026-10-08", "America/Chicago")[0].startDate).toBe("2026-11-05");
+  });
+
   it("drops a series that has ended, and a one-off in the past", () => {
     const ended = ev({ startDate: "2026-01-01", endDate: "2026-01-01", repeat: rule("month", 1, "2026-06-01") });
     const past = ev({ startDate: "2026-09-01", endDate: "2026-09-01" });
@@ -375,6 +398,23 @@ describe("the Day Agenda", () => {
     expect(middle.timed).toEqual([]);
   });
 
+  it("treats an end at midnight as the end of the day it started", () => {
+    const party = ev({ title: "Party", startDate: day, endDate: "2026-10-09", startTime: "22:00", endTime: "00:00" });
+    const [item] = importantDateItems([party], day, "2026-10-09", null);
+    expect(item).toMatchObject({ startDate: day, endDate: day, endTime: "00:00" });
+    expect(dayAgenda([item], day).timed[0]).toMatchObject({ part: "single" });
+    expect(dayAgenda(importantDateItems([party], "2026-10-09", "2026-10-09", null), "2026-10-09"))
+      .toEqual({ allDay: [], timed: [] });
+  });
+
+  it("finds an occurrence two days away across the furthest-apart zones", () => {
+    // 00:30 on the 12th at UTC+14 is 23:30 on the 10th at UTC−11.
+    const far = ev({ startDate: "2026-10-12", endDate: "2026-10-12", startTime: "00:30",
+      timeZone: "Pacific/Kiritimati" });
+    expect(importantDateItems([far], "2026-10-10", "2026-10-10", "Pacific/Pago_Pago")
+      .map((i) => [i.startDate, i.startTime])).toEqual([["2026-10-10", "23:30"]]);
+  });
+
   it("is empty for an empty day", () => {
     expect(dayAgenda([], day)).toEqual({ allDay: [], timed: [] });
   });
@@ -402,6 +442,19 @@ describe("the editor's rules", () => {
     const e = withEndTime(ev({ startTime: "22:00" }), "01:00");
     expect(e).toMatchObject({ endDate: "2026-10-13", endTime: "01:00" });
     expect(eventProblem(e)).toBeNull();
+  });
+
+  it("never turns an overnight event into a 24-hour one when its start moves past the end", () => {
+    const overnight = withEndTime(ev({ startTime: "22:00" }), "01:00");   // Oct 12 22:00 – Oct 13 01:00
+    expect(withStartTime(overnight, "00:30")).toMatchObject({ startDate: "2026-10-12", endDate: "2026-10-12",
+      startTime: "00:30", endTime: "01:00" });
+    expect(withStartTime(overnight, "23:00")).toMatchObject({ endDate: "2026-10-13" });   // still overnight
+    // A genuinely long event is never shortened by a start-time edit.
+    const conf = ev({ startDate: "2026-10-12", endDate: "2026-10-13", startTime: "09:00", endTime: "17:00" });
+    expect(withStartTime(conf, "10:00")).toMatchObject({ endDate: "2026-10-13" });
+    // On one day, a start after the end is shown as a problem, not silently moved.
+    const sameDay = ev({ title: "x", startTime: "10:00", endTime: "11:00" });
+    expect(eventProblem(withStartTime(sameDay, "12:00"))).toBe("endTimeBeforeStart");
   });
 
   it("refuses a same-day end that is not after the start", () => {

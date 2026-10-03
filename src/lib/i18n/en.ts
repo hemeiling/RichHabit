@@ -1137,10 +1137,10 @@ export const en = {
     removeEndTime: "Remove end time",
     endsNextDay: "Ends the next day",
     /** Shown when the event's times were set in a zone other than this device's. */
-    timesIn: (city: string) => `Times are ${city} time`,
+    timesIn: (zone: string) => `Times are in ${zone}`,
     timeRange: (from: string, to: string) => `${from} – ${to}`,
-    /** The time as written, beside the reader's own: "7:00 PM Chicago". */
-    zoneTime: (time: string, city: string) => `${time} ${city}`,
+    /** The time as written, beside the reader's own: "6:30 PM Central Time". */
+    zoneTime: (time: string, zone: string) => `${time} ${zone}`,
 
     /** Repeating. One row of choices; Custom reveals the rest. */
     repeat: "Repeat",

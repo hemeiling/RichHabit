@@ -6,20 +6,20 @@ import { Field, GrowingTextarea, Sheet } from "@/components/ui";
 import { uid } from "@/lib/habits";
 import { addDays, addMonths, monthFirst, monthGrid, monthOf } from "@/lib/dates";
 import {
-  clockTimeFor, dateRangeFor, monthTitleFor, prettyDateFor, shortDateFor,
+  clockTimeFor, dateRangeFor, monthTitleFor, prettyDateFor, shortDateFor, zoneLabelFor,
 } from "@/lib/i18n";
 import { useLocale, useT } from "@/lib/i18n/context";
 import {
   DEFAULT_EVENT_COLOR, EVENT_COLORS, EVENT_KINDS, KIND_EMOJI, MAX_EVENT_NOTE, MAX_EVENT_TITLE,
   ONE_OFF_ALL_DAY, REPEAT_PRESETS,
   colorHex, covers, eventLength, eventProblem, isAllDay, layoutWeekCapped, repeatPreset, ruleFor,
-  suggestedStartTime, withAllDay, withEnd, withEndTime, withKind, withStart,
+  suggestedStartTime, withAllDay, withEnd, withEndTime, withKind, withStart, withStartTime,
 } from "@/lib/importantDates";
 import type { EventBar, EventKind } from "@/lib/importantDates";
 import { MAX_REPEAT_INTERVAL, addMonthsClamped } from "@/lib/recurrence";
 import { dayAgenda, importantDateItems, upcomingItems } from "@/lib/calendar";
 import type { AgendaRow, CalendarItem } from "@/lib/calendar";
-import { deviceTimeZone, zoneCity } from "@/lib/zonedTime";
+import { deviceTimeZone, zonedToInstant } from "@/lib/zonedTime";
 import type { Dict, Locale } from "@/lib/i18n";
 import type { ImportantDate, RepeatRule, RepeatUnit } from "@/lib/types";
 
@@ -210,8 +210,14 @@ function EventEditor({
   /** Whether the person has chosen a repeat here — a birthday then never overrides it. */
   const [repeatChosen, setRepeatChosen] = useState(!isNew);
   const [customOpen, setCustomOpen] = useState(repeatPreset(draft.repeat) === "custom");
-  /** The times last typed, kept while All day is on so turning it off again restores them. */
-  const [lastTimes, setLastTimes] = useState({ start: draft.startTime, end: draft.endTime });
+  /**
+   * The times last typed — and the zone they were meant in — kept while All day
+   * is on, so turning it off again restores the event exactly. Without the zone,
+   * a Chicago 7 PM toggled on and off on a New York phone would come back as a
+   * New York 7 PM.
+   */
+  const [lastTimes, setLastTimes] = useState(
+    { start: draft.startTime, end: draft.endTime, zone: draft.timeZone });
   const [askDelete, setAskDelete] = useState(false);
   const problem = eventProblem(draft);
   const timed = !isAllDay(draft);
@@ -233,11 +239,12 @@ function EventEditor({
 
   const setAllDay = (allDay: boolean) => {
     if (allDay) {
-      setLastTimes({ start: draft.startTime, end: draft.endTime });
+      setLastTimes({ start: draft.startTime, end: draft.endTime, zone: draft.timeZone });
       setDraft(withAllDay(draft, true, "", null, null));
     } else {
       setDraft(withAllDay(draft, false,
-        lastTimes.start ?? suggestedStartTime(draft.startDate, today), lastTimes.end, viewerZone));
+        lastTimes.start ?? suggestedStartTime(draft.startDate, today), lastTimes.end,
+        lastTimes.zone ?? viewerZone));
     }
   };
 
@@ -329,8 +336,7 @@ function EventEditor({
             <input
               className="input num mt-2" type="time" required value={draft.startTime ?? ""}
               aria-label={t.importantDates.startTime}
-              onChange={(e) => e.target.value && setDraft(withEndTime(
-                { ...draft, startTime: e.target.value }, draft.endTime))}
+              onChange={(e) => e.target.value && setDraft(withStartTime(draft, e.target.value))}
             />
           )}
         </Field>
@@ -373,7 +379,7 @@ function EventEditor({
       </div>
       {otherZone && (
         <p className="faint" style={{ fontSize: 12, marginTop: -6, marginBottom: 12 }}>
-          {t.importantDates.timesIn(zoneCity(otherZone))}
+          {t.importantDates.timesIn(zoneLabelFor(otherZone, locale))}
         </p>
       )}
 
@@ -631,7 +637,10 @@ function AgendaLine({ row, onPick }: { row: AgendaRow; onPick: (item: CalendarIt
   }
   if (part === "allDay" && row.days > 1) details.push(t.importantDates.dayOf(row.day, row.days));
   if (item.original && (part === "single" || part === "start")) {
-    details.push(t.importantDates.zoneTime(time(item.original.startTime), zoneCity(item.original.timeZone)));
+    // The zone named as a region ("Central Time"), never as the city in its id.
+    const at = zonedToInstant(item.occurrenceDate, item.original.startTime, item.original.timeZone);
+    details.push(t.importantDates.zoneTime(time(item.original.startTime),
+      zoneLabelFor(item.original.timeZone, locale, at)));
   }
   const repeat = repeatText(item.repeat, t, locale);
   if (repeat) details.push(`↻ ${repeat}`);

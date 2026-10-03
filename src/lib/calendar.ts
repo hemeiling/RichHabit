@@ -88,8 +88,10 @@ function itemFor(
   let endTime: string | null = null;
   if (e.endTime) {
     const end = inViewerZone(occ.endDate, e.endTime, e.timeZone, viewerZone);
-    endDate = end.date;
     endTime = end.time;
+    // Ending at midnight is ending the day before: "10 PM – 12 AM" occupies
+    // one day, and the next day has nothing of it left to show.
+    endDate = end.time === "00:00" && end.date > start.date ? shiftDays(end.date, -1) : end.date;
   } else {
     // Open-ended: it lasts as many days as it was written to, moved with its start.
     endDate = shiftDays(start.date, daysFrom(occ.startDate, occ.endDate));
@@ -110,17 +112,20 @@ const daysFrom = (a: string, b: string) => dayNumber(b) - dayNumber(a);
 /**
  * Every occurrence that touches the reader's days [from, to].
  *
- * The window is widened by a day each side before expanding, because a timed
- * occurrence read in another zone can land on the day before or after the one
- * it was written for; the result is then cut back to the window in the
- * reader's own days.
+ * The window is widened before expanding, because a timed occurrence read in
+ * another zone can land on a different day from the one it was written for —
+ * by up to two, between the furthest-apart zones (UTC+14 and UTC−11 are 25
+ * hours apart). The result is then cut back to the window in the reader's own
+ * days.
  */
+const ZONE_PAD_DAYS = 2;
+
 export function importantDateItems(
   events: ImportantDate[], from: string, to: string, viewerZone: string | null,
 ): CalendarItem[] {
   const out: CalendarItem[] = [];
   for (const e of events) {
-    const pad = isAllDay(e) ? 0 : 1;
+    const pad = isAllDay(e) ? 0 : ZONE_PAD_DAYS;
     for (const occ of occurrencesBetween(e, shiftDays(from, -pad), shiftDays(to, pad))) {
       const item = itemFor(e, occ, viewerZone);
       if (overlaps(item, from, to)) out.push(item);
@@ -138,14 +143,16 @@ export function upcomingItems(
 ): CalendarItem[] {
   const out: CalendarItem[] = [];
   for (const e of events) {
-    // A day early for timed events, for the same reason as above.
-    let from = isAllDay(e) ? today : shiftDays(today, -1);
-    for (let tries = 0; tries < 3; tries++) {
+    // Early for timed events, for the same reason as above.
+    let from = isAllDay(e) ? today : shiftDays(today, -ZONE_PAD_DAYS);
+    for (let tries = 0; tries < 2 * ZONE_PAD_DAYS + 1; tries++) {
       const occ = nextOccurrence(e, from);
       if (!occ) break;
       const item = itemFor(e, occ, viewerZone);
       if (item.endDate >= today) { out.push(item); break; }
-      from = shiftDays(occ.startDate, 1);
+      // Past its *end* — from the day after its start, a multi-day occurrence
+      // would be found again and the series would drop out of the list.
+      from = shiftDays(occ.endDate, 1);
     }
   }
   return out.sort(compareItems);
@@ -215,7 +222,7 @@ export function dayAgenda(items: CalendarItem[], date: string): DayAgenda {
       allDay.push({ item, part: "allDay", day, days, time: null });
     } else if (item.startDate === date) {
       timed.push({ item, part: days === 1 ? "single" : "start", day, days, time: item.startTime });
-    } else if (item.endDate === date && item.endTime) {
+    } else if (item.endDate === date && item.endTime && item.endTime !== "00:00") {
       timed.push({ item, part: "end", day, days, time: "00:00" });
     } else {
       allDay.push({ item, part: "allDay", day, days, time: null });

@@ -392,6 +392,24 @@ export function withEndTime(e: ImportantDate, endTime: string | null): Important
   return next;
 }
 
+/**
+ * A new start time. It never moves a date forward — only typing an *end* time
+ * does that — but it can take one back: an evening that ran past midnight
+ * ("10 PM – 1 AM") whose start is moved to after the end ("12:30 AM") is no
+ * longer overnight. Left alone it would silently become a 24½-hour event; it
+ * becomes 12:30 – 1 AM on the one day instead. A genuinely long event (one
+ * already over 24 hours) is never shortened by this.
+ */
+export function withStartTime(e: ImportantDate, startTime: string): ImportantDate {
+  const next = { ...e, startTime };
+  if (e.startTime && e.endTime && e.endDate === addDays(e.startDate, 1)) {
+    const before = 1440 - minutesOf(e.startTime) + minutesOf(e.endTime);
+    const after = 1440 - minutesOf(startTime) + minutesOf(e.endTime);
+    if (before <= 1440 && after > 1440) next.endDate = e.startDate;
+  }
+  return next;
+}
+
 /* ------------------------------- repeat ----------------------------------- */
 
 export type RepeatPreset = "none" | "year" | "month" | "week" | "custom";

@@ -119,9 +119,6 @@ export function inViewerZone(
   return instantToZoned(zonedToInstant(date, time, eventZone), viewerZone);
 }
 
-/** "America/Chicago" → "Chicago". The zone's own city, untranslated. */
-export const zoneCity = (timeZone: string) =>
-  (timeZone.split("/").pop() ?? timeZone).replace(/_/g, " ");
 
 /** Minutes since midnight for "HH:MM". */
 export const minutesOf = (time: string) => {

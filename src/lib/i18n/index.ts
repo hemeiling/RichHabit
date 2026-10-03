@@ -62,6 +62,31 @@ export function clockTimeFor(time: string, locale: Locale): string {
 }
 
 /**
+ * A time zone as a reader names it: "Central Time", "北美中部时间", "China
+ * Standard Time" — never the IANA id it is stored as.
+ *
+ * The id names a city ("America/Chicago"), and somebody in Houston who never
+ * typed "Chicago" should not be shown it. The generic long name is the one that
+ * means the region, and it does not flip between daylight and standard time
+ * across the year. Bilingual mode uses the English name, as it does for the
+ * clock. Engines without the generic style fall back to the dated long name,
+ * then to the id's city.
+ */
+export function zoneLabelFor(timeZone: string, locale: Locale, at: number = Date.now()): string {
+  const tag = locale === "zh" ? "zh-CN" : "en-US";
+  for (const style of ["longGeneric", "long"] as const) {
+    try {
+      const name = new Intl.DateTimeFormat(tag, { timeZone, timeZoneName: style })
+        .formatToParts(new Date(at)).find((p) => p.type === "timeZoneName")?.value;
+      if (name) return name;
+    } catch {
+      // This engine does not know the style; try the next one.
+    }
+  }
+  return (timeZone.split("/").pop() ?? timeZone).replace(/_/g, " ");
+}
+
+/**
  * A calendar month as a heading: "Aug 2026", "2026年8月".
  *
  * The year is always shown. A two-month window that rolls forward crosses New
