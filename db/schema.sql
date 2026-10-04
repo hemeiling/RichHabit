@@ -1064,8 +1064,24 @@ declare
   owned record;
   heir  uuid;
 begin
+  -- Lock every membership of the departing account BEFORE reading what it owns.
+  -- If another deletion is promoting this account to owner right now, this
+  -- waits for it; the query below is a new statement with a fresh snapshot, so
+  -- it then sees the promotion and hands the board on again. Without this, the
+  -- promotion is invisible here and the cascade deletes the new owner's row,
+  -- leaving a board with members and no owner.
+  -- The same statement also takes the rows this deletion's cascades will change
+  -- (memberships it brought about, invitations to or from it), all in one fixed
+  -- order, so two deletions of linked accounts queue instead of crossing. These
+  -- only lock; nothing is updated before the cascades.
+  perform 1 from together_members
+   where user_id = old.id or added_by = old.id
+   order by board_id, user_id for update;
+  perform 1 from together_invitations
+   where invited_by = old.id or invitee_id = old.id or accepted_by = old.id
+   order by id for update;
   for owned in
-    select board_id from together_members where user_id = old.id and role = 'owner' for update
+    select board_id from together_members where user_id = old.id and role = 'owner' order by board_id for update
   loop
     -- Each change here is one the cascades would make anyway: the leaving
     -- membership goes, and an added_by naming an account already deleted in
@@ -1090,10 +1106,15 @@ begin
         delete from together_boards where id = owned.board_id;
         exit;
       end if;
+      -- added_by is cleared here when it names the departing account (the cascade
+      -- would clear it at the end of the statement anyway). Leaving it for the
+      -- cascade would update this row a second time in this transaction, which
+      -- makes PostgreSQL re-check its user_id key against the heir's account —
+      -- a lock a concurrent deletion of the heir holds: a deadlock.
       update together_members
          set role = 'owner',
-             added_by = case when exists (select 1 from users a where a.id = added_by)
-                             then added_by end
+             added_by = case when added_by = old.id then null
+                             when exists (select 1 from users a where a.id = added_by) then added_by end
        where board_id = owned.board_id and user_id = heir;
       exit when found;
     end loop;

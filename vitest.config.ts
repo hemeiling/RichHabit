@@ -7,4 +7,10 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },
+  test: {
+    // The migration-parity tests each build fresh PGlite databases from the full
+    // schema. Alone they take 1–3 s; with the whole suite running in parallel
+    // they can pass the 5 s default and fail as timeouts, not as differences.
+    testTimeout: 30_000,
+  },
 });

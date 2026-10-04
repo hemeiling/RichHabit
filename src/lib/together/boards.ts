@@ -1,4 +1,4 @@
-import { query, transaction } from "@/lib/db/pool";
+import { query } from "@/lib/db/pool";
 import { isUuid } from "@/lib/http";
 import type { Locale } from "@/lib/i18n";
 import {
@@ -9,6 +9,7 @@ import {
   MAX_EMAILS_PER_CREATE, cleanEmail, cleanPeople, createInvitation, insertPeopleInvitations, lockBoard, pendingFor,
   withdrawInvitationsFor, type PendingInvitation,
 } from "@/lib/together/invitations";
+import { togetherTransaction as transaction } from "@/lib/together/tx";
 
 /**
  * Together V1A — boards and membership.

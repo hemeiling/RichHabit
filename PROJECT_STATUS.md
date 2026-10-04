@@ -2,7 +2,7 @@
 
 > Last updated: 2026-10-03
 >
-> **TOGETHER V1A — COLLABORATION FOUNDATION: IMPLEMENTED LOCALLY ON `feature/together-v1a` (WORKTREE `/Users/meilinghe/dev/rich-habits-together`, BASED ON `424c11f`) · REVISED (EVERY MEMBERSHIP REQUIRES ACCEPTANCE; IN-PLATFORM + EMAIL INVITATIONS; NARROW PREVIEW EXCEPTION) · COMMITTED, NOT PUSHED · NOT MERGED · NOT MIGRATED (NO NEON TOUCHED) · NOT DEPLOYED · AWAITING EXPLICIT GATE A APPROVAL.** See the first section below.
+> **TOGETHER V1A — COLLABORATION FOUNDATION: GATE A FAILED ON `af3888c` (CONCURRENT DELETIONS COULD LEAVE A BOARD WITH NO OWNER; FOUND ON REAL POSTGRESQL BEFORE ANY NEON OR PRODUCTION STEP — NO PRODUCTION IMPACT) · NEW CANDIDATE WITH THE FIX COMMITTED ON `feature/together-v1a`, VERIFIED LOCALLY AND ON REAL POSTGRESQL · NOT PUSHED · NOT MERGED · NOT MIGRATED · NOT DEPLOYED · GATE A RESTARTS FROM A1 WHEN `REHEARSAL_DATABASE_URLV4` EXISTS.** See the first section below.
 >
 > **WHAT'S NEW + LANGUAGE MENU: RELEASED · `424c11f` IS `main` AND IS DEPLOYED.** Its full release record is on `feature/whats-new` (documentation only, by the Product Owner's decision); it is not repeated here.
 >
@@ -149,8 +149,60 @@ return HTTP 200 with a not-found body (existing layout behaviour; APIs return
 page — not part of V1A; (4) concurrency fixes (heir locking, invitation locks)
 cannot run on single-connection PGlite — verify in the Neon rehearsal.
 
-**Next step:** Product Owner reviews → Gate A (read-only production preflight,
-fresh Neon rehearsal) only on explicit approval.
+**Gate A, first attempt — candidate `af3888c`: FAIL (accepted by the Product Owner).**
+A1 and A2 passed (branch pushed at `af3888c`; production read-only: 39 tables, 16
+users, Postgres 18.6, no Together objects, step 15 the only pending step). A7
+failed on real PostgreSQL 18.6: deleting a board's owner while another
+transaction concurrently deleted the member being promoted committed a board
+with members and **no owner** (the second deletion's trigger could not see the
+uncommitted promotion; its cascade then removed the new owner's row). Found
+before any Neon or production step: **no production impact** — nothing was
+migrated, merged or deployed.
+
+**New candidate: contains the fix** (this commit; `af3888c` stays in history).
+Migration step 15 is still the only, additive step — its unreleased trigger
+definition was updated in place (never run on Neon or production). The trigger
+now, in one fixed order, locks the departing account's memberships *and* every
+row its cascades will change before reading what it owns; locks the heir's row;
+and clears an `added_by` naming the departing account when promoting (avoids a
+foreign-key re-check deadlock). Together transactions retry deadlocks and map
+persistent races / foreign-key conflicts to a translated 409 ("please try
+again"); answering an invitation locks the inviter's and invitee's accounts
+before the board. Vitest's timeout raised to 30 s repo-wide: PGlite migration-
+parity tests (Together, Important Dates, user plans, What's New) intermittently
+exceeded 5 s under parallel load — a timeout, not a difference.
+
+**Local / real-PostgreSQL verification of the new candidate:** typecheck, lint,
+full suite 1,382/1,382 (eight consecutive clean runs after the timeout fix),
+production build, browser suite 87/87; Together route/data suite on real
+PostgreSQL 18.6, one schema per test (50/50); Gate A deletion + concurrency suite
+on a production-shaped, runner-migrated real PostgreSQL (77/77): ordinary and
+bulk deletion in rolled-back transactions (bulk order forced and proven by
+ctid), concurrent deletion in every interleaving × three `added_by` shapes with
+"T2 blocked" asserted for the heir races, three overlapping deletions,
+multi-board heir, cross-owned forced and unforced deadlocks with retry, bulk
+delete of owner + heir's inviter racing the heir, mutual added_by and mutual
+invitations, and every invitation/membership race through the application code
+(no raw error ever reached a user). The Together tables end exactly as they
+began. Control: with `af3888c`'s trigger the original race fails (no owner;
+an empty board left behind). Production-shaped migration: 5 changes, then none;
+no existing table or row changed. Two independent reviews: invariant holds;
+their findings fixed.
+
+**Accepted limitation (documented in docs/architecture/Together.md):** two
+administrative deletions at the same instant can still deadlock in two narrow
+shapes — cross-owned boards, and a bulk delete of an owner and the heir's
+inviter racing the heir's own deletion. PostgreSQL aborts one; it changes
+nothing, the database stays consistent (one owner per non-empty board), and the
+retry succeeds. Observed locally: cross-owned 0–6 per 12 simultaneous runs;
+bulk-with-inviter 1 per 10.
+
+**Next step:** Gate A restarts from A1 on this new candidate once the Product
+Owner provides a fresh Neon branch of current production as
+`REHEARSAL_DATABASE_URLV4` in `.env.local`. Real-PostgreSQL tooling (untracked,
+`.pgdata-deploy/`): `gate.pgtest.ts` + `vitest.gate.config.ts`, `pg-shim.ts` +
+`vitest.pg-shim.config.ts`, `target-guard.ts` (local or exactly the V4 host;
+never production), `preflight.mjs`, `prep-local-prodshape.mjs`.
 
 ## Important Dates V2 — optional times, repeating events, Day Agenda (RELEASED · MIGRATED · DEPLOYED · VERIFIED)
 

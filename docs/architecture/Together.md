@@ -132,10 +132,45 @@ daily limit, are serialized. Both locks end before the email is sent.
 the deleted user owns to the longest-standing remaining member, or deletes the
 board when nobody remains. "Remaining" joins `users`, which excludes accounts
 already deleted earlier in the same statement — this is what makes admin bulk
-deletion safe. The heir's membership row is locked (`for update`), so a member
-whose account a concurrent transaction is deleting is waited for and skipped;
-if a promotion still updates nothing, the next member is tried. Every change
-it makes is one the cascades would make anyway.
+deletion safe. Concurrent deletions are made safe by locking in a fixed order.
+First, every membership row of the departing account, so a promotion another
+deletion has just made is waited for and then seen; in the same step, every
+row its cascades will change (memberships it brought about, invitations to or
+from it), so deletions of linked accounts queue rather than cross. Then the
+heir's row, so an heir being deleted meanwhile is waited for and skipped; if a
+promotion still updates nothing, the next member is tried. The promotion also
+clears an `added_by` naming the departing account, so the end-of-statement
+cascade never updates that row a second time (which would make PostgreSQL
+re-check its key against the heir's account and could deadlock with the heir's
+own deletion). Every change it makes is one the cascades would make anyway.
+
+**Hard invariant:** every board with members has exactly one owner; a board
+whose last member goes is deleted. Gate A found a candidate (`af3888c`) where
+an owner and the member being promoted, deleted concurrently, left a board with
+members and no owner; the first lock above is the fix, proven on real
+PostgreSQL in all interleavings.
+
+**Accepted operational limitation (V1A):** two administrative deletions at the
+same instant can deadlock in two narrow shapes: two accounts that each own a
+board the other belongs to; and a bulk deletion that includes a board's owner
+and the account that brought that board's heir in, racing the heir's own
+deletion. (Accounts that merely brought each other onto boards, or have pending
+invitations to each other, do not: the trigger first locks every row its
+cascades will touch, in one fixed order.) PostgreSQL aborts one transaction: it
+changes nothing (the account and its rows are intact), the database stays
+consistent with exactly one owner per non-empty board, and retrying that
+deletion succeeds. Members never see a partial state. A single bulk deletion
+is one statement and cannot deadlock with itself. No extra locking
+infrastructure is added to avoid this rare retry.
+
+**Ordinary users never see a raw error from a race.** Every Together
+transaction (`src/lib/together/tx.ts`) retries a deadlock or serialization
+failure a couple of times, and answers a race that persists — or an account or
+board deleted meanwhile (foreign-key violation) — with a translated "something
+changed, please try again" (409). Answering an invitation locks the accounts it
+joins (inviter and invitee) before the board, the order a deletion takes them
+in, so an acceptance and the inviter's deletion wait for each other rather
+than deadlock.
 Memberships cascade; `created_by`, `added_by` and `accepted_by` become null;
 in-platform invitations *to* the deleted account cascade away, and invitations
 sent by it cascade away — accepted ones included,

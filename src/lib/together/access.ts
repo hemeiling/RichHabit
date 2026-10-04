@@ -38,7 +38,7 @@ export type TogetherErrorCode =
   | "notFound" | "ownerOnly" | "archived" | "nameRequired" | "nameTooLong"
   | "emailInvalid" | "tooManyInvites" | "tooManyOpenInvites" | "sendFailed"
   | "invitationInvalid" | "wrongAccount" | "ownerCannotLeave" | "cannotRemoveSelf"
-  | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly";
+  | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly" | "conflict";
 
 export class TogetherError extends ApiError {
   constructor(readonly code: TogetherErrorCode, status = 400) {

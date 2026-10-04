@@ -995,6 +995,7 @@ export const zh: Dict = {
       tooManyPeople: "一次发出的邀请太多了。",
       tooManyBoards: "你拥有的看板数量已达上限。",
       previewOnly: "你的账户暂时还不能邀请他人。",
+      conflict: "刚才这个看板上有其他变化，请再试一次。",
     },
   },
 

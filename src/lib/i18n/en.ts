@@ -1157,6 +1157,7 @@ export const en = {
       tooManyPeople: "That is more invitations than can be sent at once.",
       tooManyBoards: "You already own the maximum number of boards.",
       previewOnly: "Inviting people is not available on your account yet.",
+      conflict: "Something on this board changed while you were doing that. Please try again.",
     },
   },
 

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { query, transaction } from "@/lib/db/pool";
+import { query } from "@/lib/db/pool";
 import { sendMail } from "@/lib/email/send";
 import { togetherInviteEmail } from "@/lib/email/templates";
 import { appUrl } from "@/lib/env";
@@ -9,6 +9,7 @@ import { isPlausibleEmail, normaliseEmail } from "@/lib/identity";
 import {
   DISPLAY_NAME, OPEN, TogetherError, USABLE, WAITING, peopleOf, requireAccess, requireBoard, togetherLive,
 } from "@/lib/together/access";
+import { togetherTransaction as transaction } from "@/lib/together/tx";
 
 /**
  * Together invitations. Nobody becomes a member of a board without accepting.
@@ -301,10 +302,23 @@ export async function pendingCount(userId: string): Promise<number> {
   return n;
 }
 
-/** The board an invitation belongs to, so the board can be locked before the invitation is. */
-async function boardOf(q: Q, where: string, params: unknown[]): Promise<string | null> {
-  const [row] = await q<{ board_id: string }>(`select i.board_id::text from together_invitations i where ${where}`, params);
-  return row?.board_id ?? null;
+/**
+ * Before answering an invitation: the accounts it joins (the inviter, who
+ * becomes `added_by`, and the person answering), then the board. That is the
+ * order an account deletion takes them in — its own row first, then its
+ * memberships and boards — so the two wait for each other instead of
+ * deadlocking. Returns the board, or null if the invitation or its inviter is
+ * gone.
+ */
+async function lockForAnswer(q: Q, where: string, params: unknown[], me: string): Promise<string | null> {
+  const [inv] = await q<{ board_id: string; invited_by: string }>(
+    `select i.board_id::text, i.invited_by::text from together_invitations i where ${where}`, params);
+  if (!inv) return null;
+  const alive = await q(`select id from users where id = any($1::uuid[]) order by id for key share`,
+    [[inv.invited_by, me]]);
+  if (alive.length !== new Set([inv.invited_by, me]).size) return null;
+  await lockBoard(q, inv.board_id);
+  return inv.board_id;
 }
 
 /**
@@ -319,9 +333,8 @@ export async function respondToInvitation(
   // A decline cannot be undone, so it must be asked for, never defaulted to.
   if (typeof accept !== "boolean") throw new TogetherError("invitationInvalid", 400);
   return transaction(async (q) => {
-    const boardId = await boardOf(q, "i.id = $1 and i.invitee_id = $2", [inviteId, userId]);
+    const boardId = await lockForAnswer(q, "i.id = $1 and i.invitee_id = $2", [inviteId, userId], userId);
     if (!boardId) throw new TogetherError("invitationInvalid", 404);
-    await lockBoard(q, boardId);
     const [inv] = await q<{ id: string; board_id: string; invited_by: string }>(
       `select i.id, i.board_id::text, i.invited_by::text
          from together_invitations i join together_boards b on b.id = i.board_id
@@ -373,9 +386,8 @@ export async function previewInvitation(token: unknown): Promise<Preview> {
 export async function acceptInvitation(userId: string, token: unknown): Promise<{ boardId: string }> {
   if (!togetherLive() || !isTokenShape(token)) throw new TogetherError("invitationInvalid", 404);
   return transaction(async (q) => {
-    const boardId = await boardOf(q, "i.token_hash = $1", [hash(token)]);
+    const boardId = await lockForAnswer(q, "i.token_hash = $1", [hash(token)], userId);
     if (!boardId) throw new TogetherError("invitationInvalid", 404);
-    await lockBoard(q, boardId);
     const [inv] = await q<{ id: string; board_id: string; email: string; invited_by: string }>(
       `select i.id, i.board_id::text, i.email_normalized as email, i.invited_by::text
          from together_invitations i join together_boards b on b.id = i.board_id

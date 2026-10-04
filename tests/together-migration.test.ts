@@ -130,6 +130,25 @@ describe("the Together V1A migration", () => {
     expect((await db.query<any>("select count(*)::int n from profiles")).rows[0].n).toBe(1);
   });
 
+  it("locks the departing account's memberships before reading what it owns (Gate A, af3888c)", () => {
+    // Without this, a concurrent deletion that promotes this account to owner is
+    // invisible to it, and the cascade deletes the new owner's row: a board with
+    // members and no owner. Proven on real PostgreSQL by the Gate A suite; PGlite
+    // has one connection, so this pins the statement order instead.
+    const [functionDef] = TOGETHER_V1A_STATEMENTS.filter((s) => /create or replace function/.test(s));
+    const body = functionDef.replace(/--.*$/gm, "");
+    const squashed = body.replace(/\s+/g, " ");
+    const lock = squashed.indexOf("perform 1 from together_members where user_id = old.id or added_by = old.id order by board_id, user_id for update;");
+    expect(squashed.indexOf("perform 1 from together_invitations where invited_by = old.id or invitee_id = old.id or accepted_by = old.id order by id for update;")).toBeGreaterThan(lock);
+    const owned = squashed.indexOf("for owned in");
+    expect(lock).toBeGreaterThan(0);
+    expect(owned).toBeGreaterThan(lock);
+    // One lock order for every deletion: its own rows, and its owned boards, by board.
+    expect(body).toMatch(/where user_id = old\.id and role = 'owner' order by board_id for update/);
+    // …and the heir's row is locked too, so an heir being deleted meanwhile is skipped.
+    expect(body).toMatch(/order by m\.joined_at, m\.user_id\s+limit 1\s+for update of m;/);
+  });
+
   it("writes no data, and the trigger writes only Together's own tables", () => {
     const [functionDef] = TOGETHER_V1A_STATEMENTS.filter((s) => /create or replace function/.test(s));
     const ddl = TOGETHER_V1A_STATEMENTS.filter((s) => s !== functionDef).join("\n") + "\n" + TOGETHER_V1A_TRIGGER;
