@@ -961,6 +961,8 @@ export const zh: Dict = {
     decline: "拒绝",
     waitingIndicator: (n: number) => `${n} 个邀请待处理`,
     invitedOnly: "你是受邀加入的。你的账户暂时还不能创建看板或邀请他人。",
+    viewAll: (n: number) => `查看全部（${n}）`,
+    boardShortcuts: "你的看板",
     workComingSoon: "待定清单和看板——你们的共同任务——将在下一次更新中推出。",
     loadFailed: "无法加载。请检查网络后重试。",
     retry: "重试",
@@ -975,6 +977,9 @@ export const zh: Dict = {
       createAccount: "创建账户",
       invalid: "这个邀请已失效。请让邀请你的人重新发送。",
       wrongAccount: "这个邀请是发给另一个邮箱的。请用那个邮箱登录后再接受。",
+      forAddress: (to: string) => `这个邀请发给 ${to}。`,
+      otherAccount: "你当前登录的是另一个 RichHabit 账户。",
+      signOutContinue: "退出并继续",
       missing: "请从邮件中打开邀请链接继续。如果你刚刚验证了邮箱，请再次打开链接来接受邀请。",
     },
     errors: {

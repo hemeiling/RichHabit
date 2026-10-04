@@ -16,8 +16,12 @@ import { useState } from "react";
  * could paint the previous user's habits from memory without asking the server
  * anything. Replacing the document drops every byte of it, and `replace` keeps
  * the signed-in page out of history entirely.
+ *
+ * `destination` defaults to the sign-in page. A Together invitation opened in
+ * the wrong account passes its own page instead: the same tab, so the
+ * invitation token it keeps in session storage is still there afterwards.
  */
-export function useSignOut() {
+export function useSignOut(destination = "/login") {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -27,7 +31,7 @@ export function useSignOut() {
     try {
       const res = await fetch("/api/auth/signout", { method: "POST" });
       if (!res.ok) throw new Error(String(res.status));
-      window.location.replace("/login");
+      window.location.replace(destination);
     } catch {
       setBusy(false);
       setFailed(true);

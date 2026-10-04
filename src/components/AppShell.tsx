@@ -32,6 +32,10 @@ import { dict, type Locale } from "@/lib/i18n";
  * item competing with the three would be navigation for its own sake. The route
  * still answers — see app/(app)/today.
  */
+/** Active boards for the sidebar's Together shortcuts — loaded by the server layout. */
+export interface TogetherShortcuts { boards: { id: string; name: string }[]; total: number }
+const NO_SHORTCUTS: TogetherShortcuts = { boards: [], total: 0 };
+
 const NAV = [
   {
     key: "journey",
@@ -53,17 +57,18 @@ const NAV = [
       },
     ],
   },
+  /*
+   * Together sits right after My Journey: My Journey is "me", Together is "us",
+   * and the views below read on towards "everyone". Two linked rings — two
+   * people, one shared space — in the same open stroke. Shown only to accounts
+   * with Together access, with their active boards as shortcuts beneath it; see
+   * `together` below.
+   */
+  { href: "/together", key: "together", startsGroup: true,
+    path: "M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" },
   { href: "/week", key: "week", startsGroup: true,
     path: "M4 6h16v13H4z M4 11h16 M9 6v13 M14 6v13" },
   { href: "/insights", key: "insights", path: "M5 19V10 M10 19V5 M15 19v-6 M20 19v-9" },
-  /*
-   * Together sits between the personal views and Community: the sidebar reads
-   * from "me" to "us" to "everyone". Two linked rings — two people, one shared
-   * space — in the same open stroke. Shown only to accounts the server has
-   * allowed into the Together preview; see `together` below.
-   */
-  { href: "/together", key: "together",
-    path: "M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" },
   /*
    * Two figures, the nearer one whole and the further one partial. Drawn in the
    * same open-stroke language as its neighbours rather than a filled glyph, and
@@ -231,8 +236,9 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-function Chrome({ email, localDb, together, togetherPending, children }:
-  { email: string; localDb: boolean; together: boolean; togetherPending: number; children: React.ReactNode }) {
+function Chrome({ email, localDb, together, togetherPending, togetherBoards, children }:
+  { email: string; localDb: boolean; together: boolean; togetherPending: number;
+    togetherBoards: TogetherShortcuts; children: React.ReactNode }) {
   const { state, actions, loading, saving, error, loadFailed, reload, dismissError } = useHabits();
 
   /*
@@ -284,12 +290,29 @@ function Chrome({ email, localDb, together, togetherPending, children }:
       sublabel: sublabel(node.key),
       children: node.children.map(toItem),
     }
-    : {
-      ...toItem(node),
-      startsGroup: "startsGroup" in node ? node.startsGroup : undefined,
-      indicator: "key" in node && node.key === "together" && togetherPending > 0
-        ? t.together.waitingIndicator(togetherPending) : undefined,
-    }));
+    : "key" in node && node.key === "together"
+      ? {
+        ...toItem(node),
+        key: "together",
+        startsGroup: true,
+        indicator: togetherPending > 0 ? t.together.waitingIndicator(togetherPending) : undefined,
+        toggleLabel: t.together.boardShortcuts,
+        // People's own board names, untranslated; "View all" only past the first few.
+        children: [
+          ...togetherBoards.boards.map((b) => ({ href: `/together/b/${b.id}`, label: b.name })),
+          ...(togetherBoards.total > togetherBoards.boards.length
+            ? [{
+              href: "/together", quiet: true,
+              label: bilingual ? en.together.viewAll(togetherBoards.total) : t.together.viewAll(togetherBoards.total),
+              sublabel: bilingual ? zh.together.viewAll(togetherBoards.total) : undefined,
+            }]
+            : []),
+        ],
+      }
+      : {
+        ...toItem(node),
+        startsGroup: "startsGroup" in node ? node.startsGroup : undefined,
+      }));
 
   return (
     <div data-theme={state.prefs.theme} style={{ minHeight: "100vh" }}>
@@ -384,7 +407,8 @@ function Chrome({ email, localDb, together, togetherPending, children }:
 }
 
 export default function AppShell({
-  userId, email, locale, localDb, aiWorkspace = false, together = false, togetherPending = 0, children,
+  userId, email, locale, localDb, aiWorkspace = false, together = false, togetherPending = 0,
+  togetherBoards = NO_SHORTCUTS, children,
 }: {
   userId: string; email: string; locale: Locale; localDb: boolean;
   /** Admins only, decided by the layout from the database. */
@@ -393,12 +417,15 @@ export default function AppShell({
   together?: boolean;
   /** In-platform Together invitations waiting for this account. */
   togetherPending?: number;
+  /** This account's active boards for the sidebar (first few) and how many there are. */
+  togetherBoards?: TogetherShortcuts;
   children: React.ReactNode;
 }) {
   return (
     <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
-        <Chrome email={email} localDb={localDb} together={together} togetherPending={togetherPending}>{children}</Chrome>
+        <Chrome email={email} localDb={localDb} together={together} togetherPending={togetherPending}
+          togetherBoards={togetherBoards}>{children}</Chrome>
         {aiWorkspace && <AiLauncher />}
       </HabitsProvider>
     </LocaleProvider>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/context";
 import { call } from "@/components/together/shared";
+import { useSignOut } from "@/components/useSignOut";
 
 /**
  * Opening a Together invitation.
@@ -21,6 +22,11 @@ import { call } from "@/components/together/shared";
  *
  * A new account that must verify its address first usually does so in another
  * tab, where this token is not; reopening the email's link continues from here.
+ *
+ * The server says, for a valid invitation, which address it is for (masked) and
+ * whether that is the signed-in account. Signed in as someone else, the screen
+ * says so instead of offering Accept, and "Sign out & continue" returns here in
+ * this tab, signed out, with the invitation still in hand.
  */
 
 const KEY = "rh_together_invite";
@@ -44,7 +50,7 @@ type State =
   | { kind: "checking" }
   | { kind: "missing" }
   | { kind: "invalid" }
-  | { kind: "ok"; board: string; inviter: string };
+  | { kind: "ok"; board: string; inviter: string; to: string; forYou: boolean | null };
 
 export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
   const t = useT();
@@ -53,14 +59,19 @@ export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
   const [state, setState] = useState<State>({ kind: "checking" });
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Signed in as someone else: sign out and come straight back here, in this
+  // tab — the token stays in this tab's session storage throughout.
+  const { signOut, busy: signingOut, failed: signOutFailed } = useSignOut("/together/invite");
 
   useEffect(() => {
     const tok = takeToken();
     setToken(tok);
     if (!tok) { setState({ kind: "missing" }); return; }
-    call<{ status: "ok"; board: string; inviter: string } | { status: "invalid" }>(
+    call<{ status: "ok"; board: string; inviter: string; to: string; forYou: boolean | null } | { status: "invalid" }>(
       "/api/together/invitations/preview", { method: "POST", body: JSON.stringify({ token: tok }) })
-      .then((r) => setState(r.status === "ok" ? { kind: "ok", board: r.board, inviter: r.inviter } : { kind: "invalid" }))
+      .then((r) => setState(r.status === "ok"
+        ? { kind: "ok", board: r.board, inviter: r.inviter, to: r.to, forYou: r.forYou }
+        : { kind: "invalid" }))
       .catch(() => setState({ kind: "invalid" }));
   }, []);
 
@@ -74,6 +85,7 @@ export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
       });
       forget();
       router.push(`/together/b/${boardId}`);
+      router.refresh();   // the sidebar's board shortcuts
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -94,11 +106,27 @@ export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
             <p className="mt-3" style={{ fontSize: 16 }}>{t.together.invitePage.invitedYou(state.inviter, state.board)}</p>
             <p className="muted mt-2" style={{ fontSize: 13.5, lineHeight: 1.55 }}>{t.together.invitePage.privacy}</p>
 
+            {/* Which account it is for — masked, informational, never a link. */}
+            {(!signedIn || state.forYou === false) && (
+              <p className="mt-3 tg-invite-for" style={{ fontSize: 14.5 }}>{t.together.invitePage.forAddress(state.to)}</p>
+            )}
+
             {!signedIn ? (
               <div className="flex gap-2 flex-wrap mt-5">
                 <Link className="btn btn-primary" href="/login?then=together-invite">{t.together.invitePage.signIn}</Link>
                 <Link className="btn" href="/login?mode=signup&then=together-invite">{t.together.invitePage.createAccount}</Link>
               </div>
+            ) : state.forYou === false ? (
+              <>
+                <p className="mt-2" role="status" style={{ fontSize: 14.5 }}>{t.together.invitePage.otherAccount}</p>
+                <div className="flex gap-2 flex-wrap mt-5">
+                  <button className="btn btn-primary" onClick={signOut} disabled={signingOut}>
+                    {t.together.invitePage.signOutContinue}
+                  </button>
+                  <button className="btn" onClick={() => { forget(); router.push("/habits"); }}>{t.together.invitePage.notNow}</button>
+                </div>
+                {signOutFailed && <p className="mt-3" role="alert" style={{ color: "var(--warn)", fontSize: 13.5 }}>{t.more.signOutFailed}</p>}
+              </>
             ) : (
               <div className="flex gap-2 flex-wrap mt-5">
                 <button className="btn btn-primary" onClick={accept} disabled={busy}>{t.together.invitePage.accept}</button>

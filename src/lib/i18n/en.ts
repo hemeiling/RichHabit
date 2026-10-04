@@ -1123,6 +1123,8 @@ export const en = {
     decline: "Decline",
     waitingIndicator: (n: number) => (n === 1 ? "1 invitation waiting" : `${n} invitations waiting`),
     invitedOnly: "You are here by invitation. Creating boards and inviting others are not available on your account yet.",
+    viewAll: (n: number) => `View all (${n})`,
+    boardShortcuts: "Your boards",
     workComingSoon: "The backlog and the board — your shared work — arrive in the next update.",
     loadFailed: "This couldn't be loaded. Check your connection and try again.",
     retry: "Try again",
@@ -1137,6 +1139,9 @@ export const en = {
       createAccount: "Create an account",
       invalid: "This invitation is no longer valid. Ask the person who invited you for a new one.",
       wrongAccount: "This invitation was sent to a different email address. Sign in with that address to accept it.",
+      forAddress: (to: string) => `This invitation is for ${to}.`,
+      otherAccount: "You are signed in with a different RichHabit account.",
+      signOutContinue: "Sign out & continue",
       missing: "Open the invitation link from your email to continue. If you have just verified your email address, open the link again to accept.",
     },
     errors: {

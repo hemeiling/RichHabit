@@ -355,26 +355,56 @@ export async function respondToInvitation(
   });
 }
 
+/**
+ * An address as the invitation screen shows it: the first two and last two
+ * characters before the @, the domain whole — "hemeiling90@outlook.com" →
+ * "he••••90@outlook.com". Short local parts keep only their first character,
+ * and one character is hidden entirely. Informational only.
+ */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  const local = [...(at > 0 ? email.slice(0, at) : email)];
+  const domain = at > 0 ? email.slice(at + 1) : "";
+  const hidden = "••••";
+  const shown = local.length >= 6 ? local.slice(0, 2).join("") + hidden + local.slice(-2).join("")
+    : local.length >= 2 ? local[0] + hidden
+      : hidden;
+  return domain ? `${shown}@${domain}` : shown;
+}
+
 export type Preview =
-  | { status: "ok"; board: string; inviter: string }
+  | {
+    status: "ok"; board: string; inviter: string;
+    /** The invited address, masked. */
+    to: string;
+    /** Whether it is the signed-in account's own address; null when signed out. */
+    forYou: boolean | null;
+  }
   | { status: "invalid" };
 
 /**
  * What the holder of an email token may learn before accepting: the board's
- * name and who invited them. Anything unusable — unknown, unsent, answered,
- * withdrawn, expired, or on an archived board — gets one answer, "invalid".
+ * name, who invited them, the invited address masked, and — when signed in —
+ * whether this invitation is for the account they are signed in with. The
+ * comparison happens here, so the full address never reaches the browser.
+ * Anything unusable — unknown, unsent, answered, withdrawn, expired, or on an
+ * archived board — gets one answer, "invalid", with none of these fields.
  */
-export async function previewInvitation(token: unknown): Promise<Preview> {
+export async function previewInvitation(token: unknown, viewerId: string | null = null): Promise<Preview> {
   if (!togetherLive() || !isTokenShape(token)) return { status: "invalid" };
-  const [row] = await query<{ board: string; inviter: string }>(
-    `select b.name as board, ${DISPLAY_NAME} as inviter
+  const viewer = isUuid(viewerId) ? viewerId : null;
+  const [row] = await query<{ board: string; inviter: string; email: string; for_you: boolean | null }>(
+    `select b.name as board, ${DISPLAY_NAME} as inviter, i.email_normalized as email,
+            i.email_normalized = (select lower(v.email) from users v where v.id = $2::uuid) as for_you
        from together_invitations i
        join together_boards b on b.id = i.board_id
        join users u on u.id = i.invited_by
        left join profiles p on p.id = u.id
       where i.token_hash = $1 and ${USABLE} and b.archived_at is null`,
-    [hash(token)]);
-  return row ? { status: "ok", board: row.board, inviter: row.inviter } : { status: "invalid" };
+    [hash(token), viewer]);
+  if (!row) return { status: "invalid" };
+  return { status: "ok", board: row.board, inviter: row.inviter, to: maskEmail(row.email),
+    forYou: viewer ? row.for_you === true : null };
 }
 
 /**

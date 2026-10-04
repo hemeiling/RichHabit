@@ -5,6 +5,7 @@ import { getSessionUser } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n/server";
 import { databaseUrl, isLocalDatabase } from "@/lib/env";
 import { togetherAccess } from "@/lib/together/access";
+import { sidebarBoards } from "@/lib/together/boards";
 import { pendingCount } from "@/lib/together/invitations";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -37,18 +38,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const aiWorkspace = Boolean(await currentAdmin().catch(() => null));
 
   /*
-   * Whether to show Together, and how many in-platform invitations wait there.
-   * Decided on the server; the client learns a yes/no and a count — never the
+   * Whether to show Together, how many in-platform invitations wait there, and
+   * this account's active boards as sidebar shortcuts. Decided on the server;
+   * the client learns a yes/no, a count and its own boards' names — never the
    * preview list. A failure only hides the item, never the page.
    */
   const together = await togetherAccess(user.id)
-    .then(async (access) => (access ? { pending: await pendingCount(user.id) } : null))
+    .then(async (access) => (access
+      ? { pending: await pendingCount(user.id), boards: await sidebarBoards(user.id) }
+      : null))
     .catch(() => null);
 
   // Resolved server-side so the first paint is already in the right language.
   return (
     <AppShell userId={user.id} email={user.email} locale={getLocale()} localDb={localDb} aiWorkspace={aiWorkspace}
-      together={Boolean(together)} togetherPending={together?.pending ?? 0}>
+      together={Boolean(together)} togetherPending={together?.pending ?? 0}
+      togetherBoards={together?.boards}>
       {children}
     </AppShell>
   );

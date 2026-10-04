@@ -2,7 +2,7 @@ import { query } from "@/lib/db/pool";
 import { isUuid } from "@/lib/http";
 import type { Locale } from "@/lib/i18n";
 import {
-  DISPLAY_NAME, OPEN, TogetherError, USABLE, isPreviewUser, peopleOf, requireAccess, requireBoard,
+  DISPLAY_NAME, OPEN, TogetherError, USABLE, isPreviewUser, peopleOf, requireAccess, requireBoard, togetherLive,
   type BoardRole, type PersonView, type TogetherAccess,
 } from "@/lib/together/access";
 import {
@@ -50,6 +50,27 @@ export function cleanBoardName(raw: unknown): string {
   if (!name) throw new TogetherError("nameRequired");
   if (name.length > MAX_BOARD_NAME) throw new TogetherError("nameTooLong");
   return name;
+}
+
+/** How many board shortcuts the sidebar shows before "View all". */
+export const SIDEBAR_BOARDS = 5;
+
+/**
+ * The sidebar's Together shortcuts: this account's ACTIVE boards — owned or
+ * joined — by name, the first few, and how many there are. Ids and names only:
+ * the same names the Together home already shows this account. Navigation
+ * only; opening a board is still decided by requireBoard. The caller (the app
+ * layout) asks only for accounts with Together access.
+ */
+export async function sidebarBoards(userId: string): Promise<{ boards: { id: string; name: string }[]; total: number }> {
+  if (!togetherLive()) return { boards: [], total: 0 };
+  const rows = await query<{ id: string; name: string; total: number }>(
+    `select b.id::text as id, b.name, count(*) over ()::int as total
+       from together_members m join together_boards b on b.id = m.board_id
+      where m.user_id = $1 and b.archived_at is null
+      order by lower(b.name), b.name, b.id
+      limit $2`, [userId, SIDEBAR_BOARDS]);
+  return { boards: rows.map(({ id, name }) => ({ id, name })), total: rows[0]?.total ?? 0 };
 }
 
 export async function loadHome(userId: string): Promise<HomeView> {

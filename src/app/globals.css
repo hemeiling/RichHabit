@@ -342,6 +342,19 @@ body {
   background: var(--accent);
 }
 .navdot-on-toggle { position: absolute; top: 5px; right: 5px; margin: 0; }
+/* A destination with a fold button at its end (Together and its boards). The
+   link keeps the full row; the button sits over its right end, 44px square. */
+.navbranch { position: relative; }
+.navbranch[data-toggle] > .navlink { padding-right: 48px; }
+.navbranch-toggle {
+  position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+  width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; color: var(--muted); background: none; border: 0; cursor: pointer;
+}
+.navbranch-toggle:hover { background: var(--raise); color: var(--ink); }
+.navbranch-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Board names are people's own words: one line, ellipsis. */
+.navshortcuts .navlink > span { white-space: nowrap; text-overflow: ellipsis; }
 
 /* A finger is not a cursor: the rows keep a comfortable target where there is
    no hover to aim with. */

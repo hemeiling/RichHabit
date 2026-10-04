@@ -31,12 +31,13 @@ export default function TogetherHome() {
     call<Home>("/api/together/home").then(setHome).catch(() => setFailed(true));
   }, []);
   useEffect(() => { load(); }, [load]);
-  // Back in the tab: someone may have invited you meanwhile.
+  // Back in the tab: someone may have invited you, or changed a board, meanwhile —
+  // re-read the home and the shell's board shortcuts.
   useEffect(() => {
-    const onFocus = () => { if (document.visibilityState === "visible") load(); };
+    const onFocus = () => { if (document.visibilityState === "visible") { load(); router.refresh(); } };
     document.addEventListener("visibilitychange", onFocus);
     return () => document.removeEventListener("visibilitychange", onFocus);
-  }, [load]);
+  }, [load, router]);
 
   const answer = async (id: string, accept: boolean) => {
     if (answering) return;
@@ -205,6 +206,7 @@ function NewBoardSheet({ people, onClose }: { people: Person[]; onClose: () => v
       const r = await call<{ id: string; failedEmails: string[] }>("/api/together/boards", {
         method: "POST", body: JSON.stringify({ name, people: picked, emails: all }),
       });
+      router.refresh();   // the board exists now: the sidebar's shortcuts
       if (r.failedEmails.length) { setPartly({ id: r.id, failed: r.failedEmails }); setBusy(false); return; }
       router.push(`/together/b/${r.id}`);
     } catch (e) {

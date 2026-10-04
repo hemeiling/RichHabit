@@ -53,6 +53,7 @@ const invite = await import("../src/app/api/together/boards/[id]/invitations/rou
 const inviteOne = await import("../src/app/api/together/boards/[id]/invitations/[inviteId]/route");
 const preview = await import("../src/app/api/together/invitations/preview/route");
 const accept = await import("../src/app/api/together/invitations/accept/route");
+const boardsLib = await import("../src/lib/together/boards");
 
 const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
 const use = async () => {
@@ -619,8 +620,9 @@ describe("invitations", () => {
     expect(JSON.stringify(await sql("select * from together_invitations"))).not.toContain(token);
     expect(row.sent_at).not.toBeNull();
 
+    // Read while signed in as the inviter: the invitation is not for them.
     expect((await json(await preview.POST(req({ token })))).body)
-      .toEqual({ status: "ok", board: "Headband Business", inviter: "Meiling" });
+      .toEqual({ status: "ok", board: "Headband Business", inviter: "Meiling", to: "ed••••ed@example.com", forYou: false });
 
     as(imposter.id);
     expect((await accept.POST(req({ token }))).status).toBe(403);
@@ -852,6 +854,99 @@ describe("invitations", () => {
       "together_board_created", "together_invitation_declined"]);
     expect(tracked[1].properties).toEqual({ channel: "email", count: 1 });
     expect(tracked[3].properties).toEqual({ people: 1, emails: 0 });
+  });
+});
+
+describe("the invitation preview: masked address and whose it is", () => {
+  it("says which account it is for — masked, and never the full address — and whether that is the viewer", async () => {
+    const owner = await account("Meiling");
+    const eddie = await account("Eddie", { email: "hemeiling90@outlook.com" });
+    const other = await account("Other");
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    await inviteTo(id, owner.id, "HeMeiling90@Outlook.com");
+    const token = tokenOf(sent.at(-1)!);
+    const view = async (who: string | null) => { as(who); return json(await preview.POST(req({ token }))); };
+
+    const signedOut = await view(null);
+    expect(signedOut.body).toEqual({ status: "ok", board: "Headband Business", inviter: "Meiling",
+      to: "he••••90@outlook.com", forYou: null });
+    expect((await view(eddie.id)).body.forYou).toBe(true);      // the invited account, whatever the case of its address
+    expect((await view(other.id)).body.forYou).toBe(false);     // signed in as someone else
+    expect((await view(owner.id)).body.forYou).toBe(false);
+    for (const r of [signedOut, await view(eddie.id), await view(other.id)]) {
+      expect(JSON.stringify(r.body)).not.toMatch(/hemeiling90/i);
+    }
+    // Viewing writes nothing.
+    expect((await sql("select accepted_at, revoked_at from together_invitations"))[0]).toEqual({ accepted_at: null, revoked_at: null });
+  });
+
+  it("answers the same way whether or not the invited address has an account", async () => {
+    const owner = await account("Meiling");
+    await account("Has", { email: "has-account@example.com" });
+    const viewer = await account("Viewer");
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    await inviteTo(id, owner.id, "has-account@example.com");
+    const a = tokenOf(sent.at(-1)!);
+    await inviteTo(id, owner.id, "no-account@example.com");
+    const b = tokenOf(sent.at(-1)!);
+    for (const who of [null, viewer.id]) {
+      as(who);
+      const ra = (await json(await preview.POST(req({ token: a })))).body;
+      const rb = (await json(await preview.POST(req({ token: b })))).body;
+      expect(Object.keys(ra)).toEqual(Object.keys(rb));
+      expect(ra.forYou).toBe(rb.forYou);
+    }
+  });
+
+  it("gives an unusable token exactly the old answer, signed in or not", async () => {
+    const owner = await account("Meiling");
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    await inviteTo(id, owner.id, "x@example.com");
+    const token = tokenOf(sent.at(-1)!);
+    await sql("update together_invitations set revoked_at = now()");
+    for (const who of [null, owner.id]) {
+      as(who);
+      for (const t of [token, "A".repeat(43), "short", null]) {
+        expect((await json(await preview.POST(req({ token: t })))).body).toEqual({ status: "invalid" });
+      }
+    }
+    allow();   // switched off
+    expect((await json(await preview.POST(req({ token })))).body).toEqual({ status: "invalid" });
+  });
+});
+
+describe("the sidebar's board shortcuts", () => {
+  it("lists the account's active boards — owned or joined — by name, first five, with the total", async () => {
+    const owner = await account("Meiling");
+    const eddie = await account("Eddie");
+    const stranger = await account("Stranger");
+    allow(owner.id, eddie.id, stranger.id);
+    const names = ["Zebra", "apple", "Mango", "banana", "Cherry", "date", "Elder"];
+    const ids: Record<string, string> = {};
+    for (const n of names) ids[n] = await newBoard(owner.id, n);
+    const theirs = await newBoard(stranger.id, "Not yours");
+    as(owner.id);
+    await board.PATCH(req({ archived: true }), { params: { id: ids.Elder } });   // archived: never a shortcut
+    const mine = await boardsLib.sidebarBoards(owner.id);
+    expect(mine.total).toBe(6);
+    expect(mine.boards.map((b) => b.name)).toEqual(["apple", "banana", "Cherry", "date", "Mango"]);
+    expect(Object.keys(mine.boards[0]).sort()).toEqual(["id", "name"]);
+    expect(mine.boards.map((b) => b.id)).not.toContain(theirs);
+
+    // A member sees a board they joined, exactly as its owner does.
+    await join(ids.Zebra, owner.id, eddie);
+    expect(await boardsLib.sidebarBoards(eddie.id)).toEqual({ boards: [{ id: ids.Zebra, name: "Zebra" }], total: 1 });
+    expect(await boardsLib.sidebarBoards(stranger.id)).toEqual({ boards: [{ id: theirs, name: "Not yours" }], total: 1 });
+
+    // Leaving, and the kill switch, take shortcuts away.
+    as(eddie.id);
+    await leave.POST(req(), { params: { id: ids.Zebra } });
+    expect(await boardsLib.sidebarBoards(eddie.id)).toEqual({ boards: [], total: 0 });
+    allow();
+    expect(await boardsLib.sidebarBoards(owner.id)).toEqual({ boards: [], total: 0 });
   });
 });
 

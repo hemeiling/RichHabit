@@ -65,9 +65,27 @@ export interface NavGroup {
   startsGroup?: boolean;
 }
 
-export type NavNode = NavItem | NavGroup;
+/**
+ * A destination that also carries shortcuts beneath it — Together and its
+ * boards. Unlike a NavGroup the parent is a real link (the overview); a
+ * separate chevron folds the shortcuts. The shortcuts are navigation only: what
+ * a person may open is still decided on the server when they open it.
+ */
+export interface NavBranch extends NavItem {
+  /** Stable, and the key the remembered open state is stored under. */
+  key: string;
+  children: readonly NavItem[];
+  /** What a screen reader hears for the fold button, e.g. "Your boards". */
+  toggleLabel: string;
+}
 
-const isGroup = (node: NavNode): node is NavGroup => "children" in node;
+/** A child that leads somewhere but is never shown as "you are here" (View all). */
+export interface NavShortcut extends NavItem { quiet?: boolean }
+
+export type NavNode = NavItem | NavGroup | NavBranch;
+
+const isGroup = (node: NavNode): node is NavGroup => "children" in node && !("href" in node);
+const isBranch = (node: NavNode): node is NavBranch => "children" in node && "href" in node;
 
 /** One viewer's folded/unfolded preference. Never account data. */
 const OPEN_KEY = (key: string) => `rh_nav_open_${key}`;
@@ -101,9 +119,9 @@ export default function Sidebar({
   const isActive = useCallback((href: string) =>
     pathname === href || pathname.startsWith(`${href}/`), [pathname]);
 
-  const link = (item: NavItem) => (
+  const link = (item: NavItem, current: boolean = isActive(item.href) && !(item as NavShortcut).quiet) => (
     <Link href={item.href} className="navlink"
-      aria-current={isActive(item.href) ? "page" : undefined}
+      aria-current={current ? "page" : undefined}
       onClick={onClose}>
       {item.icon && (
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none"
@@ -143,7 +161,7 @@ export default function Sidebar({
 
         <div className="py-2" style={{ flex: "none" }}>
           {items.map((node) => (
-            <Fragment key={isGroup(node) ? node.key : node.href}>
+            <Fragment key={isGroup(node) || isBranch(node) ? node.key : node.href}>
               {/* Inset to 20px so the rule starts where the labels do: the
                   navlink's own 8px margin plus its 12px padding. */}
               {node.startsGroup && (
@@ -153,7 +171,9 @@ export default function Sidebar({
               )}
               {isGroup(node)
                 ? <Group group={node} isActive={isActive} link={link} />
-                : link(node)}
+                : isBranch(node)
+                  ? <Branch branch={node} isActive={isActive} link={link} />
+                  : link(node)}
             </Fragment>
           ))}
         </div>
@@ -238,6 +258,69 @@ function Group({
         <div className="navkids">
           {group.children.map((child) => (
             <Fragment key={child.href}>{link(child)}</Fragment>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * A destination with shortcuts beneath it (Together and its boards).
+ *
+ * The row itself is a link to the overview; the chevron at its end is a
+ * separate button that folds the shortcuts, so neither action hides the other.
+ * Like My Journey it is open by default, opens itself when one of its shortcuts
+ * is the page you are on, and remembers a deliberate fold per browser.
+ *
+ * One highlight at a time: a shortcut when you are on it; otherwise the parent
+ * whenever you are anywhere beneath it (the overview, or a board that has no
+ * shortcut — an archived one, or one past the first few).
+ */
+function Branch({
+  branch, isActive, link,
+}: {
+  branch: NavBranch;
+  isActive: (href: string) => boolean;
+  link: (item: NavItem, current?: boolean) => React.ReactNode;
+}) {
+  const shortcuts = branch.children;
+  const hasBoards = shortcuts.some((c) => !(c as NavShortcut).quiet);
+  const within = shortcuts.some((c) => !(c as NavShortcut).quiet && isActive(c.href));
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(OPEN_KEY(branch.key));
+      if (stored !== null) setOpen(stored === "1");
+    } catch { /* the default stands */ }
+  }, [branch.key]);
+  useEffect(() => { if (within) setOpen(true); }, [within]);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try {
+      window.localStorage.setItem(OPEN_KEY(branch.key), next ? "1" : "0");
+    } catch { /* nothing to do */ }
+  };
+  return (
+    <>
+      <div className="navbranch" data-toggle={hasBoards || undefined}>
+        {link(branch, isActive(branch.href) && !within)}
+        {hasBoards && (
+          <button type="button" className="navbranch-toggle" aria-expanded={open}
+            aria-label={branch.toggleLabel} onClick={toggle}>
+            <svg className="navgroup-chev" data-open={open} width="17" height="17"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 8l4 4-4 4" />
+            </svg>
+          </button>
+        )}
+      </div>
+      {hasBoards && open && (
+        <div className="navkids navshortcuts">
+          {shortcuts.map((child) => (
+            <Fragment key={child.href + child.label}>{link(child)}</Fragment>
           ))}
         </div>
       )}

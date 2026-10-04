@@ -74,6 +74,27 @@ describe("the sidebar", () => {
   });
 });
 
+describe("Together's place in the sidebar", () => {
+  it("sits right after My Journey and before Week, set apart on both sides", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync(new URL("../src/components/AppShell.tsx", import.meta.url), "utf8");
+    const nav = src.slice(src.indexOf("const NAV = ["), src.indexOf("] as const;", src.indexOf("const NAV = [")));
+    const at = (needle: string) => nav.indexOf(needle);
+    expect(at('key: "journey"')).toBeGreaterThan(-1);
+    expect(at('href: "/together"')).toBeGreaterThan(at('href: "/priorities"'));
+    expect(at('href: "/week"')).toBeGreaterThan(at('href: "/together"'));
+    expect(nav).toMatch(/href: "\/together", key: "together", startsGroup: true/);
+    expect(nav).toMatch(/href: "\/week", key: "week", startsGroup: true/);
+  });
+
+  it("names its shortcuts' controls in both languages", () => {
+    for (const d of [en, zh]) {
+      expect(d.together.boardShortcuts.length).toBeGreaterThan(0);
+      expect(d.together.viewAll(7)).toContain("7");
+    }
+  });
+});
+
 describe("the habit sheet, now under More", () => {
   it("is listed with a label and a note in both languages", () => {
     expect(en.more.links.habits.label).toBe("My Habit Sheet");

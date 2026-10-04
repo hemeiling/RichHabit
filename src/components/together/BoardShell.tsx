@@ -46,18 +46,21 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
   }, [boardId]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const onFocus = () => { if (document.visibilityState === "visible") load(); };
+    // Back in the tab: re-read the board, and the shell (others may have changed boards meanwhile).
+    const onFocus = () => { if (document.visibilityState === "visible") { load(); router.refresh(); } };
     document.addEventListener("visibilitychange", onFocus);
     return () => document.removeEventListener("visibilitychange", onFocus);
-  }, [load]);
+  }, [load, router]);
 
   /**
    * Runs a change, then re-reads the board — the server is the truth. Says
    * whether it worked, so a follow-up (closing a form, leaving the page) never
    * hides a refusal. `reload: false` is for a change after which this board is
-   * no longer the viewer's to read.
+   * no longer the viewer's to read; `nav: true` for one the sidebar's board
+   * shortcuts show (name, archived, membership), which re-renders the shell.
    */
-  const act = async (fn: () => Promise<unknown>, done?: string, { reload = true } = {}): Promise<boolean> => {
+  const act = async (fn: () => Promise<unknown>, done?: string,
+    { reload = true, nav = false } = {}): Promise<boolean> => {
     setError(null);
     setNotice(null);
     let ok = false;
@@ -69,6 +72,7 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
       setError(e instanceof Error ? e.message : String(e));
     }
     if (reload || !ok) await load();
+    if (ok && nav) router.refresh();
     return ok;
   };
 
@@ -91,7 +95,8 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
         {renaming ? (
           <form className="flex items-center gap-2 flex-wrap" onSubmit={(e) => {
             e.preventDefault();
-            act(() => call(`/api/together/boards/${boardId}`, { method: "PATCH", body: JSON.stringify({ name }) }))
+            act(() => call(`/api/together/boards/${boardId}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+              undefined, { nav: true })
               .then((ok) => { if (ok) setRenaming(false); });
           }}>
             <input className="input" autoFocus maxLength={80} value={name} aria-label={t.together.boardName}
@@ -221,14 +226,14 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
             if (board.archived || window.confirm(t.together.confirmArchive)) {
               act(() => call(`/api/together/boards/${boardId}`, {
                 method: "PATCH", body: JSON.stringify({ archived: !board.archived }),
-              }));
+              }), undefined, { nav: true });
             }
           }}>{board.archived ? t.together.unarchive : t.together.archive}</button>
         ) : (
           <button className="btn" onClick={() => {
             if (window.confirm(t.together.confirmLeave)) {
               act(() => call(`/api/together/boards/${boardId}/leave`, { method: "POST" }), undefined, { reload: false })
-                .then((ok) => { if (ok) router.push("/together"); });
+                .then((ok) => { if (ok) { router.push("/together"); router.refresh(); } });
             }
           }}>{t.together.leave}</button>
         )}
