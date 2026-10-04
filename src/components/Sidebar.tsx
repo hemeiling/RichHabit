@@ -41,6 +41,11 @@ export interface NavItem {
    * in one pixel, where a label would add chrome to a narrow column.
    */
   startsGroup?: boolean;
+  /**
+   * Something waiting there, as a quiet dot — "2 invitations waiting". The
+   * text is what a screen reader hears; sighted readers see only the dot.
+   */
+  indicator?: string;
 }
 
 /**
@@ -111,6 +116,12 @@ export default function Sidebar({
         {item.label}
         {item.sublabel && <span className="navsub">{item.sublabel}</span>}
       </span>
+      {item.indicator && (
+        <>
+          <span className="navdot" aria-hidden="true" />
+          <span className="sr-only">{item.indicator}</span>
+        </>
+      )}
     </Link>
   );
 
@@ -235,14 +246,20 @@ function Group({
 }
 
 /** The hamburger. Hidden at the width where the sidebar is always visible. */
-export function SidebarToggle({ onClick, label }: { onClick: () => void; label: string }) {
+/**
+ * The phone's menu button. `indicator` is the same quiet dot a navigation item
+ * carries — on a phone the items are hidden in the drawer, so the button shows
+ * that something is waiting inside, and says so to a screen reader.
+ */
+export function SidebarToggle({ onClick, label, indicator }: { onClick: () => void; label: string; indicator?: string }) {
   return (
     <button className="btn btn-quiet sidebar-only-mobile" onClick={onClick}
-      style={{ padding: "6px 9px" }} aria-label={label}>
+      style={{ padding: "6px 9px", position: "relative" }} aria-label={indicator ? `${label} — ${indicator}` : label}>
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
         <path d="M4 7h16 M4 12h16 M4 17h16" />
       </svg>
+      {indicator && <span className="navdot navdot-on-toggle" aria-hidden="true" />}
     </button>
   );
 }

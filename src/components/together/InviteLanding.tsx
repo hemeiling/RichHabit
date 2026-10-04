@@ -15,7 +15,12 @@ import { call } from "@/components/together/shared";
  * in or creating an account: the login page returns here afterwards.
  *
  * The page decides nothing about access. The preview and accept APIs check the
- * token, the account and the Together preview on the server.
+ * token, the account and the invitation on the server. Accepting needs no
+ * Together preview access: a valid invitation opens its own board, and only
+ * that one.
+ *
+ * A new account that must verify its address first usually does so in another
+ * tab, where this token is not; reopening the email's link continues from here.
  */
 
 const KEY = "rh_together_invite";
@@ -41,7 +46,7 @@ type State =
   | { kind: "invalid" }
   | { kind: "ok"; board: string; inviter: string };
 
-export default function InviteLanding({ signedIn, enabled }: { signedIn: boolean; enabled: boolean }) {
+export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
   const t = useT();
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
@@ -94,8 +99,6 @@ export default function InviteLanding({ signedIn, enabled }: { signedIn: boolean
                 <Link className="btn btn-primary" href="/login?then=together-invite">{t.together.invitePage.signIn}</Link>
                 <Link className="btn" href="/login?mode=signup&then=together-invite">{t.together.invitePage.createAccount}</Link>
               </div>
-            ) : !enabled ? (
-              <p className="mt-4" role="status">{t.together.invitePage.unavailable}</p>
             ) : (
               <div className="flex gap-2 flex-wrap mt-5">
                 <button className="btn btn-primary" onClick={accept} disabled={busy}>{t.together.invitePage.accept}</button>

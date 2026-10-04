@@ -5,18 +5,20 @@ import { useT } from "@/lib/i18n/context";
 import { Avatar, call, type Person } from "@/components/together/shared";
 
 /**
- * One board, V1A: who is on it and how people join. The shared work — the
- * backlog and the board itself — arrives in V1B; this is its frame.
+ * One board, V1A: who is on it and how people join — always by invitation,
+ * accepted. The shared work — the backlog and the board itself — arrives in
+ * V1B; this is its frame.
  *
  * What a member can do is decided on the server; the screen only hides
  * controls that would be refused anyway, so nothing here is a security check.
  */
 
 interface Member extends Person { role: "owner" | "member"; joinedAt: string }
-interface Invitation { id: string; email: string; invitedBy: string; expiresAt: string }
+interface Invitation { id: string; kind: "email" | "person"; label: string; invitedBy: string; expiresAt: string }
 interface Board {
   id: string; name: string; role: "owner" | "member"; archived: boolean;
-  members: Member[]; invitations: Invitation[]; otherInvitations: number; addable: Person[];
+  members: Member[]; invitations: Invitation[]; otherInvitations: number;
+  canInvite: boolean; invitable: Person[];
 }
 
 export default function BoardShell({ boardId, viewerId }: { boardId: string; viewerId: string }) {
@@ -138,11 +140,11 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
           ))}
         </ul>
 
-        {owner && writable && board.addable.length > 0 && (
+        {board.canInvite && board.invitable.length > 0 && (
           <fieldset className="mt-4">
             <legend className="eyebrow mb-1.5">{t.together.addFromPeople}</legend>
             <div className="flex flex-wrap gap-1.5">
-              {board.addable.map((p) => (
+              {board.invitable.map((p) => (
                 <button key={p.id} type="button" className="chip" aria-pressed={adding.includes(p.id)}
                   data-on={adding.includes(p.id)}
                   onClick={() => setAdding((v) => (v.includes(p.id) ? v.filter((x) => x !== p.id) : [...v, p.id]))}>
@@ -150,14 +152,22 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
                 </button>
               ))}
             </div>
-            <button className="btn mt-2" disabled={!adding.length} onClick={() =>
-              act(() => call(`/api/together/boards/${boardId}/members`, {
-                method: "POST", body: JSON.stringify({ people: adding }),
-              })).then((ok) => { if (ok) setAdding([]); })}>{t.together.add}</button>
+            <button className="btn mt-2" disabled={!adding.length} onClick={async () => {
+              let invited = 0;
+              const ok = await act(async () => {
+                ({ invited } = await call<{ invited: number }>(`/api/together/boards/${boardId}/invitations`, {
+                  method: "POST", body: JSON.stringify({ people: adding }),
+                }));
+              });
+              if (ok) {
+                setAdding([]);
+                setNotice(invited ? t.together.peopleInvited(invited) : t.together.nothingToInvite);
+              }
+            }}>{t.together.add}</button>
           </fieldset>
         )}
 
-        {writable && (
+        {board.canInvite && (
           <form className="mt-4" onSubmit={(e) => {
             e.preventDefault();
             if (inviting || !email.trim()) return;
@@ -185,8 +195,9 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
             <ul className="tg-members mt-1">
               {board.invitations.map((i) => (
                 <li key={i.id} className="tg-member">
-                  <span className="tg-member-name" style={{ overflowWrap: "anywhere" }}>{i.email}</span>
+                  <span className="tg-member-name" style={{ overflowWrap: "anywhere" }}>{i.label}</span>
                   <span className="faint" style={{ fontSize: 12 }}>
+                    {i.kind === "person" && `${t.together.inTogether} · `}
                     {t.together.expires(i.expiresAt)}
                     {owner && ` · ${t.together.invitedBy(i.invitedBy)}`}
                   </span>

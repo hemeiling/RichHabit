@@ -7,31 +7,54 @@ import { useT } from "@/lib/i18n/context";
 import { AvatarRow, Avatar, call, type Person } from "@/components/together/shared";
 
 /**
- * Together home: the boards this account is on, and its People — everyone it
- * shares a board with. One calm page; a new board is one sheet away.
+ * Together home: invitations waiting for you, the boards you are on, and your
+ * People — everyone you share a board with, whom you can invite to another.
+ * One calm page; a new board is one sheet away.
  */
 
 interface BoardSummary { id: string; name: string; role: "owner" | "member"; archived: boolean; members: Person[] }
-interface Home { boards: BoardSummary[]; people: Person[] }
+interface Waiting { id: string; board: string; inviter: string; expiresAt: string }
+interface Home { access: "full" | "invited"; boards: BoardSummary[]; people: Person[]; invitations: Waiting[] }
 
 export default function TogetherHome() {
   const t = useT();
+  const router = useRouter();
   const [home, setHome] = useState<Home | null>(null);
   const [failed, setFailed] = useState(false);
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setFailed(false);
     call<Home>("/api/together/home").then(setHome).catch(() => setFailed(true));
   }, []);
   useEffect(() => { load(); }, [load]);
-  // Back in the tab: someone may have added you to a board meanwhile.
+  // Back in the tab: someone may have invited you meanwhile.
   useEffect(() => {
     const onFocus = () => { if (document.visibilityState === "visible") load(); };
     document.addEventListener("visibilitychange", onFocus);
     return () => document.removeEventListener("visibilitychange", onFocus);
   }, [load]);
+
+  const answer = async (id: string, accept: boolean) => {
+    if (answering) return;
+    setAnswering(id);
+    setProblem(null);
+    try {
+      const r = await call<{ boardId?: string }>("/api/together/invitations/respond", {
+        method: "POST", body: JSON.stringify({ id, accept }),
+      });
+      if (accept && r.boardId) { router.push(`/together/b/${r.boardId}`); router.refresh(); return; }
+      router.refresh();   // the navigation's indicator
+      load();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+      load();
+    }
+    setAnswering(null);
+  };
 
   if (failed) {
     return (
@@ -43,6 +66,7 @@ export default function TogetherHome() {
   }
   if (!home) return <div className="eyebrow py-10 text-center">{t.common.loading}</div>;
 
+  const full = home.access === "full";
   const active = home.boards.filter((b) => !b.archived);
   const archived = home.boards.filter((b) => b.archived);
 
@@ -50,10 +74,34 @@ export default function TogetherHome() {
     <div className="tg-home">
       <p className="muted" style={{ fontSize: 14, lineHeight: 1.55 }}>{t.together.tagline}</p>
 
+      {home.invitations.length > 0 && (
+        <section className="mt-5" aria-labelledby="tg-invitations">
+          <h2 id="tg-invitations" className="eyebrow">{t.together.invitations}</h2>
+          <ul className="tg-board-list mt-3">
+            {home.invitations.map((i) => (
+              <li key={i.id} className="card tg-waiting">
+                <p style={{ fontSize: 15 }}>{t.together.invitePage.invitedYou(i.inviter, i.board)}</p>
+                <div className="flex gap-2 flex-wrap mt-3">
+                  <button className="btn" disabled={answering !== null} onClick={() => answer(i.id, false)}>
+                    {t.together.decline}
+                  </button>
+                  <button className="btn btn-primary" disabled={answering !== null} onClick={() => answer(i.id, true)}>
+                    {t.together.accept}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {/* Outside the section: when an answer fails because the invitation is
+          gone, the reload empties the list, and the reason must stay readable. */}
+      {problem && <p className="mt-2" role="alert" style={{ color: "var(--warn)", fontSize: 13.5 }}>{problem}</p>}
+
       <section className="mt-5" aria-labelledby="tg-boards">
         <div className="flex items-center justify-between gap-3">
           <h2 id="tg-boards" className="eyebrow">{t.together.boards}</h2>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>+ {t.together.newBoard}</button>
+          {full && <button className="btn btn-primary" onClick={() => setCreating(true)}>+ {t.together.newBoard}</button>}
         </div>
         {active.length === 0 ? (
           <p className="muted mt-3" style={{ fontSize: 14 }}>{t.together.noBoards}</p>
@@ -77,18 +125,22 @@ export default function TogetherHome() {
         )}
       </section>
 
-      <section className="mt-7" aria-labelledby="tg-people">
-        <h2 id="tg-people" className="eyebrow">{t.together.people}</h2>
-        {home.people.length === 0 ? (
-          <p className="muted mt-2" style={{ fontSize: 14 }}>{t.together.noPeople}</p>
-        ) : (
-          <ul className="tg-people mt-2">
-            {home.people.map((p) => (
-              <li key={p.id} className="tg-person"><Avatar name={p.name} /> <span>{p.name}</span></li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {full ? (
+        <section className="mt-7" aria-labelledby="tg-people">
+          <h2 id="tg-people" className="eyebrow">{t.together.people}</h2>
+          {home.people.length === 0 ? (
+            <p className="muted mt-2" style={{ fontSize: 14 }}>{t.together.noPeople}</p>
+          ) : (
+            <ul className="tg-people mt-2">
+              {home.people.map((p) => (
+                <li key={p.id} className="tg-person"><Avatar name={p.name} /> <span>{p.name}</span></li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <p className="faint mt-7" style={{ fontSize: 13 }}>{t.together.invitedOnly}</p>
+      )}
 
       {creating && <NewBoardSheet people={home.people} onClose={() => setCreating(false)} />}
     </div>
@@ -114,29 +166,62 @@ function BoardCard({ board }: { board: BoardSummary }) {
   );
 }
 
-/** Name, then any People to put on it. Anyone else is invited from the board. */
+/**
+ * Name, then whom to invite: People by ticking them (an invitation inside
+ * Together), anyone else by address (an email). Nobody joins until they accept.
+ */
 function NewBoardSheet({ people, onClose }: { people: Person[]; onClose: () => void }) {
   const t = useT();
   const router = useRouter();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emails, setEmails] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [partly, setPartly] = useState<{ id: string; failed: string[] } | null>(null);
+
+  /** A first check only; the server validates every address again. */
+  const looksLikeEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  const addEmail = () => {
+    const e = email.trim();
+    if (!e) return;
+    if (!looksLikeEmail(e)) { setError(t.together.errors.emailInvalid); return; }
+    setError(null);
+    setEmails((v) => (v.some((x) => x.toLowerCase() === e.toLowerCase()) ? v : [...v, e]));
+    setEmail("");
+  };
 
   const create = async () => {
-    if (busy) return;
+    if (busy || !name.trim()) return;
     setBusy(true);
     setError(null);
+    // An address typed but not yet added is meant, too.
+    const typed = email.trim();
+    if (typed && !looksLikeEmail(typed)) { setError(t.together.errors.emailInvalid); setBusy(false); return; }
+    const all = typed && !emails.includes(typed) ? [...emails, typed] : emails;
     try {
-      const { id } = await call<{ id: string }>("/api/together/boards", {
-        method: "POST", body: JSON.stringify({ name, people: picked }),
+      const r = await call<{ id: string; failedEmails: string[] }>("/api/together/boards", {
+        method: "POST", body: JSON.stringify({ name, people: picked, emails: all }),
       });
-      router.push(`/together/b/${id}`);
+      if (r.failedEmails.length) { setPartly({ id: r.id, failed: r.failedEmails }); setBusy(false); return; }
+      router.push(`/together/b/${r.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
     }
   };
+
+  if (partly) {
+    return (
+      <Sheet open onClose={() => router.push(`/together/b/${partly.id}`)} title={t.together.newBoard}
+        footer={<button className="btn btn-primary" onClick={() => router.push(`/together/b/${partly.id}`)}>
+          {t.together.goToBoard}</button>}>
+        <p role="alert" style={{ fontSize: 14, lineHeight: 1.55 }}>{t.together.createdPartly(partly.failed.join(", "))}</p>
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet open onClose={onClose} title={t.together.newBoard}
@@ -165,6 +250,30 @@ function NewBoardSheet({ people, onClose }: { people: Person[]; onClose: () => v
               </li>
             ))}
           </ul>
+        )}
+        {emails.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5 mt-2" aria-label={t.together.inviteByEmail}>
+            {emails.map((e) => (
+              <li key={e} className="chip tg-email-chip">
+                <span style={{ overflowWrap: "anywhere" }}>{e}</span>
+                <button type="button" className="tg-chip-x" aria-label={t.together.removeEmail(e)}
+                  onClick={() => setEmails((v) => v.filter((x) => x !== e))}>×</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {emailOpen ? (
+          <div className="flex gap-2 flex-wrap mt-2">
+            <input className="input" type="email" autoFocus autoComplete="off" inputMode="email" maxLength={254}
+              aria-label={t.together.inviteByEmail} placeholder={t.together.inviteEmailPlaceholder}
+              value={email} onChange={(e) => setEmail(e.target.value)} style={{ flex: "1 1 200px" }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }} />
+            <button type="button" className="btn" onClick={addEmail} disabled={!email.trim()}>{t.together.addEmail}</button>
+          </div>
+        ) : (
+          <button type="button" className="btn btn-quiet mt-1" onClick={() => setEmailOpen(true)}>
+            {t.together.inviteByEmailToggle}
+          </button>
         )}
       </fieldset>
       <p className="faint" style={{ fontSize: 12.5 }}>{t.together.inviteAfterCreate}</p>

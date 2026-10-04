@@ -334,6 +334,14 @@ body {
    accent rather than staying grey against it. */
 .navlink[aria-current="page"] .navsub { color: var(--accent); opacity: 0.72; }
 .navgroup[data-within] .navsub { color: var(--muted); }
+/* Something waiting at that destination: a quiet dot at the row's end, never a
+   number to clear. Its meaning is in the screen-reader text beside it. */
+.navdot {
+  flex: none; margin-left: auto;
+  width: 7px; height: 7px; border-radius: 999px;
+  background: var(--accent);
+}
+.navdot-on-toggle { position: absolute; top: 5px; right: 5px; margin: 0; }
 
 /* A finger is not a cursor: the rows keep a comfortable target where there is
    no hover to aim with. */
@@ -714,6 +722,10 @@ body {
 .tg-invite { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
   background: var(--bg); color: var(--ink); }
 .tg-invite-card { width: 100%; max-width: 460px; }
+.tg-waiting { padding: 14px 16px; }
+.tg-email-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.tg-chip-x { min-width: 28px; min-height: 28px; border-radius: 999px; color: var(--muted); font-size: 16px; line-height: 1; }
+.tg-chip-x:hover { color: var(--ink); background: var(--raise); }
 
 .divide > * + * { border-top: 1px solid var(--line-soft); }
 input[type="range"] { accent-color: var(--accent); }

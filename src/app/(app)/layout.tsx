@@ -4,7 +4,8 @@ import { currentAdmin } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n/server";
 import { databaseUrl, isLocalDatabase } from "@/lib/env";
-import { togetherEnabledFor } from "@/lib/together/access";
+import { togetherAccess } from "@/lib/together/access";
+import { pendingCount } from "@/lib/together/invitations";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // The real session check. Middleware only looked at whether a cookie existed.
@@ -35,10 +36,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
    */
   const aiWorkspace = Boolean(await currentAdmin().catch(() => null));
 
+  /*
+   * Whether to show Together, and how many in-platform invitations wait there.
+   * Decided on the server; the client learns a yes/no and a count — never the
+   * preview list. A failure only hides the item, never the page.
+   */
+  const together = await togetherAccess(user.id)
+    .then(async (access) => (access ? { pending: await pendingCount(user.id) } : null))
+    .catch(() => null);
+
   // Resolved server-side so the first paint is already in the right language.
   return (
     <AppShell userId={user.id} email={user.email} locale={getLocale()} localDb={localDb} aiWorkspace={aiWorkspace}
-      together={togetherEnabledFor(user.id)}>
+      together={Boolean(together)} togetherPending={together?.pending ?? 0}>
       {children}
     </AppShell>
   );

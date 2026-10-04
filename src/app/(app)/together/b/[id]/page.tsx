@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import BoardShell from "@/components/together/BoardShell";
 import { getSessionUser } from "@/lib/auth";
 import { isUuid } from "@/lib/http";
-import { togetherEnabledFor } from "@/lib/together/access";
+import { togetherAccess } from "@/lib/together/access";
 
 /**
  * One board. Membership is checked by the API the shell calls, which answers a
@@ -11,6 +11,6 @@ import { togetherEnabledFor } from "@/lib/together/access";
 export default async function BoardPage({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  if (!togetherEnabledFor(user.id) || !isUuid(params.id)) notFound();
+  if (!isUuid(params.id) || !(await togetherAccess(user.id))) notFound();
   return <BoardShell boardId={params.id} viewerId={user.id} />;
 }

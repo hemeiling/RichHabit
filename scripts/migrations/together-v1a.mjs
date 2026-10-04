@@ -9,10 +9,13 @@
  *                         in membership, never here.
  *   together_members      who belongs to a board, as owner or member. Exactly
  *                         one owner per board (a unique partial index).
- *   together_invitations  an emailed, single-use invitation. Only the SHA-256 of
- *                         the token is stored. Usable only once `sent_at` is set,
- *                         which happens after the mail provider has accepted the
- *                         message (see src/lib/together/invitations.ts).
+ *   together_invitations  an invitation to one board, of one of two kinds:
+ *                         by EMAIL (an address and the SHA-256 of a single-use
+ *                         token; usable only once `sent_at` is set, after the
+ *                         mail provider accepted the message) or IN-PLATFORM (an
+ *                         existing account from the inviter's People, shown
+ *                         inside Together). Either way nobody becomes a member
+ *                         until they accept (src/lib/together/invitations.ts).
  *
  * The trigger: shared boards must survive their owner's account deletion, by
  * every path that deletes accounts (the admin screen, its bulk action and the
@@ -55,21 +58,36 @@ export const TOGETHER_V1A_STATEMENTS = [
   `create table if not exists together_invitations (
   id               uuid primary key default gen_random_uuid(),
   board_id         uuid not null references together_boards on delete cascade,
-  email_normalized text not null check (length(email_normalized) between 3 and 254),
-  token_hash       text not null unique,
+  email_normalized text check (length(email_normalized) between 3 and 254),
+  token_hash       text unique,
+  invitee_id       uuid references users on delete cascade,
   invited_by       uuid not null references users on delete cascade,
   created_at       timestamptz not null default now(),
   sent_at          timestamptz,
   expires_at       timestamptz not null,
   accepted_at      timestamptz,
   accepted_by      uuid references users on delete set null,
+  declined_at      timestamptz,
   revoked_at       timestamptz,
-  check (accepted_at is null or revoked_at is null)
+  check ((email_normalized is null) = (token_hash is null)),
+  check ((email_normalized is null) <> (invitee_id is null)),
+  check (num_nonnulls(accepted_at, declined_at, revoked_at) <= 1)
 )`,
-  // At most one open invitation per board and address: a new one revokes the old.
+  // At most one open invitation per board, invitee and inviter: a retry
+  // replaces the inviter's own, and never touches another member's. Accepting
+  // any of them closes the rest. The last index finds a person's own.
   `create unique index if not exists together_invitations_one_open
-  on together_invitations (board_id, email_normalized)
-  where accepted_at is null and revoked_at is null`,
+  on together_invitations (board_id, email_normalized, invited_by)
+  where email_normalized is not null
+    and accepted_at is null and declined_at is null and revoked_at is null`,
+  `create unique index if not exists together_invitations_one_open_person
+  on together_invitations (board_id, invitee_id, invited_by)
+  where invitee_id is not null
+    and accepted_at is null and declined_at is null and revoked_at is null`,
+  `create index if not exists together_invitations_invitee
+  on together_invitations (invitee_id)
+  where invitee_id is not null
+    and accepted_at is null and declined_at is null and revoked_at is null`,
   `create index if not exists together_invitations_inviter_time
   on together_invitations (invited_by, created_at desc)`,
   `create or replace function together_before_user_delete() returns trigger

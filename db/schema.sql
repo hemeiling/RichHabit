@@ -1024,21 +1024,36 @@ create index if not exists together_members_user_idx on together_members (user_i
 create table if not exists together_invitations (
   id               uuid primary key default gen_random_uuid(),
   board_id         uuid not null references together_boards on delete cascade,
-  email_normalized text not null check (length(email_normalized) between 3 and 254),
-  token_hash       text not null unique,
+  email_normalized text check (length(email_normalized) between 3 and 254),
+  token_hash       text unique,
+  invitee_id       uuid references users on delete cascade,
   invited_by       uuid not null references users on delete cascade,
   created_at       timestamptz not null default now(),
   sent_at          timestamptz,
   expires_at       timestamptz not null,
   accepted_at      timestamptz,
   accepted_by      uuid references users on delete set null,
+  declined_at      timestamptz,
   revoked_at       timestamptz,
-  check (accepted_at is null or revoked_at is null)
+  check ((email_normalized is null) = (token_hash is null)),
+  check ((email_normalized is null) <> (invitee_id is null)),
+  check (num_nonnulls(accepted_at, declined_at, revoked_at) <= 1)
 );
 
 create unique index if not exists together_invitations_one_open
-  on together_invitations (board_id, email_normalized)
-  where accepted_at is null and revoked_at is null;
+  on together_invitations (board_id, email_normalized, invited_by)
+  where email_normalized is not null
+    and accepted_at is null and declined_at is null and revoked_at is null;
+
+create unique index if not exists together_invitations_one_open_person
+  on together_invitations (board_id, invitee_id, invited_by)
+  where invitee_id is not null
+    and accepted_at is null and declined_at is null and revoked_at is null;
+
+create index if not exists together_invitations_invitee
+  on together_invitations (invitee_id)
+  where invitee_id is not null
+    and accepted_at is null and declined_at is null and revoked_at is null;
 
 create index if not exists together_invitations_inviter_time
   on together_invitations (invited_by, created_at desc);

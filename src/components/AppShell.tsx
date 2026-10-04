@@ -231,8 +231,8 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-function Chrome({ email, localDb, together, children }:
-  { email: string; localDb: boolean; together: boolean; children: React.ReactNode }) {
+function Chrome({ email, localDb, together, togetherPending, children }:
+  { email: string; localDb: boolean; together: boolean; togetherPending: number; children: React.ReactNode }) {
   const { state, actions, loading, saving, error, loadFailed, reload, dismissError } = useHabits();
 
   /*
@@ -284,7 +284,12 @@ function Chrome({ email, localDb, together, children }:
       sublabel: sublabel(node.key),
       children: node.children.map(toItem),
     }
-    : { ...toItem(node), startsGroup: "startsGroup" in node ? node.startsGroup : undefined }));
+    : {
+      ...toItem(node),
+      startsGroup: "startsGroup" in node ? node.startsGroup : undefined,
+      indicator: "key" in node && node.key === "together" && togetherPending > 0
+        ? t.together.waitingIndicator(togetherPending) : undefined,
+    }));
 
   return (
     <div data-theme={state.prefs.theme} style={{ minHeight: "100vh" }}>
@@ -310,7 +315,8 @@ function Chrome({ email, localDb, together, children }:
         <div className="mx-auto px-4 sm:px-6 flex items-center justify-between"
           style={{ maxWidth: measureFor(pathname), height: 56 }}>
           <div className="flex items-center gap-2.5 min-w-0">
-            <SidebarToggle onClick={() => setMenuOpen(true)} label={t.nav.openMenu} />
+            <SidebarToggle onClick={() => setMenuOpen(true)} label={t.nav.openMenu}
+              indicator={togetherPending > 0 ? t.together.waitingIndicator(togetherPending) : undefined} />
             {isSubPage && (
               <button className="btn btn-quiet" style={{ padding: "5px 10px" }}
                 onClick={() => router.back()} aria-label={t.common.back}>‹</button>
@@ -378,19 +384,21 @@ function Chrome({ email, localDb, together, children }:
 }
 
 export default function AppShell({
-  userId, email, locale, localDb, aiWorkspace = false, together = false, children,
+  userId, email, locale, localDb, aiWorkspace = false, together = false, togetherPending = 0, children,
 }: {
   userId: string; email: string; locale: Locale; localDb: boolean;
   /** Admins only, decided by the layout from the database. */
   aiWorkspace?: boolean;
   /** Whether this account may see Together. A boolean — never the list behind it. */
   together?: boolean;
+  /** In-platform Together invitations waiting for this account. */
+  togetherPending?: number;
   children: React.ReactNode;
 }) {
   return (
     <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
-        <Chrome email={email} localDb={localDb} together={together}>{children}</Chrome>
+        <Chrome email={email} localDb={localDb} together={together} togetherPending={togetherPending}>{children}</Chrome>
         {aiWorkspace && <AiLauncher />}
       </HabitsProvider>
     </LocaleProvider>

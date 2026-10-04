@@ -116,9 +116,9 @@ export const FEATURES = {
   together: {
     label: "Together",
     events: [
-      "together_board_created", "together_board_archived", "together_members_added",
+      "together_board_created", "together_board_archived",
       "together_member_removed", "together_board_left", "together_invitation_sent",
-      "together_invitation_accepted",
+      "together_invitation_accepted", "together_invitation_declined",
     ],
   },
 } as const;

@@ -56,9 +56,10 @@ describe("the preview allow-list", () => {
     expect(fs.readFileSync(path.join(ROOT, "src/lib/env.ts"), "utf8")).not.toMatch(/NEXT_PUBLIC_TOGETHER/);
   });
 
-  it("reaches the client only as a yes/no for the signed-in account", () => {
+  it("reaches the client only as a yes/no and a waiting count for the signed-in account", () => {
     const layout = fs.readFileSync(path.join(ROOT, "src/app/(app)/layout.tsx"), "utf8");
-    expect(layout).toMatch(/together=\{togetherEnabledFor\(user\.id\)\}/);
+    expect(layout).toContain("together={Boolean(together)} togetherPending={together?.pending ?? 0}");
+    expect(layout).not.toMatch(/previewUserIds|TOGETHER_PREVIEW/);
   });
 });
 

@@ -9,13 +9,26 @@ Phases: **V1A** (this foundation) · V1B groups, items, assignees · V1C notes a
 board calendar derived from tasks · V1D calendar pins, a CalendarItem adapter,
 public launch. Eight tables in total by the end of V1.
 
-## Rollout
+## Rollout and access
 
-`TOGETHER_PREVIEW_USER_IDS` (server only) lists the user UUIDs allowed in. It is
-read in one place, `togetherEnabledFor()` in `src/lib/together/access.ts`. The
-client receives only a boolean for the signed-in account (the nav item). Outside
-the list: no nav item, pages render not-found, every API answers 404, and an
-invitation cannot be accepted.
+`TOGETHER_PREVIEW_USER_IDS` (server only) lists the user UUIDs in the preview.
+It is read only in `src/lib/together/access.ts`. An empty list switches Together
+off for everyone, invitations included. Otherwise each account has one of:
+
+| Access | Who | May |
+| --- | --- | --- |
+| **full** | on the list | everything: create boards, invite (People or email) |
+| **invited** | not on the list, but a member of a board or holding an open in-platform invitation | see its own boards and invitations, accept/decline, act as a member (and as owner if ownership passes to it), leave — **not** create boards or invite |
+| none | everyone else | nothing: no nav item, pages render not-found, APIs answer 404 |
+
+Accepting an **emailed** invitation needs no access level at all: the token, the
+matching address and the invitation's validity decide. That is the narrow door
+by which a new or non-preview account reaches the one board it was invited to.
+Holding an unaccepted email invitation grants nothing. New access therefore
+always originates from someone on the list.
+
+The client receives only a boolean and a waiting-invitation count for the
+signed-in account (the nav item and its quiet dot) — never the list.
 
 ## Layers
 
@@ -44,12 +57,44 @@ invitation cannot be accepted.
 4. **Identity comes from the session**, never from the request body.
 5. **Other members see a display name, never an email address.** Pending
    invitation addresses are visible only to the owner and to whoever sent them.
-6. **People are derived** (everyone you share a board with); you can add only
-   People directly — anyone else needs an invitation.
-7. **Analytics carry counts and booleans only** — never names, addresses or
+6. **Nobody becomes a member without accepting.** The creator becomes owner;
+   everyone else joins only by accepting an invitation. **People are derived**
+   (everyone you share a board with, no contact table) and are whom you can
+   invite *in-platform*, never whom you can enroll.
+7. **Removal is effective until a new invitation is accepted.** Removing or
+   leaving withdraws every open invitation *for* that person on that board (and
+   every one *they* sent), so only an invitation created afterwards, explicitly
+   accepted, restores access. Any member with full access may re-invite.
+8. **Analytics carry counts, booleans and a channel name only** — never names, addresses or
    board content.
 
-## Invitations — the failure boundary
+## Invitations
+
+One table, two kinds, both pending until answered:
+
+- **In-platform** (`invitee_id`): to someone in the inviter's People, chosen
+  when creating a board or from the board's "Invite from People". No email. It
+  waits in the invitee's Together home (Invitations · 邀请) with Accept and
+  Decline, and the navigation (and, on a phone, the menu button) shows a quiet
+  dot. Members, people this inviter already invited, and people who declined
+  this inviter's invitation in the last 7 days are skipped; 50 per inviter a day.
+- **Email** (`email_normalized` + `token_hash`): to any typed address — always
+  email, even if the address belongs to someone in the inviter's People, so the
+  inviter learns nothing about who has an account. Visible in-platform to nobody.
+
+Invitations are **per inviter**: at most one open per board, invitee and inviter.
+A retry replaces the inviter's own and never touches — or reveals — another
+member's. Accepting any one closes every other open invitation for that person
+on that board; declining declines every in-platform one, and the invitee sees
+one card per board.
+
+Answers: `accepted_at` / `declined_at` / `revoked_at` (at most one, by CHECK).
+Everything that changes a board's membership or invitations locks the board row
+first, so remove, leave, invite and accept are serialized in one order.
+Pending entries on a board are shown only to the owner and the sender — an
+address for email, a display name for in-platform.
+
+### Email — the failure boundary
 
 1. In one transaction: revoke any open invitation for the same board and
    address, and insert a new one with `sent_at` null (unusable).
@@ -62,8 +107,20 @@ usable, every emailed token has a committed row, and retries leave exactly one
 usable invitation. Tokens are 32 random bytes carried in the URL fragment (never
 sent to a server by the browser), stored only as SHA-256, valid 14 days, single
 use, and accepted only by the signed-in account with that address. Accepting
-also marks that account's address verified (`users.email_verified_at`, only if
-unset): opening the link proves the inbox.
+writes nothing to the account itself; normal sign-up verification applies.
+
+When creating a board, typed addresses are sent one by one after the board
+commits; each has its own failure boundary, and any that failed are named back
+to the creator ("the board was created, but…") to retry from the board.
+
+### New accounts and verification
+
+Sign up from the invitation → verify the address (required when
+`REQUIRE_EMAIL_VERIFICATION` is on) → accept. The token lives in the original
+tab's session storage, so either: return to that tab, choose **Back to sign in**
+and sign in — the invitation continues; or, if verifying in another tab, sign in
+there and **open the invitation link again**. Automatic continuation across tabs
+is not built (V1 limitation; both paths are tested).
 
 Invitation creation locks the board row and takes a per-inviter advisory lock,
 so two members inviting the same address at once, or one inviter racing the
@@ -80,7 +137,8 @@ whose account a concurrent transaction is deleting is waited for and skipped;
 if a promotion still updates nothing, the next member is tried. Every change
 it makes is one the cascades would make anyway.
 Memberships cascade; `created_by`, `added_by` and `accepted_by` become null;
-invitations sent by the deleted account cascade away — accepted ones included,
+in-platform invitations *to* the deleted account cascade away, and invitations
+sent by it cascade away — accepted ones included,
 so the record of who invited whom goes with the inviter's account.
 
 **V1B and later:** any new table that references a user must decide its
@@ -88,3 +146,10 @@ deletion behaviour explicitly (cascade, or set null to keep shared work), and
 tests must cover bulk deletion. Assignees should reference
 `together_members (board_id, user_id)` with a composite foreign key so that
 leaving or removal clears assignments.
+
+## Known behaviour outside Together
+
+Pages under the `(app)` route group that call `notFound()` render the
+not-found page with HTTP 200, because that layout streams; `/admin` pages and
+unknown routes return a real 404. Together's APIs are unaffected: they answer
+404 for no access and for a board that is missing or not yours, identically.
