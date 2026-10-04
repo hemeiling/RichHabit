@@ -37,6 +37,7 @@ const HAS_CJK = /[\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF]/;
 const SHARED = new Set([
   "common.none",
   "login.emailPlaceholder",
+  "together.inviteEmailPlaceholder",
   "goalAreas.Health", "goalAreas.Fitness", "goalAreas.Career", "goalAreas.Learning",
   "goalAreas.Relationships", "goalAreas.Financial", "goalAreas.Personal project", "goalAreas.Sleep",
 ]);

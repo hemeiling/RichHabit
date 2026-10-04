@@ -109,6 +109,18 @@ export const FEATURES = {
     label: "What's New",
     events: ["whats_new_opened", "whats_new_cta_clicked"],
   },
+  /*
+   * Together. Counts and booleans only — never a board name, an address or a
+   * member's name: what people are working on together is theirs.
+   */
+  together: {
+    label: "Together",
+    events: [
+      "together_board_created", "together_board_archived", "together_members_added",
+      "together_member_removed", "together_board_left", "together_invitation_sent",
+      "together_invitation_accepted",
+    ],
+  },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

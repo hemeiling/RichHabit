@@ -993,6 +993,104 @@ create table coach_requests (
 create index coach_requests_user_time_idx on coach_requests (user_id, occurred_at desc);
 
 
+-- ---- Together V1A: boards, membership, invitations ----------------------
+-- Shared workspaces, kept apart from every private RichHabit table. The same
+-- statements as scripts/migrations/together-v1a.mjs, which explains them; the
+-- trigger hands a board to its longest-standing remaining member when its
+-- owner's account is deleted, or deletes it when nobody else is on it.
+create table if not exists together_boards (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (length(btrim(name)) between 1 and 80),
+  created_by  uuid references users on delete set null,
+  archived_at timestamptz,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create table if not exists together_members (
+  board_id  uuid not null references together_boards on delete cascade,
+  user_id   uuid not null references users on delete cascade,
+  role      text not null check (role in ('owner','member')),
+  added_by  uuid references users on delete set null,
+  joined_at timestamptz not null default now(),
+  primary key (board_id, user_id)
+);
+
+create unique index if not exists together_members_one_owner
+  on together_members (board_id) where role = 'owner';
+
+create index if not exists together_members_user_idx on together_members (user_id);
+
+create table if not exists together_invitations (
+  id               uuid primary key default gen_random_uuid(),
+  board_id         uuid not null references together_boards on delete cascade,
+  email_normalized text not null check (length(email_normalized) between 3 and 254),
+  token_hash       text not null unique,
+  invited_by       uuid not null references users on delete cascade,
+  created_at       timestamptz not null default now(),
+  sent_at          timestamptz,
+  expires_at       timestamptz not null,
+  accepted_at      timestamptz,
+  accepted_by      uuid references users on delete set null,
+  revoked_at       timestamptz,
+  check (accepted_at is null or revoked_at is null)
+);
+
+create unique index if not exists together_invitations_one_open
+  on together_invitations (board_id, email_normalized)
+  where accepted_at is null and revoked_at is null;
+
+create index if not exists together_invitations_inviter_time
+  on together_invitations (invited_by, created_at desc);
+
+create or replace function together_before_user_delete() returns trigger
+language plpgsql as $$
+declare
+  owned record;
+  heir  uuid;
+begin
+  for owned in
+    select board_id from together_members where user_id = old.id and role = 'owner' for update
+  loop
+    -- Each change here is one the cascades would make anyway: the leaving
+    -- membership goes, and an added_by naming an account already deleted in
+    -- this statement becomes null. Making them now keeps the promotion valid
+    -- however many owners and members one statement deletes.
+    delete from together_members
+     where board_id = owned.board_id and user_id = old.id;
+    -- The heir's row is locked, so a member whose account another transaction
+    -- is deleting at this moment is waited for and then skipped; and if the
+    -- promotion still finds nobody, the next member is tried. A board is never
+    -- left without an owner.
+    loop
+      heir := null;
+      select m.user_id into heir
+        from together_members m
+        join users u on u.id = m.user_id
+       where m.board_id = owned.board_id
+       order by m.joined_at, m.user_id
+       limit 1
+         for update of m;
+      if heir is null then
+        delete from together_boards where id = owned.board_id;
+        exit;
+      end if;
+      update together_members
+         set role = 'owner',
+             added_by = case when exists (select 1 from users a where a.id = added_by)
+                             then added_by end
+       where board_id = owned.board_id and user_id = heir;
+      exit when found;
+    end loop;
+  end loop;
+  return old;
+end
+$$;
+
+create trigger together_before_user_delete
+  before delete on users for each row execute function together_before_user_delete();
+-- ---- end Together V1A ------------------------------------------------------
+
 -- ---- AI workspace, admin only -------------------------------------------
 -- Seven tables for the admin-only AI Workspace. Kept identical to
 -- scripts/migrations/ai-workspace.mjs, which creates them on existing databases;

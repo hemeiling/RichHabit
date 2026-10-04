@@ -4,6 +4,7 @@ import { currentAdmin } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n/server";
 import { databaseUrl, isLocalDatabase } from "@/lib/env";
+import { togetherEnabledFor } from "@/lib/together/access";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // The real session check. Middleware only looked at whether a cookie existed.
@@ -36,7 +37,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Resolved server-side so the first paint is already in the right language.
   return (
-    <AppShell userId={user.id} email={user.email} locale={getLocale()} localDb={localDb} aiWorkspace={aiWorkspace}>
+    <AppShell userId={user.id} email={user.email} locale={getLocale()} localDb={localDb} aiWorkspace={aiWorkspace}
+      together={togetherEnabledFor(user.id)}>
       {children}
     </AppShell>
   );

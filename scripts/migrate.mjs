@@ -25,6 +25,7 @@ import { migrateUserPlans } from "./migrations/user-plans.mjs";
 import { migratePriorityQuota } from "./migrations/priority-quota-usage.mjs";
 import { migrateImportantDatesV2 } from "./migrations/important-dates-v2.mjs";
 import { migrateWhatsNew } from "./migrations/whats-new.mjs";
+import { migrateTogetherV1A } from "./migrations/together-v1a.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -919,6 +920,17 @@ try {
    * deleted. Additive and guarded. See scripts/migrations/whats-new.mjs.
    */
   changed += await migrateWhatsNew(client, console.log);
+
+  /*
+   * ---- 15. Together V1A: boards, membership, invitations ---------------------
+   *
+   * Three new tables, created only if absent, and a BEFORE DELETE trigger on
+   * users that hands a shared board to its longest-standing remaining member
+   * when its owner's account is deleted (or deletes it when nobody else is on
+   * it). Nothing existing is altered and no row is read or written. See
+   * scripts/migrations/together-v1a.mjs.
+   */
+  changed += await migrateTogetherV1A(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

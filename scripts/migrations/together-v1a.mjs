@@ -1,0 +1,152 @@
+/**
+ * ---- 15. Together V1A: boards, membership, invitations ----------------------
+ *
+ * Three new tables and one trigger on `users`. Nothing that exists is altered,
+ * rewritten or backfilled; every existing account and row is untouched.
+ *
+ *   together_boards       a shared workspace. `created_by` is an audit fact and
+ *                         is set null when that account goes — ownership lives
+ *                         in membership, never here.
+ *   together_members      who belongs to a board, as owner or member. Exactly
+ *                         one owner per board (a unique partial index).
+ *   together_invitations  an emailed, single-use invitation. Only the SHA-256 of
+ *                         the token is stored. Usable only once `sent_at` is set,
+ *                         which happens after the mail provider has accepted the
+ *                         message (see src/lib/together/invitations.ts).
+ *
+ * The trigger: shared boards must survive their owner's account deletion, by
+ * every path that deletes accounts (the admin screen, its bulk action and the
+ * prune script all run `delete from users`). Before a user row is deleted, each
+ * board it owns is handed to the longest-standing remaining member — or, when
+ * nobody else remains, deleted, because it is no longer shared with anyone.
+ * "Remaining" excludes accounts already deleted earlier in the same statement:
+ * a row-level BEFORE trigger sees the rows its statement has already processed,
+ * so joining `users` is what keeps a bulk delete from handing a board to someone
+ * who is also being deleted.
+ *
+ * Idempotent: tables and indexes `if not exists`, the function `or replace`, the
+ * trigger only if absent. db/schema.sql carries the same statements for fresh
+ * installs; tests/together-migration.test.ts proves both match and that every
+ * existing table and row comes through unchanged.
+ */
+
+export const TOGETHER_V1A_TABLES = ["together_boards", "together_members", "together_invitations"];
+
+export const TOGETHER_V1A_STATEMENTS = [
+  `create table if not exists together_boards (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (length(btrim(name)) between 1 and 80),
+  created_by  uuid references users on delete set null,
+  archived_at timestamptz,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+)`,
+  `create table if not exists together_members (
+  board_id  uuid not null references together_boards on delete cascade,
+  user_id   uuid not null references users on delete cascade,
+  role      text not null check (role in ('owner','member')),
+  added_by  uuid references users on delete set null,
+  joined_at timestamptz not null default now(),
+  primary key (board_id, user_id)
+)`,
+  `create unique index if not exists together_members_one_owner
+  on together_members (board_id) where role = 'owner'`,
+  `create index if not exists together_members_user_idx on together_members (user_id)`,
+  `create table if not exists together_invitations (
+  id               uuid primary key default gen_random_uuid(),
+  board_id         uuid not null references together_boards on delete cascade,
+  email_normalized text not null check (length(email_normalized) between 3 and 254),
+  token_hash       text not null unique,
+  invited_by       uuid not null references users on delete cascade,
+  created_at       timestamptz not null default now(),
+  sent_at          timestamptz,
+  expires_at       timestamptz not null,
+  accepted_at      timestamptz,
+  accepted_by      uuid references users on delete set null,
+  revoked_at       timestamptz,
+  check (accepted_at is null or revoked_at is null)
+)`,
+  // At most one open invitation per board and address: a new one revokes the old.
+  `create unique index if not exists together_invitations_one_open
+  on together_invitations (board_id, email_normalized)
+  where accepted_at is null and revoked_at is null`,
+  `create index if not exists together_invitations_inviter_time
+  on together_invitations (invited_by, created_at desc)`,
+  `create or replace function together_before_user_delete() returns trigger
+language plpgsql as $$
+declare
+  owned record;
+  heir  uuid;
+begin
+  for owned in
+    select board_id from together_members where user_id = old.id and role = 'owner' for update
+  loop
+    -- Each change here is one the cascades would make anyway: the leaving
+    -- membership goes, and an added_by naming an account already deleted in
+    -- this statement becomes null. Making them now keeps the promotion valid
+    -- however many owners and members one statement deletes.
+    delete from together_members
+     where board_id = owned.board_id and user_id = old.id;
+    -- The heir's row is locked, so a member whose account another transaction
+    -- is deleting at this moment is waited for and then skipped; and if the
+    -- promotion still finds nobody, the next member is tried. A board is never
+    -- left without an owner.
+    loop
+      heir := null;
+      select m.user_id into heir
+        from together_members m
+        join users u on u.id = m.user_id
+       where m.board_id = owned.board_id
+       order by m.joined_at, m.user_id
+       limit 1
+         for update of m;
+      if heir is null then
+        delete from together_boards where id = owned.board_id;
+        exit;
+      end if;
+      update together_members
+         set role = 'owner',
+             added_by = case when exists (select 1 from users a where a.id = added_by)
+                             then added_by end
+       where board_id = owned.board_id and user_id = heir;
+      exit when found;
+    end loop;
+  end loop;
+  return old;
+end
+$$`,
+];
+
+const TRIGGER = `create trigger together_before_user_delete
+  before delete on users for each row execute function together_before_user_delete()`;
+
+async function tableExists(client, table) {
+  const { rows } = await client.query(
+    `select 1 from information_schema.tables where table_schema = 'public' and table_name = $1`, [table]);
+  return rows.length > 0;
+}
+
+export async function migrateTogetherV1A(client, log = () => {}) {
+  if (!(await tableExists(client, "users"))) return 0;
+  let changed = 0;
+  const existed = {};
+  for (const t of TOGETHER_V1A_TABLES) existed[t] = await tableExists(client, t);
+  const { rows: fn } = await client.query(
+    `select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'together_before_user_delete'`);
+  for (const statement of TOGETHER_V1A_STATEMENTS) await client.query(statement);
+  for (const t of TOGETHER_V1A_TABLES) {
+    if (!existed[t]) { log(`  created ${t}`); changed++; }
+  }
+  if (!fn.length) { log("  created together_before_user_delete()"); changed++; }
+  const { rows: trg } = await client.query(
+    `select 1 from pg_trigger where tgname = 'together_before_user_delete' and not tgisinternal`);
+  if (!trg.length) {
+    await client.query(TRIGGER);
+    log("  created trigger together_before_user_delete on users");
+    changed++;
+  }
+  return changed;
+}
+
+export const TOGETHER_V1A_TRIGGER = TRIGGER;

@@ -25,7 +25,11 @@ type Mode = "signin" | "signup";
  * The language switcher is here as well as in More: a relative opening this for
  * the first time has to be able to change it before they have an account.
  */
-export default function LoginForm({ initialMode = "signin" }: { initialMode?: Mode }) {
+export default function LoginForm({ initialMode = "signin", returnTo }: {
+  initialMode?: Mode;
+  /** An internal path from the page's fixed allow-list; /habits otherwise. */
+  returnTo?: string;
+}) {
   const t = useT();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -117,7 +121,7 @@ export default function LoginForm({ initialMode = "signin" }: { initialMode?: Mo
         setPending({ email: data.email ?? identifier, sent: data.sent !== false });
         return;
       }
-      router.push("/habits");
+      router.push(returnTo ?? "/habits");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.login.genericError);

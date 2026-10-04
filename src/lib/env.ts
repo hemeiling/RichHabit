@@ -355,6 +355,27 @@ export const mail = {
   outboxDir: str("MAIL_OUTBOX_DIR", "") || null,
 };
 
+// ─────────────────────────────── Together ────────────────────────────────────
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const together = {
+  /**
+   * The Together preview, by account id. Together is visible — in the sidebar,
+   * at its pages and through every one of its APIs — only to these accounts
+   * until its public launch. Ids rather than addresses: an id never changes and
+   * cannot be claimed by registering somebody else's email.
+   *
+   * Read on the server only. The client is told one boolean ("may this account
+   * see Together"), never the list or anybody else's id. Anything that is not a
+   * well-formed UUID is ignored, so a typo cannot widen the preview.
+   */
+  get previewUserIds(): ReadonlySet<string> {
+    return new Set((process.env.TOGETHER_PREVIEW_USER_IDS ?? "")
+      .split(",").map((s) => s.trim().toLowerCase()).filter((s) => UUID.test(s)));
+  },
+};
+
 // ─────────────────────────────── analytics ───────────────────────────────────
 
 export const analytics = {

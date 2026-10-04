@@ -23,6 +23,10 @@ const PUBLIC_PATHS = [
   // the credential and is checked server-side, once.
   "/forgot",
   "/reset",
+  // A Together invitation has to open for someone not yet signed in — or not
+  // yet registered. The page decides what they may do; every API it calls
+  // re-checks on the server.
+  "/together/invite",
 ];
 
 /**

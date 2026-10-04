@@ -57,6 +57,14 @@ const NAV = [
     path: "M4 6h16v13H4z M4 11h16 M9 6v13 M14 6v13" },
   { href: "/insights", key: "insights", path: "M5 19V10 M10 19V5 M15 19v-6 M20 19v-9" },
   /*
+   * Together sits between the personal views and Community: the sidebar reads
+   * from "me" to "us" to "everyone". Two linked rings — two people, one shared
+   * space — in the same open stroke. Shown only to accounts the server has
+   * allowed into the Together preview; see `together` below.
+   */
+  { href: "/together", key: "together",
+    path: "M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" },
+  /*
    * Two figures, the nearer one whole and the further one partial. Drawn in the
    * same open-stroke language as its neighbours rather than a filled glyph, and
    * placed after the personal views because it is the only outward-looking
@@ -223,8 +231,8 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-function Chrome({ email, localDb, children }:
-  { email: string; localDb: boolean; children: React.ReactNode }) {
+function Chrome({ email, localDb, together, children }:
+  { email: string; localDb: boolean; together: boolean; children: React.ReactNode }) {
   const { state, actions, loading, saving, error, loadFailed, reload, dismissError } = useHabits();
 
   /*
@@ -267,7 +275,9 @@ function Chrome({ email, localDb, children }:
     href: tab.href, label: label(tab.key), sublabel: sublabel(tab.key), icon: tab.path,
   });
 
-  const items: NavNode[] = NAV.map((node) => ("children" in node
+  // Together is hidden from accounts outside its preview — the server decided.
+  const nav = NAV.filter((node) => together || !("key" in node && node.key === "together"));
+  const items: NavNode[] = nav.map((node) => ("children" in node
     ? {
       key: node.key,
       label: label(node.key),
@@ -307,7 +317,8 @@ function Chrome({ email, localDb, children }:
             )}
             <span className="display" style={{
               fontSize: 21, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>{t.titles[pathname] ?? t.appName}</span>
+            }}>{t.titles[pathname]
+              ?? (pathname.startsWith("/together/") ? t.titles["/together"] : t.appName)}</span>
             {/* Beside the page title, where the eye already is, rather than in
                 a corner that gets skipped. */}
             {localDb && <LocalDbBadge />}
@@ -367,17 +378,19 @@ function Chrome({ email, localDb, children }:
 }
 
 export default function AppShell({
-  userId, email, locale, localDb, aiWorkspace = false, children,
+  userId, email, locale, localDb, aiWorkspace = false, together = false, children,
 }: {
   userId: string; email: string; locale: Locale; localDb: boolean;
   /** Admins only, decided by the layout from the database. */
   aiWorkspace?: boolean;
+  /** Whether this account may see Together. A boolean — never the list behind it. */
+  together?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
-        <Chrome email={email} localDb={localDb}>{children}</Chrome>
+        <Chrome email={email} localDb={localDb} together={together}>{children}</Chrome>
         {aiWorkspace && <AiLauncher />}
       </HabitsProvider>
     </LocaleProvider>

@@ -2,6 +2,10 @@
 
 > Last updated: 2026-10-03
 >
+> **TOGETHER V1A — COLLABORATION FOUNDATION: IMPLEMENTED LOCALLY ON `feature/together-v1a` (WORKTREE `/Users/meilinghe/dev/rich-habits-together`, BASED ON `424c11f`) · COMMITTED, NOT PUSHED · NOT MERGED · NOT MIGRATED (NO NEON TOUCHED) · NOT DEPLOYED · AWAITING THE PRODUCT OWNER'S REVIEW AND GATE A APPROVAL.** See the first section below.
+>
+> **WHAT'S NEW + LANGUAGE MENU: RELEASED · `424c11f` IS `main` AND IS DEPLOYED.** Its full release record is on `feature/whats-new` (documentation only, by the Product Owner's decision); it is not repeated here.
+>
 > **IMPORTANT DATES V2 — OPTIONAL TIMES, REPEATING EVENTS, DAY AGENDA: RELEASED · `9dc9b65` ON `main` (fast-forward from `bea8bb1`) · GATE A PASS (INDEPENDENT REVIEW, READ-ONLY PRODUCTION PREFLIGHT, NEON REHEARSAL ON `important-dates-v2-rehearsal`) · PRODUCTION MIGRATION APPLIED 2026-10-03 19:36:48 UTC — EXACTLY 14 CHANGES (7 COLUMNS + 7 CHECKS), SECOND RUN "NOTHING TO DO" · ALL 35 EXISTING EVENTS BYTE-IDENTICAL, ALL STILL ALL-DAY AND ONCE · DEPLOYED ON RENDER BY THE PRODUCT OWNER (MANUAL; AUTO-DEPLOY DID NOT START) · SERVED BUILD PROVEN BY BUNDLE PROBE · SIGNED-OUT CHECKS PASS · SIGNED-IN VERIFIED BY THE PRODUCT OWNER ON THEIR OWN ACCOUNT · PRODUCTION VERIFIED.** See the first section below.
 >
 > **PHASE 5 — FREE PLAN ENFORCEMENT: IMPLEMENTED → COMMITTED → PUSHED → REHEARSED → PRODUCTION MIGRATION APPLIED → DEPLOYED → PRODUCTION VERIFIED · `2410bd3` ON `main` → MIGRATION APPLIED 2026-09-20, SHORTLY BEFORE THE 04:44 UTC HEALTH CHECK (38 → 39 TABLES) → DEPLOYED TO RENDER (`dep-danmdsmk1f9s73979ceg`) → PRODUCTION VERIFIED 2026-09-20 · **MIGRATION BEFORE DEPLOY**, BECAUSE THE DEPLOYED CODE READS `priority_quota_usage` FOR FREE PRIORITY CREATION · FREE = **15 ACTIVE HABITS** AND **5 NEW PRIORITIES PER SERVER-DERIVED LOCAL DAY** · GRANDFATHERED PRO (8) AND ADMIN (5) UNLIMITED AND WRITE NO QUOTA ROW · ONLY TRANSITIONS *INTO* ACTIVE ARE GATED; AN ACCOUNT OVER THE LIMIT KEEPS EVERYTHING · `priority_quota_usage` CREATED **EMPTY** AND STILL 0 ROWS · NO EXISTING USER DATA MIGRATED, MODIFIED OR DELETED · NO PAYMENT INFRASTRUCTURE · KNOWN **VERIFICATION GAP** (NOT A DEFECT): SIMULTANEOUS MULTI-SESSION LOCK CONTENTION NOT YET EXECUTED**
@@ -77,6 +81,77 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Together V1A — collaboration foundation (LOCAL ONLY · COMMITTED · NOT PUSHED/MIGRATED/DEPLOYED)
+
+**Scope delivered:** Together navigation (preview accounts only), Together home
+(boards, archived toggle, derived People), create/rename boards, invitations by
+email, owner removes / member leaves, archive/unarchive (owner), board shell with
+a placeholder for V1B work, central `requireBoard`, account-deletion trigger,
+server-side preview allow-list. EN / 中文 / 双语, 390px and desktop.
+
+**Rollout gate:** `TOGETHER_PREVIEW_USER_IDS` (server only; comma-separated
+immutable user UUIDs; invalid entries ignored; empty = nobody). Outside it, the
+nav item is absent, pages render not-found, every API answers 404, and invitations
+cannot be accepted. The client receives only a yes/no for the signed-in account.
+**Must be set in Render before anyone can see Together; unset is safe.**
+
+**Schema (migration step 15, `scripts/migrations/together-v1a.mjs`, mirrored in
+`db/schema.sql`):** 3 tables `together_boards`, `together_members`,
+`together_invitations`; partial unique indexes (one owner per board; one open
+invitation per board+address); function + `BEFORE DELETE ON users` trigger
+`together_before_user_delete`. Additive only; the trigger is the one integration
+point with an existing table. 5 changes on first run, 0 on the second.
+
+**Account deletion:** before a user row is deleted, each board it owns goes to the
+longest-standing remaining member (accounts deleted earlier in the same statement
+excluded), else the board is deleted. Proven for single, bulk (both orders), chained
+heirs and delete-everyone cases. Bug found and fixed during testing: a bulk delete
+could fail an FK recheck on `added_by`.
+
+**Invitation ordering (failure boundary):** (1) commit an inactive row (`sent_at`
+null; earlier open invitation for the same board+address revoked in the same
+transaction); (2) send; on failure revoke and report failure; (3) activate only if
+still open — otherwise report failure. Preview/accept require `sent_at`. So: a
+reported failure is never usable, an emailed token always has a committed row, and
+a retry leaves exactly one usable invitation. Token: 32 random bytes in the URL
+fragment, SHA-256 stored, 14 days, single use, address must match the signed-in
+account; moved to sessionStorage and stripped from the address bar.
+
+**Verification (local):** typecheck, lint, full suite, production build; new tests
+`tests/together-db.test.ts` (routes against Postgres: auth matrix, invitations,
+deletion), `tests/together-migration.test.ts`, `tests/together-boundaries.test.ts`;
+Playwright on the local stack (EN/中文/双语 × 390/1440, keyboard, axe, all invite
+flows via the mail outbox, regression); production-shaped local rehearsal
+(`.pgdata-deploy/rehearse-local.mjs`, untracked) PASS.
+
+**Independent review:** no authorization bypass, no leak, invitation boundary
+holds. Fixed from it: concurrent account deletions could leave a board ownerless
+(heir row now locked, promotion retried); a lost activation reply could leave a
+"failed" invitation usable (now withdrawn); simultaneous invitations to one
+address returned a raw 500 (board row + per-inviter advisory lock); malformed
+invitation id → 500 (now 404); UI swallowed failed rename/leave; misleading
+over-20-people error and inflated analytics count; bilingual expiry date shown
+twice. Concurrency fixes cannot be exercised on single-connection PGlite —
+verify in the Neon rehearsal.
+
+**Open product decisions (not changed):** (a) People spread transitively — a
+co-member can add you to new boards without asking, and others then see you;
+(b) a member can re-invite someone the owner removed. Both follow the approved
+"derived People / any member invites" design.
+
+**Accepting an invitation sets `users.email_verified_at` when unset** (inbox
+proven by the link) — the one write to an existing table outside the trigger.
+
+**Known, not fixed:** (1) pages under `(app)` that call `notFound()` stream with
+HTTP 200 and a not-found body (existing layout behaviour; APIs return real 404s);
+(2) app-wide `--muted`/`--faint`/`.eyebrow` text fails WCAG AA contrast on every
+page (35 hits on `/habits`), Together inherits it; (3) a brand-new account whose
+sign-up requires email verification must reopen the invitation link after
+verifying (the token lives in that tab's sessionStorage).
+
+**Next step:** Product Owner reviews the report → if approved, Gate A (independent
+review already done locally; read-only production preflight; fresh Neon rehearsal).
 
 ## Important Dates V2 — optional times, repeating events, Day Agenda (RELEASED · MIGRATED · DEPLOYED · VERIFIED)
 

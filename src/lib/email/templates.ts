@@ -147,3 +147,38 @@ const RESET_ZH: Copy = {
 export function resetEmail(locale: Locale, url: string, ttlMinutes: number) {
   return compose(blocks(locale, RESET_EN, RESET_ZH), locale, url, ttlMinutes);
 }
+
+/**
+ * Together — an invitation to one shared board.
+ *
+ * Says who is inviting and to which board, and nothing else: no other members,
+ * nothing from the board, nothing from anybody's private RichHabit. The names
+ * are escaped by `compose` like every other interpolated string. The message is
+ * the same whether or not the address already has an account — the link decides
+ * that, after it is opened — so nothing about the recipient is implied.
+ */
+export function togetherInviteEmail(
+  locale: Locale, url: string, inviter: string, board: string, days: number,
+) {
+  const en: Copy = {
+    subject: `${inviter} invited you to ${board} on RichHabit`,
+    heading: `Join ${board}`,
+    lead: `${inviter} invited you to work together on “${board}” in RichHabit Together — `
+      + "a shared board for keeping commitments to each other. Your own RichHabit stays private.",
+    button: "Open the invitation",
+    fallback: "If the button does not work, copy this link into your browser:",
+    expiry: (d) => `This invitation works for ${d} days and can be accepted once.`,
+    ignore: "If you were not expecting this, you can ignore this email — nothing happens unless you accept.",
+  };
+  const zh: Copy = {
+    subject: `${inviter} 邀请你加入 RichHabit 的「${board}」`,
+    heading: `加入「${board}」`,
+    lead: `${inviter} 邀请你在 RichHabit「一起」中共同参与「${board}」——一个帮助彼此守住承诺的共享看板。`
+      + "你自己的 RichHabit 内容依然保持私密。",
+    button: "查看邀请",
+    fallback: "如果按钮无法使用，请把下面的链接复制到浏览器打开：",
+    expiry: (d) => `此邀请在 ${d} 天内有效，且只能接受一次。`,
+    ignore: "如果这封邮件出乎你的意料，可以忽略它——除非你接受，否则不会发生任何事。",
+  };
+  return compose(blocks(locale, en, zh), locale, url, days);
+}
