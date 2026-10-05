@@ -2,7 +2,9 @@
 
 > Last updated: 2026-10-05
 >
-> **TOGETHER V1A — COLLABORATION FOUNDATION: COMPLETE (CLOSED 2026-10-05) · `main` = DEPLOYED = `26011bd` · PRODUCTION MIGRATED 2026-10-04 (STEP 15, 39 → 42 TABLES, ADDITIVE) · SERVED BUILD PROVEN BY BUNDLE PROBE · SIGNED-IN VISUAL CHECKS PASSED BY THE PRODUCT OWNER (hippo DESKTOP, meimei MOBILE) · PREVIEW ALLOW-LIST = hippo + meimei · V1B NOT STARTED (NEEDS EXPLICIT APPROVAL).** See the first section below.
+> **TOGETHER V1B — SHARED WORK (BOARD + BACKLOG): IMPLEMENTED AND LOCALLY VERIFIED · CANDIDATE COMMITTED ON `feature/together-v1b` (from `65f074e`) · NOT PUSHED · NOT MERGED · PRODUCTION NOT MIGRATED · NOT DEPLOYED · GATE A NOT STARTED — WAITING FOR THE PRODUCT OWNER TO CREATE A FRESH V5 NEON REHEARSAL BRANCH (`REHEARSAL_DATABASE_URLV5`) AND APPROVE GATE A.** See the Together V1B section below.
+>
+> **TOGETHER V1A — COLLABORATION FOUNDATION: COMPLETE (CLOSED 2026-10-05) · `main` = DEPLOYED = `26011bd` · PRODUCTION MIGRATED 2026-10-04 (STEP 15, 39 → 42 TABLES, ADDITIVE) · SERVED BUILD PROVEN BY BUNDLE PROBE · SIGNED-IN VISUAL CHECKS PASSED BY THE PRODUCT OWNER (hippo DESKTOP, meimei MOBILE) · PREVIEW ALLOW-LIST = hippo + meimei · V1B IN PROGRESS (LOCAL CANDIDATE; SEE ABOVE).** See the Together V1A section below.
 >
 > **WHAT'S NEW + LANGUAGE MENU: RELEASED · `424c11f` IS `main` AND IS DEPLOYED.** Its full release record is on `feature/whats-new` (documentation only, by the Product Owner's decision); it is not repeated here.
 >
@@ -86,6 +88,66 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Together V1B — shared work: Board + Backlog (LOCAL CANDIDATE · NOT PUSHED/MIGRATED/DEPLOYED)
+
+**State:** implemented on `feature/together-v1b` (branched from `65f074e`, which
+carries the V1A close record). One candidate commit (see `git log`). Production,
+`main`, Headband, the V1A restore branch and the allow-list are untouched. No
+Neon database was used.
+
+**Scope (approved and locked):** inside a space, Board (看板: To do / In progress /
+Waiting / Done, fixed) and Backlog (想法池: "we might"); quick title-only capture;
+Commit → top of To do, Commit to…, Back to Backlog; Move to… (menu on desktop,
+bottom sheet on a phone; no drag-and-drop); one stage at a time on mobile; task
+sheet (title, description, assignees, group, effort 1/2/3/5/8, pure-date due);
+Done shows the last 14 days (max 20) + Show older; soft delete + Undo + Recently
+deleted; Groups sheet; Members moved to `/together/b/[id]/members`; archived
+spaces read-only; no realtime, filters or notifications. Design and rules:
+`docs/architecture/Together.md` (V1B section).
+
+**Schema:** migration step 16, `scripts/migrations/together-v1b.mjs` (mirrored in
+`db/schema.sql`): `together_groups`, `together_tasks`, `together_task_assignees`
+— create-if-absent only; no V1A table, function or trigger changed. Ordering by
+`moved_at desc, id desc` (no position column); `text_version` for title/description
+conflicts; board-scoped composite keys (assignee → membership, cascade; group →
+same space, set null).
+
+**Intentional V1A-visible changes:** English strings now call the container a
+"space" (Space / 空间; "Board" is the work board); the space page opens on the
+Board, with membership and rename/archive/leave on its Members page.
+
+**Local verification of the candidate:**
+- typecheck, lint, full suite 1,442/1,442, production build;
+- migration: parity, idempotence, additive-only, every existing row unchanged
+  (PGlite); local real-PostgreSQL 18.6 rehearsal on a production-shaped database
+  (26011bd schema + V1A data): 42 → 45 tables, "3 change(s)" then "Nothing to do",
+  0 structure lines removed, 74 added (all V1B), every existing table identical;
+- route/authorization suite (20) on PGlite and, with V1A's (54), on local real
+  PostgreSQL (74/74);
+- V1B deletion + concurrency suite on local real PostgreSQL 15/15 (8 repetitions
+  per race; 0 deadlocks), with a control that fails when assignees reference
+  `users`; V1A Gate suite 77/77 on the V1B schema;
+- browser: V1B 127/127 (desktop + 390px, EN/中文/双语, light/dark, keyboard-only
+  Move to…, axe, strict contrast on the work surface, no mobile overflow, no
+  console errors); V1A journeys 96/96 and sidebar 77/77 (expectations updated
+  only for the intentional changes above);
+- independent security / data-safety / design review: 0 critical; 2 high (task
+  sheet could close over a conflict or failed save; "Keep mine" could later revert
+  a partner's other field) and 3 medium (lock order vs member removal; Escape in
+  an inline panel closed the sheet; out-of-order re-reads) — all fixed and covered
+  by tests; low items fixed or documented (open-work cap is a soft guard; an
+  archive does not wait for a write already past its check).
+
+**Gate A prerequisites (not started):** the Product Owner creates a fresh Neon
+branch cloned from production and adds it to the main project's `.env.local` as
+`REHEARSAL_DATABASE_URLV5` (never printed); then explicit Gate A approval. Tooling
+ready in `.pgdata-deploy/` (ignored by Git): `preflight.mjs` (reports
+`step16Pending`), `target-guard.ts` (local, V4 or V5 only — never production),
+`gate-v1b.pgtest.ts`, `gate.pgtest.ts`, `vitest.pg-shim.config.ts`,
+`rehearse-v1b-local.mjs`.
+
+**Next step:** Product Owner reviews the candidate, creates V5, approves Gate A.
 
 ## Together V1A — collaboration foundation (COMPLETE · MIGRATED · DEPLOYED · VERIFIED)
 

@@ -110,8 +110,9 @@ export const FEATURES = {
     events: ["whats_new_opened", "whats_new_cta_clicked"],
   },
   /*
-   * Together. Counts and booleans only — never a board name, an address or a
-   * member's name: what people are working on together is theirs.
+   * Together. Counts, booleans and stage keys only — never a board name, an
+   * address, a member's name, a task's title or description, a group's name or
+   * who is assigned: what people are working on together is theirs.
    */
   together: {
     label: "Together",
@@ -119,6 +120,8 @@ export const FEATURES = {
       "together_board_created", "together_board_archived",
       "together_member_removed", "together_board_left", "together_invitation_sent",
       "together_invitation_accepted", "together_invitation_declined",
+      "together_task_created", "together_task_moved", "together_task_assignees_set",
+      "together_task_deleted", "together_task_restored", "together_group_created", "together_group_deleted",
     ],
   },
 } as const;

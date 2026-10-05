@@ -5,13 +5,10 @@ import { getSessionUser } from "@/lib/auth";
 import { isUuid } from "@/lib/http";
 import { togetherAccess } from "@/lib/together/access";
 
-/**
- * A space's Board. Membership is checked by the API the screen calls, which
- * answers a non-member exactly as it answers a space that does not exist.
- */
-export default async function SpaceBoardPage({ params }: { params: { id: string } }) {
+/** A space's Backlog — what "we might" do. Same gate as the Board. */
+export default async function SpaceBacklogPage({ params }: { params: { id: string } }) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (!isUuid(params.id) || !(await togetherAccess(user.id))) notFound();
-  return <Suspense><SpaceWork boardId={params.id} viewerId={user.id} view="board" /></Suspense>;
+  return <Suspense><SpaceWork boardId={params.id} viewerId={user.id} view="backlog" /></Suspense>;
 }

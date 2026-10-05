@@ -1127,6 +1127,70 @@ create trigger together_before_user_delete
   before delete on users for each row execute function together_before_user_delete();
 -- ---- end Together V1A ------------------------------------------------------
 
+-- ---- Together V1B: groups, tasks, assignees ------------------------------
+-- A space's shared work. The same statements as scripts/migrations/together-v1b.mjs,
+-- which explains them. Every relation inside a space is board-scoped by a
+-- composite key; an assignee must be a member of the task's own space, so
+-- removal, leaving and account deletion clear assignments by cascade.
+create table if not exists together_groups (
+  id         uuid primary key default gen_random_uuid(),
+  board_id   uuid not null references together_boards on delete cascade,
+  name       text not null check (length(btrim(name)) between 1 and 40),
+  created_by uuid references users on delete set null,
+  created_at timestamptz not null default now(),
+  unique (board_id, id)
+);
+
+create unique index if not exists together_groups_name on together_groups (board_id, lower(name));
+
+create index if not exists together_groups_created_by on together_groups (created_by) where created_by is not null;
+
+create table if not exists together_tasks (
+  id           uuid primary key default gen_random_uuid(),
+  board_id     uuid not null references together_boards on delete cascade,
+  title        text not null check (length(btrim(title)) between 1 and 200),
+  description  text check (description is null or length(description) <= 10000),
+  stage        text not null check (stage in ('backlog','todo','doing','waiting','done')),
+  moved_at     timestamptz not null default now(),
+  group_id     uuid,
+  effort       smallint check (effort between 1 and 99),
+  due_on       date check (due_on between '2000-01-01' and '2100-12-31'),
+  created_by   uuid references users on delete set null,
+  updated_by   uuid references users on delete set null,
+  text_version integer not null default 1,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz,
+  deleted_by   uuid references users on delete set null,
+  unique (board_id, id),
+  foreign key (board_id, group_id) references together_groups (board_id, id) on delete set null (group_id)
+);
+
+create index if not exists together_tasks_stage
+  on together_tasks (board_id, stage, moved_at desc, id desc) where deleted_at is null;
+
+create index if not exists together_tasks_deleted
+  on together_tasks (board_id, deleted_at desc) where deleted_at is not null;
+
+create index if not exists together_tasks_created_by on together_tasks (created_by) where created_by is not null;
+
+create index if not exists together_tasks_updated_by on together_tasks (updated_by) where updated_by is not null;
+
+create index if not exists together_tasks_deleted_by on together_tasks (deleted_by) where deleted_by is not null;
+
+create table if not exists together_task_assignees (
+  task_id     uuid not null,
+  board_id    uuid not null,
+  user_id     uuid not null,
+  assigned_at timestamptz not null default now(),
+  primary key (task_id, user_id),
+  foreign key (board_id, task_id) references together_tasks (board_id, id) on delete cascade,
+  foreign key (board_id, user_id) references together_members (board_id, user_id) on delete cascade
+);
+
+create index if not exists together_task_assignees_member on together_task_assignees (board_id, user_id);
+-- ---- end Together V1B ------------------------------------------------------
+
 -- ---- AI workspace, admin only -------------------------------------------
 -- Seven tables for the admin-only AI Workspace. Kept identical to
 -- scripts/migrations/ai-workspace.mjs, which creates them on existing databases;

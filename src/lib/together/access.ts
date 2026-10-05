@@ -38,7 +38,11 @@ export type TogetherErrorCode =
   | "notFound" | "ownerOnly" | "archived" | "nameRequired" | "nameTooLong"
   | "emailInvalid" | "tooManyInvites" | "tooManyOpenInvites" | "sendFailed"
   | "invitationInvalid" | "wrongAccount" | "ownerCannotLeave" | "cannotRemoveSelf"
-  | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly" | "conflict";
+  | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly" | "conflict"
+  // V1B — shared work
+  | "titleRequired" | "titleTooLong" | "descriptionTooLong" | "stageInvalid" | "effortInvalid"
+  | "dueInvalid" | "notAMember" | "tooManyAssignees" | "tooManyTasks" | "taskDeleted" | "textConflict"
+  | "taskMissing" | "groupNameRequired" | "groupNameTooLong" | "groupExists" | "groupMissing" | "tooManyGroups";
 
 export class TogetherError extends ApiError {
   constructor(readonly code: TogetherErrorCode, status = 400) {

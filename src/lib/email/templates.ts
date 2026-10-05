@@ -149,7 +149,7 @@ export function resetEmail(locale: Locale, url: string, ttlMinutes: number) {
 }
 
 /**
- * Together — an invitation to one shared board.
+ * Together — an invitation to one shared space.
  *
  * Says who is inviting and to which board, and nothing else: no other members,
  * nothing from the board, nothing from anybody's private RichHabit. The names
@@ -164,7 +164,7 @@ export function togetherInviteEmail(
     subject: `${inviter} invited you to ${board} on RichHabit`,
     heading: `Join ${board}`,
     lead: `${inviter} invited you to work together on “${board}” in RichHabit Together — `
-      + "a shared board for keeping commitments to each other. Your own RichHabit stays private.",
+      + "a shared space for keeping commitments to each other. Your own RichHabit stays private.",
     button: "Open the invitation",
     fallback: "If the button does not work, copy this link into your browser:",
     expiry: (d) => `This invitation works for ${d} days and can be accepted once.`,

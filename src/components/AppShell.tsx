@@ -108,7 +108,13 @@ const RAIL_ROUTES = new Set(["/habits", "/priorities"]);
  * narrow reading measure (`.intent`), so nothing about the questions changes.
  */
 const WIDE_ROUTES = new Set([...RAIL_ROUTES, "/intention"]);
-const measureFor = (pathname: string) => (WIDE_ROUTES.has(pathname) ? 1240 : 780);
+/*
+ * A Together space too: its Board is four columns. Its Backlog and Members keep
+ * a reading measure inside (`.tg-narrow`), but share the wide shell so the
+ * space's header and tabs do not jump when moving between them.
+ */
+const measureFor = (pathname: string) =>
+  (WIDE_ROUTES.has(pathname) || pathname.startsWith("/together/b/") ? 1240 : 780);
 
 /**
  * Keeps the language in three places agreed: React state (what you see), the

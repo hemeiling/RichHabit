@@ -26,6 +26,7 @@ import { migratePriorityQuota } from "./migrations/priority-quota-usage.mjs";
 import { migrateImportantDatesV2 } from "./migrations/important-dates-v2.mjs";
 import { migrateWhatsNew } from "./migrations/whats-new.mjs";
 import { migrateTogetherV1A } from "./migrations/together-v1a.mjs";
+import { migrateTogetherV1B } from "./migrations/together-v1b.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -931,6 +932,16 @@ try {
    * scripts/migrations/together-v1a.mjs.
    */
   changed += await migrateTogetherV1A(client, console.log);
+
+  /*
+   * ---- 16. Together V1B: groups, tasks, assignees ---------------------------
+   *
+   * Three new tables, created only if absent. No V1A table, function or trigger
+   * is altered, and no existing row is read or written. Assignees reference a
+   * space's membership, so removal, leaving and account deletion clear them by
+   * cascade. See scripts/migrations/together-v1b.mjs.
+   */
+  changed += await migrateTogetherV1B(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

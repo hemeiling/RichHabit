@@ -2,12 +2,14 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/context";
-import { Avatar, BoardMark, call, type Person } from "@/components/together/shared";
+import { Avatar, call, type Person } from "@/components/together/shared";
+import SpaceHeader, { spaceStyle } from "@/components/together/SpaceHeader";
+import { cachedWork } from "@/components/together/SpaceWork";
 
 /**
- * One board, V1A: who is on it and how people join — always by invitation,
- * accepted. The shared work — the backlog and the board itself — arrives in
- * V1B; this is its frame.
+ * A space's Members page: who is in it and how people join — always by
+ * invitation, accepted — and the owner's housekeeping (rename, archive). Off
+ * the everyday work surface on purpose: Board and Backlog are for the work.
  *
  * What a member can do is decided on the server; the screen only hides
  * controls that would be refused anyway, so nothing here is a security check.
@@ -21,7 +23,7 @@ interface Board {
   canInvite: boolean; invitable: Person[];
 }
 
-export default function BoardShell({ boardId, viewerId }: { boardId: string; viewerId: string }) {
+export default function SpaceMembers({ boardId, viewerId }: { boardId: string; viewerId: string }) {
   const t = useT();
   const router = useRouter();
   const [board, setBoard] = useState<Board | null>(null);
@@ -88,45 +90,23 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
 
   const owner = board.role === "owner";
   const writable = !board.archived;
+  /** How many of this space's open tasks someone holds, from the last reading of its work (if any). */
+  const assignedTo = (id: string) =>
+    cachedWork(boardId)?.tasks.filter((x) => x.stage !== "done" && x.assignees.includes(id)).length ?? 0;
 
   return (
-    <div className="tg-board">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        {renaming ? (
-          <form className="flex items-center gap-2 flex-wrap" onSubmit={(e) => {
-            e.preventDefault();
-            act(() => call(`/api/together/boards/${boardId}`, { method: "PATCH", body: JSON.stringify({ name }) }),
-              undefined, { nav: true })
-              .then((ok) => { if (ok) setRenaming(false); });
-          }}>
-            <input className="input" autoFocus maxLength={80} value={name} aria-label={t.together.boardName}
-              onChange={(e) => setName(e.target.value)} style={{ minWidth: 220 }} />
-            <button className="btn btn-primary" type="submit">{t.common.save}</button>
-            <button className="btn" type="button" onClick={() => setRenaming(false)}>{t.common.cancel}</button>
-          </form>
-        ) : (
-          <div className="tg-board-head">
-            <BoardMark id={board.id} name={board.name} size={32} />
-            <h2 className="display tg-board-title">{board.name}</h2>
-          </div>
-        )}
-        {owner && writable && !renaming && (
-          <button className="btn btn-quiet" onClick={() => { setName(board.name); setRenaming(true); }}>
-            {t.together.rename}
-          </button>
-        )}
+    <div className="tg-space" style={spaceStyle(board.id)}>
+      <SpaceHeader id={board.id} name={board.name} members={board.members} view="members" />
+    <div className="tg-board tg-narrow">
+      <div className="flex items-start justify-between gap-3 flex-wrap mt-5">
+        <h3 className="display" style={{ fontSize: 22 }}>{t.together.members}</h3>
       </div>
 
       {board.archived && <p className="tg-archived mt-3" role="status">{t.together.archivedNote}</p>}
       {notice && <p className="mt-3" role="status" style={{ fontSize: 13.5, color: "var(--accent)" }}>{notice}</p>}
       {error && <p className="mt-3" role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>{error}</p>}
 
-      <div className="card p-4 mt-4 tg-placeholder">
-        <p className="muted" style={{ fontSize: 14 }}>{t.together.workComingSoon}</p>
-      </div>
-
-      <section className="card p-4 mt-4" aria-labelledby="tg-members">
-        <h3 id="tg-members" className="eyebrow">{t.together.members}</h3>
+      <section className="card p-4 mt-4" aria-label={t.together.members}>
         <ul className="tg-members mt-2">
           {board.members.map((m) => (
             <li key={m.id} className="tg-member">
@@ -139,7 +119,8 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
               </span>
               {owner && m.id !== viewerId && (
                 <button className="btn btn-quiet tg-small" onClick={() => {
-                  if (window.confirm(t.together.confirmRemove(m.name))) {
+                  const n = assignedTo(m.id);
+                  if (window.confirm(n ? t.together.confirmRemoveAssigned(m.name, n) : t.together.confirmRemove(m.name))) {
                     act(() => call(`/api/together/boards/${boardId}/members/${m.id}`, { method: "DELETE" }));
                   }
                 }}>{t.together.remove}</button>
@@ -223,8 +204,24 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
         )}
       </section>
 
+      {/* The space's own housekeeping, apart from its people: rename, archive — or leave. */}
       <div className="flex gap-2 flex-wrap mt-4">
-        {owner ? (
+        {renaming ? (
+          <form className="flex items-center gap-2 flex-wrap" onSubmit={(e) => {
+            e.preventDefault();
+            act(() => call(`/api/together/boards/${boardId}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+              undefined, { nav: true })
+              .then((ok) => { if (ok) setRenaming(false); });
+          }}>
+            <input className="input" autoFocus maxLength={80} value={name} aria-label={t.together.boardName}
+              onChange={(e) => setName(e.target.value)} style={{ minWidth: 220 }} />
+            <button className="btn btn-primary" type="submit">{t.common.save}</button>
+            <button className="btn" type="button" onClick={() => setRenaming(false)}>{t.common.cancel}</button>
+          </form>
+        ) : owner ? (<>
+          {writable && (
+            <button className="btn" onClick={() => { setName(board.name); setRenaming(true); }}>{t.together.renameSpace}</button>
+          )}
           <button className="btn" onClick={() => {
             if (board.archived || window.confirm(t.together.confirmArchive)) {
               act(() => call(`/api/together/boards/${boardId}`, {
@@ -232,7 +229,7 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
               }), undefined, { nav: true });
             }
           }}>{board.archived ? t.together.unarchive : t.together.archive}</button>
-        ) : (
+        </>) : (
           <button className="btn" onClick={() => {
             if (window.confirm(t.together.confirmLeave)) {
               act(() => call(`/api/together/boards/${boardId}/leave`, { method: "POST" }), undefined, { reload: false })
@@ -241,6 +238,7 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
           }}>{t.together.leave}</button>
         )}
       </div>
+    </div>
     </div>
   );
 }
