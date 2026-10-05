@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { HabitsProvider, useHabits } from "@/components/store";
 import { LanguageMenu, WhatsNew } from "@/components/HeaderControls";
 import Sidebar, { SidebarToggle, type NavItem, type NavNode } from "@/components/Sidebar";
+import { BoardMark } from "@/components/together/shared";
 import { useSignOut } from "@/components/useSignOut";
 import FeedbackSheet from "@/components/FeedbackSheet";
 import AiLauncher from "@/components/aiWorkspace/AiLauncher";
@@ -58,14 +59,19 @@ const NAV = [
     ],
   },
   /*
-   * Together sits right after My Journey: My Journey is "me", Together is "us",
-   * and the views below read on towards "everyone". Two linked rings — two
-   * people, one shared space — in the same open stroke. Shown only to accounts
-   * with Together access, with their active boards as shortcuts beneath it; see
-   * `together` below.
+   * Together: the same kind of group as My Journey — a heading you fold, with
+   * destinations beneath it. My Journey is "me", Together is "us", and the views
+   * after the rule read on towards "everyone". Overview (the two linked rings —
+   * two people, one shared space) comes first; the account's active boards are
+   * added beneath it at render, each with its own mark. Shown only to accounts
+   * with Together access; see `together` below.
    */
-  { href: "/together", key: "together", startsGroup: true,
-    path: "M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" },
+  {
+    key: "together",
+    children: [
+      { href: "/together", key: "togetherOverview", path: "M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" },
+    ],
+  },
   { href: "/week", key: "week", startsGroup: true,
     path: "M4 6h16v13H4z M4 11h16 M9 6v13 M14 6v13" },
   { href: "/insights", key: "insights", path: "M5 19V10 M10 19V5 M15 19v-6 M20 19v-9" },
@@ -283,36 +289,25 @@ function Chrome({ email, localDb, together, togetherPending, togetherBoards, chi
 
   // Together is hidden from accounts outside its preview — the server decided.
   const nav = NAV.filter((node) => together || !("key" in node && node.key === "together"));
+  const waiting = togetherPending > 0 ? t.together.waitingIndicator(togetherPending) : undefined;
   const items: NavNode[] = nav.map((node) => ("children" in node
     ? {
       key: node.key,
       label: label(node.key),
       sublabel: sublabel(node.key),
-      children: node.children.map(toItem),
+      children: node.key === "together"
+        ? [
+          // Overview carries the invitation dot; the heading shows it while folded.
+          ...node.children.map((child) => ({ ...toItem(child), indicator: waiting })),
+          // The first few active boards, by name as people wrote it — never translated.
+          ...togetherBoards.boards.map((b) => ({
+            href: `/together/b/${b.id}`, label: b.name, mark: <BoardMark id={b.id} name={b.name} />,
+          })),
+        ]
+        : node.children.map(toItem),
+      indicator: node.key === "together" ? waiting : undefined,
     }
-    : "key" in node && node.key === "together"
-      ? {
-        ...toItem(node),
-        key: "together",
-        startsGroup: true,
-        indicator: togetherPending > 0 ? t.together.waitingIndicator(togetherPending) : undefined,
-        toggleLabel: t.together.boardShortcuts,
-        // People's own board names, untranslated; "View all" only past the first few.
-        children: [
-          ...togetherBoards.boards.map((b) => ({ href: `/together/b/${b.id}`, label: b.name })),
-          ...(togetherBoards.total > togetherBoards.boards.length
-            ? [{
-              href: "/together", quiet: true,
-              label: bilingual ? en.together.viewAll(togetherBoards.total) : t.together.viewAll(togetherBoards.total),
-              sublabel: bilingual ? zh.together.viewAll(togetherBoards.total) : undefined,
-            }]
-            : []),
-        ],
-      }
-      : {
-        ...toItem(node),
-        startsGroup: "startsGroup" in node ? node.startsGroup : undefined,
-      }));
+    : { ...toItem(node), startsGroup: "startsGroup" in node ? node.startsGroup : undefined }));
 
   return (
     <div data-theme={state.prefs.theme} style={{ minHeight: "100vh" }}>

@@ -52,12 +52,13 @@ export function cleanBoardName(raw: unknown): string {
   return name;
 }
 
-/** How many board shortcuts the sidebar shows before "View all". */
+/** How many board shortcuts the sidebar shows; Overview lists them all. */
 export const SIDEBAR_BOARDS = 5;
 
 /**
  * The sidebar's Together shortcuts: this account's ACTIVE boards — owned or
- * joined — by name, the first few, and how many there are. Ids and names only:
+ * joined — by name (the same order as the overview's tiles, so the sidebar
+ * shows the overview's first few), and how many there are. Ids and names only:
  * the same names the Together home already shows this account. Navigation
  * only; opening a board is still decided by requireBoard. The caller (the app
  * layout) asks only for accounts with Together access.
@@ -84,7 +85,7 @@ export async function loadHome(userId: string): Promise<HomeView> {
               where m.board_id = b.id) as members
        from together_members mine join together_boards b on b.id = mine.board_id
       where mine.user_id = $1
-      order by b.archived_at is not null, b.updated_at desc, b.id`, [userId]);
+      order by b.archived_at is not null, lower(b.name), b.name, b.id`, [userId]);
   return {
     access,
     boards,

@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/lib/i18n/context";
-import { Avatar, call, type Person } from "@/components/together/shared";
+import { Avatar, BoardMark, call, type Person } from "@/components/together/shared";
 
 /**
  * One board, V1A: who is on it and how people join — always by invitation,
@@ -105,7 +105,10 @@ export default function BoardShell({ boardId, viewerId }: { boardId: string; vie
             <button className="btn" type="button" onClick={() => setRenaming(false)}>{t.common.cancel}</button>
           </form>
         ) : (
-          <h2 className="display tg-board-title">{board.name}</h2>
+          <div className="tg-board-head">
+            <BoardMark id={board.id} name={board.name} size={32} />
+            <h2 className="display tg-board-title">{board.name}</h2>
+          </div>
         )}
         {owner && writable && !renaming && (
           <button className="btn btn-quiet" onClick={() => { setName(board.name); setRenaming(true); }}>

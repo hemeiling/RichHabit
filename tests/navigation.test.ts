@@ -75,23 +75,31 @@ describe("the sidebar", () => {
 });
 
 describe("Together's place in the sidebar", () => {
-  it("sits right after My Journey and before Week, set apart on both sides", async () => {
+  const navSource = async () => {
     const fs = await import("node:fs");
     const src = fs.readFileSync(new URL("../src/components/AppShell.tsx", import.meta.url), "utf8");
-    const nav = src.slice(src.indexOf("const NAV = ["), src.indexOf("] as const;", src.indexOf("const NAV = [")));
+    return src.slice(src.indexOf("const NAV = ["), src.indexOf("] as const;", src.indexOf("const NAV = [")));
+  };
+
+  it("is a group like My Journey, right after it and before Week, which starts the next section", async () => {
+    const nav = await navSource();
     const at = (needle: string) => nav.indexOf(needle);
-    expect(at('key: "journey"')).toBeGreaterThan(-1);
-    expect(at('href: "/together"')).toBeGreaterThan(at('href: "/priorities"'));
-    expect(at('href: "/week"')).toBeGreaterThan(at('href: "/together"'));
-    expect(nav).toMatch(/href: "\/together", key: "together", startsGroup: true/);
+    expect(at('key: "together"')).toBeGreaterThan(at('href: "/priorities"'));
+    expect(at('href: "/week"')).toBeGreaterThan(at('key: "together"'));
+    // A group: a heading with destinations beneath it, not a destination itself.
+    const node = nav.slice(at('key: "together"'), at('href: "/week"'));
+    expect(node).toMatch(/children: \[/);
+    expect(node).not.toMatch(/href: "\/together", key: "together"/);
+    expect(node).toMatch(/href: "\/together", key: "togetherOverview"/);
     expect(nav).toMatch(/href: "\/week", key: "week", startsGroup: true/);
   });
 
-  it("names its shortcuts' controls in both languages", () => {
+  it("names the group and its Overview in both languages", () => {
     for (const d of [en, zh]) {
-      expect(d.together.boardShortcuts.length).toBeGreaterThan(0);
-      expect(d.together.viewAll(7)).toContain("7");
+      expect(d.nav.together.length).toBeGreaterThan(0);
+      expect(d.nav.togetherOverview.length).toBeGreaterThan(0);
     }
+    expect(en.nav.togetherOverview).not.toBe(zh.nav.togetherOverview);
   });
 });
 

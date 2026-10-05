@@ -173,7 +173,7 @@ export function togetherInviteEmail(
   const zh: Copy = {
     subject: `${inviter} 邀请你加入 RichHabit 的「${board}」`,
     heading: `加入「${board}」`,
-    lead: `${inviter} 邀请你在 RichHabit「一起」中共同参与「${board}」——一个帮助彼此守住承诺的共享看板。`
+    lead: `${inviter} 邀请你在 RichHabit「一起」中共同参与「${board}」——一个帮助彼此守住承诺的共享空间。`
       + "你自己的 RichHabit 内容依然保持私密。",
     button: "查看邀请",
     fallback: "如果按钮无法使用，请把下面的链接复制到浏览器打开：",

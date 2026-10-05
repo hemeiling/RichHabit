@@ -935,6 +935,10 @@ describe("the sidebar's board shortcuts", () => {
     expect(mine.boards.map((b) => b.name)).toEqual(["apple", "banana", "Cherry", "date", "Mango"]);
     expect(Object.keys(mine.boards[0]).sort()).toEqual(["id", "name"]);
     expect(mine.boards.map((b) => b.id)).not.toContain(theirs);
+    // The sidebar shows the overview's first five, in the same order.
+    as(owner.id);
+    const tiles = (await json(await home.GET())).body.boards.filter((b: any) => !b.archived).map((b: any) => b.name);
+    expect(tiles.slice(0, 5)).toEqual(mine.boards.map((b) => b.name));
 
     // A member sees a board they joined, exactly as its owner does.
     await join(ids.Zebra, owner.id, eddie);

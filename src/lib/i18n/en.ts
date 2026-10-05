@@ -73,6 +73,7 @@ export const en = {
     /* Sits after the four personal views and before settings: it is the one
        screen that looks outward, and the sidebar reads inward-to-outward. */
     together: "Together",
+    togetherOverview: "Overview",
     community: "Community",
     more: "More",
     /** The sidebar's own labels: the landmark, the drawer, the account block. */
@@ -1074,8 +1075,10 @@ export const en = {
     boards: "Boards",
     archivedBoards: (n: number) => `Archived boards (${n})`,
     noBoards: "No shared boards yet. Start one, then invite the people you're working with.",
+    emptyTitle: "Start your first shared board",
+    emptyBody: "A board is a small shared space for something you are doing together. Invite people once it is ready.",
+    openBoardDetail: (name: string, people: number, owner: boolean, archived = false) => `Open ${name}, ${people === 1 ? "1 person" : `${people} people`}${owner ? ", you own it" : ""}${archived ? ", archived" : ""}`,
     newBoard: "New board",
-    openBoard: (name: string) => `Open ${name}`,
     memberCount: (n: number) => (n === 1 ? "1 person" : `${n} people`),
     people: "People",
     noPeople: "People you share a board with appear here, ready to invite to another one.",
@@ -1122,9 +1125,7 @@ export const en = {
     accept: "Accept",
     decline: "Decline",
     waitingIndicator: (n: number) => (n === 1 ? "1 invitation waiting" : `${n} invitations waiting`),
-    invitedOnly: "You are here by invitation. Creating boards and inviting others are not available on your account yet.",
-    viewAll: (n: number) => `View all (${n})`,
-    boardShortcuts: "Your boards",
+    invitedOnly: "You are here by invitation. Boards you are invited to appear here; starting your own is part of the Together preview.",
     workComingSoon: "The backlog and the board — your shared work — arrive in the next update.",
     loadFailed: "This couldn't be loaded. Check your connection and try again.",
     retry: "Try again",

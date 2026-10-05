@@ -1,10 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Field, Sheet } from "@/components/ui";
-import { useT } from "@/lib/i18n/context";
-import { AvatarRow, Avatar, call, type Person } from "@/components/together/shared";
+import { dict } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n/context";
+import { AvatarRow, Avatar, BoardMark, call, type Person } from "@/components/together/shared";
+import { boardColor } from "@/lib/together/identity";
 
 /**
  * Together home: invitations waiting for you, the boards you are on, and your
@@ -18,6 +20,7 @@ interface Home { access: "full" | "invited"; boards: BoardSummary[]; people: Per
 
 export default function TogetherHome() {
   const t = useT();
+  const locale = useLocale();
   const router = useRouter();
   const [home, setHome] = useState<Home | null>(null);
   const [failed, setFailed] = useState(false);
@@ -68,21 +71,25 @@ export default function TogetherHome() {
   if (!home) return <div className="eyebrow py-10 text-center">{t.common.loading}</div>;
 
   const full = home.access === "full";
+  const bilingual = locale === "both";
+  // "Owner" says something only when some boards are yours and some are not.
+  const mixedRoles = new Set(home.boards.map((b) => b.role)).size > 1;
   const active = home.boards.filter((b) => !b.archived);
   const archived = home.boards.filter((b) => b.archived);
+  const newBoard = () => setCreating(true);
 
   return (
     <div className="tg-home">
-      <p className="muted" style={{ fontSize: 14, lineHeight: 1.55 }}>{t.together.tagline}</p>
+      <p className="muted tg-tagline">{t.together.tagline}</p>
 
       {home.invitations.length > 0 && (
-        <section className="mt-5" aria-labelledby="tg-invitations">
+        <section className="mt-6" aria-labelledby="tg-invitations">
           <h2 id="tg-invitations" className="eyebrow">{t.together.invitations}</h2>
-          <ul className="tg-board-list mt-3">
+          <ul className="tg-invites mt-3">
             {home.invitations.map((i) => (
               <li key={i.id} className="card tg-waiting">
                 <p style={{ fontSize: 15 }}>{t.together.invitePage.invitedYou(i.inviter, i.board)}</p>
-                <div className="flex gap-2 flex-wrap mt-3">
+                <div className="flex gap-2 flex-wrap">
                   <button className="btn" disabled={answering !== null} onClick={() => answer(i.id, false)}>
                     {t.together.decline}
                   </button>
@@ -99,35 +106,66 @@ export default function TogetherHome() {
           gone, the reload empties the list, and the reason must stay readable. */}
       {problem && <p className="mt-2" role="alert" style={{ color: "var(--warn)", fontSize: 13.5 }}>{problem}</p>}
 
-      <section className="mt-5" aria-labelledby="tg-boards">
-        <div className="flex items-center justify-between gap-3">
+      <section className="mt-7" aria-labelledby="tg-boards">
+        <div className="tg-section-head">
           <h2 id="tg-boards" className="eyebrow">{t.together.boards}</h2>
-          {full && <button className="btn btn-primary" onClick={() => setCreating(true)}>+ {t.together.newBoard}</button>}
+          {/* A second, quiet way in, beside what it creates — in reach however many boards there are. */}
+          {full && active.length > 0 && (
+            <button className="btn btn-quiet tg-new-quiet" onClick={newBoard}>+ {t.together.newBoard}</button>
+          )}
         </div>
-        {active.length === 0 ? (
-          <p className="muted mt-3" style={{ fontSize: 14 }}>{t.together.noBoards}</p>
-        ) : (
-          <ul className="tg-board-list mt-3">
-            {active.map((b) => <BoardCard key={b.id} board={b} />)}
+        {active.length === 0 && full ? (
+          // No boards yet: the first one is the whole point of the page.
+          <div className="tg-empty mt-3">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" /></svg>
+            <h3 className="tg-empty-title">{t.together.emptyTitle}</h3>
+            <p className="muted tg-empty-body">{t.together.emptyBody}</p>
+            <button className="btn btn-primary mt-1" onClick={newBoard}>+ {t.together.newBoard}</button>
+          </div>
+        ) : active.length === 0 ? null : (
+          <ul className="tg-tiles mt-3">
+            {active.map((b) => <BoardTile key={b.id} board={b} showRole={mixedRoles} />)}
+            {full && (
+              <li>
+                <button type="button" className="tg-tile tg-tile-new" onClick={newBoard}>
+                  <span className="tg-tile-plus" aria-hidden="true">+</span>
+                  {/* Bilingual: English over Chinese on two set lines, like the sidebar — not one string that wraps anywhere. */}
+                  {bilingual ? (
+                    <span className="tg-tile-new-label">
+                      {dict("en").together.newBoard}<span className="tg-tile-new-sub">{dict("zh").together.newBoard}</span>
+                    </span>
+                  ) : <span>{t.together.newBoard}</span>}
+                </button>
+              </li>
+            )}
           </ul>
         )}
+        {/* Invited, not (yet) in the preview: a fact about the account, said calmly. */}
+        {!full && (
+          <p className="tg-invited-note mt-4">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" /></svg>
+            <span>{t.together.invitedOnly}</span>
+          </p>
+        )}
         {archived.length > 0 && (
-          <div className="mt-4">
+          <div className="mt-5">
             <button className="btn btn-quiet" aria-expanded={showArchived}
               onClick={() => setShowArchived((v) => !v)}>
               {showArchived ? "▾" : "▸"} {t.together.archivedBoards(archived.length)}
             </button>
             {showArchived && (
-              <ul className="tg-board-list mt-2">
-                {archived.map((b) => <BoardCard key={b.id} board={b} />)}
+              <ul className="tg-tiles mt-2">
+                {archived.map((b) => <BoardTile key={b.id} board={b} showRole={mixedRoles} />)}
               </ul>
             )}
           </div>
         )}
       </section>
 
-      {full ? (
-        <section className="mt-7" aria-labelledby="tg-people">
+      {full && (
+        <section className="mt-8" aria-labelledby="tg-people">
           <h2 id="tg-people" className="eyebrow">{t.together.people}</h2>
           {home.people.length === 0 ? (
             <p className="muted mt-2" style={{ fontSize: 14 }}>{t.together.noPeople}</p>
@@ -139,8 +177,6 @@ export default function TogetherHome() {
             </ul>
           )}
         </section>
-      ) : (
-        <p className="faint mt-7" style={{ fontSize: 13 }}>{t.together.invitedOnly}</p>
       )}
 
       {creating && <NewBoardSheet people={home.people} onClose={() => setCreating(false)} />}
@@ -148,19 +184,25 @@ export default function TogetherHome() {
   );
 }
 
-function BoardCard({ board }: { board: BoardSummary }) {
+/**
+ * One board as a tile: its mark, its name, who is on it. The whole tile is one
+ * link with a full spoken name; the mark and avatars are decoration. Its colour
+ * tints the border on hover — the only place the colour appears outside the mark.
+ */
+function BoardTile({ board, showRole }: { board: BoardSummary; showRole: boolean }) {
   const t = useT();
+  const n = board.members.length;
+  const owner = board.role === "owner";
   return (
     <li>
-      <Link href={`/together/b/${board.id}`} className="card tg-board-card" data-archived={board.archived || undefined}
-        aria-label={t.together.openBoard(board.name)}>
-        <span className="tg-board-name">{board.name}</span>
-        <span className="tg-board-meta">
+      <Link href={`/together/b/${board.id}`} className="tg-tile tg-board-card" data-archived={board.archived || undefined}
+        style={{ "--tile": boardColor(board.id) } as CSSProperties}
+        aria-label={t.together.openBoardDetail(board.name, n, owner, board.archived)}>
+        <BoardMark id={board.id} name={board.name} size={44} />
+        <span className="tg-tile-name">{board.name}</span>
+        <span className="tg-tile-meta" aria-hidden="true">
           <AvatarRow people={board.members} label={board.members.map((m) => m.name).join(", ")} />
-          <span className="faint" style={{ fontSize: 12.5 }}>
-            {t.together.memberCount(board.members.length)}
-            {board.role === "owner" && ` · ${t.together.owner}`}
-          </span>
+          {owner && showRole && <span className="tg-tile-tag">{t.together.owner}</span>}
         </span>
       </Link>
     </li>
