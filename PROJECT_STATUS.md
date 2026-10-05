@@ -2,7 +2,7 @@
 
 > Last updated: 2026-10-05
 >
-> **TOGETHER V1B — SHARED WORK (BOARD + BACKLOG): IMPLEMENTED AND LOCALLY VERIFIED · CANDIDATE COMMITTED ON `feature/together-v1b` (from `65f074e`) · NOT PUSHED · NOT MERGED · PRODUCTION NOT MIGRATED · NOT DEPLOYED · GATE A NOT STARTED — WAITING FOR THE PRODUCT OWNER TO CREATE A FRESH V5 NEON REHEARSAL BRANCH (`REHEARSAL_DATABASE_URLV5`) AND APPROVE GATE A.** See the Together V1B section below.
+> **TOGETHER V1B — SHARED WORK (BOARD + BACKLOG): RELEASED AND CLOSED 2026-10-05 · DEPLOYED APPLICATION = `main` = `a52fe8303ef94746b29270d2e00565454f0a226f` (manual Render deploy; served build proven by bundle probe on richhabit.rosalytics.com and richhabit.onrender.com) · PRODUCTION MIGRATED 2026-10-05 14:28 UTC (STEP 16, 42 → 45 TABLES, ADDITIVE) · GATE A PASS (V5) · GATE B PASS · RELEASE PASS.** This status record is a later documentation-only commit on `feature/together-v1b`; it was not deployed, and `main` stays at `a52fe83`. See the Together V1B section below.
 >
 > **TOGETHER V1A — COLLABORATION FOUNDATION: COMPLETE (CLOSED 2026-10-05) · `main` = DEPLOYED = `26011bd` · PRODUCTION MIGRATED 2026-10-04 (STEP 15, 39 → 42 TABLES, ADDITIVE) · SERVED BUILD PROVEN BY BUNDLE PROBE · SIGNED-IN VISUAL CHECKS PASSED BY THE PRODUCT OWNER (hippo DESKTOP, meimei MOBILE) · PREVIEW ALLOW-LIST = hippo + meimei · V1B IN PROGRESS (LOCAL CANDIDATE; SEE ABOVE).** See the Together V1A section below.
 >
@@ -89,12 +89,42 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Together V1B — shared work: Board + Backlog (LOCAL CANDIDATE · NOT PUSHED/MIGRATED/DEPLOYED)
+## Together V1B — shared work: Board + Backlog (RELEASED · MIGRATED · DEPLOYED · VERIFIED · CLOSED)
 
-**State:** implemented on `feature/together-v1b` (branched from `65f074e`, which
-carries the V1A close record). One candidate commit (see `git log`). Production,
-`main`, Headband, the V1A restore branch and the allow-list are untouched. No
-Neon database was used.
+**Closed 2026-10-05 by the Product Owner (Gate A PASS, Gate B PASS, release PASS).**
+
+| Item | State |
+| --- | --- |
+| Deployed application | `a52fe8303ef94746b29270d2e00565454f0a226f` = `main` (fast-forward `26011bd` → `65f074e` (V1A close record) → `a52fe83`). Manual Render deploy (auto-deploy did not start, as before). Served build proven by bundle probe: 6/6 V1B-only strings, the removed V1A string gone, 4/4 controls — on richhabit.rosalytics.com and richhabit.onrender.com. |
+| This record | A documentation-only commit on `feature/together-v1b` after `a52fe83`. Not deployed; `main` was not moved. |
+| Database | Step 16 applied to production 2026-10-05 14:28:19–14:28:28 UTC: "Done — 3 change(s)" (`together_groups`, `together_tasks`, `together_task_assignees`); second run "Nothing to do". 42 → 45 tables; 0 structure lines removed; the 74 additions identical to the V5 rehearsal; V1A function and trigger unchanged; every pre-existing row byte-identical (per-row fingerprints). |
+| Restore point | Neon branch `restore-before-together-v1b-2026-10-05` (`ep-cold-wind`; in `.env.local` as `RESTORE_DATABASE_URL_TOGETHER_V1B`, and the same endpoint as `REHEARSAL_DATABASE_URLV6`), verified identical to production immediately before the migration. Keep until the Product Owner retires it. |
+| Rehearsal | V5 (`ep-wild-bonus`), migrated, then returned to its clean post-migration fingerprint. Keep for now. The V1A restore branch is also kept. |
+| Production smoke | By the Product Owner as hippo (desktop): created "Get Amazon Seller Account Setup", edited it, assigned hippo, set effort and due date, moved To do → In progress; all persisted. Stopped partway by choice (Backlog/Commit, Group, assigning meimei, Delete/Undo/Restore and the meimei mobile pass were not run). Keep this real task. |
+| Final read-only comparison | Production serves `a52fe83`; 45 tables, approved schema; Headband active, hippo Owner, meimei Member, invitation accepted, all unchanged; V1B content = exactly the smoke task (1 task, 1 assignee, 0 groups); pre-V1B data unchanged except the Product Owner's own session/app-open/analytics activity; analytics carry stage keys and counts only. No findings. |
+
+**Gate A (V5, a fresh clone of production):** exact pre-migration parity (structure
+and all 42 row fingerprints); real runner 3 changes, then none; additive proof;
+route/authorization/isolation suites 74/74; V1B deletion + concurrency 17/17
+(0 deadlocks; the users-referencing control fails as it should); V1A Gate suite
+77/77 on the V1B schema; full suite 1,442/1,442; browser V1B 127/127, V1A 96/96 and
+77/77; V5 returned to its clean post-migration fingerprint.
+
+**Accepted low limitations (unchanged):** an archive does not wait for a write
+already past its check; simultaneous creates can exceed the open-work cap by a few.
+Neither allows an authorization bypass, cross-space access or data corruption.
+
+**Kept, not cleaned up (by decision):** the V1B restore branch, V5, the V1A restore
+branch, environment variables, Headband and its membership, the smoke task.
+
+**Next (separate work, not started):** (1) unified Board + Backlog with desktop
+drag-and-drop and true reordering — proposal first; (2) reusable People /
+Collaborators.
+
+The record below is how V1B got here.
+
+**State (historical):** implemented on `feature/together-v1b` (branched from `65f074e`, which
+carries the V1A close record).
 
 **Scope (approved and locked):** inside a space, Board (看板: To do / In progress /
 Waiting / Done, fixed) and Backlog (想法池: "we might"); quick title-only capture;
@@ -139,7 +169,7 @@ Board, with membership and rename/archive/leave on its Members page.
   by tests; low items fixed or documented (open-work cap is a soft guard; an
   archive does not wait for a write already past its check).
 
-**Gate A prerequisites (not started):** the Product Owner creates a fresh Neon
+**Gate A prerequisites (historical, since met):** the Product Owner creates a fresh Neon
 branch cloned from production and adds it to the main project's `.env.local` as
 `REHEARSAL_DATABASE_URLV5` (never printed); then explicit Gate A approval. Tooling
 ready in `.pgdata-deploy/` (ignored by Git): `preflight.mjs` (reports
@@ -147,7 +177,6 @@ ready in `.pgdata-deploy/` (ignored by Git): `preflight.mjs` (reports
 `gate-v1b.pgtest.ts`, `gate.pgtest.ts`, `vitest.pg-shim.config.ts`,
 `rehearse-v1b-local.mjs`.
 
-**Next step:** Product Owner reviews the candidate, creates V5, approves Gate A.
 
 ## Together V1A — collaboration foundation (COMPLETE · MIGRATED · DEPLOYED · VERIFIED)
 
