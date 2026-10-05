@@ -1,8 +1,8 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-03
+> Last updated: 2026-10-05
 >
-> **TOGETHER V1A — COLLABORATION FOUNDATION: GATE A FAILED ON `af3888c` (CONCURRENT DELETIONS COULD LEAVE A BOARD WITH NO OWNER; FOUND ON REAL POSTGRESQL BEFORE ANY NEON OR PRODUCTION STEP — NO PRODUCTION IMPACT) · NEW CANDIDATE WITH THE FIX COMMITTED ON `feature/together-v1a`, VERIFIED LOCALLY AND ON REAL POSTGRESQL · NOT PUSHED · NOT MERGED · NOT MIGRATED · NOT DEPLOYED · GATE A RESTARTS FROM A1 WHEN `REHEARSAL_DATABASE_URLV4` EXISTS.** See the first section below.
+> **TOGETHER V1A — COLLABORATION FOUNDATION: COMPLETE (CLOSED 2026-10-05) · `main` = DEPLOYED = `26011bd` · PRODUCTION MIGRATED 2026-10-04 (STEP 15, 39 → 42 TABLES, ADDITIVE) · SERVED BUILD PROVEN BY BUNDLE PROBE · SIGNED-IN VISUAL CHECKS PASSED BY THE PRODUCT OWNER (hippo DESKTOP, meimei MOBILE) · PREVIEW ALLOW-LIST = hippo + meimei · V1B NOT STARTED (NEEDS EXPLICIT APPROVAL).** See the first section below.
 >
 > **WHAT'S NEW + LANGUAGE MENU: RELEASED · `424c11f` IS `main` AND IS DEPLOYED.** Its full release record is on `feature/whats-new` (documentation only, by the Product Owner's decision); it is not repeated here.
 >
@@ -24,7 +24,12 @@
 > **COMMUNITY RANKINGS + TWO-SERIES MY PROGRESS: RELEASED IN `026d8be` · STILL LIVE IN PRODUCTION**
 > **ACCOMPLISHMENTS: RELEASED IN `d728111` · STILL LIVE IN PRODUCTION**
 >
-> **Repository:** `origin/main` is `9dc9b65` (Important Dates V2), fast-forwarded
+> **Repository (2026-10-05):** `origin/main` is `26011bd` (Together V1A design),
+> fast-forwarded `424c11f` → `da77a83` → `214e09b` → `26011bd`. Production database:
+> 42 tables (Together's three added 2026-10-04). Deployed application: `26011bd`.
+> The paragraphs below describe the state before Together.
+>
+> **Repository (before Together):** `origin/main` was `9dc9b65` (Important Dates V2), fast-forwarded
 > from `bea8bb1`, plus the separate documentation commit recording that release.
 > Before it: `2410bd3` (Phase 5), fast-forwarded from `84eb5bc`, then the status
 > commits up to `bea8bb1`. Its descent since the AI Workspace release: `3037cc5`, `fe06524`,
@@ -82,11 +87,44 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Together V1A — collaboration foundation (LOCAL ONLY · COMMITTED · NOT PUSHED/MIGRATED/DEPLOYED)
+## Together V1A — collaboration foundation (COMPLETE · MIGRATED · DEPLOYED · VERIFIED)
 
-**State:** revised after the Product Owner's permission decisions; committed on
-`feature/together-v1a` (first commit `85c0359`, revision on top). Not pushed,
-not merged, no Neon touched, not deployed. **Waiting for explicit Gate A approval.**
+**Closed 2026-10-05 by the Product Owner (PASS).** Current production state:
+
+| Item | State |
+|---|---|
+| Code | `main` = `26011bdc5a24e85c19a91c0f3dfcbc89246ecf80` (fast-forwards only: `424c11f` → `da77a83` → `214e09b` → `26011bd`) |
+| Deployed | `26011bd`, Manual Deploy on Render (auto-deploy has never started for these releases). Served build proven by bundle probe: 6/6 release strings, 4/4 controls (2026-10-05 01:17 UTC) |
+| Database | Migration step 15 applied 2026-10-04 15:36:48–15:36:56 UTC (5 changes; second run none); 42 tables. `26011bd` and `214e09b` changed no schema |
+| Restore point | Neon branch `restore-before-together-v1a-2026-10-04` (`ep-wild-feather`) — keep until the Product Owner retires it |
+| Render config | `TOGETHER_PREVIEW_USER_IDS` = hippo `2b2a9237-f597-49b0-ae73-b4f5b188a7a0`, meimei `48b3c3d9-b880-4f82-af6f-07a702168074` (set by the Product Owner; mirrored in local `.env.local`). Empty = Together off for everyone |
+| Production smoke state | Board "Headband" (created by hippo 2026-10-04 22:40 UTC): hippo Owner, meimei Member (accepted email invitation). **Keep it; do not alter membership; do not clean up** until the Product Owner says so |
+
+**Final read-only comparison (2026-10-05 01:17 UTC) vs. the pre-release snapshot
+(`.pgdata-deploy/gR1-…`):** schema and every table unchanged except
+`analytics_events` (+4 `app_opened`), `user_sessions` (+2) and `sessions` —
+all the Product Owner's own sign-ins as meimei and hippo. Together tables
+unchanged: 1 board, 2 members, 1 invitation (accepted); Together events: 1
+board created, 1 invitation sent (hippo), 1 accepted (meimei). No other account
+has created a board or invited anyone.
+
+**Signed-in verification (Product Owner):** hippo desktop and meimei mobile —
+sidebar group (Overview + Headband with mark, fold, single selection), tile
+overview, New board for both full-access accounts, board page mark, mobile
+drawer and two-column tiles, EN / 中文 (空间) / 双语, light and dark. All PASS.
+
+**Coverage gap accepted:** with both controlled accounts on the allow-list, the
+invitation-only experience (note, no creation controls) is no longer exercised
+in production; it is covered by the local browser suites.
+
+**Next step:** none for V1A. **V1B (work inside a board, e.g. Kanban — 看板) is
+not started and needs the Product Owner's explicit approval.** Production
+smoke-state clean-up and retiring the restore branch also wait for their decision.
+
+The history below is the record of how V1A got here.
+
+**State (historical):** revised after the Product Owner's permission decisions; committed on
+`feature/together-v1a` (first commit `85c0359`, revision on top).
 
 **Scope:** Together nav + home (Invitations · boards · People), create/rename,
 archive/restore, invitations (in-platform and email), accept/decline, owner
@@ -197,12 +235,28 @@ nothing, the database stays consistent (one owner per non-empty board), and the
 retry succeeds. Observed locally: cross-owned 0–6 per 12 simultaneous runs;
 bulk-with-inviter 1 per 10.
 
-**Next step:** Gate A restarts from A1 on this new candidate once the Product
-Owner provides a fresh Neon branch of current production as
-`REHEARSAL_DATABASE_URLV4` in `.env.local`. Real-PostgreSQL tooling (untracked,
-`.pgdata-deploy/`): `gate.pgtest.ts` + `vitest.gate.config.ts`, `pg-shim.ts` +
-`vitest.pg-shim.config.ts`, `target-guard.ts` (local or exactly the V4 host;
-never production), `preflight.mjs`, `prep-local-prodshape.mjs`.
+**Gate A on `da77a83` (2026-10-04) — recommended PASS; awaiting the Product Owner.**
+- A1: tree clean; 3 V1A commits on `424c11f`; no secrets; branch pushed, remote = `da77a83`; main untouched.
+- A2 (read-only): production 39 tables, 16 users (5 admins), PG 18.6, no Together objects, step 15 the only pending step; unchanged since the first preflight (structure `7b9d6e9b…`, 2,366 rows).
+- A3: fresh branch `REHEARSAL_DATABASE_URLV4` (endpoint `ep-hidden-thunder`, distinct from production, V3 and the old rehearsals) byte-identical to production before migration (structure and all 39 table hashes).
+- A4: real runner on V4 (pooled, as production): first run "Done — 5 change(s)" (3 tables, function, trigger); second "Nothing to do".
+- A5: 39 → 42 tables; 0 structure lines removed; all 67 added lines are Together's; every pre-existing table's rows identical; Together tables empty; trigger body identical to the candidate's.
+- A6/A7 on V4 (direct endpoint): deletion + concurrency suite 77/77 (ownership invariant after every scenario; 1 cross-owned deadlock, consistent and retried). A8: route/security suite 50/50. V4 returned exactly to its post-migration fingerprint; no test schemas, synthetic accounts or Together rows left.
+- A9: Together SQL touches only together_*, users (id, email server-side, username), profiles (display/first name), user_preferences.locale; analytics content-free.
+- A10: typecheck, lint, full suite 1,382/1,382, build, browser 87/87 on the exact candidate.
+- A11: independent review — no release-blocking issue. One MEDIUM finding for the Product Owner: an admin deleting an account while that person is sending an invitation can deadlock; in reproduction the admin deletion is aborted (retry succeeds), data stays consistent, ordinary users see no raw error. Same safe failure mode as the accepted limitation, but admin-vs-user rather than admin-vs-admin. Small fix available (lock the inviter's account before the board in createInvitation/invitePeople) — would be a new candidate.
+
+**Gate B progress (2026-10-04):** B1–B7 done — restore point `restore-before-together-v1a-2026-10-04` (`ep-wild-feather`, verified identical to production); production migrated 15:36:48–15:36:56 UTC (5 changes, then none; every pre-existing row byte-identical; 39 → 42 tables); `main` fast-forwarded to `da77a83`; manual Render deploy of `da77a83` verified by bundle probe; kill switch verified; preview enabled for the Product Owner's account only (B8 verified). B9 round 1 by the Product Owner: production board "Headband" (hippo owner, meimei member via email invitation) — keep it; do not clean up yet.
+
+**UX patch candidate `214e09b` (on top of `da77a83`, not merged/deployed):** Together moved under My Journey with board shortcuts (active boards, alphabetical, five + View all); wrong-account invitation screen (masked address, Sign out & continue). Preview API additive only; no schema/migration change. Verified locally: full suite 1,393/1,393, build, browser 43/43 (sidebar) + 96/96 (journeys); independent review: no blocking issues.
+
+`214e09b` was released to production 2026-10-04 (main fast-forwarded; Manual Deploy; served build verified by bundle probe; signed-out checks and read-only data checks passed; P5–P8 signed-in checklist superseded by the redesign).
+
+**Design candidate `26011bd` (on `214e09b`; released 2026-10-05, see the table above):** Together as a My Journey-style sidebar group (Overview + up to five boards with marks); board identity (palette colour from board id, tested contrast); tile overview with New board tile and empty hero; invitation-only note; Chinese container term 空间 (看板 kept for V1B Kanban). No schema/API/migration change. Verified locally: full suite 1,398/1,398, build, browser 77/77 + 96/96; independent design/security review: no blocking issues, findings fixed.
+
+The A11 admin-vs-user deadlock finding was accepted by the Product Owner as a
+documented limitation (same safe failure mode: one transaction aborts, data stays
+consistent, the retry succeeds).
 
 ## Important Dates V2 — optional times, repeating events, Day Agenda (RELEASED · MIGRATED · DEPLOYED · VERIFIED)
 
