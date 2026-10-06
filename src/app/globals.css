@@ -834,17 +834,20 @@ body {
 }
 .tg-more-btn:hover { background: var(--raise); color: var(--ink); }
 
-.tg-tabs { display: flex; gap: 26px; border-bottom: 1px solid var(--line); }
-.tg-tab {
-  position: relative; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 1px;
-  font-size: 14.5px; font-weight: 500; color: var(--tg-muted); text-decoration: none; white-space: nowrap;
+.tg-back-link {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin-left: -4px; padding: 0 6px;
+  border-radius: 8px; font-size: 13.5px; color: var(--tg-muted); text-decoration: none;
 }
-.tg-tab:hover { color: var(--ink); }
-.tg-tab[aria-current="page"] { color: var(--ink); }
-.tg-tab[aria-current="page"]::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px; background: var(--space);
+.tg-back-link:hover { color: var(--ink); background: var(--raise); }
+
+/* One work surface: the Board, then the Backlog, then History — each a section,
+   the two below quieter than the Board. */
+.tg-section { margin-top: 22px; }
+.tg-section-quiet { margin-top: 34px; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.tg-section-title {
+  margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--tg-muted);
 }
-.tg-tab-n { font-size: 12px; font-weight: 500; color: var(--tg-muted); font-variant-numeric: tabular-nums; }
+.tg-section-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .tg-inline-error {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px;
   padding: 6px 6px 6px 14px; border-radius: 12px; font-size: 13.5px; background: var(--warn-soft); color: var(--warn);
@@ -852,7 +855,7 @@ body {
 
 /* The board. Narrow: one stage at a time. Wide (the container, not the window —
    a tablet with the sidebar open is narrow): four columns. */
-.tg-work { container-type: inline-size; margin-top: 18px; }
+.tg-work { container-type: inline-size; }
 .tg-stagebar {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px; margin-bottom: 14px;
   border-radius: 14px; background: var(--raise); border: 1px solid var(--line-soft);
@@ -976,8 +979,8 @@ body {
 }
 
 /* The Backlog: a capture field and a light list. */
-.tg-backlog { max-width: 780px; margin-top: 18px; }
-.tg-backlog-intro { font-size: 14px; line-height: 1.55; color: var(--tg-muted); max-width: 60ch; }
+.tg-backlog { max-width: 780px; border-radius: 16px; transition: background-color .15s ease, box-shadow .15s ease; }
+.tg-backlog-intro { font-size: 13.5px; line-height: 1.55; color: var(--tg-muted); max-width: 60ch; margin-top: -4px; }
 .tg-capture {
   display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 4px 4px 4px 14px; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--line); transition: border-color .15s ease, box-shadow .15s ease;
@@ -1021,7 +1024,6 @@ body {
 .tg-backlog-empty-title { color: var(--ink); font-size: 16px; font-weight: 600; }
 .tg-backlog-empty-body { color: var(--tg-muted); font-size: 13.5px; line-height: 1.55; max-width: 52ch; }
 @media (max-width: 520px) {
-  .tg-tabs { gap: 22px; }
   .tg-brow { padding-left: 6px; padding-right: 2px; }
   .tg-commit { padding: 0 8px 0 12px; }
 }
@@ -1858,3 +1860,75 @@ input[type="range"] { accent-color: var(--accent); }
   .lp { padding: 30px 40px 40px; }
   .lp-wordmark { font-size: 22px; }
 }
+
+/* ---- Dragging (desktop): the card stays as a calm placeholder, the lists that
+   can take it are tinted, and a thin line in the space's colour marks the spot. */
+.tg-card[draggable="true"], .tg-brow[draggable="true"] { cursor: grab; }
+.tg-card[draggable="true"]:active, .tg-brow[draggable="true"]:active { cursor: grabbing; }
+.tg-card[data-dragging], .tg-brow[data-dragging] {
+  opacity: .45; box-shadow: none; border-style: dashed; border-color: color-mix(in srgb, var(--space) 40%, var(--line));
+}
+.tg-brow[data-dragging] { outline: 1.5px dashed color-mix(in srgb, var(--space) 40%, var(--line)); outline-offset: -2px; }
+.tg-card[data-drop]::before, .tg-brow[data-drop]::before {
+  content: ""; position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 2px; background: var(--space);
+  pointer-events: none;
+}
+.tg-card[data-drop="before"]::before { top: -6px; }
+.tg-card[data-drop="after"]::before { bottom: -6px; }
+.tg-brow[data-drop="before"]::before { top: -1px; }
+.tg-brow[data-drop="after"]::before { bottom: -1px; }
+.tg-col[data-drop-target], .tg-backlog[data-drop-target] { transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease; }
+@container (min-width: 880px) {
+  .tg-col[data-drop-target="ready"] { border-color: color-mix(in srgb, var(--space) 22%, var(--line-soft)); }
+  .tg-col[data-drop-target="over"] {
+    border-color: color-mix(in srgb, var(--space) 45%, var(--line-soft));
+    background: color-mix(in srgb, var(--space) 5%, var(--surface));
+  }
+}
+/* Drawn outside the section (outline-offset), so the ring never touches its text and nothing moves. */
+.tg-backlog[data-drop-target="ready"] { outline: 1px solid color-mix(in srgb, var(--space) 22%, transparent); outline-offset: 8px; }
+.tg-backlog[data-drop-target="over"] {
+  outline: 1.5px solid color-mix(in srgb, var(--space) 45%, transparent); outline-offset: 8px;
+  background: color-mix(in srgb, var(--space) 4%, transparent);
+}
+.tg-col[data-drop-empty] .tg-col-empty, .tg-backlog[data-drop-empty] .tg-backlog-empty {
+  border-radius: 12px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--space) 45%, transparent);
+}
+
+/* ---- History: what we've done. Quieter still — a compact list by day. */
+.tg-history { max-width: 780px; }
+.tg-history-count { font-size: 12.5px; color: var(--tg-muted); font-variant-numeric: tabular-nums; }
+.tg-history-empty { font-size: 13.5px; line-height: 1.55; color: var(--tg-muted); }
+.tg-history-day + .tg-history-day { margin-top: 14px; }
+.tg-history-date { margin: 0 0 4px; font-size: 12.5px; font-weight: 600; color: var(--tg-muted); }
+.tg-hlist { list-style: none; margin: 0; padding: 0; }
+.tg-hrow {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 4px 12px;
+  padding: 6px 6px 6px 8px; border-radius: 10px;
+}
+.tg-hrow:hover { background: var(--surface); }
+.tg-hrow-open { display: flex; align-items: flex-start; gap: 8px; min-width: 0; text-align: left; font-size: 14px; line-height: 1.45; color: var(--ink); }
+.tg-hrow-open::after { content: ""; position: absolute; inset: 0; border-radius: 10px; }
+.tg-hrow-open:focus-visible { outline: none; }
+.tg-hrow:has(.tg-hrow-open:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tg-hrow-title { overflow-wrap: anywhere; }
+.tg-hrow-meta { display: inline-flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--tg-muted); min-width: 0; }
+.tg-hrow-meta .tg-group { max-width: 14ch; }
+.tg-reopen {
+  position: relative; z-index: 1; min-height: 32px; padding: 0 10px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 500; color: var(--accent); transition: opacity .15s ease, background-color .15s ease;
+}
+.tg-reopen:hover { background: var(--accent-soft); }
+@media (hover: hover) {
+  .tg-reopen { opacity: 0; }
+  .tg-hrow:hover .tg-reopen, .tg-hrow:focus-within .tg-reopen { opacity: 1; }
+}
+@media (hover: none) { .tg-reopen { min-height: 40px; } }
+@media (max-width: 520px) {
+  .tg-hrow { grid-template-columns: minmax(0, 1fr) auto; }
+  .tg-hrow-meta { grid-column: 1; grid-row: 2; padding-left: 21px; }
+  .tg-reopen { grid-column: 2; grid-row: 1 / span 2; }
+}
+.tg-pill-sub { color: var(--tg-muted); font-weight: 400; }
+.tg-reopen-btn { margin-right: auto; }
+.tg-sheet-top:has(.tg-reopen-btn) > :first-child { margin-right: 0; }

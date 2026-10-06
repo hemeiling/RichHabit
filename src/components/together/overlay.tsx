@@ -95,6 +95,8 @@ export interface MenuItem {
   label: string;
   /** The current choice: shown checked and not selectable. */
   current?: boolean;
+  /** Not available here (already at the top, say): shown, but not selectable. */
+  disabled?: boolean;
   /** Starts a new section with a hairline above. */
   divided?: boolean;
   onSelect: () => void;
@@ -134,7 +136,7 @@ export function Menu({ anchor, title, items, onClose, currentLabel }: {
   useEffect(() => {
     if (!mounted) return;
     const before = document.activeElement as HTMLElement | null;
-    const list = () => [...(ref.current?.querySelectorAll<HTMLButtonElement>("[role=menuitemradio]:not([disabled])") ?? [])];
+    const list = () => [...(ref.current?.querySelectorAll<HTMLButtonElement>("[role^=menuitem]:not([disabled])") ?? [])];
     // Next frame: by then the menu has been placed beside its button.
     const frame = requestAnimationFrame(() => list()[0]?.focus({ preventScroll: true }));
     const onKey = (e: KeyboardEvent) => {
@@ -165,7 +167,8 @@ export function Menu({ anchor, title, items, onClose, currentLabel }: {
         {items.map((item) => (
           <div key={item.key}>
             {item.divided && <div className="tg-menu-sep" role="separator" />}
-            <button type="button" role="menuitemradio" aria-checked={!!item.current} disabled={item.current}
+            <button type="button" role={item.current === undefined ? "menuitem" : "menuitemradio"}
+              aria-checked={item.current === undefined ? undefined : item.current} disabled={item.current || item.disabled}
               className="tg-menu-item" onClick={() => { onClose(); item.onSelect(); }}>
               <span className="tg-menu-check" aria-hidden="true">{item.current ? "✓" : ""}</span>
               <span className="tg-menu-label">{item.label}</span>

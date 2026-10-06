@@ -1,11 +1,12 @@
 "use client";
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { TaskSummary } from "@/lib/together/work";
-import { BOARD_STAGES, type BoardStage } from "@/lib/together/stages";
+import { BOARD_STAGES, type BoardStage, type Stage } from "@/lib/together/stages";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { dict } from "@/lib/i18n";
 import TaskCard from "@/components/together/TaskCard";
 import type { Person } from "@/components/together/shared";
+import type { useListDrag } from "@/components/together/useListDrag";
 
 /**
  * The board: To do, In progress, Waiting, Done.
@@ -15,12 +16,14 @@ import type { Person } from "@/components/together/shared";
  * four-part control, never four squeezed columns or a board that scrolls
  * sideways. It is one DOM either way: a container query decides, so the server
  * and the first paint agree and nothing jumps on load.
+ *
+ * Each column is a drop target for a dragged card (desktop only), and Done holds
+ * only what was finished in the last 24 hours — older work is in History, below.
  */
 
 export interface BoardProps {
-  tasks: TaskSummary[];
-  older: { tasks: TaskSummary[]; more: boolean } | null;
-  doneOlder: number;
+  /** Each list, in order (Done already limited to its 24 hours). */
+  lists: Map<Stage, TaskSummary[]>;
   today: string;
   members: Map<string, Person>;
   groups: Map<string, string>;
@@ -31,7 +34,7 @@ export interface BoardProps {
   onAdd: (stage: BoardStage, title: string) => Promise<boolean>;
   onOpen: (task: TaskSummary) => void;
   onMove: (task: TaskSummary, anchor: HTMLElement) => void;
-  onShowOlder: () => void;
+  dnd: ReturnType<typeof useListDrag>;
 }
 
 /** A stage's name; in bilingual mode on two lines, where a single joined label would not fit. */
@@ -86,11 +89,7 @@ export function QuickAdd({ label, placeholder, hint, onAdd, autoOpen = false }: 
 
 export default function WorkBoard(p: BoardProps) {
   const t = useT().together.work;
-  const byStage = new Map<BoardStage, TaskSummary[]>(BOARD_STAGES.map((s) => [s, []]));
-  for (const task of p.tasks) if (task.stage !== "backlog") byStage.get(task.stage)!.push(task);
-  const counts = (s: BoardStage) => byStage.get(s)!.length + (s === "done" ? p.doneOlder : 0);
-  const shownOlder = p.older?.tasks.length ?? 0;
-  const remaining = Math.max(0, p.doneOlder - shownOlder);
+  const list = (s: BoardStage) => p.lists.get(s) ?? [];
 
   // Arrow keys move between the stage tabs, as in any tab list.
   const onTabsKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -109,53 +108,38 @@ export default function WorkBoard(p: BoardProps) {
         {BOARD_STAGES.map((s) => (
           <button key={s} id={`tg-stage-tab-${s}`} type="button" role="tab" className="tg-stage"
             aria-selected={p.stage === s} aria-controls={`tg-col-${s}`} tabIndex={p.stage === s ? 0 : -1}
-            aria-label={t.stageTab(s, counts(s))} onClick={() => p.onStage(s)}>
+            aria-label={t.stageTab(s, list(s).length)} onClick={() => p.onStage(s)}>
             <span className="tg-stage-name"><StageName stage={s} /></span>
-            <span className="tg-stage-n" aria-hidden="true">{counts(s)}</span>
+            <span className="tg-stage-n" aria-hidden="true">{list(s).length}</span>
           </button>
         ))}
       </div>
 
       <div className="tg-cols">
         {BOARD_STAGES.map((s) => {
-          const list = byStage.get(s)!;
+          const items = list(s);
           return (
             <section key={s} id={`tg-col-${s}`} className="tg-col" data-stage={s} data-current={p.stage === s || undefined}
-              aria-labelledby={`tg-col-head-${s}`} role="region">
+              aria-labelledby={`tg-col-head-${s}`} role="region" {...p.dnd.list(s, items)}>
               <h3 className="tg-col-head" id={`tg-col-head-${s}`}>
                 <span className="tg-col-name">{t.stages[s]}</span>
-                <span className="tg-col-n">{counts(s)}</span>
+                <span className="tg-col-n">{items.length}</span>
               </h3>
               {!p.readOnly && (
                 <QuickAdd label={t.addTo(s)} placeholder={t.addPlaceholder} hint={t.addHint}
                   onAdd={(title) => p.onAdd(s, title)} />
               )}
-              {list.length > 0 ? (
+              {items.length > 0 ? (
                 <ul className="tg-card-list">
-                  {list.map((task) => (
+                  {items.map((task) => (
                     <li key={task.id}>
                       <TaskCard task={task} today={p.today} members={p.members} groups={p.groups} readOnly={p.readOnly}
-                        onOpen={() => p.onOpen(task)} onMove={(a) => p.onMove(task, a)} />
+                        onOpen={() => p.onOpen(task)} onMove={(a) => p.onMove(task, a)} drag={p.dnd.card(task, s, items)} />
                     </li>
                   ))}
                 </ul>
-              ) : (s !== "done" || !p.doneOlder) && (
+              ) : (
                 <p className="tg-col-empty">{t.empty[s]}</p>
-              )}
-              {s === "done" && shownOlder > 0 && (
-                <ul className="tg-card-list tg-older">
-                  {p.older!.tasks.map((task) => (
-                    <li key={task.id}>
-                      <TaskCard task={task} today={p.today} members={p.members} groups={p.groups} readOnly={p.readOnly}
-                        onOpen={() => p.onOpen(task)} onMove={(a) => p.onMove(task, a)} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {s === "done" && (shownOlder === 0 ? p.doneOlder > 0 : p.older!.more) && (
-                <button type="button" className="tg-older-btn" onClick={p.onShowOlder}>
-                  {shownOlder === 0 ? t.showOlder(p.doneOlder) : `${t.showMore} (${remaining})`}
-                </button>
               )}
             </section>
           );

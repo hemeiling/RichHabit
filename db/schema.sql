@@ -1191,6 +1191,15 @@ create table if not exists together_task_assignees (
 create index if not exists together_task_assignees_member on together_task_assignees (board_id, user_id);
 -- ---- end Together V1B ------------------------------------------------------
 
+-- ---- Together: task ordering (rank) ------------------------------------------
+-- A task's place within its list, assigned only by the server. The same
+-- statements as scripts/migrations/together-task-rank.mjs, which explains them.
+alter table together_tasks add column if not exists rank bigint;
+
+create index if not exists together_tasks_rank
+  on together_tasks (board_id, stage, rank, id) where deleted_at is null;
+-- ---- end Together task ordering ------------------------------------------------
+
 -- ---- AI workspace, admin only -------------------------------------------
 -- Seven tables for the admin-only AI Workspace. Kept identical to
 -- scripts/migrations/ai-workspace.mjs, which creates them on existing databases;

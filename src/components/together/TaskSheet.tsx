@@ -39,8 +39,8 @@ function AutoGrow(props: TextareaHTMLAttributes<HTMLTextAreaElement> & { value: 
 const errorOf = (e: unknown) => e as Error & { status?: number };
 
 export default function TaskSheet({
-  boardId, taskId, live, spaceName, members, groups, viewerId, today, archived,
-  onClose, onChanged, onMove, onDelete, onRestored, onGroupCreated,
+  boardId, taskId, live, spaceName, members, groups, viewerId, today, archived, inHistory,
+  onClose, onChanged, onMove, onReopen, onDelete, onRestored, onGroupCreated,
 }: {
   boardId: string;
   taskId: string;
@@ -52,9 +52,12 @@ export default function TaskSheet({
   viewerId: string;
   today: string;
   archived: boolean;
+  /** Done for more than 24 hours: shown in History, and only Reopen moves it. */
+  inHistory: boolean;
   onClose: () => void;
   onChanged: (task: TaskSummary) => void;
   onMove: (task: TaskSummary, anchor: HTMLElement) => void;
+  onReopen: (task: TaskSummary, anchor: HTMLElement) => void;
   onDelete: (task: TaskSummary) => void;
   onRestored: (task: TaskSummary) => void;
   onGroupCreated: (group: GroupView) => void;
@@ -267,16 +270,21 @@ export default function TaskSheet({
   return (
     <Dialog label={detail.title || t.task} onClose={requestClose} wide>
       <div className="tg-sheet-top">
-        <button type="button" className="tg-stage-pill" data-stage={stage} aria-haspopup="menu" disabled={readOnly}
-          aria-label={`${t.stage}: ${t.stages[stage]}. ${t.moveTo}`}
+        <button type="button" className="tg-stage-pill" data-stage={stage} aria-haspopup="menu" disabled={readOnly || inHistory}
+          aria-label={inHistory ? `${t.stage}: ${t.history}` : `${t.stage}: ${t.stages[stage]}. ${t.moveTo}`}
           onClick={(e) => onMove(live ?? detail, e.currentTarget)}>
           <span className="tg-stage-dot" aria-hidden="true" />
           <StageName stage={stage as BoardStage | "backlog"} />
-          {!readOnly && (
+          {inHistory && <span className="tg-pill-sub">· {t.history}</span>}
+          {!readOnly && !inHistory && (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
           )}
         </button>
+        {inHistory && !readOnly && (
+          <button type="button" className="btn tg-small tg-reopen-btn" aria-haspopup="menu"
+            onClick={(e) => onReopen(live ?? detail, e.currentTarget)}>{t.reopen}</button>
+        )}
         <span className="tg-saved" role="status">{saved ? t.saved : ""}</span>
         <button type="button" className="btn btn-quiet tg-sheet-close" onClick={requestClose}>{tt.common.close}</button>
       </div>

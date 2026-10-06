@@ -14,7 +14,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
  * crosses from one space to another; only current members can be assigned, and
  * leaving or removal clears assignments; deletion is soft and restorable; two
  * people cannot silently overwrite each other's words; order is "newest move on
- * top"; Done ages behind "Show older"; a departed creator becomes "Former
+ * top"; Done keeps a task for 24 hours, then History; a departed creator becomes "Former
  * member"; and analytics never carry what anyone wrote.
  */
 
@@ -37,6 +37,7 @@ const work = await import("../src/app/api/together/boards/[id]/work/route");
 const tasks = await import("../src/app/api/together/boards/[id]/tasks/route");
 const deleted = await import("../src/app/api/together/boards/[id]/tasks/deleted/route");
 const task = await import("../src/app/api/together/boards/[id]/tasks/[taskId]/route");
+const history = await import("../src/app/api/together/boards/[id]/tasks/history/route");
 const restore = await import("../src/app/api/together/boards/[id]/tasks/[taskId]/restore/route");
 const groups = await import("../src/app/api/together/boards/[id]/groups/route");
 const group = await import("../src/app/api/together/boards/[id]/groups/[groupId]/route");
@@ -89,7 +90,7 @@ async function view(who: string, id: string) {
   const r = await json(await work.GET(req(undefined, "GET"), P(id)));
   expect(r.status, JSON.stringify(r.body)).toBe(200);
   return r.body as { tasks: { id: string; stage: string; title: string; assignees: string[]; groupId: string | null }[];
-    doneOlder: number; groups: { id: string; name: string }[]; members: { id: string }[]; space: { archived: boolean } };
+    history: { tasks: { id: string; title: string; movedAt: string }[]; more: boolean; total: number }; groups: { id: string; name: string }[]; members: { id: string }[]; space: { archived: boolean } };
 }
 const stageIds = async (who: string, id: string, stage: string) =>
   (await view(who, id)).tasks.filter((x) => x.stage === stage).map((x) => x.id);
@@ -117,7 +118,7 @@ describe("who may touch a space's work", () => {
     const missing = randomUUID();
     const calls: [string, () => Promise<Response>][] = [
       ["work", () => work.GET(req(undefined, "GET"), P(id))],
-      ["older", () => tasks.GET(req(undefined, "GET", "http://x/api?cursor="), P(id))],
+      ["history", () => history.GET(req(undefined, "GET", "http://x/api?cursor="), P(id))],
       ["create", () => tasks.POST(req({ title: "x" }), P(id))],
       ["deleted", () => deleted.GET(req(undefined, "GET"), P(id))],
       ["task", () => task.GET(req(undefined, "GET"), T(id, t.id))],
@@ -435,54 +436,46 @@ describe("soft delete", () => {
   });
 });
 
-describe("Done ages behind Show older", () => {
-  it("shows the last two weeks (at most twenty), and pages the rest without gaps or repeats", async () => {
+describe("Done for 24 hours, then History", () => {
+  const page = async (who: string, id: string, cursor = "") => {
+    as(who);
+    return (await json(await history.GET(req(undefined, "GET", `http://x/api?cursor=${encodeURIComponent(cursor)}`), P(id)))).body;
+  };
+
+  it("pages History newest-finished first, without gaps or repeats, and never deletes old work", async () => {
     const hippo = await account("Hippo");
     allow(hippo);
     const id = await space(hippo);
     for (let i = 0; i < 25; i++) {
       await sql(`insert into together_tasks (board_id, title, stage, moved_at, created_by)
-        values ($1, $2, 'done', now() - make_interval(days => 15 + $3), $4)`, [id, `old ${i}`, i, hippo]);
+        values ($1, $2, 'done', now() - make_interval(days => 2 + $3), $4)`, [id, `old ${i}`, i, hippo]);
     }
     for (let i = 0; i < 3; i++) await add(hippo, id, `recent ${i}`, "done");
-    let w = await view(hippo, id);
+    const w = await view(hippo, id);
     expect(w.tasks.filter((x) => x.stage === "done").map((x) => x.title)).toEqual(["recent 2", "recent 1", "recent 0"]);
-    expect(w.doneOlder).toBe(25);
-
-    const recent = w.tasks.filter((x) => x.stage === "done") as any[];
-    const last = recent.at(-1);
-    as(hippo);
-    const p1 = (await json(await tasks.GET(req(undefined, "GET", `http://x/api?cursor=${encodeURIComponent(`${last.movedAt}|${last.id}`)}`), P(id)))).body;
-    expect(p1.tasks).toHaveLength(20);
-    expect(p1.more).toBe(true);
-    const l1 = p1.tasks.at(-1);
-    const p2 = (await json(await tasks.GET(req(undefined, "GET", `http://x/api?cursor=${encodeURIComponent(`${l1.movedAt}|${l1.id}`)}`), P(id)))).body;
+    expect(w.history.total).toBe(25);
+    expect(w.history.tasks).toHaveLength(20);
+    expect(w.history.more).toBe(true);
+    const l1 = w.history.tasks.at(-1)!;
+    const p2 = await page(hippo, id, `${l1.movedAt}|${l1.id}`);
     expect(p2.tasks).toHaveLength(5);
     expect(p2.more).toBe(false);
-    const titles = [...p1.tasks, ...p2.tasks].map((x: any) => x.title);
+    const titles = [...w.history.tasks, ...p2.tasks].map((x: any) => x.title);
     expect(new Set(titles).size).toBe(25);
     expect(titles[0]).toBe("old 0");
     expect(titles.at(-1)).toBe("old 24");
-
-    // More than twenty finished recently: twenty shown, the rest behind Show older.
-    for (let i = 0; i < 19; i++) await add(hippo, id, `more ${i}`, "done");
-    w = await view(hippo, id);
-    expect(w.tasks.filter((x) => x.stage === "done")).toHaveLength(20);
-    expect(w.doneOlder).toBe(27);
-    // Old work is never deleted for its age.
-    expect((await sql(`select count(*)::int n from together_tasks where deleted_at is null`))[0].n).toBe(47);
+    expect((await sql(`select count(*)::int n from together_tasks where deleted_at is null`))[0].n).toBe(28);
   });
 
-  it("ties microsecond-identical moves deterministically (id), and ignores a malformed cursor", async () => {
+  it("ties microsecond-identical completions deterministically (id), and ignores a malformed cursor", async () => {
     const hippo = await account("Hippo");
     allow(hippo);
     const id = await space(hippo);
     await sql(`insert into together_tasks (board_id, title, stage, moved_at) select $1, 't' || g, 'done', '2026-01-01T00:00:00Z'
       from generate_series(1, 25) g`, [id]);
-    as(hippo);
-    const p1 = (await json(await tasks.GET(req(undefined, "GET", "http://x/api?cursor=nonsense"), P(id)))).body;
+    const p1 = await page(hippo, id, "nonsense");
     const l = p1.tasks.at(-1);
-    const p2 = (await json(await tasks.GET(req(undefined, "GET", `http://x/api?cursor=${encodeURIComponent(`${l.movedAt}|${l.id}`)}`), P(id)))).body;
+    const p2 = await page(hippo, id, `${l.movedAt}|${l.id}`);
     const ids = [...p1.tasks, ...p2.tasks].map((x: any) => x.id);
     expect(new Set(ids).size).toBe(25);
     expect(ids).toEqual([...ids].sort().reverse());

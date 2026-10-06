@@ -1,6 +1,8 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-05
+> Last updated: 2026-10-06
+>
+> **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): CANDIDATE COMMITTED AND PUSHED ON `feature/together-board-history` (from `db60151`) · LOCALLY VERIFIED · NOT MERGED · PRODUCTION NOT MIGRATED (STEP 17 PENDING) · NOT DEPLOYED · GATE A NOT STARTED — WAITING FOR THE PRODUCT OWNER TO APPROVE THE CANDIDATE AND CREATE A FRESH REHEARSAL BRANCH (`REHEARSAL_DATABASE_URLV7`).** See the first section below. Production remains V1B at `a52fe83`.
 >
 > **TOGETHER V1B — SHARED WORK (BOARD + BACKLOG): RELEASED AND CLOSED 2026-10-05 · DEPLOYED APPLICATION = `main` = `a52fe8303ef94746b29270d2e00565454f0a226f` (manual Render deploy; served build proven by bundle probe on richhabit.rosalytics.com and richhabit.onrender.com) · PRODUCTION MIGRATED 2026-10-05 14:28 UTC (STEP 16, 42 → 45 TABLES, ADDITIVE) · GATE A PASS (V5) · GATE B PASS · RELEASE PASS.** This status record is a later documentation-only commit on `feature/together-v1b`; it was not deployed, and `main` stays at `a52fe83`. See the Together V1B section below.
 >
@@ -88,6 +90,52 @@
 > The earlier My Journey and Clarify Your Intention release (`cd3eef4`, with its
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
+
+## Together — unified Board + Backlog + History (CANDIDATE · NOT MIGRATED/DEPLOYED)
+
+**State:** implemented on `feature/together-board-history` (branched from `db60151`,
+the V1B close record). One candidate commit (see `git log`). Production, `main`
+(`a52fe83`), Headband, the restore branches, V5/V6 and the allow-list untouched.
+
+**What it is (approved design):** one work surface per space — Board (4 fixed
+stages), Backlog directly below, History below that. Done shows a task for exactly
+24 elapsed hours after it most recently entered Done (`moved_at`, database clock),
+then the same row shows in History (query only — no History stage, no job).
+History is chronological, paged 20 at a time; Reopen sends work back to To do / In
+progress / Waiting. Desktop whole-card drag-and-drop (Backlog + 4 stages; never
+History) with true same-list reordering; Move to… gains Position (top/up/down/
+bottom) for keyboard and phone. `/together/b/[id]/backlog` redirects to `#backlog`.
+Details: `docs/architecture/Together.md` (V1B section).
+
+**Schema:** migration step 17, `scripts/migrations/together-task-rank.mjs` (mirrored
+in `db/schema.sql`): `together_tasks.rank bigint` (nullable), index
+`together_tasks_rank (board_id, stage, rank, id) where deleted_at is null`, and an
+idempotent backfill that writes `rank` only, for rows where it is null, in today's
+order above each list's current top. Nothing dropped or renamed; no V1A/V1B table,
+function or trigger altered.
+
+**Ordering:** sparse bigint ranks (gap 1024), server-owned, per-list advisory locks
+(after the write gate, before the task row); placement uses only visible neighbours;
+renumber on demand (one list; deleted rows included; for Done only its 24 hours),
+which takes its rows NOWAIT and gives way/retries rather than ever waiting — so it
+cannot join a deadlock; restore keeps its place unless its rank was taken (then
+directly above the holder); a no-op move writes nothing; Undo restores the exact
+former place.
+
+**Local verification:** typecheck, lint, full suite 1,469/1,469, production build;
+step-17 migration tests 7/7 (additive, backfill = today's order, rank-only,
+idempotent, late rows on top, fresh-install parity); ordering/History route suite
+20/20; on local real PostgreSQL 18.6: step-17 rehearsal on a production-shaped
+database (a52fe83 schema + V1A/V1B data: 3 changes, then none; 45 tables; 2
+structure lines added, 0 removed), ordering races 6/6, V1B deletion+concurrency
+17/17, V1A Gate 77/77, route suites 94/94 — 0 deadlocks; browser: unified surface
+62/62, V1B journeys 126/126, V1A journeys 96/96, sidebar 77/77 (EN/中文/双语,
+1440/390, light/dark, drag, keyboard Position, axe, strict contrast, no overflow).
+Independent review: 0 critical/high; 2 medium (renumber vs account-deletion
+deadlock; unbounded Done renumber) and low items — all fixed and tested.
+
+**Next step:** Product Owner approves the candidate; creates a fresh Neon branch
+cloned from production as `REHEARSAL_DATABASE_URLV7`; approves Gate A.
 
 ## Together V1B — shared work: Board + Backlog (RELEASED · MIGRATED · DEPLOYED · VERIFIED · CLOSED)
 

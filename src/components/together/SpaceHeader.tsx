@@ -6,21 +6,14 @@ import { boardColor, markColors } from "@/lib/together/identity";
 import { AvatarRow, BoardMark, type Person } from "@/components/together/shared";
 
 /**
- * The top of a space: its mark and name, who is in it (which opens Members),
- * a quiet ⋯ for the space's housekeeping, and the work views.
- *
- * The views are a registry, so Calendar joins later as one more entry. They
- * are links — each view has its own address — styled as tabs, with the
- * space's own colour under the one you are on: the only colour on the page
- * besides the mark.
+ * The top of a space: its mark and name, who is in it (which opens Members) and
+ * a quiet ⋯ for the space's housekeeping. The work — Board, Backlog, History —
+ * is one surface below it, so there are no view tabs; when Calendar arrives, a
+ * small view switcher joins here. On the Members page a quiet link leads back
+ * to the work.
  */
 
-export type SpaceView = "board" | "backlog" | "members";
-
-const VIEWS = [
-  { key: "board", path: "" },
-  { key: "backlog", path: "/backlog" },
-] as const;
+export type SpaceView = "work" | "members";
 
 /** The space's colour as CSS variables, per theme — for the tab underline and the cards' hover edge. */
 export function spaceStyle(id: string): CSSProperties {
@@ -28,12 +21,11 @@ export function spaceStyle(id: string): CSSProperties {
   return { "--space-l": c.light.ink, "--space-d": c.dark.ink } as CSSProperties;
 }
 
-export default function SpaceHeader({ id, name, members, view, backlogCount, onMore }: {
+export default function SpaceHeader({ id, name, members, view, onMore }: {
   id: string;
   name: string;
   members: Person[];
   view: SpaceView;
-  backlogCount?: number;
   /** Opens the ⋯ menu; absent where the page has no housekeeping. */
   onMore?: (anchor: HTMLElement) => void;
 }) {
@@ -60,16 +52,13 @@ export default function SpaceHeader({ id, name, members, view, backlogCount, onM
           )}
         </div>
       </div>
-      <nav className="tg-tabs" aria-label={t.work.views}>
-        {VIEWS.map((v) => (
-          <Link key={v.key} href={href(v.path)} className="tg-tab" aria-current={view === v.key ? "page" : undefined}>
-            {t.work[v.key]}
-            {v.key === "backlog" && backlogCount !== undefined && backlogCount > 0 && (
-              <span className="tg-tab-n">{backlogCount}</span>
-            )}
-          </Link>
-        ))}
-      </nav>
+      {view === "members" && (
+        <Link href={href("")} className="tg-back-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+          {t.work.backToWork}
+        </Link>
+      )}
     </header>
   );
 }

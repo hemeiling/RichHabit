@@ -17,7 +17,12 @@ import {
  * space's work inside that space.
  */
 
-const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
+// Step 17 (task ordering) builds on these tables and has its own test; here the
+// schema is taken as of step 16.
+const FULL_SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
+const RANK_START = "-- ---- Together: task ordering (rank) ----";
+const RANK_END = "-- ---- end Together task ordering ----";
+const SCHEMA = FULL_SCHEMA.slice(0, FULL_SCHEMA.indexOf(RANK_START)) + FULL_SCHEMA.slice(FULL_SCHEMA.indexOf(RANK_END) + RANK_END.length);
 const START = "-- ---- Together V1B: groups, tasks, assignees ----";
 const END = "-- ---- end Together V1B ----";
 const EXISTING_SCHEMA = SCHEMA.slice(0, SCHEMA.indexOf(START)) + SCHEMA.slice(SCHEMA.indexOf(END) + END.length);

@@ -1,4 +1,5 @@
 "use client";
+import { useRef, type DragEvent } from "react";
 import type { TaskSummary } from "@/lib/together/work";
 import { dueState, isWarm } from "@/lib/together/due";
 import { useT } from "@/lib/i18n/context";
@@ -15,7 +16,23 @@ import { Avatar, type Person } from "@/components/together/shared";
  *
  * The whole card opens the task (a stretched button, so it is one keyboard
  * stop); Move to… is a separate button above it.
+ *
+ * On a desktop the whole card can also be dragged — no handle. A press that
+ * moves becomes a drag (the browser's own threshold); a press that does not is
+ * a click and opens the task. A press that starts on a control (Move to…) never
+ * becomes a drag.
  */
+
+export interface CardDrag {
+  enabled: boolean;
+  /** This card is the one being dragged: it stays as a calm placeholder. */
+  dragging: boolean;
+  /** The drop would land just above / just below this card. */
+  dropBefore: boolean;
+  dropAfter: boolean;
+  onStart: (e: DragEvent<HTMLElement>) => void;
+  onEnd: () => void;
+}
 
 export function DueText({ dueOn, today, done }: { dueOn: string; today: string; done?: boolean }) {
   const t = useT().together.work;
@@ -54,7 +71,7 @@ export function Effort({ value }: { value: number }) {
   return <span className="tg-effort" role="img" aria-label={t.effortValue(value)}>{value}</span>;
 }
 
-export default function TaskCard({ task, today, members, groups, readOnly, onOpen, onMove }: {
+export default function TaskCard({ task, today, members, groups, readOnly, onOpen, onMove, drag }: {
   task: TaskSummary;
   today: string;
   members: Map<string, Person>;
@@ -62,15 +79,22 @@ export default function TaskCard({ task, today, members, groups, readOnly, onOpe
   readOnly: boolean;
   onOpen: () => void;
   onMove: (anchor: HTMLElement) => void;
+  drag?: CardDrag;
 }) {
   const t = useT().together.work;
+  const pressedControl = useRef(false);
   const done = task.stage === "done";
   const group = task.groupId ? groups.get(task.groupId) : undefined;
   const assigned = task.assignees.some((id) => members.has(id));
   const askWho = !assigned && (task.stage === "doing" || task.stage === "waiting");
   const hasMeta = group || task.dueOn || assigned || askWho || task.effort || task.hasDescription;
   return (
-    <article className="tg-card" data-done={done || undefined} data-movable={!readOnly || undefined}>
+    <article className="tg-card" data-done={done || undefined} data-movable={!readOnly || undefined} data-task-id={task.id}
+      draggable={drag?.enabled || undefined} data-dragging={drag?.dragging || undefined}
+      data-drop={drag?.dropBefore ? "before" : drag?.dropAfter ? "after" : undefined}
+      onPointerDown={(e) => { pressedControl.current = !!(e.target as Element).closest("[data-no-drag]"); }}
+      onDragStart={drag?.enabled ? (e) => { if (pressedControl.current) { e.preventDefault(); return; } drag.onStart(e); } : undefined}
+      onDragEnd={drag?.enabled ? drag.onEnd : undefined}>
       <button type="button" className="tg-card-open" onClick={onOpen} aria-label={t.openTask(task.title)}>
         {done && (
           <svg className="tg-card-tick" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -96,7 +120,7 @@ export default function TaskCard({ task, today, members, groups, readOnly, onOpe
       )}
       {/* In the corner, not in the line beneath: that line is for the task's own signals. */}
       {!readOnly && (
-        <button type="button" className="tg-card-move" aria-label={t.moveTask(task.title)} aria-haspopup="menu"
+        <button type="button" className="tg-card-move" data-no-drag aria-label={t.moveTask(task.title)} aria-haspopup="menu"
           onClick={(e) => onMove(e.currentTarget)}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>

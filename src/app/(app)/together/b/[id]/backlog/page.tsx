@@ -1,14 +1,10 @@
-import { Suspense } from "react";
-import { notFound, redirect } from "next/navigation";
-import SpaceWork from "@/components/together/SpaceWork";
-import { getSessionUser } from "@/lib/auth";
-import { isUuid } from "@/lib/http";
-import { togetherAccess } from "@/lib/together/access";
+import { redirect } from "next/navigation";
 
-/** A space's Backlog — what "we might" do. Same gate as the Board. */
-export default async function SpaceBacklogPage({ params }: { params: { id: string } }) {
-  const user = await getSessionUser();
-  if (!user) redirect("/login");
-  if (!isUuid(params.id) || !(await togetherAccess(user.id))) notFound();
-  return <Suspense><SpaceWork boardId={params.id} viewerId={user.id} view="backlog" /></Suspense>;
+/**
+ * The Backlog used to be its own page; it is now a section of the space's one
+ * work surface. Old links land on it there. (The space page does its own access
+ * check, so nothing is decided here.)
+ */
+export default function SpaceBacklogRedirect({ params }: { params: { id: string } }) {
+  redirect(`/together/b/${encodeURIComponent(params.id)}#backlog`);
 }

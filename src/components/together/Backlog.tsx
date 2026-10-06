@@ -4,6 +4,7 @@ import type { TaskSummary } from "@/lib/together/work";
 import { useT } from "@/lib/i18n/context";
 import { Assignees, DueText, Effort } from "@/components/together/TaskCard";
 import type { Person } from "@/components/together/shared";
+import type { useListDrag } from "@/components/together/useListDrag";
 
 /**
  * The Backlog — 想法池: what "we might" do. Capturing is one field and Enter;
@@ -11,9 +12,11 @@ import type { Person } from "@/components/together/shared";
  * "Commit to…" chooses another stage.
  *
  * Rows rather than cards: this is a list to scan and pick from, and it can be
- * long, so it stays light.
+ * long, so it stays light — quieter than the Board above it. On a desktop a row
+ * can be dragged up to a board stage (committing it) or within the Backlog, and
+ * cards can be dragged down into it.
  */
-export default function Backlog({ tasks, today, members, groups, readOnly, onCapture, onOpen, onCommit, onCommitTo }: {
+export default function Backlog({ tasks, today, members, groups, readOnly, onCapture, onOpen, onCommit, onCommitTo, dnd }: {
   tasks: TaskSummary[];
   today: string;
   members: Map<string, Person>;
@@ -23,6 +26,7 @@ export default function Backlog({ tasks, today, members, groups, readOnly, onCap
   onOpen: (task: TaskSummary) => void;
   onCommit: (task: TaskSummary) => void;
   onCommitTo: (task: TaskSummary, anchor: HTMLElement) => void;
+  dnd: ReturnType<typeof useListDrag>;
 }) {
   const t = useT().together.work;
   const [value, setValue] = useState("");
@@ -40,7 +44,7 @@ export default function Backlog({ tasks, today, members, groups, readOnly, onCap
   };
 
   return (
-    <div className="tg-backlog">
+    <div className="tg-backlog" {...dnd.list("backlog", tasks)}>
       <p className="tg-backlog-intro">{t.backlogIntro}</p>
 
       {!readOnly && (
@@ -67,8 +71,17 @@ export default function Backlog({ tasks, today, members, groups, readOnly, onCap
           {tasks.map((task) => {
             const group = task.groupId ? groups.get(task.groupId) : undefined;
             const meta = group || task.dueOn || task.effort || task.assignees.some((id) => members.has(id));
+            const drag = dnd.card(task, "backlog", tasks);
             return (
-              <li key={task.id} className="tg-brow" data-meta={meta || undefined}>
+              <li key={task.id} className="tg-brow" data-meta={meta || undefined} data-task-id={task.id}
+                draggable={drag.enabled || undefined} data-dragging={drag.dragging || undefined}
+                data-drop={drag.dropBefore ? "before" : drag.dropAfter ? "after" : undefined}
+                onPointerDown={(e) => { (e.currentTarget as HTMLElement).dataset.pressControl = (e.target as Element).closest("[data-no-drag]") ? "1" : ""; }}
+                onDragStart={drag.enabled ? (e) => {
+                  if ((e.currentTarget as HTMLElement).dataset.pressControl) { e.preventDefault(); return; }
+                  drag.onStart(e);
+                } : undefined}
+                onDragEnd={drag.enabled ? drag.onEnd : undefined}>
                 <button type="button" className="tg-brow-open" onClick={() => onOpen(task)} aria-label={t.openTask(task.title)}>
                   <span className="tg-brow-title">{task.title}</span>
                 </button>
@@ -81,7 +94,7 @@ export default function Backlog({ tasks, today, members, groups, readOnly, onCap
                   </span>
                 )}
                 {!readOnly && (
-                  <span className="tg-brow-actions">
+                  <span className="tg-brow-actions" data-no-drag>
                     <button type="button" className="tg-commit" onClick={() => onCommit(task)} aria-label={t.commitAria(task.title)}>
                       {t.commit}
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"

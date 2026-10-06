@@ -1,12 +1,7 @@
 import { body } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
-import { createTask, olderDone } from "@/lib/together/work";
+import { createTask } from "@/lib/together/work";
 import { togetherRoute } from "@/lib/together/route";
-
-/** Older Done, a page at a time after `cursor` (the last one on screen). */
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  return togetherRoute((userId) => olderDone(userId, params.id, new URL(request.url).searchParams.get("cursor")));
-}
 
 /** Quick capture: a title, into Backlog or a board stage. */
 export async function POST(request: Request, { params }: { params: { id: string } }) {

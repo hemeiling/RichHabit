@@ -189,13 +189,15 @@ tests must cover bulk deletion. Assignees should reference
 `together_members (board_id, user_id)` with a composite foreign key so that
 leaving or removal clears assignments.
 
-## V1B — shared work: Backlog and Board
+## V1B — shared work: Board, Backlog and History
 
-A space has two work views, **Board** (看板) and **Backlog** (想法池), at
-`/together/b/[id]` and `/together/b/[id]/backlog`; its people and housekeeping
-(rename, archive, leave, invitations) are on `/together/b/[id]/members`, reached
-from the space header. Views come from a small registry in `SpaceHeader.tsx`, so
-Calendar (V1C) is one more entry.
+A space's work is **one surface** at `/together/b/[id]`: the **Board** (看板 — "what
+we're doing"), the **Backlog** (想法池 — "what we might do") directly below it, and
+**History** (历史 — "what we've done") at the bottom. (The V1B release had Board
+and Backlog as two tab views; `/together/b/[id]/backlog` now redirects to
+`#backlog`.) People and housekeeping (rename, archive, leave, invitations) are on
+`/together/b/[id]/members`, reached from the space header, which has a way back.
+When Calendar arrives, a small view switcher joins the header.
 
 **Backlog ≠ To do.** The Backlog is what "we might" do — captured, not promised.
 The Board is what "we will" do, in exactly four fixed stages: To do, In progress,
@@ -208,7 +210,7 @@ stage); "Back to Backlog" is the reverse.
 | Table | Holds |
 | --- | --- |
 | `together_groups` | Labels inside one space. Unique per space ignoring case; at most 30 (service). No colour, no nesting, no permissions. |
-| `together_tasks` | Title (≤ 200, one line), description (≤ 10,000, as written), stage, `moved_at`, optional group, effort (smallint 1–99; the UI offers 1/2/3/5/8), due date (`date`, 2000–2100), `created_by`, `updated_by`, `text_version`, timestamps, soft-delete (`deleted_at`, `deleted_by`). |
+| `together_tasks` | Title (≤ 200, one line), description (≤ 10,000, as written), stage, `moved_at`, `rank` (step 17), optional group, effort (smallint 1–99; the UI offers 1/2/3/5/8), due date (`date`, 2000–2100), `created_by`, `updated_by`, `text_version`, timestamps, soft-delete (`deleted_at`, `deleted_by`). |
 | `together_task_assignees` | Who has taken a task on: none, one or several — one task, never a copy per person. |
 
 Every relation inside a space is **board-scoped by a composite key**:
@@ -226,10 +228,27 @@ function or trigger changed.
 - **Every endpoint starts at `requireBoard`** (non-member = missing space = 404);
   every write passes `write: true`, so an archived space is read-only for every
   task and group write. Tasks and groups are always looked up with their space.
-- **Order** within a stage is `moved_at desc, id desc`. Creating, moving and
-  committing set `moved_at`; editing never does. There is no position column; a
-  future drag-and-drop adds a rank column additively. Undo of a move puts the task
-  at the top of its former stage.
+- **Lists and order** (step 17, `scripts/migrations/together-task-rank.mjs`). Each
+  of a space's five stages is a list, ordered `rank asc nulls first, moved_at
+  desc, id desc` (index `together_tasks_rank`). `rank` is a sparse `bigint`
+  (1024 apart) assigned only by the server (`work.ts`), from intent: top,
+  bottom, up, down, or before/after a task the client can see — never a number.
+  A drop takes the integer midpoint of its neighbours; when none is left, that
+  one list is renumbered in a single statement (every row of the list, deleted
+  and History rows too, so a restore lands where it was), and only `rank`
+  changes. Placement only ever uses the **visible** list (live, and for Done its
+  24 hours) as neighbours; a neighbour that moved, was deleted, is in History or
+  is another space's falls back to the top. A restore keeps its rank unless a
+  visible task holds the same rank (it was placed into the gap), in which case it
+  goes directly above that task; with no rank, to the top — so no two visible
+  tasks ever share a rank. A move that would leave a task where it is writes
+  nothing. New, moved, committed and reopened work goes to the top; Undo of a
+  move returns the task to its exact former place.
+- **Drag-and-drop** (desktop, a fine pointer only): the browser's own
+  drag-and-drop, whole card, no handle; a press that starts on a control never
+  drags; lists accept both `dragenter` and `dragover`. Destinations are the
+  Backlog and the four stages — never History. Move to… (with Position: top, up,
+  down, bottom) does everything without dragging, on any device.
 - **Creator vs assignee.** `created_by` is written once, from the session, and
   never by the API. The creator is shown by display name while still a member,
   and as **Former member / 前成员** otherwise — no name is stored or shown for
@@ -237,10 +256,22 @@ function or trigger changed.
 - **Deletion is soft.** A deleted task leaves every view except Recently deleted;
   any member restores it (same stage, same place). Nothing is purged in V1B —
   no retention job; a retention policy is a later decision.
-- **Done ages on screen only**: the board shows Done moved there in the last 14
-  days, at most 20; the rest is behind "Show older", paged by a lossless
-  `(moved_at, id)` cursor (microsecond text). Nothing is archived or deleted for
-  its age.
+- **Done for 24 hours, then History.** `moved_at` is when a task entered its
+  current stage — set only when the stage changes, never by an edit, a reorder or
+  a restore. Done shows a task while `moved_at > now() − 24 hours` (the
+  database's clock — exactly 24 elapsed hours, not midnight); after that the same
+  row is History. History is not a stage and nothing moves anything: it is that
+  query, newest finished first, paged 20 at a time by a lossless `(moved_at, id)`
+  cursor. Leaving Done and re-entering starts a fresh 24 hours. A History task can
+  only be **reopened** (to To do, In progress, Waiting — or the Backlog through
+  the API); it cannot be reordered in Done or dropped back into it. Nothing is
+  ever archived or deleted for its age. The screen re-reads once at the moment
+  the next Done card turns 24 hours old — a single timer, not polling.
+- **Lock order** for ordering writes: the write gate (space, accounts,
+  memberships — `for key share`), then the lists the write touches (advisory,
+  per space and stage, sorted), then the task row. Edits that do not reorder take
+  no list lock, so a renumber can wait for an editor but never the reverse.
+  Proven on real PostgreSQL (`.pgdata-deploy/gate-order.pgtest.ts`).
 - **Concurrency.** No real-time connection and no polling: the view re-reads after
   your own changes, when the tab regains focus, and on Refresh. Small fields are
   last-write-wins per field. Title and description carry `text_version`: an edit

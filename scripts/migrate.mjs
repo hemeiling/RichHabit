@@ -27,6 +27,7 @@ import { migrateImportantDatesV2 } from "./migrations/important-dates-v2.mjs";
 import { migrateWhatsNew } from "./migrations/whats-new.mjs";
 import { migrateTogetherV1A } from "./migrations/together-v1a.mjs";
 import { migrateTogetherV1B } from "./migrations/together-v1b.mjs";
+import { migrateTogetherTaskRank } from "./migrations/together-task-rank.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -942,6 +943,15 @@ try {
    * cascade. See scripts/migrations/together-v1b.mjs.
    */
   changed += await migrateTogetherV1B(client, console.log);
+
+  /*
+   * ---- 17. Together: task ordering (rank) -----------------------------------
+   *
+   * One nullable column and one index on together_tasks, and a one-time
+   * backfill of that column only, in today's order. Nothing else changes. See
+   * scripts/migrations/together-task-rank.mjs.
+   */
+  changed += await migrateTogetherTaskRank(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");
