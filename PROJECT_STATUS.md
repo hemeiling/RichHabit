@@ -1,8 +1,12 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-06
+> Last updated: 2026-10-09
 >
-> **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): CANDIDATE COMMITTED AND PUSHED ON `feature/together-board-history` (from `db60151`) · LOCALLY VERIFIED · NOT MERGED · PRODUCTION NOT MIGRATED (STEP 17 PENDING) · NOT DEPLOYED · GATE A NOT STARTED — WAITING FOR THE PRODUCT OWNER TO APPROVE THE CANDIDATE AND CREATE A FRESH REHEARSAL BRANCH (`REHEARSAL_DATABASE_URLV7`).** See the first section below. Production remains V1B at `a52fe83`.
+> **CURRENT PRODUCTION: `main` = DEPLOYED = `3b937f326b76df165b4e9da0faa885865da554ed` (Together "Invite people") · DATABASE 45 TABLES AT MIGRATION STEP 17 · NOTHING PENDING.** Next: Priority Compass drag/auto-scroll + add-from-top UX (brief received, on hold until the Product Owner says go). Reusable People/Collaborators: brief received, not started, needs explicit approval.
+>
+> **TOGETHER "INVITE PEOPLE" (SPACE HEADER): RELEASED AND VERIFIED 2026-10-09 · `3b937f3` FAST-FORWARDED FROM `83a9d51` (ONE COMMIT, 9 FILES, UI + ONE SHARED SERVER RULE) · NO MIGRATION · NO DATA CHANGE · RENDER `dep-db466sm0tbcc73d9faj0` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS.** See the first section below.
+>
+> **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): RELEASED AND CLOSED 2026-10-09 · `83a9d51` · PRODUCTION MIGRATED 2026-10-07 05:07 UTC (STEP 17: 3 CHANGES, SECOND RUN NO-OP, ADDITIVE) · GATE A PASS (V7) · GATE B PASS · PRODUCT OWNER SMOKE TEST PASSED.** See the second section below.
 >
 > **TOGETHER V1B — SHARED WORK (BOARD + BACKLOG): RELEASED AND CLOSED 2026-10-05 · DEPLOYED APPLICATION = `main` = `a52fe8303ef94746b29270d2e00565454f0a226f` (manual Render deploy; served build proven by bundle probe on richhabit.rosalytics.com and richhabit.onrender.com) · PRODUCTION MIGRATED 2026-10-05 14:28 UTC (STEP 16, 42 → 45 TABLES, ADDITIVE) · GATE A PASS (V5) · GATE B PASS · RELEASE PASS.** This status record is a later documentation-only commit on `feature/together-v1b`; it was not deployed, and `main` stays at `a52fe83`. See the Together V1B section below.
 >
@@ -91,11 +95,64 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Together — unified Board + Backlog + History (CANDIDATE · NOT MIGRATED/DEPLOYED)
+## Together — "Invite people" in the space header (RELEASED · DEPLOYED · VERIFIED)
 
-**State:** implemented on `feature/together-board-history` (branched from `db60151`,
-the V1B close record). One candidate commit (see `git log`). Production, `main`
-(`a52fe83`), Headband, the restore branches, V5/V6 and the allow-list untouched.
+**Why:** inviting was reachable only through the member avatars, which do not
+look clickable; the ⋯ menu had only Groups, Recently deleted, Refresh.
+
+**What:** the space header shows **Invite people** (邀请伙伴; "Invite" on a phone,
+the full name kept as the accessible name) to whoever may invite. It opens Members
+at its invite form (`#invite`) with the email field focused; on Members it brings
+the form into view. ⋯ now lists **Members** first, for everyone. On a phone the
+header's tools sit on their own line under the space name. The invitation and
+acceptance flow, permissions and privacy are unchanged.
+
+**Rule:** `mayInvite(userId, archived)` in `src/lib/together/access.ts` = full
+Together access (preview list) and space not archived — the rule the invitation
+routes already enforce; now shared by the Members payload (`boards.ts`) and the
+work payload (`work.ts`, `space.canInvite`). An invited-only member (e.g. meimei)
+sees no Invite action, and the route still refuses them (403).
+
+**Release:** branch `feature/together-invite-action`; candidate `3b937f3`, parent
+`83a9d51` (production `main` at the time), 9 files; no migration, schema, env,
+dependency or deploy-config change. Checks on the exact commit: typecheck, lint,
+full suite 1,470/1,470, production build; local browser suite 89/89 (owner,
+preview member, invited-only member, archived space; click, tap, keyboard;
+EN / 中文 / 双语 × 1440 / 390 / 320; light/dark; axe; no overflow; long names).
+`main` fast-forwarded 2026-10-09 03:38 UTC; Render `dep-db466sm0tbcc73d9faj0`
+(manual). Verified on richhabit.rosalytics.com and richhabit.onrender.com: the
+four new CSS markers present (absent before); the served stylesheet
+`cc9814d9843c0ac2.css` byte-identical to the local build of `3b937f3`; the
+`83a9d51` controls still present; health 200; signed out, every Together page and
+`/priorities` → 307 /login, and the work, members, invite and move APIs → 401.
+Read-only database comparison before vs after: no row in any table changed;
+Headband (hippo owner, meimei member, 1 accepted invitation) identical. The
+signed-in check of the button and the ⋯ entry is the Product Owner's.
+
+**Release tooling (ignored, never committed):** `.pgdata-deploy/probe-invite.mjs`
+in the `rich-habits-together` worktree.
+
+## Together — unified Board + Backlog + History (RELEASED · MIGRATED · DEPLOYED · VERIFIED · CLOSED)
+
+**State:** released as `83a9d5100667e33d103e1818c61cf2fed934c597` (branch
+`feature/together-board-history`). Gate A on V7 (`REHEARSAL_DATABASE_URLV7`, a
+production clone): 3 changes then none, preservation exact, real-PostgreSQL and
+browser suites all passing. Gate B: B1 preflight; B2 restore branch
+`restore-before-together-board-history-2026-10-07`
+(`RESTORE_DATABASE_URL_TOGETHER_BOARD`, parity with production exact, 2,470 rows);
+B3 production step 17 on 2026-10-07 05:07 UTC — "added together_tasks.rank",
+"created index together_tasks_rank", "ranked 1 existing task(s)", second run
+"Nothing to do"; B4 preservation exact (45 tables, only the column and index added,
+structure hash = Gate A's `af22097977f6296b721aa5d4b4199628`, every other row
+identical, the task identical except rank, order and History unchanged); B5 `main`
+fast-forwarded `a52fe83` → `83a9d51`; B6 manual Render deploy, served build proven
+on both domains (the drag data type lives in a signed-in-only chunk, so it cannot
+be probed signed out); B7 health, schema, Headband, signed-out 307/401. Product
+Owner smoke test passed (2026-10-09 03:06–03:09 UTC: reopened the Amazon task from
+History, captured and moved a new task, created a group, dragged across stages).
+Final read-only comparison: schema unchanged, Headband identical, every change
+explained by that smoke test and ordinary use. Retained by decision: the restore
+branch, V7, V5/V6 and older restore branches, all environment variables.
 
 **What it is (approved design):** one work surface per space — Board (4 fixed
 stages), Backlog directly below, History below that. Done shows a task for exactly
@@ -134,8 +191,8 @@ structure lines added, 0 removed), ordering races 6/6, V1B deletion+concurrency
 Independent review: 0 critical/high; 2 medium (renumber vs account-deletion
 deadlock; unbounded Done renumber) and low items — all fixed and tested.
 
-**Next step:** Product Owner approves the candidate; creates a fresh Neon branch
-cloned from production as `REHEARSAL_DATABASE_URLV7`; approves Gate A.
+**Cleanup (optional, needs explicit approval):** the restore branch above and V7
+can be deleted once the Product Owner is satisfied; nothing depends on them.
 
 ## Together V1B — shared work: Board + Backlog (RELEASED · MIGRATED · DEPLOYED · VERIFIED · CLOSED)
 
