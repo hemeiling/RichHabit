@@ -50,16 +50,33 @@ export function StageName({ stage }: { stage: BoardStage | "backlog" }) {
   );
 }
 
-/** "+ Add" that becomes a field. Enter adds and keeps it open for the next one; Escape (or leaving it empty) closes it. */
-export function QuickAdd({ label, placeholder, hint, onAdd, autoOpen = false }: {
-  label: string; placeholder: string; hint: string; onAdd: (title: string) => Promise<boolean>; autoOpen?: boolean;
+/**
+ * "+ Add" that becomes a field. Enter adds and keeps it open for the next one;
+ * Escape (or leaving it empty) closes it.
+ *
+ * Open or closed is the caller's, so a second opener can share it — on a wide
+ * board the column heading's quiet "+" opens it, and the full-width row is only
+ * shown in the one-stage (narrow) view. Closing returns focus to whichever
+ * opener is on screen.
+ */
+export function QuickAdd({ label, placeholder, hint, onAdd, open, onOpenChange, alsoOpener }: {
+  label: string; placeholder: string; hint: string; onAdd: (title: string) => Promise<boolean>;
+  open: boolean; onOpenChange: (open: boolean) => void;
+  /** Another button that opens this field (the column heading's +). */
+  alsoOpener?: () => HTMLElement | null;
 }) {
-  const [open, setOpen] = useState(autoOpen);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
-  const close = () => { setOpen(false); setValue(""); requestAnimationFrame(() => opener.current?.focus()); };
+  const close = () => {
+    onOpenChange(false);
+    setValue("");
+    requestAnimationFrame(() => {
+      const row = opener.current;
+      (row && row.offsetParent !== null ? row : alsoOpener?.())?.focus();
+    });
+  };
   const submit = async () => {
     const title = value.trim();
     if (!title || busy) return;
@@ -70,7 +87,7 @@ export function QuickAdd({ label, placeholder, hint, onAdd, autoOpen = false }: 
   };
   if (!open) {
     return (
-      <button ref={opener} type="button" className="tg-add" onClick={() => setOpen(true)}>
+      <button ref={opener} type="button" className="tg-add" onClick={() => onOpenChange(true)}>
         <span className="tg-add-plus" aria-hidden="true">+</span>{label}
       </button>
     );
@@ -81,7 +98,7 @@ export function QuickAdd({ label, placeholder, hint, onAdd, autoOpen = false }: 
         placeholder={placeholder} enterKeyHint="done" disabled={busy && !value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); close(); } }}
-        onBlur={() => { if (!value.trim() && !busy) setOpen(false); }} />
+        onBlur={() => { if (!value.trim() && !busy) onOpenChange(false); }} />
       <p className="tg-add-hint" aria-hidden="true">{hint}</p>
     </form>
   );
@@ -90,6 +107,9 @@ export function QuickAdd({ label, placeholder, hint, onAdd, autoOpen = false }: 
 export default function WorkBoard(p: BoardProps) {
   const t = useT().together.work;
   const list = (s: BoardStage) => p.lists.get(s) ?? [];
+  // Which stage's add field is open (one at a time), and each heading's + so focus can return to it.
+  const [adding, setAdding] = useState<BoardStage | null>(null);
+  const plus = useRef<Partial<Record<BoardStage, HTMLButtonElement | null>>>({});
 
   // Arrow keys move between the stage tabs, as in any tab list.
   const onTabsKey = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -121,13 +141,24 @@ export default function WorkBoard(p: BoardProps) {
           return (
             <section key={s} id={`tg-col-${s}`} className="tg-col" data-stage={s} data-current={p.stage === s || undefined}
               aria-labelledby={`tg-col-head-${s}`} role="region" {...p.dnd.list(s, items)}>
-              <h3 className="tg-col-head" id={`tg-col-head-${s}`}>
-                <span className="tg-col-name">{t.stages[s]}</span>
-                <span className="tg-col-n">{items.length}</span>
-              </h3>
+              <div className="tg-col-top">
+                <h3 className="tg-col-head" id={`tg-col-head-${s}`}>
+                  <span className="tg-col-name">{t.stages[s]}</span>
+                  <span className="tg-col-n">{items.length}</span>
+                </h3>
+                {!p.readOnly && (
+                  <button type="button" className="tg-col-add" aria-label={t.addTo(s)} aria-expanded={adding === s}
+                    ref={(el) => { plus.current[s] = el; }} onClick={() => setAdding(s)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                  </button>
+                )}
+              </div>
               {!p.readOnly && (
                 <QuickAdd label={t.addTo(s)} placeholder={t.addPlaceholder} hint={t.addHint}
-                  onAdd={(title) => p.onAdd(s, title)} />
+                  onAdd={(title) => p.onAdd(s, title)} open={adding === s}
+                  onOpenChange={(open) => setAdding((cur) => (open ? s : cur === s ? null : cur))}
+                  alsoOpener={() => plus.current[s] ?? null} />
               )}
               {items.length > 0 ? (
                 <ul className="tg-card-list">

@@ -49,8 +49,8 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
   useEffect(() => { load(); }, [load]);
 
   /**
-   * Bring the invite form into view and put the cursor in the email field — for
-   * the header's Invite people, here or arriving from the work page (#invite).
+   * Bring the invite form into view and put the cursor in the email field — on
+   * arriving from the Together overview's Invite people (#invite).
    */
   const focusInvite = useCallback(() => {
     const area = document.getElementById("invite");
@@ -114,8 +114,7 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
 
   return (
     <div className="tg-space" style={spaceStyle(board.id)}>
-      <SpaceHeader id={board.id} name={board.name} members={board.members} view="members"
-        canInvite={board.canInvite} onInvite={focusInvite} />
+      <SpaceHeader id={board.id} name={board.name} members={board.members} view="members" />
     <div className="tg-board tg-narrow">
       <div className="flex items-start justify-between gap-3 flex-wrap mt-5">
         <h3 className="display" style={{ fontSize: 22 }}>{t.together.members}</h3>

@@ -928,6 +928,8 @@ export const zh: Dict = {
     boardName: "空间名称",
     boardNamePlaceholder: "发带生意",
     addPeople: "邀请伙伴",
+    inviteChoose: "邀请加入哪个空间？",
+    inviteChooseNote: "受邀的人接受邀请后，只会加入你选择的空间。",
     noPeopleToAdd: "还没有伙伴。",
     inviteAfterCreate: "你选择的伙伴会在「一起」中收到邀请，接受后才会加入。",
     inviteByEmailToggle: "+ 通过邮箱邀请",

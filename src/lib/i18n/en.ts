@@ -1093,6 +1093,9 @@ export const en = {
     boardName: "Space name",
     boardNamePlaceholder: "Headband Business",
     addPeople: "Invite people",
+    // Overview → Invite people, when there is more than one space: an invitation is always to one space.
+    inviteChoose: "Invite to which space?",
+    inviteChooseNote: "People you invite join only the space you choose, once they accept.",
     noPeopleToAdd: "Nobody yet.",
     inviteAfterCreate: "People you pick are invited inside Together, and join when they accept.",
     inviteByEmailToggle: "+ Invite someone by email",

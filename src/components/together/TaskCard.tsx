@@ -8,9 +8,11 @@ import { Avatar, type Person } from "@/components/together/shared";
 /**
  * One task on the board or in the Backlog.
  *
- * The title is the card. Beneath it, one quiet line carries only what helps
- * decide what to do next: the group, the due date (warm when it is today or
- * past, never red), who has it, and its effort as a small number. Nothing is
+ * The title is the card. Beneath it, a quiet line carries only what helps decide
+ * what to do next: what it is about on the left — the group, the due date (warm
+ * when it is today or past, never red) — and on the right its effort, as a small
+ * number, and who has it. In a narrow card the right side wraps under the left
+ * rather than cutting anything off. Nothing is
  * shown when there is nothing to say — except on work that is under way or
  * waiting, where a faint dashed circle asks who has it.
  *
@@ -112,10 +114,14 @@ export default function TaskCard({ task, today, members, groups, readOnly, onOpe
                 strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9" /></svg>
             )}
           </span>
-          {task.effort && <Effort value={task.effort} />}
-          {assigned
-            ? <Assignees ids={task.assignees} members={members} />
-            : askWho && <span className="tg-nobody" role="img" aria-label={t.nobodyYet} />}
+          {(task.effort || assigned || askWho) && (
+            <span className="tg-card-side">
+              {task.effort && <Effort value={task.effort} />}
+              {assigned
+                ? <Assignees ids={task.assignees} members={members} />
+                : askWho && <span className="tg-nobody" role="img" aria-label={t.nobodyYet} />}
+            </span>
+          )}
         </div>
       )}
       {/* In the corner, not in the line beneath: that line is for the task's own signals. */}

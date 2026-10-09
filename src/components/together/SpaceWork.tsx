@@ -329,8 +329,7 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
 
   return (
     <div className="tg-space" style={spaceStyle(work.space.id)}>
-      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work"
-        canInvite={work.space.canInvite} onMore={setMore} />
+      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work" onMore={setMore} />
 
       {readOnly && <p className="tg-archived mt-4" role="status">{t.readOnly}</p>}
       {error && (
@@ -348,17 +347,20 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
           onOpen={(task) => setOpenId(task.id)} onMove={openMove} dnd={dnd} />
       </section>
 
-      <section className="tg-section tg-section-quiet" id="backlog" aria-labelledby="tg-h-backlog">
+      {/* Below the board: the Backlog, and History beside it on a wide screen — both quieter than the board. */}
+      <div className="tg-lower-wrap"><div className="tg-lower">
+      <section className="tg-section tg-section-quiet tg-lower-backlog" id="backlog" aria-labelledby="tg-h-backlog">
         <h2 className="tg-section-title" id="tg-h-backlog">{t.backlog}</h2>
         <Backlog tasks={lists.get("backlog") ?? []} today={today} members={members} groups={groups} readOnly={readOnly}
           onCapture={(title) => create(title, "backlog")} onOpen={(task) => setOpenId(task.id)}
           onCommit={(task) => move(task, "todo", { place: "top" }, "menu")} onCommitTo={openMove} dnd={dnd} />
       </section>
 
-      <section className="tg-section tg-section-quiet" id="history" aria-labelledby="tg-h-history">
+      <section className="tg-section tg-section-quiet tg-lower-history" id="history" aria-labelledby="tg-h-history">
         <History heading="tg-h-history" history={history} today={today} members={members} groups={groups} readOnly={readOnly}
           onOpen={(task) => setOpenId(task.id)} onReopen={openReopen} onShowOlder={showOlderHistory} />
       </section>
+      </div></div>
 
       <p className="sr-only" role="status" aria-live="polite">{announce}</p>
 

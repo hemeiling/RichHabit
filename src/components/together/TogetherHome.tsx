@@ -3,15 +3,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Field, Sheet } from "@/components/ui";
-import { dict } from "@/lib/i18n";
-import { useLocale, useT } from "@/lib/i18n/context";
+import { useT } from "@/lib/i18n/context";
 import { AvatarRow, Avatar, BoardMark, call, type Person } from "@/components/together/shared";
 import { boardColor } from "@/lib/together/identity";
 
 /**
- * Together home: invitations waiting for you, the boards you are on, and your
- * People — everyone you share a board with, whom you can invite to another.
- * One calm page; a new board is one sheet away.
+ * Together home: invitations waiting for you, the spaces you are on, and your
+ * People — everyone you share a space with. One calm page. Each section has one
+ * action, beside its heading: + New space by Spaces, + Invite people by People.
+ * An invitation is always to one space, so Invite people asks which (when there
+ * is more than one) and opens that space's invite form.
  */
 
 interface BoardSummary { id: string; name: string; role: "owner" | "member"; archived: boolean; members: Person[] }
@@ -20,11 +21,11 @@ interface Home { access: "full" | "invited"; boards: BoardSummary[]; people: Per
 
 export default function TogetherHome() {
   const t = useT();
-  const locale = useLocale();
   const router = useRouter();
   const [home, setHome] = useState<Home | null>(null);
   const [failed, setFailed] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -71,12 +72,13 @@ export default function TogetherHome() {
   if (!home) return <div className="eyebrow py-10 text-center">{t.common.loading}</div>;
 
   const full = home.access === "full";
-  const bilingual = locale === "both";
   // "Owner" says something only when some boards are yours and some are not.
   const mixedRoles = new Set(home.boards.map((b) => b.role)).size > 1;
   const active = home.boards.filter((b) => !b.archived);
   const archived = home.boards.filter((b) => b.archived);
   const newBoard = () => setCreating(true);
+  const inviteTo = (id: string) => router.push(`/together/b/${id}/members#invite`);
+  const invitePeople = () => (active.length === 1 ? inviteTo(active[0].id) : setChoosing(true));
 
   return (
     <div className="tg-home">
@@ -109,10 +111,8 @@ export default function TogetherHome() {
       <section className="mt-7" aria-labelledby="tg-boards">
         <div className="tg-section-head">
           <h2 id="tg-boards" className="eyebrow">{t.together.boards}</h2>
-          {/* A second, quiet way in, beside what it creates — in reach however many boards there are. */}
-          {full && active.length > 0 && (
-            <button className="btn btn-quiet tg-new-quiet" onClick={newBoard}>+ {t.together.newBoard}</button>
-          )}
+          {/* The one way in, beside what it creates — in reach however many spaces there are. */}
+          {full && <button className="btn btn-quiet tg-new-quiet" onClick={newBoard}>+ {t.together.newBoard}</button>}
         </div>
         {active.length === 0 && full ? (
           // No boards yet: the first one is the whole point of the page.
@@ -121,24 +121,10 @@ export default function TogetherHome() {
               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9.5 16a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11 M14.5 19a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11" /></svg>
             <h3 className="tg-empty-title">{t.together.emptyTitle}</h3>
             <p className="muted tg-empty-body">{t.together.emptyBody}</p>
-            <button className="btn btn-primary mt-1" onClick={newBoard}>+ {t.together.newBoard}</button>
           </div>
         ) : active.length === 0 ? null : (
           <ul className="tg-tiles mt-3">
             {active.map((b) => <BoardTile key={b.id} board={b} showRole={mixedRoles} />)}
-            {full && (
-              <li>
-                <button type="button" className="tg-tile tg-tile-new" onClick={newBoard}>
-                  <span className="tg-tile-plus" aria-hidden="true">+</span>
-                  {/* Bilingual: English over Chinese on two set lines, like the sidebar — not one string that wraps anywhere. */}
-                  {bilingual ? (
-                    <span className="tg-tile-new-label">
-                      {dict("en").together.newBoard}<span className="tg-tile-new-sub">{dict("zh").together.newBoard}</span>
-                    </span>
-                  ) : <span>{t.together.newBoard}</span>}
-                </button>
-              </li>
-            )}
           </ul>
         )}
         {/* Invited, not (yet) in the preview: a fact about the account, said calmly. */}
@@ -166,7 +152,13 @@ export default function TogetherHome() {
 
       {full && (
         <section className="mt-8" aria-labelledby="tg-people">
-          <h2 id="tg-people" className="eyebrow">{t.together.people}</h2>
+          <div className="tg-section-head">
+            <h2 id="tg-people" className="eyebrow">{t.together.people}</h2>
+            {active.length > 0 && (
+              <button className="btn btn-quiet tg-new-quiet" aria-haspopup={active.length > 1 ? "dialog" : undefined}
+                onClick={invitePeople}>+ {t.together.addPeople}</button>
+            )}
+          </div>
           {home.people.length === 0 ? (
             <p className="muted mt-2" style={{ fontSize: 14 }}>{t.together.noPeople}</p>
           ) : (
@@ -180,6 +172,7 @@ export default function TogetherHome() {
       )}
 
       {creating && <NewBoardSheet people={home.people} onClose={() => setCreating(false)} />}
+      {choosing && <ChooseSpaceSheet spaces={active} onPick={inviteTo} onClose={() => setChoosing(false)} />}
     </div>
   );
 }
@@ -206,6 +199,28 @@ function BoardTile({ board, showRole }: { board: BoardSummary; showRole: boolean
         </span>
       </Link>
     </li>
+  );
+}
+
+/** Which space to invite into: one at a time, so nobody is told an invitation reaches all of them. */
+function ChooseSpaceSheet({ spaces, onPick, onClose }: { spaces: BoardSummary[]; onPick: (id: string) => void; onClose: () => void }) {
+  const t = useT();
+  return (
+    <Sheet open onClose={onClose} title={t.together.inviteChoose}
+      footer={<button className="btn" onClick={onClose}>{t.common.cancel}</button>}>
+      <p className="muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>{t.together.inviteChooseNote}</p>
+      <ul className="tg-choose mt-3">
+        {spaces.map((b) => (
+          <li key={b.id}>
+            <button type="button" className="tg-choose-row" onClick={() => onPick(b.id)}>
+              <BoardMark id={b.id} name={b.name} size={32} />
+              <span className="tg-choose-name">{b.name}</span>
+              <AvatarRow people={b.members} label={b.members.map((m) => m.name).join(", ")} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Sheet>
   );
 }
 
