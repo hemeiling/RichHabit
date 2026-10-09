@@ -44,6 +44,7 @@ const group = await import("../src/app/api/together/boards/[id]/groups/[groupId]
 const boardRoute = await import("../src/app/api/together/boards/[id]/route");
 const memberRoute = await import("../src/app/api/together/boards/[id]/members/[userId]/route");
 const leaveRoute = await import("../src/app/api/together/boards/[id]/leave/route");
+const invitations = await import("../src/app/api/together/boards/[id]/invitations/route");
 const lib = await import("../src/lib/together/work");
 
 const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
@@ -90,7 +91,7 @@ async function view(who: string, id: string) {
   const r = await json(await work.GET(req(undefined, "GET"), P(id)));
   expect(r.status, JSON.stringify(r.body)).toBe(200);
   return r.body as { tasks: { id: string; stage: string; title: string; assignees: string[]; groupId: string | null }[];
-    history: { tasks: { id: string; title: string; movedAt: string }[]; more: boolean; total: number }; groups: { id: string; name: string }[]; members: { id: string }[]; space: { archived: boolean } };
+    history: { tasks: { id: string; title: string; movedAt: string }[]; more: boolean; total: number }; groups: { id: string; name: string }[]; members: { id: string }[]; space: { archived: boolean; canInvite: boolean } };
 }
 const stageIds = async (who: string, id: string, stage: string) =>
   (await view(who, id)).tasks.filter((x) => x.stage === stage).map((x) => x.id);
@@ -197,6 +198,35 @@ describe("who may touch a space's work", () => {
     expect(JSON.stringify([await sql(`select * from together_tasks order by id`), await sql(`select * from together_groups`),
       await sql(`select * from together_task_assignees`)])).toBe(before);
     expect((await view(meimei, id)).space.archived).toBe(true);
+  });
+
+  it("tells the header whether this reader may invite — the answer Members gives and the invitation route enforces", async () => {
+    const owner = await account("Hippo");
+    const peer = await account("Eddie");
+    const meimei = await account("Meimei");
+    allow(owner, peer);
+    const id = await space(owner, [peer, meimei]);
+    const members = async (who: string) => { as(who); return (await json(await boardRoute.GET(req(undefined, "GET"), P(id)))).body; };
+
+    // On the preview list: owner and member alike may invite; the work page and Members agree.
+    for (const who of [owner, peer]) {
+      expect((await view(who, id)).space.canInvite).toBe(true);
+      expect((await members(who)).canInvite).toBe(true);
+    }
+    // Here by invitation only: no Invite action, and the route refuses (403 — they already know the space).
+    expect((await view(meimei, id)).space.canInvite).toBe(false);
+    expect((await members(meimei)).canInvite).toBe(false);
+    as(meimei);
+    expect((await invitations.POST(req({ email: "someone@example.com" }), P(id))).status).toBe(403);
+    expect(await sql(`select id from together_invitations`)).toEqual([]);
+
+    // Archived: nobody may invite.
+    as(owner);
+    expect((await boardRoute.PATCH(req({ archived: true }, "PATCH"), P(id))).status).toBe(200);
+    for (const who of [owner, peer, meimei]) {
+      expect((await view(who, id)).space.canInvite).toBe(false);
+      expect((await members(who)).canInvite).toBe(false);
+    }
   });
 });
 

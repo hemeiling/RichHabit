@@ -2,7 +2,7 @@ import { query } from "@/lib/db/pool";
 import { isUuid } from "@/lib/http";
 import type { Locale } from "@/lib/i18n";
 import {
-  DISPLAY_NAME, OPEN, TogetherError, USABLE, isPreviewUser, peopleOf, requireAccess, requireBoard, togetherLive,
+  DISPLAY_NAME, OPEN, TogetherError, USABLE, mayInvite, peopleOf, requireAccess, requireBoard, togetherLive,
   type BoardRole, type PersonView, type TogetherAccess,
 } from "@/lib/together/access";
 import {
@@ -184,7 +184,7 @@ export async function loadBoard(userId: string, boardId: unknown): Promise<Board
       where i.board_id = $1 and ${USABLE}
       order by i.created_at desc, i.id`, [access.boardId]);
   const visible = open.filter((i) => access.role === "owner" || i.invitedById === userId);
-  const canInvite = !access.archived && isPreviewUser(userId);
+  const canInvite = mayInvite(userId, access.archived);
   // Only this reader's own invitations count as "already invited": another
   // member's pending invitation is theirs, and is not revealed here.
   const taken = new Set([...members.map((m) => m.id),

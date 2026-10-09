@@ -76,6 +76,13 @@ export const togetherLive = (): boolean => together.previewUserIds.size > 0;
 export const isPreviewUser = (userId: string): boolean =>
   together.previewUserIds.has(userId.toLowerCase());
 
+/**
+ * Whether this reader may invite to a space: full access, and the space not
+ * archived — what the invitation routes enforce (requireAccess full, a writable
+ * board). Screens use it only to show or hide their invite controls.
+ */
+export const mayInvite = (userId: string, archived: boolean): boolean => !archived && isPreviewUser(userId);
+
 export type TogetherAccess = "full" | "invited";
 
 /** What this account may do in Together, or null for "it does not exist". */

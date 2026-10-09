@@ -1,6 +1,6 @@
 import { query } from "@/lib/db/pool";
 import { isUuid } from "@/lib/http";
-import { DISPLAY_NAME, TogetherError, requireBoard, type BoardRole, type PersonView } from "@/lib/together/access";
+import { DISPLAY_NAME, TogetherError, mayInvite, requireBoard, type BoardRole, type PersonView } from "@/lib/together/access";
 import { isDueDate } from "@/lib/together/due";
 import { EFFORT_CHOICES, isStage, type Stage } from "@/lib/together/stages";
 import { togetherTransaction as transaction } from "@/lib/together/tx";
@@ -124,7 +124,8 @@ export interface TaskDetail extends TaskSummary {
 export interface GroupView { id: string; name: string }
 
 export interface WorkView {
-  space: { id: string; name: string; role: BoardRole; archived: boolean };
+  /** `canInvite`: the same rule the invitation routes enforce (full access, space not archived) — the header only shows or hides its Invite action by it. */
+  space: { id: string; name: string; role: BoardRole; archived: boolean; canInvite: boolean };
   /** Current members: who can be assigned, and whose names the board shows. */
   members: PersonView[];
   groups: GroupView[];
@@ -235,7 +236,7 @@ async function readWork(query: Q, userId: string, boardId: unknown): Promise<Wor
        from together_tasks t where t.board_id = $1 and t.deleted_at is null and ${IN_HISTORY}`, [id]);
   const first = await historyRows(query, id, null);
   return {
-    space: { id, name: space.name, role: access.role, archived: access.archived },
+    space: { id, name: space.name, role: access.role, archived: access.archived, canInvite: mayInvite(userId, access.archived) },
     members, groups, tasks,
     history: { ...first, total },
     serverNow: now,

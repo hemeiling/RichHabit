@@ -319,7 +319,9 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   };
 
   const moreItems: MenuItem[] = [
-    { key: "groups", label: t.groups, onSelect: () => setPanel("groups") },
+    // Also reachable by the avatars; named here so nobody has to guess that.
+    { key: "members", label: tt.together.members, onSelect: () => router.push(`/together/b/${boardId}/members`) },
+    { key: "groups", label: t.groups, divided: true, onSelect: () => setPanel("groups") },
     { key: "deleted", label: t.recentlyDeleted, onSelect: () => setPanel("deleted") },
     { key: "refresh", label: t.refresh, divided: true, onSelect: () => { setToday(todayISO()); load(); } },
   ];
@@ -327,7 +329,8 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
 
   return (
     <div className="tg-space" style={spaceStyle(work.space.id)}>
-      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work" onMore={setMore} />
+      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work"
+        canInvite={work.space.canInvite} onMore={setMore} />
 
       {readOnly && <p className="tg-archived mt-4" role="status">{t.readOnly}</p>}
       {error && (

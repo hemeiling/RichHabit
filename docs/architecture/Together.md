@@ -196,7 +196,12 @@ we're doing"), the **Backlog** (想法池 — "what we might do") directly below
 **History** (历史 — "what we've done") at the bottom. (The V1B release had Board
 and Backlog as two tab views; `/together/b/[id]/backlog` now redirects to
 `#backlog`.) People and housekeeping (rename, archive, leave, invitations) are on
-`/together/b/[id]/members`, reached from the space header, which has a way back.
+`/together/b/[id]/members`, reached from the space header — the avatars, **Members**
+in ⋯, or **Invite people** (邀请伙伴; "Invite" on a phone), which opens Members at
+its invite form (`#invite`). Invite people shows only when the server says this
+reader may invite (`mayInvite`: full access, space not archived — the rule the
+invitation routes enforce); the invitation and acceptance flow itself is unchanged.
+Members has a way back to the work.
 When Calendar arrives, a small view switcher joins the header.
 
 **Backlog ≠ To do.** The Backlog is what "we might" do — captured, not promised.

@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/context";
 import { Avatar, call, type Person } from "@/components/together/shared";
 import SpaceHeader, { spaceStyle } from "@/components/together/SpaceHeader";
@@ -47,6 +47,24 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
     }
   }, [boardId]);
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * Bring the invite form into view and put the cursor in the email field — for
+   * the header's Invite people, here or arriving from the work page (#invite).
+   */
+  const focusInvite = useCallback(() => {
+    const area = document.getElementById("invite");
+    if (!area) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    area.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+    (document.getElementById("tg-invite") ?? area).focus({ preventScroll: true });
+  }, []);
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (!board?.canInvite || arrived.current || window.location.hash !== "#invite") return;
+    arrived.current = true;
+    focusInvite();
+  }, [board, focusInvite]);
   useEffect(() => {
     // Back in the tab: re-read the board, and the shell (others may have changed boards meanwhile).
     const onFocus = () => { if (document.visibilityState === "visible") { load(); router.refresh(); } };
@@ -96,7 +114,8 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
 
   return (
     <div className="tg-space" style={spaceStyle(board.id)}>
-      <SpaceHeader id={board.id} name={board.name} members={board.members} view="members" />
+      <SpaceHeader id={board.id} name={board.name} members={board.members} view="members"
+        canInvite={board.canInvite} onInvite={focusInvite} />
     <div className="tg-board tg-narrow">
       <div className="flex items-start justify-between gap-3 flex-wrap mt-5">
         <h3 className="display" style={{ fontSize: 22 }}>{t.together.members}</h3>
@@ -129,53 +148,56 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
           ))}
         </ul>
 
-        {board.canInvite && board.invitable.length > 0 && (
-          <fieldset className="mt-4">
-            <legend className="eyebrow mb-1.5">{t.together.addFromPeople}</legend>
-            <div className="flex flex-wrap gap-1.5">
-              {board.invitable.map((p) => (
-                <button key={p.id} type="button" className="chip" aria-pressed={adding.includes(p.id)}
-                  data-on={adding.includes(p.id)}
-                  onClick={() => setAdding((v) => (v.includes(p.id) ? v.filter((x) => x !== p.id) : [...v, p.id]))}>
-                  {p.name}
-                </button>
-              ))}
-            </div>
-            <button className="btn mt-2" disabled={!adding.length} onClick={async () => {
-              let invited = 0;
-              const ok = await act(async () => {
-                ({ invited } = await call<{ invited: number }>(`/api/together/boards/${boardId}/invitations`, {
-                  method: "POST", body: JSON.stringify({ people: adding }),
-                }));
-              });
-              if (ok) {
-                setAdding([]);
-                setNotice(invited ? t.together.peopleInvited(invited) : t.together.nothingToInvite);
-              }
-            }}>{t.together.add}</button>
-          </fieldset>
-        )}
-
         {board.canInvite && (
-          <form className="mt-4" onSubmit={(e) => {
-            e.preventDefault();
-            if (inviting || !email.trim()) return;
-            setInviting(true);
-            const to = email.trim();
-            act(() => call(`/api/together/boards/${boardId}/invitations`, {
-              method: "POST", body: JSON.stringify({ email: to }),
-            }).then(() => setEmail("")), t.together.inviteSent(to)).finally(() => setInviting(false));
-          }}>
-            <label className="eyebrow block mb-1.5" htmlFor="tg-invite">{t.together.inviteByEmail}</label>
-            <div className="flex gap-2 flex-wrap">
-              <input id="tg-invite" className="input" type="email" autoComplete="off" inputMode="email"
-                placeholder={t.together.inviteEmailPlaceholder} value={email} maxLength={254}
-                onChange={(e) => setEmail(e.target.value)} style={{ flex: "1 1 220px" }} />
-              <button className="btn btn-primary" type="submit" disabled={inviting || !email.trim()}>
-                {t.together.invite}
-              </button>
-            </div>
-          </form>
+          <div id="invite" className="tg-invite-area mt-5" tabIndex={-1} aria-labelledby="tg-invite-h">
+            <h4 id="tg-invite-h" className="tg-invite-h">{t.together.addPeople}</h4>
+            {board.invitable.length > 0 && (
+              <fieldset className="mt-3">
+                <legend className="eyebrow mb-1.5">{t.together.addFromPeople}</legend>
+                <div className="flex flex-wrap gap-1.5">
+                  {board.invitable.map((p) => (
+                    <button key={p.id} type="button" className="chip" aria-pressed={adding.includes(p.id)}
+                      data-on={adding.includes(p.id)}
+                      onClick={() => setAdding((v) => (v.includes(p.id) ? v.filter((x) => x !== p.id) : [...v, p.id]))}>
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+                <button className="btn mt-2" disabled={!adding.length} onClick={async () => {
+                  let invited = 0;
+                  const ok = await act(async () => {
+                    ({ invited } = await call<{ invited: number }>(`/api/together/boards/${boardId}/invitations`, {
+                      method: "POST", body: JSON.stringify({ people: adding }),
+                    }));
+                  });
+                  if (ok) {
+                    setAdding([]);
+                    setNotice(invited ? t.together.peopleInvited(invited) : t.together.nothingToInvite);
+                  }
+                }}>{t.together.add}</button>
+              </fieldset>
+            )}
+
+            <form className="mt-4" onSubmit={(e) => {
+              e.preventDefault();
+              if (inviting || !email.trim()) return;
+              setInviting(true);
+              const to = email.trim();
+              act(() => call(`/api/together/boards/${boardId}/invitations`, {
+                method: "POST", body: JSON.stringify({ email: to }),
+              }).then(() => setEmail("")), t.together.inviteSent(to)).finally(() => setInviting(false));
+            }}>
+              <label className="eyebrow block mb-1.5" htmlFor="tg-invite">{t.together.inviteByEmail}</label>
+              <div className="flex gap-2 flex-wrap">
+                <input id="tg-invite" className="input" type="email" autoComplete="off" inputMode="email"
+                  placeholder={t.together.inviteEmailPlaceholder} value={email} maxLength={254}
+                  onChange={(e) => setEmail(e.target.value)} style={{ flex: "1 1 220px" }} />
+                <button className="btn btn-primary" type="submit" disabled={inviting || !email.trim()}>
+                  {t.together.invite}
+                </button>
+              </div>
+            </form>
+          </div>
         )}
 
         {(board.invitations.length > 0 || board.otherInvitations > 0) && (

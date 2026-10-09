@@ -823,7 +823,11 @@ body {
 .tg-narrow { max-width: 780px; }
 
 .tg-space-head { display: flex; flex-direction: column; gap: 14px; }
-.tg-space-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+/* The name keeps at least 11rem: when the tools would squeeze it further, they wrap
+   onto their own line instead. On a phone they always sit on that line, under the name. */
+.tg-space-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; min-width: 0; }
+.tg-space-row > .tg-board-head { flex: 1 1 11rem; }
+@media (max-width: 559px) { .tg-space-row > .tg-board-head { flex-basis: 100%; } }
 .tg-space-tools { display: flex; align-items: center; gap: 4px; flex: none; }
 .tg-members-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; border-radius: 999px; }
 .tg-members-link:hover { background: var(--raise); }
@@ -833,6 +837,29 @@ body {
   color: var(--muted); transition: background-color .15s ease, color .15s ease;
 }
 .tg-more-btn:hover { background: var(--raise); color: var(--ink); }
+/* Invite people: the one labelled action in a space's header — an outlined pill,
+   quieter than a primary button, so the space's name stays the headline.
+   "Invite" alone on a phone. */
+.tg-invite-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 38px; margin: 3px 6px 3px 0; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink);
+  font-size: 13.5px; font-weight: 500; white-space: nowrap; text-decoration: none;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.tg-invite-btn svg { color: var(--accent); flex: none; }
+.tg-invite-btn:hover { background: var(--raise); border-color: color-mix(in srgb, var(--line) 50%, var(--muted)); }
+.tg-invite-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tg-invite-short { display: none; }
+@media (max-width: 559px) {
+  .tg-invite-btn { padding: 0 11px; margin-right: 2px; }
+  .tg-invite-long { display: none; }
+  .tg-invite-short { display: inline; }
+}
+@media (prefers-reduced-motion: reduce) { .tg-invite-btn { transition: none; } }
+/* The Members page's invite form, which Invite people brings into view. */
+.tg-invite-area { scroll-margin-top: 24px; }
+.tg-invite-area:focus { outline: none; }
+.tg-invite-h { font-size: 15px; font-weight: 600; color: var(--ink); }
 
 .tg-back-link {
   align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin-left: -4px; padding: 0 6px;
