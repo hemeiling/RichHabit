@@ -1,12 +1,14 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-09
+> Last updated: 2026-10-09 (Together UI redesign release)
 >
-> **CURRENT PRODUCTION: `main` = DEPLOYED = `3b937f326b76df165b4e9da0faa885865da554ed` (Together "Invite people") · DATABASE 45 TABLES AT MIGRATION STEP 17 · NOTHING PENDING.** Next: Priority Compass drag/auto-scroll + add-from-top UX (brief received, on hold until the Product Owner says go). Reusable People/Collaborators: brief received, not started, needs explicit approval.
+> **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · NOTHING PENDING.** Next: Priority Compass drag/auto-scroll + add-from-top UX (brief received, on hold until the Product Owner says go). Reusable People/Collaborators: brief received, not started, needs explicit approval.
 >
-> **TOGETHER "INVITE PEOPLE" (SPACE HEADER): RELEASED AND VERIFIED 2026-10-09 · `3b937f3` FAST-FORWARDED FROM `83a9d51` (ONE COMMIT, 9 FILES, UI + ONE SHARED SERVER RULE) · NO MIGRATION · NO DATA CHANGE · RENDER `dep-db466sm0tbcc73d9faj0` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS.** See the first section below.
+> **TOGETHER UI REDESIGN (OVERVIEW ACTIONS + SPACE PAGE): RELEASED AND VERIFIED 2026-10-09 · `a768682` FAST-FORWARDED FROM `3b937f3` (ONE COMMIT, 12 FILES, PRESENTATION + 2 STRINGS PER LANGUAGE) · NO MIGRATION · NO API CHANGE BEYOND REMOVING THE UNUSED `space.canInvite` · RENDER `dep-db46s23tqb8s73e9q1kg` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS · NO DATA CHANGE.** See the first section below. The header Invite button from `3b937f3` moved to the overview's People.
 >
-> **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): RELEASED AND CLOSED 2026-10-09 · `83a9d51` · PRODUCTION MIGRATED 2026-10-07 05:07 UTC (STEP 17: 3 CHANGES, SECOND RUN NO-OP, ADDITIVE) · GATE A PASS (V7) · GATE B PASS · PRODUCT OWNER SMOKE TEST PASSED.** See the second section below.
+> **TOGETHER "INVITE PEOPLE" (SPACE HEADER): RELEASED AND VERIFIED 2026-10-09 (SUPERSEDED IN PART BY THE REDESIGN ABOVE) · `3b937f3` FAST-FORWARDED FROM `83a9d51` (ONE COMMIT, 9 FILES, UI + ONE SHARED SERVER RULE) · NO MIGRATION · NO DATA CHANGE · RENDER `dep-db466sm0tbcc73d9faj0` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS.** See the second section below.
+>
+> **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): RELEASED AND CLOSED 2026-10-09 · `83a9d51` · PRODUCTION MIGRATED 2026-10-07 05:07 UTC (STEP 17: 3 CHANGES, SECOND RUN NO-OP, ADDITIVE) · GATE A PASS (V7) · GATE B PASS · PRODUCT OWNER SMOKE TEST PASSED.** See the third section below.
 >
 > **TOGETHER V1B — SHARED WORK (BOARD + BACKLOG): RELEASED AND CLOSED 2026-10-05 · DEPLOYED APPLICATION = `main` = `a52fe8303ef94746b29270d2e00565454f0a226f` (manual Render deploy; served build proven by bundle probe on richhabit.rosalytics.com and richhabit.onrender.com) · PRODUCTION MIGRATED 2026-10-05 14:28 UTC (STEP 16, 42 → 45 TABLES, ADDITIVE) · GATE A PASS (V5) · GATE B PASS · RELEASE PASS.** This status record is a later documentation-only commit on `feature/together-v1b`; it was not deployed, and `main` stays at `a52fe83`. See the Together V1B section below.
 >
@@ -95,7 +97,58 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Together — "Invite people" in the space header (RELEASED · DEPLOYED · VERIFIED)
+## Together — UI redesign: Overview actions + space page (RELEASED · DEPLOYED · VERIFIED)
+
+**Overview:** each section has one action at its heading's right edge, styled and
+aligned identically — **+ New space** by SPACES (the dashed "New space" tile is
+gone; the no-spaces empty state has no button of its own) and **+ Invite people**
+by PEOPLE (full Together access only). An invitation is always to one space: with
+one active space Invite people opens its Members page at `#invite` (email
+focused); with several it first asks "Invite to which space?" and says the person
+joins only that space. The space header no longer has an Invite button; Members
+is first in ⋯ and on the avatars. `work.ts`'s `space.canInvite` (added in
+`3b937f3`, now unread) was removed; `mayInvite` still feeds Members.
+
+**Space page (presentation only):** four equal-height lanes (`--tg-lane`, a
+shade deeper than the page) with borderless cards; each column heading has its
+count and a quiet + that opens the add field (the full-width "Add to …" row stays
+in the one-stage narrow view); card metadata wraps instead of clipping (group +
+date left, effort + people right); sentence-case section titles; Backlog and
+History side by side when the content is ≥ 1000px, otherwise stacked at ≤ 820px;
+lighter capture, borderless Commit actions (accent on hover; always on touch),
+actions under the title in a narrow Backlog/History; compact History.
+Drag-and-drop, ordering, Position, History's 24 hours, keyboard and reduced
+motion unchanged.
+
+**Release:** branch `feature/together-ui-refine`, candidate `a768682`, parent
+`3b937f3`; no migration, schema, env, dependency, script or deploy-config change;
+every CSS line changed is Together's. Checks on the exact commit: typecheck, lint,
+1,470/1,470, build; local browser: surface suite 62/62 (drag, Position, History,
+Reopen, axe, strict contrast) and refinement suite 62/62 (overview actions and
+alignment at 5 locale×width combos, chooser flow + axe, column + by mouse and
+keyboard with focus return, order after reload, equal lanes, no clipped metadata
+at 7 combos, no overflow, reduced motion). Before/after screenshots:
+`~/dev/together-ui-review/index.html` (local only). `main` fast-forwarded
+2026-10-09; Render `dep-db46s23tqb8s73e9q1kg` (manual). Verified 04:46 UTC on
+richhabit.rosalytics.com and richhabit.onrender.com: 5/5 new markers, 0/3 removed
+classes, 5/5 controls (three probes); served app stylesheet byte-identical to the
+local build; health 200; signed out, Together pages and `/priorities` → 307
+/login, home / work / members / invite / move APIs → 401. Read-only database
+before vs after: schema unchanged (45 tables, `af22097977f6296b721aa5d4b4199628`),
+no Together event, spaces / members / invitations / both tasks identical; only
+one analytics event and a session timestamp (ordinary use).
+
+**Production Together state (Product Owner's own activity, 2026-10-09 03:52 UTC,
+not from any release):** hippo sent an email invitation to Headband (open,
+expires 2026-10-23) and removed a member four seconds later — Headband now has
+only hippo (owner); meimei is no longer a member. Flagged to the Product Owner;
+not changed by the agent.
+
+**Release tooling (ignored, never committed):** `.pgdata-deploy/probe-ui.mjs` and
+`.pgdata-deploy/ev-together.mjs` (read-only Together activity) in the
+`rich-habits-together` worktree.
+
+## Together — "Invite people" in the space header (RELEASED · DEPLOYED · VERIFIED · PARTLY SUPERSEDED)
 
 **Why:** inviting was reachable only through the member avatars, which do not
 look clickable; the ⋯ menu had only Groups, Recently deleted, Refresh.
