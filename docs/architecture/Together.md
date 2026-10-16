@@ -30,8 +30,12 @@ off for everyone, invitations included. Otherwise each account has one of:
 An invitation is **addressed to** an account (`addressedTo`, access.ts) when it
 names the account (in-platform), or when it was emailed to the account's own
 address and that address is *proved*: verified, or held by an account that was
-never asked to verify (accounts predating verification, and admin-created
-accounts, which the admin vouched for). An addressed invitation waits in the
+never asked to verify **and** either predates the fixed cutoff
+`PROVED_ADDRESS_CUTOFF` (2026-10-17 — the existing, known accounts) or was
+created by an admin, who vouched for it. The cutoff closes the exempt set: a
+later spell with `REQUIRE_EMAIL_VERIFICATION` off can never mint a new account
+whose unverified address this check would trust — such an account verifies its
+address in-app, or uses the emailed link. An addressed invitation waits in the
 account's Together home and the header's notification bell, with Accept and
 Decline — so a registered account never needs the emailed link. An account
 whose address is unproved keeps only the link, whose token proves control of

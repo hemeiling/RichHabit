@@ -764,7 +764,7 @@ describe("invitations", () => {
 
   it("lets an account outside the preview accept the invitation it was sent — and nothing more", async () => {
     const owner = await account("Meiling");
-    const newbie = await account("Newbie", { email: "newbie@example.com" });
+    const newbie = await account("Newbie", { email: "newbie@example.com", verified: true });
     const imposter = await account("Imposter");
     allow(owner.id);
     const id = await newBoard(owner.id, "Headband Business");
@@ -866,7 +866,7 @@ describe("invitations", () => {
 describe("answering an email invitation in-app", () => {
   it("shows an email invitation to the account with that proved address, and Accept joins that one board", async () => {
     const owner = await account("Meiling");
-    const reg = await account("Reggie", { email: "reggie@example.com" });
+    const reg = await account("Reggie", { email: "reggie@example.com", verified: true });
     allow(owner.id);
     const id = await newBoard(owner.id, "Headband Business");
     const unrelated = await newBoard(owner.id, "Private plans");
@@ -893,7 +893,7 @@ describe("answering an email invitation in-app", () => {
 
   it("lets the account decline in-app, which voids the emailed link and clears the inviter's pending list", async () => {
     const owner = await account("Meiling");
-    const reg = await account("Reggie", { email: "reggie@example.com" });
+    const reg = await account("Reggie", { email: "reggie@example.com", verified: true });
     allow(owner.id);
     const id = await newBoard(owner.id);
     await inviteTo(id, owner.id, "reggie@example.com");
@@ -924,6 +924,33 @@ describe("answering an email invitation in-app", () => {
     // Proving the address brings the invitation into the app.
     await sql(`update users set email_verified_at = now() where id = $1`, [shaky.id]);
     expect(await waitingFor(shaky.id)).toMatchObject([{ inviter: "Meiling" }]);
+  });
+
+  it("does not trust an unverified exempt account created after the cutoff — verification or the link upgrade it", async () => {
+    const owner = await account("Meiling");
+    // An account minted while REQUIRE_EMAIL_VERIFICATION was off, after the
+    // cutoff: signed in, exempt from verifying, but its address is unproved.
+    const later = await account("Later", { email: "later@example.com" });
+    await sql(`update users set verification_required = false, email_verified_at = null,
+        created_at = timestamptz '2026-10-17 00:00:01+00' where id = $1`, [later.id]);
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    await inviteTo(id, owner.id, "later@example.com");
+
+    as(later.id);
+    expect((await home.GET()).status).toBe(404);
+    const [{ id: inviteId }] = await sql(`select id from together_invitations where board_id = $1`, [id]);
+    expect((await respond.POST(req({ id: inviteId, accept: true }))).status).toBe(404);
+
+    // An admin-created account is vouched for, and is trusted after the cutoff.
+    await sql(`update users set created_via = 'admin' where id = $1`, [later.id]);
+    expect(await waitingFor(later.id)).toMatchObject([{ inviter: "Meiling" }]);
+    await sql(`update users set created_via = 'self_signup' where id = $1`, [later.id]);
+    expect((await home.GET()).status).toBe(404);
+    // Verifying the address — the in-app flow — is the ordinary upgrade.
+    await sql(`update users set email_verified_at = now() where id = $1`, [later.id]);
+    expect(await waitingFor(later.id)).toMatchObject([{ inviter: "Meiling" }]);
+    // The emailed link always worked: it proves the inbox itself.
   });
 
   it("lists invitations only for their account: the bell answers everyone else as not found", async () => {

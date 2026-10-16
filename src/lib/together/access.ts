@@ -65,18 +65,32 @@ export const USABLE =
   "i.accepted_at is null and i.declined_at is null and i.revoked_at is null and i.sent_at is not null and i.expires_at > now()";
 
 /**
+ * Accounts that were never asked to verify (`verification_required = false`)
+ * are treated as holding a proved address only when they predate this cutoff
+ * — the existing accounts the Product Owner already knows — or were created
+ * by an admin, who vouched for the address. A fixed literal, in the manner of
+ * Phase 4C's Grandfathered Pro cutoff, so the exempt set is closed: a later
+ * spell with REQUIRE_EMAIL_VERIFICATION switched off can mint sign-ins, but
+ * never new accounts whose unverified address this check would trust.
+ */
+export const PROVED_ADDRESS_CUTOFF = "2026-10-17T00:00:00Z";
+
+/**
  * An invitation addressed to the account bound as `param`: it names the account
  * (in-platform), or it was emailed to the account's own address. The email arm
  * requires the address to be *proved* — verified, or held by an account that
- * was never asked to verify (accounts that predate verification, and accounts
- * an admin created and thereby vouched for). An account whose address is
+ * was never asked to verify and predates `PROVED_ADDRESS_CUTOFF` (or was
+ * admin-created, and thereby vouched for). An account whose address is
  * unproved keeps only the email link, whose token proves control of the inbox
- * itself. Columns of `together_invitations i`.
+ * itself — and the in-app verify flow upgrades it at any time. Columns of
+ * `together_invitations i`.
  */
 export const addressedTo = (param: string) =>
   `(i.invitee_id = ${param} or (i.email_normalized is not null and exists (
      select 1 from users me where me.id = ${param} and lower(me.email) = i.email_normalized
-       and (me.email_verified_at is not null or not me.verification_required))))`;
+       and (me.email_verified_at is not null
+            or (not me.verification_required
+                and (me.created_at < timestamptz '${PROVED_ADDRESS_CUTOFF}' or me.created_via = 'admin'))))))`;
 
 /**
  * Invitations waiting for account `$1` — in-platform, or emailed to its proved
