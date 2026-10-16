@@ -823,7 +823,9 @@ export default function Priorities({ date }: { date: string }) {
         const detail = detailsFor ? state.priorities.find((p) => p.id === detailsFor) : undefined;
         if (detailsFor && !detail) setTimeout(() => setDetailsFor(null), 0);
         return detail ? (
-          <PriorityDetails
+          // Keyed by row: whatever opens next remounts fresh, so no field,
+          // timer or draft can ever carry across two different priorities.
+          <PriorityDetails key={detail.id}
             item={detail} date={date}
             onSetCategory={(next) => {
               if (next !== normalizePriorityCategory(detail.category)) move(detail.id, next, null);
