@@ -5,6 +5,7 @@ import PriorityDetails from "@/components/PriorityDetails";
 import { useHabits } from "@/components/store";
 import { Sheet } from "@/components/ui";
 import { needsDeleteConfirmation } from "@/lib/accomplishments";
+import { startDragAutoScroll, stopDragAutoScroll } from "@/lib/dragAutoScroll";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import {
@@ -604,7 +605,7 @@ export default function Priorities({ date }: { date: string }) {
     settleTimer.current = setTimeout(() => setSettling(null), 240);
   }, [allItems, actions, t]);
 
-  const endDrag = () => { setDragId(null); setOverCard(null); setOverQuad(null); };
+  const endDrag = () => { stopDragAutoScroll(); setDragId(null); setOverCard(null); setOverQuad(null); };
 
   const done = allItems.filter((p) => doneOn(p, date)).length;
   const total = allItems.length;
@@ -766,7 +767,7 @@ export default function Priorities({ date }: { date: string }) {
                       setMenuFor(null);
                       if (next !== category) move(item.id, next, null);
                     }}
-                    onDragStart={() => setDragId(item.id)}
+                    onDragStart={() => { setDragId(item.id); startDragAutoScroll(); }}
                     onDragEnd={endDrag}
                     onDragOverCard={() => { setOverCard(item.id); setOverQuad(category); }}
                     onDropOnCard={() => { if (dragId) move(dragId, category, item.id); endDrag(); }}

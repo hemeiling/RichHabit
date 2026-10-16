@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { startDragAutoScroll, stopDragAutoScroll } from "@/lib/dragAutoScroll";
 import type { TaskSummary } from "@/lib/together/work";
 import type { Stage } from "@/lib/together/stages";
 import type { CardDrag } from "@/components/together/TaskCard";
@@ -58,7 +59,10 @@ export function useListDrag({ enabled, onDrop }: {
   const drop = useRef(onDrop);
   drop.current = onDrop;
 
-  const end = useCallback(() => { token.current++; current.current = null; setDrag(null); setOver(null); }, []);
+  const end = useCallback(() => {
+    stopDragAutoScroll();
+    token.current++; current.current = null; setDrag(null); setOver(null);
+  }, []);
 
   const card = (task: TaskSummary, stage: Stage, items: TaskSummary[]): CardDrag => {
     const others = items.filter((t) => t.id !== drag?.id);
@@ -71,6 +75,7 @@ export function useListDrag({ enabled, onDrop }: {
       onStart: (e: DragEvent<HTMLElement>) => {
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData(TYPE, task.id);
+        startDragAutoScroll();
         // After the browser has taken its picture of the card, so the picture is the card, not the placeholder.
         const mine = ++token.current;
         current.current = { id: task.id, from: task.stage };

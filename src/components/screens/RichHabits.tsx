@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
+import { startDragAutoScroll, stopDragAutoScroll } from "@/lib/dragAutoScroll";
 import AddHabit from "@/components/AddHabit";
 import ProgressPanel from "@/components/ProgressPanel";
 import GratitudeJournal from "@/components/GratitudeJournal";
@@ -385,13 +386,13 @@ export default function RichHabits() {
                   drag={{
                     dragging: dragged === h.id,
                     over: overId === h.id && dragged !== null && dragged !== h.id,
-                    onDragStart: () => setDragged(h.id),
+                    onDragStart: () => { setDragged(h.id); startDragAutoScroll(); },
                     onDragOver: (e) => { e.preventDefault(); setOverId(h.id); },
                     onDrop: () => {
                       if (dragged) reorderWithin(c.id, dragged, h.id);
-                      setDragged(null); setOverId(null);
+                      stopDragAutoScroll(); setDragged(null); setOverId(null);
                     },
-                    onDragEnd: () => { setDragged(null); setOverId(null); },
+                    onDragEnd: () => { stopDragAutoScroll(); setDragged(null); setOverId(null); },
                   }} />
               ))}
             </div>

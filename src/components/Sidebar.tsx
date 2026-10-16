@@ -142,7 +142,9 @@ export default function Sidebar({
         <div className="sidebar-scrim" onClick={onClose} aria-hidden="true" />
       )}
 
-      <nav className="sidebar" data-open={open} aria-label={navLabel}>
+      {/* Never auto-scrolled during a card drag: crossing it must not wiggle
+          the navigation, and the page behind it keeps scrolling instead. */}
+      <nav className="sidebar" data-open={open} data-drag-autoscroll="skip" aria-label={navLabel}>
         <div className="flex items-center justify-between gap-2 px-4"
           style={{ height: 56, flex: "none" }}>
           {brand}
