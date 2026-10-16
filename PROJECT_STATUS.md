@@ -149,9 +149,11 @@ Deploy order is free in both directions: the new code answers "none"/"empty"
 until the tables exist (guarded queries), and the deployed `a768682` names its
 columns explicitly and never touches the new objects.
 
-**Expected production output — exactly:**
+**Expected production output — exactly (confirmed verbatim on the Neon R1
+rehearsal branch, a byte-exact copy of production):**
 
 ```
+  priorities: already converted, left alone
   created index together_invitations_email_open
   created together_connections
   created together_connection_invitations
@@ -162,9 +164,11 @@ columns explicitly and never touches the new objects.
 Done — 6 change(s).
 ```
 
-Anything else — any backfill line, any `created day_priorities` (production
-already has that legacy table), any other count — means STOP; do not deploy.
-A second run must print `Nothing to do; already up to date.`
+The first line is informational: the old day_priorities→priorities conversion
+step reporting it has nothing to do (it counts no change and writes nothing).
+Anything else — any other backfill line, any `created day_priorities`, any
+other count — means STOP; do not deploy. A second run must print
+`Nothing to do; already up to date.` (also confirmed on the branch).
 
 ### Combined rehearsal (local full runner) — PASSED · Neon rehearsal waits on gate R1
 
@@ -297,19 +301,29 @@ may be lost.
 **Gate R0 (Product Owner): APPROVED 2026-10-16** for
 `efd95427803e215af691674b3e68efa9e7d9f1a5` ("I approve R0 for RichHabit
 release candidate …; proceed with R1 final release rehearsal only").
-**Gate R1 (Product Owner): STILL BLOCKED ON ACCESS, 2026-10-16.** The Neon
-rehearsal needs a credential only the Product Owner holds: all ten stored
-`REHEARSAL_*`/`RESTORE_*` URLs fail auth (28P01, re-probed today), there is
-no `NEON_API_KEY` or `neonctl` in this environment, and the two substitutes
-the agent attempted were refused by the permission system by design (reusing
-production credentials against branch hosts; copying production user data
-into a local clone). **Unblock either way:** (a) in the Neon console, create
-a fresh branch of production — it doubles as the restore point — and add its
-URL to `.env.local` (add-only; e.g. `REHEARSAL_DATABASE_URL_RC1`); or (b) add
-a `NEON_API_KEY` to `.env.local` and the agent creates and manages the branch
-itself. **Note: until a fresh branch exists there is also no usable restore
-point** — every stored restore URL fails auth too — so this gate protects
-rollback, not just rehearsal.
+**Gate R1: PASSED 2026-10-16** on the Product Owner's fresh Neon branch
+`richhabit-rc1-r1-rehearsal-20261016` (`br-cold-mouse-aybjtmhz`, project
+`noisy-boat-87993934`, parent production; `REHEARSAL_DATABASE_URL_RC1` in
+`.env.local`, host `ep-delicate-wa…` ≠ production's `ep-jolly-hall-…`,
+asserted programmatically before every step). Evidence:
+
+| R1 check | Result |
+| --- | --- |
+| branch = production | EXACT before migration: 45/45 tables identical by row count AND whole-row content hash (both read `begin read only`, UTC); PostgreSQL 18.6 both; step-17 present, all candidate objects absent, legacy `day_priorities` present |
+| runner pass 1 | target line showed the rehearsal host with `** REMOTE **`; output verbatim as pinned above; `Done — 6 change(s).` |
+| runner pass 2 | `Nothing to do; already up to date.` |
+| data preservation | 44/44 other tables byte-identical to their pre-migration hashes; `priorities` (177 rows — production grew by 2 since the earlier baseline; the branch tracks CURRENT production) byte-identical over its original columns to production itself (same hash both sides); new columns pure defaults on every row; the three new tables present and empty; step-18 index present |
+| application + authorization smoke (candidate app on port 3300 against the MIGRATED branch, production's `TOGETHER_PREVIEW_USER_IDS` mirrored, two throwaway accounts — never a real user's session) | 20/20: health/db up · signed-out writes 401, /together 307 · priority create/description/links on the new columns · PNG upload, owner download 200 with nosniff · cross-account: fetch 404, delete 404, foreign PATCH 404, foreign attachment list empty (user-scoped SQL, no existence oracle) · non-preview account gets 404 from Together home and connections |
+| production untouched | only `begin read only` transactions, rolled back; the runner never pointed at the production host; the 3100 preview untouched |
+
+**Restore point — IMPORTANT:** the rehearsal branch is **no longer suitable
+as the restore point**: it has been migrated and carries smoke accounts
+(rc1smokea/rc1smokeb) and their test rows. Before the production migration,
+create a second, untouched Neon branch (e.g.
+`restore-before-rc1-<date>`) and leave it pristine — that is the restore
+point, per this project's convention. (Neon's own point-in-time restore on
+the production branch is a backstop, but the pristine branch is the tested
+path.)
 
 **The release (`efd9542`), once R0 and R1 are given:**
 
