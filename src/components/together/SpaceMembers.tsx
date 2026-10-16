@@ -30,7 +30,7 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
   const [gone, setGone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
+  const [who, setWho] = useState("");
   const [inviting, setInviting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
@@ -177,24 +177,45 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
               </fieldset>
             )}
 
+            {/*
+              * One field for either name. An address goes by email, exactly as
+              * before; a username (no @) invites that account inside Together,
+              * with no email and no link. The split is decided again on the
+              * server — this is convenience, not a check.
+              */}
             <form className="mt-4" onSubmit={(e) => {
               e.preventDefault();
-              if (inviting || !email.trim()) return;
+              const to = who.trim();
+              if (inviting || !to) return;
               setInviting(true);
-              const to = email.trim();
-              act(() => call(`/api/together/boards/${boardId}/invitations`, {
-                method: "POST", body: JSON.stringify({ email: to }),
-              }).then(() => setEmail("")), t.together.inviteSent(to)).finally(() => setInviting(false));
+              const isEmail = to.includes("@");
+              (async () => {
+                let done = t.together.inviteSent(to);
+                const ok = await act(async () => {
+                  if (isEmail) {
+                    await call(`/api/together/boards/${boardId}/invitations`, {
+                      method: "POST", body: JSON.stringify({ email: to }),
+                    });
+                  } else {
+                    const { invited } = await call<{ invited: number }>(`/api/together/boards/${boardId}/invitations`, {
+                      method: "POST", body: JSON.stringify({ username: to }),
+                    });
+                    done = invited ? t.together.inviteSentInApp(to) : t.together.nothingToInvite;
+                  }
+                });
+                if (ok) { setWho(""); setNotice(done); }
+              })().finally(() => setInviting(false));
             }}>
-              <label className="eyebrow block mb-1.5" htmlFor="tg-invite">{t.together.inviteByEmail}</label>
+              <label className="eyebrow block mb-1.5" htmlFor="tg-invite">{t.together.inviteByEmailOrUsername}</label>
               <div className="flex gap-2 flex-wrap">
-                <input id="tg-invite" className="input" type="email" autoComplete="off" inputMode="email"
-                  placeholder={t.together.inviteEmailPlaceholder} value={email} maxLength={254}
-                  onChange={(e) => setEmail(e.target.value)} style={{ flex: "1 1 220px" }} />
-                <button className="btn btn-primary" type="submit" disabled={inviting || !email.trim()}>
+                <input id="tg-invite" className="input" type="text" autoComplete="off" autoCapitalize="none"
+                  spellCheck={false} placeholder={t.together.inviteWhoPlaceholder} value={who} maxLength={254}
+                  onChange={(e) => setWho(e.target.value)} style={{ flex: "1 1 220px" }} />
+                <button className="btn btn-primary" type="submit" disabled={inviting || !who.trim()}>
                   {t.together.invite}
                 </button>
               </div>
+              <p className="faint mt-2" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.together.inviteHow}</p>
             </form>
           </div>
         )}

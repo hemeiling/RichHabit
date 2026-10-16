@@ -17,12 +17,14 @@ import {
  * space's work inside that space.
  */
 
-// Step 17 (task ordering) builds on these tables and has its own test; here the
-// schema is taken as of step 16.
+// Steps 17 (task ordering) and 18 (email invitations by address) come later and
+// have their own tests; here the schema is taken as of step 16.
 const FULL_SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
-const RANK_START = "-- ---- Together: task ordering (rank) ----";
-const RANK_END = "-- ---- end Together task ordering ----";
-const SCHEMA = FULL_SCHEMA.slice(0, FULL_SCHEMA.indexOf(RANK_START)) + FULL_SCHEMA.slice(FULL_SCHEMA.indexOf(RANK_END) + RANK_END.length);
+const without = (schema: string, start: string, end: string) =>
+  schema.slice(0, schema.indexOf(start)) + schema.slice(schema.indexOf(end) + end.length);
+const SCHEMA = without(
+  without(FULL_SCHEMA, "-- ---- Together: task ordering (rank) ----", "-- ---- end Together task ordering ----"),
+  "-- ---- Together: email invitations by address (step 18) ----", "-- ---- end Together email invitations by address ----");
 const START = "-- ---- Together V1B: groups, tasks, assignees ----";
 const END = "-- ---- end Together V1B ----";
 const EXISTING_SCHEMA = SCHEMA.slice(0, SCHEMA.indexOf(START)) + SCHEMA.slice(SCHEMA.indexOf(END) + END.length);

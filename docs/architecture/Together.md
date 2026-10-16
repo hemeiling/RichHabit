@@ -23,18 +23,28 @@ off for everyone, invitations included. Otherwise each account has one of:
 
 | Access | Who | May |
 | --- | --- | --- |
-| **full** | on the list | everything: create boards, invite (People or email) |
-| **invited** | not on the list, but a member of a board or holding an open in-platform invitation | see its own boards and invitations, accept/decline, act as a member (and as owner if ownership passes to it), leave — **not** create boards or invite |
+| **full** | on the list | everything: create boards, invite (People, username or email) |
+| **invited** | not on the list, but a member of a board or holding an open invitation *addressed to it* — in-platform, or emailed to its proved address | see its own boards and invitations, accept/decline, act as a member (and as owner if ownership passes to it), leave — **not** create boards or invite |
 | none | everyone else | nothing: no nav item, pages render not-found, APIs answer 404 |
 
-Accepting an **emailed** invitation needs no access level at all: the token, the
-matching address and the invitation's validity decide. That is the narrow door
-by which a new or non-preview account reaches the one board it was invited to.
-Holding an unaccepted email invitation grants nothing. New access therefore
-always originates from someone on the list.
+An invitation is **addressed to** an account (`addressedTo`, access.ts) when it
+names the account (in-platform), or when it was emailed to the account's own
+address and that address is *proved*: verified, or held by an account that was
+never asked to verify (accounts predating verification, and admin-created
+accounts, which the admin vouched for). An addressed invitation waits in the
+account's Together home and the header's notification bell, with Accept and
+Decline — so a registered account never needs the emailed link. An account
+whose address is unproved keeps only the link, whose token proves control of
+the inbox itself.
+
+Accepting an **emailed** invitation by its link needs no access level at all:
+the token, the matching address and the invitation's validity decide. That is
+the narrow door by which a brand-new account reaches the one board it was
+invited to. New access always originates from someone on the list.
 
 The client receives only a boolean and a waiting-invitation count for the
-signed-in account (the nav item and its quiet dot) — never the list.
+signed-in account (the nav item's quiet dot and the bell's number) — never the
+list.
 
 ## Layers
 
@@ -47,7 +57,7 @@ signed-in account (the nav item and its quiet dot) — never the list.
 | Route wrapper (session, gate, translated errors) | `src/lib/together/route.ts` |
 | API | `src/app/api/together/**` — every handler is `return togetherRoute(...)`, except the signed-out invitation preview |
 | Screens | `src/components/together/*`, `src/app/(app)/together/**`, `src/app/together/invite` |
-| Schema | `scripts/migrations/together-v1a.mjs` (runner step 15) and `together-v1b.mjs` (step 16), mirrored in `db/schema.sql` |
+| Schema | `scripts/migrations/together-v1a.mjs` (runner step 15), `together-v1b.mjs` (16), `together-task-rank.mjs` (17) and `together-invite-email.mjs` (18), mirrored in `db/schema.sql` |
 
 ## Invariants every later phase must keep
 
@@ -79,21 +89,27 @@ signed-in account (the nav item and its quiet dot) — never the list.
 
 One table, two kinds, both pending until answered:
 
-- **In-platform** (`invitee_id`): to someone in the inviter's People, chosen
-  when creating a board or from the board's "Invite from People". No email. It
-  waits in the invitee's Together home (Invitations · 邀请) with Accept and
-  Decline, and the navigation (and, on a phone, the menu button) shows a quiet
-  dot. Members, people this inviter already invited, and people who declined
-  this inviter's invitation in the last 7 days are skipped; 50 per inviter a day.
+- **In-platform** (`invitee_id`): to someone in the inviter's People — chosen
+  when creating a board or from the board's "Invite from People" — or to a
+  typed **username** (the public handle the Community board shows; an unknown
+  username is refused plainly, which reveals nothing about email addresses). No
+  email. It waits in the invitee's Together home (Invitations · 邀请) and the
+  header's notification bell with Accept and Decline, and the navigation (and,
+  on a phone, the menu button) shows a quiet dot. Members, people this inviter
+  already invited, and people who declined this inviter's invitation in the
+  last 7 days are skipped; 50 per inviter a day.
 - **Email** (`email_normalized` + `token_hash`): to any typed address — always
   email, even if the address belongs to someone in the inviter's People, so the
-  inviter learns nothing about who has an account. Visible in-platform to nobody.
+  inviter learns nothing about who has an account. When the address belongs to
+  an account whose address is proved, the same invitation also waits in that
+  account's home and bell (`addressedTo`), answerable in-app without the link;
+  the inviter is told nothing either way, and no other member ever sees it.
 
 Invitations are **per inviter**: at most one open per board, invitee and inviter.
 A retry replaces the inviter's own and never touches — or reveals — another
 member's. Accepting any one closes every other open invitation for that person
-on that board; declining declines every in-platform one, and the invitee sees
-one card per board.
+on that board; declining declines every invitation addressed to that account
+there, and the invitee sees one card per board.
 
 Answers: `accepted_at` / `declined_at` / `revoked_at` (at most one, by CHECK).
 Everything that changes a board's membership or invitations locks the board row

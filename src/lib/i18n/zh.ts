@@ -946,6 +946,10 @@ export const zh: Dict = {
     inviteEmailPlaceholder: "name@example.com",
     invite: "邀请",
     inviteSent: (email: string) => `邀请已发送至 ${email}。`,
+    inviteByEmailOrUsername: "用邮箱或用户名邀请",
+    inviteWhoPlaceholder: "name@example.com 或用户名",
+    inviteHow: "邮箱地址会收到邮件邀请；如果它属于 RichHabit 账户，邀请也会出现在应用里。用户名则直接在应用内邀请，不发邮件。",
+    inviteSentInApp: (name: string) => `已在 Together 内向 ${name} 发出邀请，对方接受后加入。`,
     pendingInvitations: "待接受的邀请",
     otherPending: (n: number) => `另有 ${n} 个由其他成员发出的邀请`,
     expires: (iso: string) => `${new Date(iso).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" })} 过期`,
@@ -1112,6 +1116,7 @@ export const zh: Dict = {
       ownerCannotLeave: "作为所有者，你不能退出这个空间，可以选择归档。",
       cannotRemoveSelf: "你不能移除自己。",
       notInPeople: "这里只能邀请已经和你共享空间的伙伴，其他人请用邮箱邀请。",
+      usernameUnknown: "没有找到这个用户名对应的账户。请检查拼写，或改用邮箱邀请。",
       tooManyPeople: "一次发出的邀请太多了。",
       tooManyBoards: "你拥有的空间数量已达上限。",
       previewOnly: "你的账户暂时还不能邀请他人。",
@@ -1134,6 +1139,15 @@ export const zh: Dict = {
       groupMissing: "这个分组已不存在。",
       tooManyGroups: "每个空间最多 30 个分组。",
     },
+  },
+
+  notifications: {
+    label: "通知",
+    title: "通知",
+    open: "通知",
+    openWithCount: (n: number) => `通知，${n} 个邀请待处理`,
+    empty: "暂时没有通知。共享空间的邀请会出现在这里。",
+    openTogether: "打开 Together",
   },
 
   whatsNew: {

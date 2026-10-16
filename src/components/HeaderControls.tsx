@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useHabits } from "@/components/store";
+import { call } from "@/components/together/shared";
 import { Sheet } from "@/components/ui";
 import * as db from "@/lib/db";
 import { dict, type Locale } from "@/lib/i18n";
@@ -12,7 +14,8 @@ import {
 } from "@/lib/releases";
 
 /**
- * The right-hand side of the signed-in header: What's New, then Language.
+ * The right-hand side of the signed-in header: Notifications (for accounts
+ * with Together access), What's New, then Language.
  *
  * Quiet text controls from 900px, where the sidebar is always on screen and the
  * header has room; 44×44 icon buttons below that, so a phone header keeps its
@@ -32,6 +35,7 @@ const ICON_PATHS = {
   calendar: "M4.5 6h15v14h-15z M4.5 10.5h15 M8.5 3.5v4 M15.5 3.5v4",
   crown: "M4 17.5l-1-9.5 5 4 4-7 4 7 5-4-1 9.5z M5 20.5h14",
   check: "M5 12.5l4.2 4.2L19 7",
+  bell: "M18 9.6a6 6 0 1 0-12 0c0 4.3-1.7 5.7-1.7 5.7h15.4S18 13.9 18 9.6 M9.9 18.7a2.3 2.3 0 0 0 4.2 0",
 } as const;
 
 function Icon({ name, size = 18 }: { name: keyof typeof ICON_PATHS; size?: number }) {
@@ -367,6 +371,167 @@ function WhatsNewPanel({
         <button type="button" className="btn btn-quiet wn-close" onClick={onClose}>{t.common.close}</button>
       </div>
       {body}
+    </div>
+  );
+}
+
+/* ------------------------------ Notifications ------------------------------ */
+
+interface WaitingInvitation { id: string; board: string; inviter: string; expiresAt: string }
+
+/**
+ * The notification bell: Together invitations waiting for this account, with
+ * Accept and Decline right there. The count comes from the server with the
+ * page (the same number the sidebar's indicator uses); the list is read when
+ * the bell opens, so the chrome costs nothing until it is used. Rendered only
+ * for accounts with Together access — for everyone else there is nothing it
+ * could ever show.
+ */
+export function NotificationBell({ count }: { count: number }) {
+  const t = useT();
+  const locale = useLocale();
+  const router = useRouter();
+  const phone = usePhone();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<WaitingInvitation[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+
+  const close = useCallback((returnFocus: boolean) => {
+    setOpen(false);
+    if (returnFocus) trigger.current?.focus();
+  }, []);
+  const outside = useCallback(() => close(false), [close]);
+  useOutsidePress(wrap, open && !phone, outside);
+
+  useEffect(() => {
+    if (!open || phone) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(true); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, phone, close]);
+
+  const load = useCallback(() => {
+    setFailed(false);
+    call<{ invitations: WaitingInvitation[] }>("/api/together/invitations")
+      .then((r) => setItems(r.invitations))
+      .catch(() => { setItems(null); setFailed(true); });
+  }, []);
+
+  const toggle = () => {
+    if (open) { close(true); return; }
+    setItems(null);
+    setProblem(null);
+    setOpen(true);
+    load();
+  };
+
+  const answer = async (id: string, accept: boolean) => {
+    if (answering) return;
+    setAnswering(id);
+    setProblem(null);
+    try {
+      const r = await call<{ boardId?: string }>("/api/together/invitations/respond", {
+        method: "POST", body: JSON.stringify({ id, accept }),
+      });
+      setItems((v) => (v ? v.filter((i) => i.id !== id) : v));
+      if (accept && r.boardId) {
+        setAnswering(null);
+        close(false);
+        router.push(`/together/b/${r.boardId}`);
+        // After the navigation, so the layout the new page renders with is the
+        // one that gets refreshed — this is what clears the badge.
+        router.refresh();
+        return;
+      }
+      router.refresh();   // the badge, and the sidebar's indicator
+    } catch (e) {
+      // It may have been answered elsewhere or withdrawn meanwhile: say why,
+      // and re-read so the list tells the truth.
+      setProblem(e instanceof Error ? e.message : String(e));
+      load();
+      router.refresh();
+    }
+    setAnswering(null);
+  };
+
+  const body = (
+    <div className="bell-list">
+      {failed ? (
+        <p className="bell-note" role="alert">{t.together.loadFailed}</p>
+      ) : items === null ? (
+        <p className="bell-note">{t.common.loading}</p>
+      ) : items.length === 0 ? (
+        <p className="bell-note">{t.notifications.empty}</p>
+      ) : (
+        <ul className="bell-items">
+          {items.map((i) => (
+            <li key={i.id} className="bell-item">
+              <p className="bell-text">{t.together.invitePage.invitedYou(i.inviter, i.board)}</p>
+              <div className="bell-actions">
+                <button className="btn" disabled={answering !== null} onClick={() => answer(i.id, false)}>
+                  {t.together.decline}
+                </button>
+                <button className="btn btn-primary" disabled={answering !== null} onClick={() => answer(i.id, true)}>
+                  {t.together.accept}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {problem && <p className="bell-note" role="alert" style={{ color: "var(--warn)" }}>{problem}</p>}
+      <p className="bell-foot">
+        <Link href="/together" onClick={() => close(false)}>{t.notifications.openTogether} →</Link>
+      </p>
+    </div>
+  );
+
+  return (
+    <div
+      className="hdr-anchor"
+      ref={wrap}
+      onBlur={(e) => {
+        if (open && !phone && !wrap.current?.contains(e.relatedTarget as Node | null)) close(false);
+      }}
+    >
+      <button
+        ref={trigger}
+        type="button"
+        className="hdr-ctl"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={count > 0 ? t.notifications.openWithCount(count) : t.notifications.open}
+        title={t.notifications.open}
+        onClick={toggle}
+      >
+        <span className="hdr-icon">
+          <Icon name="bell" />
+          {count > 0 && <span className="hdr-count num" aria-hidden="true">{count > 9 ? "9+" : count}</span>}
+        </span>
+        <ControlLabel locale={locale} en={dict("en").notifications.label} zh={dict("zh").notifications.label} />
+      </button>
+
+      {open && (phone
+        ? <Sheet open onClose={() => close(true)} title={t.notifications.title}>{body}</Sheet>
+        : (
+          <div
+            role="dialog"
+            aria-labelledby={titleId}
+            className="hdr-pop bell-pop"
+            onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); close(true); } }}
+          >
+            <div className="wn-head">
+              <h2 id={titleId} className="wn-title">{t.notifications.title}</h2>
+              <button type="button" className="btn btn-quiet wn-close" onClick={() => close(true)}>{t.common.close}</button>
+            </div>
+            {body}
+          </div>
+        ))}
     </div>
   );
 }

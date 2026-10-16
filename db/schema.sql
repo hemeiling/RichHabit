@@ -1058,6 +1058,16 @@ create index if not exists together_invitations_invitee
 create index if not exists together_invitations_inviter_time
   on together_invitations (invited_by, created_at desc);
 
+-- ---- Together: email invitations by address (step 18) --------------------------
+-- Open email invitations by address: email invitations are also shown in-app
+-- to the account whose proved address they were sent to, and that lookup runs
+-- on every signed-in page load (the waiting-invitation count).
+create index if not exists together_invitations_email_open
+  on together_invitations (email_normalized)
+  where email_normalized is not null
+    and accepted_at is null and declined_at is null and revoked_at is null;
+-- ---- end Together email invitations by address ----------------------------------
+
 create or replace function together_before_user_delete() returns trigger
 language plpgsql as $$
 declare

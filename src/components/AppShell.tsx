@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { HabitsProvider, useHabits } from "@/components/store";
-import { LanguageMenu, WhatsNew } from "@/components/HeaderControls";
+import { LanguageMenu, NotificationBell, WhatsNew } from "@/components/HeaderControls";
 import Sidebar, { SidebarToggle, type NavItem, type NavNode } from "@/components/Sidebar";
 import { BoardMark } from "@/components/together/shared";
 import { useSignOut } from "@/components/useSignOut";
@@ -361,6 +361,9 @@ function Chrome({ email, localDb, together, togetherPending, togetherBoards, chi
           <div className="hdr-controls">
             <span className="eyebrow hdr-saving" style={{ opacity: saving ? 1 : 0, transition: "opacity .2s" }}
               aria-hidden={!saving}>{t.common.saving}</span>
+            {/* The bell leads: it is the only control whose number can demand
+                attention, and only accounts with Together access see it. */}
+            {together && <NotificationBell count={togetherPending} />}
             <WhatsNew />
             <LanguageMenu />
             <button type="button" className="hdr-ctl hdr-theme" aria-label={t.common.toggleDarkMode}

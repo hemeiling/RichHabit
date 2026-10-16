@@ -653,6 +653,33 @@ body {
 .lang-item[aria-checked="true"] { font-weight: 600; }
 .lang-check { width: 16px; display: inline-flex; color: var(--accent); flex: none; }
 
+/*
+ * The notification bell's count. A number rather than a dot: "how many people
+ * are waiting on me" is the fact the bell exists to carry. Capped in the
+ * component at 9+ so the badge never outgrows the icon.
+ */
+.hdr-count {
+  position: absolute; top: -6px; right: -8px; min-width: 15px; height: 15px; padding: 0 4px;
+  border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+  font-size: 10px; font-weight: 700; line-height: 15px; text-align: center;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.hdr-ctl:hover .hdr-count, .hdr-ctl[aria-expanded="true"] .hdr-count { box-shadow: 0 0 0 2px var(--raise); }
+
+/* The bell's panel: each invitation with its answers, dividers not cards. */
+.bell-pop { width: 340px; max-height: min(68vh, 520px); overflow-y: auto; padding: 14px 18px 6px; }
+.bell-items { list-style: none; margin: 0; padding: 0; }
+.bell-item { display: flex; flex-direction: column; gap: 9px; padding: 13px 0; }
+.bell-item + .bell-item { border-top: 1px solid var(--line-soft); }
+.bell-text { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.bell-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bell-note { font-size: 13.5px; color: var(--muted); padding: 12px 0; }
+.bell-foot { padding: 11px 0 8px; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.bell-foot a { color: var(--accent); text-decoration: none; }
+.bell-foot a:hover { text-decoration: underline; }
+/* In the bottom sheet the panel starts at the sheet's own title. */
+.sheet .bell-list .bell-item:first-child { padding-top: 4px; }
+
 /* The release history. Dividers, not cards: it is a list you read once. */
 .wn-pop { width: 380px; max-height: min(72vh, 580px); overflow-y: auto; padding: 14px 18px 4px; }
 .wn-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

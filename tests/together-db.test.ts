@@ -50,6 +50,7 @@ const respond = await import("../src/app/api/together/invitations/respond/route"
 const member = await import("../src/app/api/together/boards/[id]/members/[userId]/route");
 const leave = await import("../src/app/api/together/boards/[id]/leave/route");
 const invite = await import("../src/app/api/together/boards/[id]/invitations/route");
+const inviteList = await import("../src/app/api/together/invitations/route");
 const inviteOne = await import("../src/app/api/together/boards/[id]/invitations/[inviteId]/route");
 const preview = await import("../src/app/api/together/invitations/preview/route");
 const accept = await import("../src/app/api/together/invitations/accept/route");
@@ -771,11 +772,16 @@ describe("invitations", () => {
     await inviteTo(id, owner.id, "newbie@example.com");
     const token = tokenOf(sent.at(-1)!);
 
-    // Holding an emailed invitation grants nothing by itself.
+    // Holding an emailed invitation to its own (proved) address, the account
+    // already sees that one invitation in-app — and nothing else.
     as(newbie.id);
-    expect((await home.GET()).status).toBe(404);
-    // Someone else outside the preview cannot use it.
+    const waiting = (await json(await home.GET())).body;
+    expect(waiting).toMatchObject({ access: "invited", boards: [], people: [] });
+    expect(waiting.invitations.map((i: any) => i.board)).toEqual(["Headband Business"]);
+    // Someone else outside the preview cannot use it, in-app or by token.
     as(imposter.id);
+    expect((await home.GET()).status).toBe(404);
+    expect((await respond.POST(req({ id: waiting.invitations[0].id, accept: true }))).status).toBe(404);
     expect((await accept.POST(req({ token }))).status).toBe(403);
 
     as(newbie.id);
@@ -854,6 +860,151 @@ describe("invitations", () => {
       "together_board_created", "together_invitation_declined"]);
     expect(tracked[1].properties).toEqual({ channel: "email", count: 1 });
     expect(tracked[3].properties).toEqual({ people: 1, emails: 0 });
+  });
+});
+
+describe("answering an email invitation in-app", () => {
+  it("shows an email invitation to the account with that proved address, and Accept joins that one board", async () => {
+    const owner = await account("Meiling");
+    const reg = await account("Reggie", { email: "reggie@example.com" });
+    allow(owner.id);
+    const id = await newBoard(owner.id, "Headband Business");
+    const unrelated = await newBoard(owner.id, "Private plans");
+    await inviteTo(id, owner.id, "Reggie@Example.com");
+    // The email still went out, exactly as for an address with no account.
+    expect(sent).toHaveLength(1);
+
+    // The bell's list and the home show the same one invitation.
+    as(reg.id);
+    const list = (await json(await inviteList.GET())).body.invitations;
+    expect(list.map((i: any) => i.board)).toEqual(["Headband Business"]);
+    expect(await waitingFor(reg.id)).toMatchObject([{ board: "Headband Business", inviter: "Meiling" }]);
+
+    // Accept in-app — no token, no link.
+    expect((await answer(reg.id, list[0].id, true)).body).toEqual({ boardId: id });
+    expect(await memberIds(id)).toContain(reg.id);
+    expect(await canSee(reg.id, id)).toBe(true);
+    expect(await canSee(reg.id, unrelated)).toBe(false);
+    // The accepted invitation is spent: its emailed token answers "invalid".
+    const token = tokenOf(sent.at(-1)!);
+    as(reg.id);
+    expect((await accept.POST(req({ token }))).status).toBe(404);
+  });
+
+  it("lets the account decline in-app, which voids the emailed link and clears the inviter's pending list", async () => {
+    const owner = await account("Meiling");
+    const reg = await account("Reggie", { email: "reggie@example.com" });
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    await inviteTo(id, owner.id, "reggie@example.com");
+    const [w] = await waitingFor(reg.id);
+    expect((await answer(reg.id, w.id, false)).status).toBe(200);
+    expect(await waitingFor(reg.id)).toEqual([]);
+    expect(await memberIds(id)).toEqual([owner.id]);
+    as(reg.id);
+    expect((await accept.POST(req({ token: tokenOf(sent.at(-1)!) }))).status).toBe(404);
+    as(owner.id);
+    expect((await json(await board.GET(req(undefined, "GET"), { params: { id } }))).body.invitations).toEqual([]);
+  });
+
+  it("shows nothing in-app while the address is unproved; the emailed token stays the only door", async () => {
+    const owner = await account("Meiling");
+    const shaky = await account("Shaky", { email: "shaky@example.com" });
+    await sql(`update users set verification_required = true, email_verified_at = null where id = $1`, [shaky.id]);
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    await inviteTo(id, owner.id, "shaky@example.com");
+
+    // Unproved: no in-app invitation, no Together access, no in-app answer.
+    as(shaky.id);
+    expect((await home.GET()).status).toBe(404);
+    const [{ id: inviteId }] = await sql(`select id from together_invitations where board_id = $1`, [id]);
+    expect((await respond.POST(req({ id: inviteId, accept: true }))).status).toBe(404);
+
+    // Proving the address brings the invitation into the app.
+    await sql(`update users set email_verified_at = now() where id = $1`, [shaky.id]);
+    expect(await waitingFor(shaky.id)).toMatchObject([{ inviter: "Meiling" }]);
+  });
+
+  it("lists invitations only for their account: the bell answers everyone else as not found", async () => {
+    const stranger = await account("Stranger");
+    const owner = await account("Meiling");
+    allow(owner.id);
+    await newBoard(owner.id);
+    as(stranger.id);
+    expect((await inviteList.GET()).status).toBe(404);
+    as(null);
+    expect((await inviteList.GET()).status).toBe(401);
+  });
+});
+
+describe("inviting by username", () => {
+  const inviteUser = async (boardId: string, from: string, username: string) => {
+    as(from);
+    return json(await invite.POST(req({ username }), { params: { id: boardId } }));
+  };
+
+  it("invites a registered account in-platform — no email — and Accept makes them a member", async () => {
+    const owner = await account("Meiling");
+    const friend = await account("Friend");
+    const [{ username }] = await sql(`select username from users where id = $1`, [friend.id]);
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    const r = await inviteUser(id, owner.id, username.toUpperCase());   // case does not matter
+    expect(r).toMatchObject({ status: 200, body: { invited: 1 } });
+    expect(sent).toHaveLength(0);
+
+    const [w] = await waitingFor(friend.id);
+    expect(w).toMatchObject({ board: "Headband Business", inviter: "Meiling" });
+    expect((await answer(friend.id, w.id, true)).body).toEqual({ boardId: id });
+    expect(await memberIds(id)).toContain(friend.id);
+
+    // The channel name only — never the username.
+    const sentEvents = tracked.filter((e) => e.event === "together_invitation_sent");
+    expect(sentEvents.at(-1)?.properties).toEqual({ channel: "username", count: 1 });
+    expect(JSON.stringify(tracked)).not.toContain(username);
+  });
+
+  it("says plainly when no account has that username, and skips members and repeats quietly", async () => {
+    const owner = await account("Meiling");
+    const friend = await account("Friend");
+    const [{ username }] = await sql(`select username from users where id = $1`, [friend.id]);
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+
+    expect((await inviteUser(id, owner.id, "nobody-here")).status).toBe(404);
+    expect((await inviteUser(id, owner.id, "")).status).toBe(404);
+    expect((await inviteUser(id, owner.id, "two words")).status).toBe(404);
+
+    // Already invited by this inviter: nothing new, said as a count.
+    expect((await inviteUser(id, owner.id, username)).body).toEqual({ invited: 1 });
+    expect((await inviteUser(id, owner.id, username)).body).toEqual({ invited: 0 });
+    // One open invitation per board, invitee and inviter — not a second row.
+    expect(await sql(`select count(*)::int n from together_invitations where board_id = $1`, [id]))
+      .toMatchObject([{ n: 1 }]);
+    // Already a member (the owner themselves): also nothing new.
+    const [{ username: own }] = await sql(`select username from users where id = $1`, [owner.id]);
+    expect((await inviteUser(id, owner.id, own)).body).toEqual({ invited: 0 });
+  });
+
+  it("needs full access and a writable board, like every other way of inviting", async () => {
+    const owner = await account("Meiling");
+    const member2 = await account("Member", { email: "member@example.com" });
+    const outsider = await account("Out");
+    const [{ username }] = await sql(`select username from users where id = $1`, [outsider.id]);
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    await join(id, owner.id, member2);
+
+    as(outsider.id);
+    expect((await invite.POST(req({ username }), { params: { id } })).status).toBe(404);
+    // A member who is not in the preview may not invite.
+    as(member2.id);
+    expect((await invite.POST(req({ username }), { params: { id } })).status).toBe(403);
+    // An archived space takes no invitations.
+    as(owner.id);
+    await board.PATCH(req({ archived: true }, "PATCH"), { params: { id } });
+    expect((await inviteUser(id, owner.id, username)).status).toBe(409);
   });
 });
 

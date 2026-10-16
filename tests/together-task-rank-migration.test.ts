@@ -15,7 +15,13 @@ import {
  * nothing else; that it is idempotent; and that it matches a fresh install.
  */
 
-const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
+// Step 18 (email invitations by address) comes later and has its own test;
+// here the schema is taken as of step 17.
+const FULL_SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
+const without = (schema: string, start: string, end: string) =>
+  schema.slice(0, schema.indexOf(start)) + schema.slice(schema.indexOf(end) + end.length);
+const SCHEMA = without(FULL_SCHEMA,
+  "-- ---- Together: email invitations by address (step 18) ----", "-- ---- end Together email invitations by address ----");
 const START = "-- ---- Together: task ordering (rank) ----";
 const END = "-- ---- end Together task ordering ----";
 const EXISTING_SCHEMA = SCHEMA.slice(0, SCHEMA.indexOf(START)) + SCHEMA.slice(SCHEMA.indexOf(END) + END.length);

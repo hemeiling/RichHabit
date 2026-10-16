@@ -1112,6 +1112,11 @@ export const en = {
     inviteEmailPlaceholder: "name@example.com",
     invite: "Invite",
     inviteSent: (email: string) => `Invitation sent to ${email}.`,
+    inviteByEmailOrUsername: "Invite by email or username",
+    inviteWhoPlaceholder: "name@example.com or username",
+    /** Stated as what the product does, never as a fact about one address. */
+    inviteHow: "An email address gets an email invitation; if it belongs to a RichHabit account, it also appears in the app. A username is invited inside the app, with no email.",
+    inviteSentInApp: (name: string) => `Invitation sent to ${name} in Together. They join when they accept.`,
     pendingInvitations: "Pending invitations",
     otherPending: (n: number) => (n === 1 ? "1 more pending from another member" : `${n} more pending from other members`),
     // Takes the timestamp, so bilingual mode formats each half in its own language.
@@ -1290,6 +1295,7 @@ export const en = {
       ownerCannotLeave: "As the owner you can't leave this space. You can archive it instead.",
       cannotRemoveSelf: "You can't remove yourself.",
       notInPeople: "You can invite here only people you already share a space with. Invite anyone else by email.",
+      usernameUnknown: "No RichHabit account has that username. Check the spelling, or invite them by email.",
       tooManyPeople: "That is more invitations than can be sent at once.",
       tooManyBoards: "You already own the maximum number of spaces.",
       previewOnly: "Inviting people is not available on your account yet.",
@@ -1312,6 +1318,20 @@ export const en = {
       groupMissing: "That group no longer exists.",
       tooManyGroups: "A space can have up to 30 groups.",
     },
+  },
+
+  /**
+   * The header's notification bell: Together invitations waiting for this
+   * account, with Accept and Decline right there. Together-only today; if the
+   * app ever notifies about anything else, it belongs here too.
+   */
+  notifications: {
+    label: "Notifications",
+    title: "Notifications",
+    open: "Notifications",
+    openWithCount: (n: number) => `Notifications, ${n === 1 ? "1 invitation" : `${n} invitations`} waiting`,
+    empty: "Nothing waiting. Invitations to shared spaces appear here.",
+    openTogether: "Open Together",
   },
 
   /**

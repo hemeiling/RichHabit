@@ -7,7 +7,7 @@ import { isUuid } from "@/lib/http";
 import { isLocale, type Locale } from "@/lib/i18n";
 import { isPlausibleEmail, normaliseEmail } from "@/lib/identity";
 import {
-  DISPLAY_NAME, OPEN, TogetherError, USABLE, WAITING, peopleOf, requireAccess, requireBoard, togetherLive,
+  DISPLAY_NAME, OPEN, TogetherError, USABLE, WAITING, addressedTo, peopleOf, requireAccess, requireBoard, togetherLive,
 } from "@/lib/together/access";
 import { togetherTransaction as transaction } from "@/lib/together/tx";
 
@@ -17,11 +17,20 @@ import { togetherTransaction as transaction } from "@/lib/together/tx";
  * Two kinds, one table, one rule:
  *
  *   IN-PLATFORM  to someone in the inviter's People (an account they already
- *                share a board with). No email: it waits in the invitee's
- *                Together home, with Accept and Decline. Usable at once.
+ *                share a board with), or to a public username typed in. No
+ *                email: it waits in the invitee's Together home and the
+ *                header's notification bell, with Accept and Decline. Usable
+ *                at once. An unknown username is refused plainly — usernames
+ *                are public handles (the Community board shows them), so that
+ *                answer reveals nothing about email addresses.
  *   EMAIL        to an address typed in. Always email, whether or not the
  *                address has an account or is in the inviter's People, so the
- *                inviter learns nothing about who uses RichHabit.
+ *                inviter learns nothing about who uses RichHabit. When the
+ *                address belongs to an account whose address is proved
+ *                (access.ts, `addressedTo`), the same invitation also waits in
+ *                that account's Together home and bell, so it can be accepted
+ *                in-app without the emailed link. The inviter is told nothing
+ *                either way.
  *
  * Each inviter's invitations are their own: at most one open per board,
  * invitee and inviter. A retry replaces the inviter's own and never touches
@@ -143,6 +152,17 @@ export async function insertPeopleInvitations(q: Q, boardId: string, inviterId: 
   if (!people.length) return 0;
   const mine = new Set((await peopleOf(q, inviterId)).map((p) => p.id));
   if (people.some((id) => !mine.has(id))) throw new TogetherError("notInPeople");
+  return insertInvitationsFor(q, boardId, inviterId, people);
+}
+
+/**
+ * The shared core: in-platform invitations to specific accounts, with the
+ * board and inviter already checked and the account ids already resolved —
+ * from the inviter's People, or from a typed public username. Never from a
+ * raw id in a request: cleanPeople ids go through the People check above, and
+ * usernames resolve on the server.
+ */
+async function insertInvitationsFor(q: Q, boardId: string, inviterId: string, people: string[]): Promise<number> {
   await lockBoard(q, boardId);
   await lockInviter(q, inviterId);
   const fresh = (await q<{ id: string }>(
@@ -177,6 +197,29 @@ export async function invitePeople(userId: string, boardId: unknown, rawPeople: 
   return transaction(async (q) => {
     const access = await requireBoard(q, userId, boardId, { write: true, lock: true });
     return insertPeopleInvitations(q, access.boardId, userId, people);
+  });
+}
+
+/**
+ * Invite one account by its public username, in-platform — no email, no link.
+ * Usernames are public handles (chosen for the Community board), so "no account
+ * has that username" is an honest answer that reveals nothing about email
+ * addresses or private data. The usual skip rules and daily limit apply;
+ * 0 created means they are already here, already invited by this inviter, or
+ * recently declined — one combined answer, so a decline is not singled out.
+ */
+export async function inviteByUsername(userId: string, boardId: unknown, rawUsername: unknown): Promise<number> {
+  await requireAccess(userId, { full: true });
+  const username = typeof rawUsername === "string" ? rawUsername.trim().toLowerCase() : "";
+  // A sanity bound, not the sign-up shape rules: an account whose handle
+  // predates today's rules must still be invitable by it.
+  if (!username || username.length > 254 || /\s/.test(username)) throw new TogetherError("usernameUnknown", 404);
+  return transaction(async (q) => {
+    const access = await requireBoard(q, userId, boardId, { write: true, lock: true });
+    const [target] = await q<{ id: string }>(
+      `select id::text as id from users where lower(username) = $1`, [username]);
+    if (!target) throw new TogetherError("usernameUnknown", 404);
+    return insertInvitationsFor(q, access.boardId, userId, [target.id]);
   });
 }
 
@@ -275,8 +318,9 @@ export async function withdrawInvitationsFor(q: Q, boardId: string, userId: stri
 export interface PendingInvitation { id: string; board: string; inviter: string; expiresAt: string }
 
 /**
- * In-platform invitations waiting for this account, newest first — one per
- * board, however many members invited them to it.
+ * Invitations waiting for this account — in-platform, or emailed to its proved
+ * address — newest first; one per board, however many members invited them to
+ * it. What the Together home and the header's notification bell both show.
  */
 export async function pendingFor(userId: string, q: Q = query): Promise<PendingInvitation[]> {
   return q<PendingInvitation>(
@@ -322,9 +366,11 @@ async function lockForAnswer(q: Q, where: string, params: unknown[], me: string)
 }
 
 /**
- * Accept or decline an in-platform invitation addressed to this account.
- * Anything else — someone else's, answered, withdrawn, expired, or on an
- * archived board — is one answer, "no longer valid".
+ * Accept or decline an invitation addressed to this account — in-platform, or
+ * emailed to its proved address (`addressedTo`), which is how a registered
+ * account answers an email invitation without the link. Anything else —
+ * someone else's, answered, withdrawn, expired, or on an archived board — is
+ * one answer, "no longer valid".
  */
 export async function respondToInvitation(
   userId: string, inviteId: unknown, accept: unknown,
@@ -333,12 +379,12 @@ export async function respondToInvitation(
   // A decline cannot be undone, so it must be asked for, never defaulted to.
   if (typeof accept !== "boolean") throw new TogetherError("invitationInvalid", 400);
   return transaction(async (q) => {
-    const boardId = await lockForAnswer(q, "i.id = $1 and i.invitee_id = $2", [inviteId, userId], userId);
+    const boardId = await lockForAnswer(q, `i.id = $1 and ${addressedTo("$2")}`, [inviteId, userId], userId);
     if (!boardId) throw new TogetherError("invitationInvalid", 404);
     const [inv] = await q<{ id: string; board_id: string; invited_by: string }>(
       `select i.id, i.board_id::text, i.invited_by::text
          from together_invitations i join together_boards b on b.id = i.board_id
-        where i.id = $1 and i.invitee_id = $2 and ${USABLE} and b.archived_at is null
+        where i.id = $1 and ${addressedTo("$2")} and ${USABLE} and b.archived_at is null
         for update of i`, [inviteId, userId]);
     if (!inv) throw new TogetherError("invitationInvalid", 404);
     if (accept) {
@@ -347,9 +393,9 @@ export async function respondToInvitation(
       await q(`update together_invitations set accepted_at = now(), accepted_by = $2 where id = $1`, [inv.id, userId]);
       await withdrawInvitationsFor(q, inv.board_id, userId);
     } else {
-      // A decline answers every in-platform invitation to this board.
-      await q(`update together_invitations set declined_at = now()
-        where board_id = $1 and invitee_id = $2 and ${OPEN}`, [inv.board_id, userId]);
+      // A decline answers every invitation addressed to this account on this board.
+      await q(`update together_invitations i set declined_at = now()
+        where i.board_id = $1 and ${addressedTo("$2")} and ${OPEN}`, [inv.board_id, userId]);
     }
     return { boardId: inv.board_id };
   });

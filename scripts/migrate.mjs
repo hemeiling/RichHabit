@@ -28,6 +28,7 @@ import { migrateWhatsNew } from "./migrations/whats-new.mjs";
 import { migrateTogetherV1A } from "./migrations/together-v1a.mjs";
 import { migrateTogetherV1B } from "./migrations/together-v1b.mjs";
 import { migrateTogetherTaskRank } from "./migrations/together-task-rank.mjs";
+import { migrateTogetherInviteEmail } from "./migrations/together-invite-email.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -952,6 +953,16 @@ try {
    * scripts/migrations/together-task-rank.mjs.
    */
   changed += await migrateTogetherTaskRank(client, console.log);
+
+  /*
+   * ---- 18. Together: find email invitations by address ----------------------
+   *
+   * One partial index, so the per-request waiting-invitation check stays
+   * indexed now that email invitations are also shown in-app to the account
+   * whose proved address they name. Nothing else changes. See
+   * scripts/migrations/together-invite-email.mjs.
+   */
+  changed += await migrateTogetherInviteEmail(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

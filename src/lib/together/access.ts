@@ -12,13 +12,16 @@ import { ApiError, isUuid } from "@/lib/http";
  *
  *   full     — on the list: everything, including creating boards and inviting.
  *   invited  — not on the list, but a member of a board or holding an open
- *              in-platform invitation: their own boards and invitations, and
- *              what a member may do on them. Not creating boards, not inviting —
- *              so new access always starts from someone on the list.
+ *              invitation addressed to it (in-platform, or emailed to its
+ *              proved address — see `addressedTo`): their own boards and
+ *              invitations, and what a member may do on them. Not creating
+ *              boards, not inviting — so new access always starts from someone
+ *              on the list.
  *
- * Accepting an emailed invitation needs neither: the token, the matching
- * address and the invitation's own validity decide (invitations.ts). That is
- * the narrow way a new account reaches the one board it was invited to.
+ * Accepting an emailed invitation by its link needs neither: the token, the
+ * matching address and the invitation's own validity decide (invitations.ts).
+ * That is the narrow way a brand-new account reaches the one board it was
+ * invited to.
  *
  * ## Who may touch a board
  *
@@ -38,7 +41,7 @@ export type TogetherErrorCode =
   | "notFound" | "ownerOnly" | "archived" | "nameRequired" | "nameTooLong"
   | "emailInvalid" | "tooManyInvites" | "tooManyOpenInvites" | "sendFailed"
   | "invitationInvalid" | "wrongAccount" | "ownerCannotLeave" | "cannotRemoveSelf"
-  | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly" | "conflict"
+  | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly" | "conflict" | "usernameUnknown"
   // V1B — shared work
   | "titleRequired" | "titleTooLong" | "descriptionTooLong" | "stageInvalid" | "effortInvalid"
   | "dueInvalid" | "notAMember" | "tooManyAssignees" | "tooManyTasks" | "taskDeleted" | "textConflict"
@@ -62,11 +65,26 @@ export const USABLE =
   "i.accepted_at is null and i.declined_at is null and i.revoked_at is null and i.sent_at is not null and i.expires_at > now()";
 
 /**
- * In-platform invitations waiting for account `$1`: usable, on a live board it
- * is not already on. Columns of `together_invitations i` joined to
- * `together_boards b`. The one definition behind access, the list and the count.
+ * An invitation addressed to the account bound as `param`: it names the account
+ * (in-platform), or it was emailed to the account's own address. The email arm
+ * requires the address to be *proved* — verified, or held by an account that
+ * was never asked to verify (accounts that predate verification, and accounts
+ * an admin created and thereby vouched for). An account whose address is
+ * unproved keeps only the email link, whose token proves control of the inbox
+ * itself. Columns of `together_invitations i`.
  */
-export const WAITING = `i.invitee_id = $1 and ${USABLE} and b.archived_at is null
+export const addressedTo = (param: string) =>
+  `(i.invitee_id = ${param} or (i.email_normalized is not null and exists (
+     select 1 from users me where me.id = ${param} and lower(me.email) = i.email_normalized
+       and (me.email_verified_at is not null or not me.verification_required))))`;
+
+/**
+ * Invitations waiting for account `$1` — in-platform, or emailed to its proved
+ * address: usable, on a live board it is not already on. Columns of
+ * `together_invitations i` joined to `together_boards b`. The one definition
+ * behind access, the list, the count and the header's notification bell.
+ */
+export const WAITING = `${addressedTo("$1")} and ${USABLE} and b.archived_at is null
    and not exists (select 1 from together_members m where m.board_id = i.board_id and m.user_id = $1)`;
 
 /** Together is switched on at all: during the preview, only while somebody is on the list. */

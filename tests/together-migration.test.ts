@@ -18,15 +18,17 @@ import {
  * Together data.
  */
 
-// Steps 16 and 17 build on these tables and have their own tests
-// (together-v1b-migration, together-task-rank-migration); here the schema is
-// taken as of step 15.
+// Steps 16, 17 and 18 build on these tables and have their own tests
+// (together-v1b-migration, together-task-rank-migration,
+// together-invite-email-migration); here the schema is taken as of step 15.
 const FULL_SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
 const without = (schema: string, start: string, end: string) =>
   schema.slice(0, schema.indexOf(start)) + schema.slice(schema.indexOf(end) + end.length);
 const SCHEMA = without(
-  without(FULL_SCHEMA, "-- ---- Together: task ordering (rank) ----", "-- ---- end Together task ordering ----"),
-  "-- ---- Together V1B: groups, tasks, assignees ----", "-- ---- end Together V1B ----");
+  without(
+    without(FULL_SCHEMA, "-- ---- Together: task ordering (rank) ----", "-- ---- end Together task ordering ----"),
+    "-- ---- Together V1B: groups, tasks, assignees ----", "-- ---- end Together V1B ----"),
+  "-- ---- Together: email invitations by address (step 18) ----", "-- ---- end Together email invitations by address ----");
 const START = "-- ---- Together V1A: boards, membership, invitations ----";
 const END = "-- ---- end Together V1A ----";
 const EXISTING_SCHEMA = SCHEMA.slice(0, SCHEMA.indexOf(START)) + SCHEMA.slice(SCHEMA.indexOf(END) + END.length);
