@@ -294,13 +294,22 @@ may be lost.
 
 ### Release plan and gates
 
-**Gate R0 (Product Owner):** approve the release after reviewing the local
-preview at http://127.0.0.1:3100 (it serves `9719750`, content-identical to
-the candidate).
-**Gate R1 (Product Owner):** in Neon, create a fresh branch of production —
-it doubles as the restore point — and put its URL in `.env.local` (add a new
-variable or update `REHEARSAL_DATABASE_URL`; the file is add-only and is
-never committed).
+**Gate R0 (Product Owner): APPROVED 2026-10-16** for
+`efd95427803e215af691674b3e68efa9e7d9f1a5` ("I approve R0 for RichHabit
+release candidate …; proceed with R1 final release rehearsal only").
+**Gate R1 (Product Owner): STILL BLOCKED ON ACCESS, 2026-10-16.** The Neon
+rehearsal needs a credential only the Product Owner holds: all ten stored
+`REHEARSAL_*`/`RESTORE_*` URLs fail auth (28P01, re-probed today), there is
+no `NEON_API_KEY` or `neonctl` in this environment, and the two substitutes
+the agent attempted were refused by the permission system by design (reusing
+production credentials against branch hosts; copying production user data
+into a local clone). **Unblock either way:** (a) in the Neon console, create
+a fresh branch of production — it doubles as the restore point — and add its
+URL to `.env.local` (add-only; e.g. `REHEARSAL_DATABASE_URL_RC1`); or (b) add
+a `NEON_API_KEY` to `.env.local` and the agent creates and manages the branch
+itself. **Note: until a fresh branch exists there is also no usable restore
+point** — every stored restore URL fails auth too — so this gate protects
+rollback, not just rehearsal.
 
 **The release (`efd9542`), once R0 and R1 are given:**
 
