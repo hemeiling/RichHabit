@@ -30,6 +30,7 @@ import { migrateTogetherV1B } from "./migrations/together-v1b.mjs";
 import { migrateTogetherTaskRank } from "./migrations/together-task-rank.mjs";
 import { migrateTogetherInviteEmail } from "./migrations/together-invite-email.mjs";
 import { migrateTogetherConnections } from "./migrations/together-connections.mjs";
+import { migratePriorityDetails } from "./migrations/priority-details.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -973,6 +974,15 @@ try {
    * scripts/migrations/together-connections.mjs.
    */
   changed += await migrateTogetherConnections(client, console.log);
+
+  /*
+   * ---- 20. Priority details: description, links, attachments ---------------
+   *
+   * Two defaulted columns on `priorities` and one new table, nothing else;
+   * every existing row is valid untouched. See
+   * scripts/migrations/priority-details.mjs.
+   */
+  changed += await migratePriorityDetails(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

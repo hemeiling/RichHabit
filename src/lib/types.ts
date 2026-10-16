@@ -290,6 +290,28 @@ export interface Priority {
    */
   plannedOn: string | null;
   sortOrder: number;
+  /** Optional notes, as written. Empty string is the ordinary state. */
+  description: string;
+  /** Optional links, at most a handful, in the order added. */
+  links: PriorityLink[];
+  /** How many files are attached. The bytes themselves are fetched on demand. */
+  attachmentCount: number;
+}
+
+/**
+ * The details a row without any has — a brand-new line, and every row from
+ * before the details migration. Spread into fixtures and optimistic inserts.
+ */
+export const NO_PRIORITY_DETAILS = {
+  description: "", links: [] as PriorityLink[], attachmentCount: 0,
+};
+
+/** One optional link on a priority: where it goes and the words it wears. */
+export interface PriorityLink {
+  /** http(s) only, enforced at the API. */
+  url: string;
+  /** Shown in place of the URL when present; as typed. */
+  label: string;
 }
 
 /*

@@ -1066,6 +1066,39 @@ export const en = {
      * a failure.
      */
     focusHint: "Longer than a post-it. Move the two or three that really matter to the top — the rest will keep.",
+    /**
+     * The details panel: everything beyond a line's words is optional, lives
+     * here, and autosaves. Attachment wording doubles as the API's refusals.
+     */
+    details: {
+      title: "Priority details",
+      open: (text: string) => `Open details for "${text}"`,
+      hasDetails: "Has notes, links or files",
+      notesLabel: "Notes",
+      notesPlaceholder: "Anything that helps: context, steps, what done looks like…",
+      linksLabel: "Links",
+      linkUrlPlaceholder: "https://…",
+      linkLabelPlaceholder: "Label (optional)",
+      addLink: "Add",
+      linkInvalid: "Links must be complete web addresses (http or https).",
+      removeLink: (label: string) => `Remove the link ${label}`,
+      openLink: (label: string) => `Open ${label} in a new tab`,
+      filesLabel: "Files",
+      addFile: "Attach a file",
+      fileRules: (each: string, count: number) => `Up to ${count} files, ${each} each — images, PDF or plain text.`,
+      uploading: "Uploading…",
+      removeFile: (name: string) => `Remove ${name}`,
+      deleteFileConfirm: (name: string) => `Remove the file “${name}”? This cannot be undone.`,
+      fileTooLarge: (max: string) => `That file is too large — the limit is ${max}.`,
+      fileEmpty: "That file is empty.",
+      fileUnsupported: "Images (PNG, JPEG, GIF, WebP), PDFs and plain-text files can be attached.",
+      tooManyFiles: (n: number) => `A priority can hold up to ${n} files. Remove one first.`,
+      storageFull: (max: string) => `Your attachments have reached ${max} in all. Remove something first.`,
+      categoryLabel: "Quadrant",
+      markDone: "Mark done",
+      reopen: "Reopen",
+      written: (date: string) => `Written ${date}`,
+    },
   },
   /**
    * The language control in the app header. The options are written in their

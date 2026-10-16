@@ -2,10 +2,13 @@ import { body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
 import { markMemberStale, viewerToday } from "@/lib/community";
 import {
-  addPriority, deletePriority, reorderPriorities, savePriorityLayout, setPriorityDone,
-  setPriorityPlannedOn, setPriorityText,
+  addPriority, deletePriority, reorderPriorities, savePriorityLayout, setPriorityDescription,
+  setPriorityDone, setPriorityLinks, setPriorityPlannedOn, setPriorityText,
 } from "@/lib/db/queries";
-import { parseNewPriority, parsePriorityDone, parsePriorityPlan, parsePriorityText } from "@/lib/validate";
+import {
+  parseNewPriority, parsePriorityDescription, parsePriorityDone, parsePriorityLinks,
+  parsePriorityPlan, parsePriorityText,
+} from "@/lib/validate";
 
 /**
  * The post-it. Private user content: what someone means to do is never read by
@@ -55,6 +58,20 @@ export async function PATCH(request: Request) {
 
     if (Array.isArray(b?.ids)) {
       await reorderPriorities(userId, b.ids.map((v: unknown) => String(v)));
+      return;
+    }
+
+    /* The optional details, one field at a time like the plan and the words.
+       Both are private content: nothing about them is tracked or logged. */
+    if (typeof b?.description === "string") {
+      const { id, description } = parsePriorityDescription(b);
+      await setPriorityDescription(userId, id, description);
+      return;
+    }
+
+    if (Array.isArray(b?.links)) {
+      const { id, links } = parsePriorityLinks(b);
+      await setPriorityLinks(userId, id, links);
       return;
     }
 

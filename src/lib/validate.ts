@@ -211,6 +211,42 @@ export function parsePriorityText(b: any): { id: string; text: string } {
   return { id: check.uuid(b?.id, "id"), text };
 }
 
+export const MAX_PRIORITY_DESCRIPTION = 5000;
+export const MAX_PRIORITY_LINKS = 10;
+export const MAX_PRIORITY_LINK_URL = 2048;
+export const MAX_PRIORITY_LINK_LABEL = 120;
+
+/** Optional notes. Empty is an ordinary value — it is how notes are removed. */
+export function parsePriorityDescription(b: any): { id: string; description: string } {
+  return {
+    id: check.uuid(b?.id, "id"),
+    description: check.text(b?.description, "description", MAX_PRIORITY_DESCRIPTION),
+  };
+}
+
+/**
+ * The whole links list. Only http(s) URLs that the WHATWG parser accepts are
+ * stored — javascript:, data: and friends never get in, so the anchor the
+ * screen renders can only ever point at a web address. Labels are kept as
+ * typed (React escapes them on the way out).
+ */
+export function parsePriorityLinks(b: any): { id: string; links: { url: string; label: string }[] } {
+  if (!Array.isArray(b?.links)) throw new ApiError("links must be a list");
+  if (b.links.length > MAX_PRIORITY_LINKS) {
+    throw new ApiError(`At most ${MAX_PRIORITY_LINKS} links on one priority`);
+  }
+  const links = b.links.map((raw: any) => {
+    const url = check.text(raw?.url, "url", MAX_PRIORITY_LINK_URL).trim();
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { throw new ApiError("Links must be complete web addresses"); }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new ApiError("Links must be http or https");
+    }
+    return { url, label: check.text(raw?.label ?? "", "label", MAX_PRIORITY_LINK_LABEL).trim() };
+  });
+  return { id: check.uuid(b?.id, "id"), links };
+}
+
 export function parseMonthlyReflection(b: any) {
   const month = check.text(b?.month, "month", 7);
   if (!/^\d{4}-\d{2}$/.test(month)) throw new ApiError("month must be YYYY-MM");

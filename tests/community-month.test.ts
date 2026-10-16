@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { emptyState } from "../src/lib/types";
+import { NO_PRIORITY_DETAILS, emptyState } from "../src/lib/types";
 import type { AppState, Habit, Priority } from "../src/lib/types";
 
 /**
@@ -46,7 +46,7 @@ const habit = { id: "h", name: "h", templateKey: null, category: "morning", type
 let n = 0;
 const done = (completedOn: string, text: string): Priority => ({
   id: `p${++n}`, text, createdOn: completedOn, completedOn,
-  category: "urgent_important", plannedOn: null, sortOrder: 0,
+  category: "urgent_important", plannedOn: null, sortOrder: 0, ...NO_PRIORITY_DETAILS,
 });
 
 /** Ticks the one daily habit on every day from `from` to `to` for which `keep` holds. */

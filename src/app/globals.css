@@ -1454,30 +1454,7 @@ input[type="range"] { accent-color: var(--accent); }
 .pcard-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* While editing, the × is hidden: beside a field it reads as "cancel", and on
    an open line it would delete in one tap. */
-.pcard[data-editing="true"] .drag-handle,
-.pcard[data-editing="true"] .pcard-x { visibility: hidden; }
-.pcard-edit { display: grid; gap: 6px; }
-/* The field's border and padding are taken back out with a negative margin, so
-   the words sit exactly where they were before the tap and nothing jumps. */
-.pcard-field {
-  display: block; width: calc(100% + 8px); margin: -3px -4px; resize: none; overflow: hidden;
-  font: inherit; font-size: 14.5px; line-height: 1.4; color: var(--ink);
-  background: var(--surface); border: 1px solid var(--accent); border-radius: 8px;
-  padding: 2px 3px; box-shadow: 0 0 0 3px var(--accent-soft);
-}
-.pcard-field:focus { outline: none; }
-.pcard-field[aria-invalid="true"] { border-color: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
-.pcard-edit-error { font-size: 12px; line-height: 1.4; color: var(--warn); }
-.pcard-edit-actions { display: flex; justify-content: flex-end; gap: 6px; }
-.pcard-edit-btn {
-  border: 1px solid var(--line); background: var(--surface); color: var(--muted);
-  font: inherit; font-size: 12px; line-height: 1; padding: 6px 11px; border-radius: 999px; cursor: pointer;
-}
-.pcard-edit-btn:hover { color: var(--ink); }
-/* Quiet with a pointer, where Enter is the habit; filled on touch, below. */
-.pcard-edit-btn[data-primary] { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 500; }
-.pcard-edit-btn:disabled { opacity: .45; cursor: default; }
-.pcard-edit-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* (The inline editor's rules lived here; editing now happens in the details panel.) */
 /* A finger needs a bigger target than a pointer. */
 @media not all and (hover: hover) {
   .pcard-edit-btn { font-size: 13px; padding: 10px 16px; }
@@ -1598,6 +1575,68 @@ input[type="range"] { accent-color: var(--accent); }
 /* Smaller than the global row: this sits inside a box, not under the matrix. */
 .qadd .input { font-size: 13.5px; padding: 8px 10px; border-radius: 10px; }
 .qadd .btn { padding: 7px 13px; font-size: 13px; }
+
+
+/*
+ * The whole card opens the details: the title button stretches over the card
+ * (the Together board's .tg-card-open pattern), and every control is raised
+ * above it, so a press on the tick stays a tick, and a press anywhere quiet
+ * is "open". Dragging is the card's own and starts wherever a real drag
+ * gesture starts — the browser never turns a click into one.
+ */
+.pcard-open { position: static; }
+.pcard-open::after { content: ""; position: absolute; inset: 0; border-radius: 13px; }
+.pcard .tick, .pcard .qpill, .pcard .pcard-x, .pcard .drag-handle { position: relative; z-index: 1; }
+
+/* "There is more behind these words" — never the contents themselves. */
+.pdetail-ind { display: inline-flex; align-items: center; gap: 3px; color: var(--faint); font-size: 11px; }
+
+/* ------------------------- priority details panel ------------------------- */
+.pdx-wrap { position: fixed; inset: 0; z-index: 60; }
+.pdx-scrim { position: absolute; inset: 0; background: rgba(15, 17, 20, .22); animation: fadeIn .15s ease both; }
+.pdx-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(430px, 94vw);
+  background: var(--surface); border-left: 1px solid var(--line);
+  box-shadow: -18px 0 44px -28px rgba(0, 0, 0, .45);
+  padding: 14px 18px 28px; overflow-y: auto; outline: none;
+  animation: pdxIn .18s ease both;
+}
+@keyframes pdxIn { from { transform: translateX(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+.pdx-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.pdx-heading { font-family: var(--display); font-size: 20px; line-height: 1.2; }
+.pdx-title {
+  width: 100%; font: inherit; font-size: 16px; font-weight: 600; line-height: 1.45;
+  border: 1px solid transparent; border-radius: 10px; padding: 6px 9px; margin-left: -9px;
+  background: none; resize: none; color: var(--ink);
+}
+.pdx-title:hover { border-color: var(--line-soft); }
+.pdx-title:focus { outline: none; border-color: var(--accent); }
+.pdx-title[aria-invalid] { border-color: var(--warn); }
+.pdx-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 12px; flex-wrap: wrap; margin-top: 8px; }
+.pdx-quads { display: flex; flex-wrap: wrap; gap: 6px; }
+.pdx-quads .chip { gap: 6px; }
+.pdx-notes {
+  width: 100%; font: inherit; font-size: 13.5px; line-height: 1.55; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px;
+  background: var(--surface); resize: vertical; min-height: 96px; margin-top: 6px;
+}
+.pdx-notes:focus { outline: none; border-color: var(--accent); }
+.pdx-links, .pdx-files { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.pdx-link, .pdx-file { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
+.pdx-link a, .pdx-file a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; min-width: 0; }
+.pdx-link a:hover, .pdx-file a:hover { text-decoration: underline; }
+.pdx-x {
+  flex: none; border: none; background: none; color: var(--faint);
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer; padding: 3px 7px; border-radius: 6px;
+}
+.pdx-x:hover { color: var(--warn); background: var(--line-soft); }
+.pdx-addlink { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.pdx-addlink .input { font-size: 13px; padding: 7px 9px; }
+.pdx-addlink .input:first-child { flex: 1 1 160px; }
+.pdx-addlink .input:nth-of-type(2) { flex: 1 1 110px; }
+.pdx-error { color: var(--warn); font-size: 12.5px; margin-top: 5px; }
+.pdx-upload { display: inline-block; cursor: pointer; }
+.pdx-busy { opacity: .6; pointer-events: none; }
 
 /* ------------------------- clarify your intention -------------------------- */
 /*

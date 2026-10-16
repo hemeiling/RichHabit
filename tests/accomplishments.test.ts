@@ -9,6 +9,7 @@ import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
 import { both } from "../src/lib/i18n/both";
 import type { Priority, PriorityCategory } from "../src/lib/types";
+import { NO_PRIORITY_DETAILS } from "../src/lib/types";
 
 /**
  * An accomplishment is a priority with a completion date. These tests pin the
@@ -19,7 +20,7 @@ import type { Priority, PriorityCategory } from "../src/lib/types";
 let n = 0;
 const priority = (over: Partial<Priority> = {}): Priority => ({
   id: `p${String(++n).padStart(3, "0")}`, text: "Line", createdOn: "2026-09-01", completedOn: null,
-  category: "urgent_important", plannedOn: null, sortOrder: 0, ...over,
+  category: "urgent_important", plannedOn: null, sortOrder: 0, ...NO_PRIORITY_DETAILS, ...over,
 });
 
 /* The client's own actions, reduced to what they do to the row. */

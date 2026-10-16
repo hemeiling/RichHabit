@@ -71,6 +71,32 @@ async function assertRef(q: Q, table: Owned, id: string, userId: string) {
  * permissions problem or a dead connection still throws, because those are not
  * "this feature is not deployed yet", they are "something is wrong".
  */
+/**
+ * Priorities with their optional details and a count of attached files. Falls
+ * back to the original column list when the database has not reached the
+ * details migration yet, so this build runs before that migration exactly as
+ * the previous one did — every row simply reads as having no details.
+ */
+async function readPriorities(userId: string): Promise<{ rows: any[]; missing: string | null }> {
+  try {
+    return {
+      rows: await query<any>(
+        `select p.id, p.body, p.created_on, p.completed_on, p.category, p.planned_on, p.sort_order,
+                p.description, p.links,
+                (select count(*)::int from priority_attachments a where a.priority_id = p.id) as attachment_count
+           from priorities p
+          where p.user_id = $1 order by p.category, p.sort_order, p.created_on, p.created_at`, [userId]),
+      missing: null,
+    };
+  } catch (e) {
+    if (!isSchemaBehind(e)) throw e;
+    return optionalRead<any>("priorities",
+      `select id, body, created_on, completed_on, category, planned_on, sort_order
+         from priorities
+        where user_id = $1 order by category, sort_order, created_on, created_at`, [userId]);
+  }
+}
+
 async function optionalRead<T>(
   module: string, sql: string, params: unknown[],
 ): Promise<{ rows: T[]; missing: string | null }> {
@@ -168,10 +194,7 @@ export async function loadState(userId: string): Promise<AppState> {
       query("select * from habit_completions where user_id = $1", [userId]),
       query("select * from day_notes where user_id = $1", [userId]),
       query("select month, body from monthly_reflections where user_id = $1", [userId]),
-      optionalRead<any>("priorities",
-        `select id, body, created_on, completed_on, category, planned_on, sort_order
-           from priorities
-          where user_id = $1 order by category, sort_order, created_on, created_at`, [userId]),
+      readPriorities(userId),
       readImportantDates(userId),
       query("select * from habit_awareness_entries where user_id = $1", [userId]),
       query("select * from habit_stacks where user_id = $1", [userId]),
@@ -303,6 +326,11 @@ export async function loadState(userId: string): Promise<AppState> {
     category: normalizePriorityCategory(p.category),
     plannedOn: p.planned_on ?? null,
     sortOrder: Number(p.sort_order ?? 0),
+    // Absent columns (a database from before the details migration) read as
+    // "no details", exactly like a row that never gained any.
+    description: typeof p.description === "string" ? p.description : "",
+    links: Array.isArray(p.links) ? p.links : [],
+    attachmentCount: Number(p.attachment_count ?? 0),
   }));
 
   /*
@@ -668,6 +696,134 @@ export async function setPriorityText(userId: string, id: string, text: string):
       where id = $1 and user_id = $2`,
     [id, userId, text],
   );
+}
+
+/** One field, like the wording and the plan: nothing else on the row can move. */
+export async function setPriorityDescription(userId: string, id: string, description: string): Promise<void> {
+  await assertRef(query, "priorities", id, userId);
+  await query(
+    `update priorities set description = $3, updated_at = now()
+      where id = $1 and user_id = $2`,
+    [id, userId, description],
+  );
+}
+
+/** The whole list at once — it is one small ordered value the row owns. */
+export async function setPriorityLinks(
+  userId: string, id: string, links: { url: string; label: string }[],
+): Promise<void> {
+  await assertRef(query, "priorities", id, userId);
+  await query(
+    `update priorities set links = $3::jsonb, updated_at = now()
+      where id = $1 and user_id = $2`,
+    [id, userId, JSON.stringify(links)],
+  );
+}
+
+/* ---------------------------- attachments --------------------------------- */
+
+/**
+ * Hard caps for files on priorities, chosen to keep the database a sane place
+ * for them: a handful of small documents per line, not a drive. The bytes live
+ * in the row (the AI Workspace's file pattern — this deployment has no blob store), so
+ * the caps are what keeps `select` payloads and storage honest.
+ */
+export const PRIORITY_ATTACHMENT_LIMITS = {
+  maxBytes: 5 * 1024 * 1024,
+  maxPerPriority: 5,
+  /** Across all of one account's priorities. */
+  maxTotalBytes: 50 * 1024 * 1024,
+};
+
+export interface PriorityAttachmentMeta {
+  id: string;
+  priorityId: string;
+  originalFilename: string;
+  kind: string;
+  mimeType: string;
+  byteSize: number;
+  createdAt: string;
+}
+
+const attachmentMeta = (r: any): PriorityAttachmentMeta => ({
+  id: r.id, priorityId: r.priority_id, originalFilename: r.original_filename,
+  kind: r.kind, mimeType: r.mime_type, byteSize: Number(r.byte_size), createdAt: r.created_at,
+});
+
+export class AttachmentRefused extends Error {
+  constructor(readonly reason: "tooMany" | "quotaFull") { super(reason); }
+}
+
+/**
+ * Stores one file on one of the caller's priorities. The priority row is
+ * locked while the caps are checked, so two simultaneous uploads cannot
+ * squeeze past `maxPerPriority` together; the per-account total rides the
+ * same lock ordering (every attachment write locks its priority first).
+ * The caller has already decided kind and mime type from the bytes.
+ */
+export async function addPriorityAttachment(
+  userId: string, priorityId: string,
+  file: { originalFilename: string; kind: string; mimeType: string; sha256: string; bytes: Uint8Array },
+): Promise<PriorityAttachmentMeta> {
+  return transaction(async (q) => {
+    const own = await q(
+      `select 1 from priorities where id = $1 and user_id = $2 for update`, [priorityId, userId]);
+    // The same answer a missing row gets anywhere else: it does not exist.
+    if (own.length === 0) throw new ApiError("Not found", 404);
+    const [counts] = await q<{ here: number; total: number }>(
+      `select
+         count(*) filter (where priority_id = $2)::int as here,
+         coalesce(sum(byte_size), 0)::bigint::int as total
+         from priority_attachments where user_id = $1`,
+      [userId, priorityId],
+    );
+    if (counts.here >= PRIORITY_ATTACHMENT_LIMITS.maxPerPriority) throw new AttachmentRefused("tooMany");
+    if (counts.total + file.bytes.byteLength > PRIORITY_ATTACHMENT_LIMITS.maxTotalBytes) {
+      throw new AttachmentRefused("quotaFull");
+    }
+    const [row] = await q<any>(
+      `insert into priority_attachments
+         (user_id, priority_id, original_filename, kind, mime_type, byte_size, sha256, content)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       returning id, priority_id, original_filename, kind, mime_type, byte_size, created_at`,
+      [userId, priorityId, file.originalFilename, file.kind, file.mimeType,
+        file.bytes.byteLength, file.sha256, file.bytes],
+    );
+    return attachmentMeta(row);
+  });
+}
+
+/** The files on one of the caller's priorities — metadata only, never bytes. */
+export async function listPriorityAttachments(
+  userId: string, priorityId: string,
+): Promise<PriorityAttachmentMeta[]> {
+  const rows = await query<any>(
+    `select a.id, a.priority_id, a.original_filename, a.kind, a.mime_type, a.byte_size, a.created_at
+       from priority_attachments a
+      where a.user_id = $1 and a.priority_id = $2
+      order by a.created_at, a.id`,
+    [userId, priorityId],
+  );
+  return rows.map(attachmentMeta);
+}
+
+/** One file with its bytes — the caller's own, or null, with no distinction. */
+export async function readPriorityAttachment(
+  userId: string, id: string,
+): Promise<(PriorityAttachmentMeta & { content: Buffer }) | null> {
+  const [row] = await query<any>(
+    `select id, priority_id, original_filename, kind, mime_type, byte_size, created_at, content
+       from priority_attachments where id = $1 and user_id = $2`,
+    [id, userId],
+  );
+  return row ? { ...attachmentMeta(row), content: row.content } : null;
+}
+
+/** Deletes the caller's own attachment; anyone else's does not exist. */
+export async function deletePriorityAttachment(userId: string, id: string): Promise<boolean> {
+  const gone = await query(
+    `delete from priority_attachments where id = $1 and user_id = $2 returning id`, [id, userId]);
+  return gone.length > 0;
 }
 
 /**

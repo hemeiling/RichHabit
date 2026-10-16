@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { rangeScore } from "../src/lib/habits";
-import { emptyState } from "../src/lib/types";
+import { NO_PRIORITY_DETAILS, emptyState } from "../src/lib/types";
 import type { AppState, Habit, Priority } from "../src/lib/types";
 
 /**
@@ -57,7 +57,7 @@ const habit = { id: "h", name: "h", templateKey: null, category: "morning", type
 let p = 0;
 const done = (completedOn: string | null, text = "Private words", createdOn = "2026-09-01"): Priority => ({
   id: `prio-${++p}`, text, createdOn, completedOn, category: (["urgent_important", "important_not_urgent",
-    "urgent_not_important", "not_important_not_urgent"] as const)[p % 4], plannedOn: "2026-09-20", sortOrder: p,
+    "urgent_not_important", "not_important_not_urgent"] as const)[p % 4], plannedOn: "2026-09-20", sortOrder: p, ...NO_PRIORITY_DETAILS,
 });
 const days = (n: number, from = 1) => Array.from({ length: n }, (_, i) => `2026-09-${String(from + i).padStart(2, "0")}`);
 
