@@ -1,12 +1,20 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-16 (Together in-app invitations + Priority Compass redesign candidates)
+> Last updated: 2026-10-16 (Priority Compass V2 after the Product Owner's usability review)
 >
 > **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · NOTHING PENDING IN PRODUCTION.**
 >
-> **PRIORITY COMPASS REDESIGN (ONE ENTRY POINT, ONE-TAP QUADRANT, DONE-SINKS): CANDIDATE ON `feature/priority-compass-redesign` (from `a768682`, `cab8a51` NOT included — the two candidates are independent) · LOCALLY VERIFIED (typecheck, lint, build; unit suite green but for the known `inspect-prod-readonly` baseline and one load-flaky `ai-workspace-migration` file that passes alone; 22/22 browser checks at 1440 and 390, English and 中文, including the preserved Free daily limit) · NO MIGRATION · NO API OR DATA CHANGE · NOT MERGED · NOT DEPLOYED · WAITING FOR THE PRODUCT OWNER TO REVIEW THE LOCAL RESULT.** See the second section below.
+> **2026-10-16 PRODUCT OWNER REVIEW: NEITHER CANDIDATE RELEASED. The Compass
+> composer's 2×2 quadrant cards, the invisible drag grip and the empty space
+> were rejected; Together looked missing from the reviewer's sidebar. All
+> addressed below. Both candidates remain NOT MERGED · NOT MIGRATED · NOT
+> DEPLOYED, waiting for a fresh review.**
 >
-> **TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: CANDIDATE ON `feature/together-inapp-invites` (from `a768682`) · LOCALLY VERIFIED (typecheck, lint, build; unit suite 1482/1483, the 1 failure is the known `inspect-prod-readonly` baseline; 24/24 browser checks at 1440 and 390, English and 中文) · NOT MERGED · NOT DEPLOYED · MIGRATION STEP 18 (ONE ADDITIVE PARTIAL INDEX) NOT APPLIED TO PRODUCTION · WAITING FOR THE PRODUCT OWNER TO REVIEW THE LOCAL RESULT.** See the first section below. After approval: rehearse step 18 on a fresh Neon branch, apply to production (index only, no data), fast-forward `main`, deploy, verify. Then: **Priority Compass redesign (Priority 2 of the 2026-10-15 brief, approved to follow this release).**
+> **PRIORITY COMPASS V2: CANDIDATE = `89add96` ON `feature/priority-compass-redesign` (from `a768682`; three commits: the redesigned entry, the chips/grips/kept-words rework, and a fix for a pre-existing bug that had silently disabled the quadrant drop highlight since the original matrix) · NO MIGRATION · NO API OR DATA-SHAPE CHANGE (one client-store signature: `addPriority` now also reports whether the write was accepted) · VERIFIED: lint, unit 1471/1472 (known baseline), the union tree type-checked by `next build`; 29/29 browser checks including REAL drag-and-drop between and within quadrants, mid-drag drop-target highlighting, persistence after reload, the Free-quota refusal returning the typed words, 1280/768/390/320 widths, English, 中文 and bilingual.** See the Priority Compass section below.
+>
+> **TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: UNCHANGED CANDIDATE `e2212b1` (+ doc `f5d1bc3`) ON `feature/together-inapp-invites` · THE FULL FLOW RE-DEMONSTRATED 2026-10-16 ON FRESH ACCOUNTS (11/11): invite by username, bell, in-app Accept without the email, immediate space access, one-tick re-invite of an existing collaborator from People, withdraw.** Release readiness, rehearsal, preflight, security review and rollback: see `f5d1bc3`'s PROJECT_STATUS on that branch; its plan still holds with release 2 = `7b03ab0` on `release/priority-compass-on-invites` (the V2 Compass rebased onto the invitations candidate; one conflict, this file, resolved; 192/192 key-suite tests on the combined tree).
+>
+> **TOGETHER NAVIGATION ("missing from my sidebar") — INVESTIGATED, NOT A BUG (6/6 browser checks):** the sidebar's Together group renders exactly per the access rules. In the state the Product Owner reviewed, `charliew` had **declined** his only invitation, so for him Together correctly vanished; a brand-new account sees nothing until invited. The other dependency: Together exists at all only while `TOGETHER_PREVIEW_USER_IDS` is set — my demo server sets it for the test database's `hippo`; a self-started `npm run dev` without that variable in `.env.local` hides Together for **everyone**, which is the likely other way to meet an empty sidebar. Demonstrated: hippo (preview) ✓ visible · meimei (member) ✓ · charliew (member) ✓ · fresh account ✗ hidden by design → visible the moment an invitation waits for it. No access rule was changed.
 >
 > **TOGETHER UI REDESIGN (OVERVIEW ACTIONS + SPACE PAGE): RELEASED AND VERIFIED 2026-10-09 · `a768682` FAST-FORWARDED FROM `3b937f3` (ONE COMMIT, 12 FILES, PRESENTATION + 2 STRINGS PER LANGUAGE) · NO MIGRATION · NO API CHANGE BEYOND REMOVING THE UNUSED `space.canInvite` · RENDER `dep-db46s23tqb8s73e9q1kg` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS · NO DATA CHANGE.** See the first section below. The header Invite button from `3b937f3` moved to the overview's People.
 >
@@ -192,6 +200,49 @@ Priority Compass redesign.
 Priority 2 of the Product Owner's 2026-10-15 brief: make daily prioritization
 extremely easy — one obvious place to enter a priority, quick category choice,
 clear hierarchy, calm on phones.
+
+### V2, 2026-10-16 — after the Product Owner's usability review (`3339647` + `89add96`)
+
+The review rejected V1's composer: its 2×2 of quadrant cards duplicated the
+matrix below, the drag grip was invisible at rest, empty quadrants wasted
+space, and a screenshot showed typed words ("hihihi") stranded beside a
+highlighted choice. V2:
+
+- **One field, four chips.** Typing reveals a single compact row — "Add to
+  · [• Do now] [• Protect] [• Delegate] [• Limit]" — one line tall; the
+  matrix below is the only full statement of the quadrants. Enter hands the
+  keyboard to the chips, Escape hands it back with the words intact; there is
+  still no default and Enter alone cannot file.
+- **The stranded-words bug, fixed at the root.** `addPriority` (store) now
+  returns `{ id, saved }`, where `saved` reports whether the write was
+  accepted. The composer clears instantly for the next line; when the Free
+  daily allowance (or a lost connection) refuses the write, the rollback
+  removes the card, the banner explains, and the words return to the field —
+  nothing typed is ever lost. The in-box add parks a refused draft as that
+  box's draft instead. (The screenshot's state itself was V1's two-step Enter
+  focus; both causes are gone.)
+- **The matrix is the main surface.** The grip is faintly visible at rest on
+  pointer devices (it was `opacity: 0` until hover) and brightens on hover;
+  drop targets mark harder — and a **pre-existing bug from the original
+  matrix** was found and fixed: the quadrant's `data-over` attribute was
+  rendered as the dragged card's id, never `"true"`, so the stylesheet's
+  highlight had never actually fired (`89add96`). Dragging between quadrants,
+  reordering within one, Move to… from the pill menu (phone and keyboard) all
+  proven in a real browser, including persistence after reload.
+- **Space reclaimed.** Each box's header carries a small +, which opens the
+  inline add and wears a dot while a draft is parked there; the full-width
+  "+ Add here" rows are gone; quadrant padding and empty states tightened.
+
+**V2 verification, 2026-10-16:** lint clean; unit 1471/1472 (the known
+`inspect-prod-readonly` baseline); the combined preview tree type-checked by
+`next build`; **29/29 browser checks** — chip row under 40px, filing/clearing/
+focus, Enter/Escape keyboard path, grip visible at rest, real drag between
+quadrants, real reorder within a quadrant, mid-drag quadrant highlight (held
+real mouse drag), arrangement surviving reload, + add and parked-draft dot,
+Move to… menu, done-sink, the sixth-line refusal returning the words, no
+horizontal overflow at 1280/768/390/320, English, 中文, bilingual. Screenshots
+in the session scratchpad (`shots2/`). The earlier V1 record below stands for
+history; the candidate is now `89add96`.
 
 **State:** implemented on `feature/priority-compass-redesign`, branched from
 `a768682` (main), independent of the invitations candidate. Presentation only:
