@@ -19,10 +19,8 @@
  *                            are no tombstones and nothing to purge later.
  *
  * db/schema.sql carries the same statements for fresh installs;
- * tests/priority-details-migration.test.ts proves both match.
- *
- * Runner numbering: the Together invitations candidate adds its own step 18
- * (an index); whichever releases second renumbers its comment at rebase.
+ * tests/priority-details-migration.test.ts proves both match. Runner step 20,
+ * after the Together email-index (18) and collaborators (19).
  */
 
 export const PRIORITY_DETAILS_STATEMENTS = [
