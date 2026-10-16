@@ -1,8 +1,18 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-06
+> Last updated: 2026-10-16 (Together in-app invitations + Priority Compass redesign candidates)
 >
-> **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): CANDIDATE COMMITTED AND PUSHED ON `feature/together-board-history` (from `db60151`) · LOCALLY VERIFIED · NOT MERGED · PRODUCTION NOT MIGRATED (STEP 17 PENDING) · NOT DEPLOYED · GATE A NOT STARTED — WAITING FOR THE PRODUCT OWNER TO APPROVE THE CANDIDATE AND CREATE A FRESH REHEARSAL BRANCH (`REHEARSAL_DATABASE_URLV7`).** See the first section below. Production remains V1B at `a52fe83`.
+> **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · NOTHING PENDING IN PRODUCTION.**
+>
+> **PRIORITY COMPASS REDESIGN (ONE ENTRY POINT, ONE-TAP QUADRANT, DONE-SINKS): CANDIDATE ON `feature/priority-compass-redesign` (from `a768682`, `cab8a51` NOT included — the two candidates are independent) · LOCALLY VERIFIED (typecheck, lint, build; unit suite green but for the known `inspect-prod-readonly` baseline and one load-flaky `ai-workspace-migration` file that passes alone; 22/22 browser checks at 1440 and 390, English and 中文, including the preserved Free daily limit) · NO MIGRATION · NO API OR DATA CHANGE · NOT MERGED · NOT DEPLOYED · WAITING FOR THE PRODUCT OWNER TO REVIEW THE LOCAL RESULT.** See the second section below.
+>
+> **TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: CANDIDATE ON `feature/together-inapp-invites` (from `a768682`) · LOCALLY VERIFIED (typecheck, lint, build; unit suite 1482/1483, the 1 failure is the known `inspect-prod-readonly` baseline; 24/24 browser checks at 1440 and 390, English and 中文) · NOT MERGED · NOT DEPLOYED · MIGRATION STEP 18 (ONE ADDITIVE PARTIAL INDEX) NOT APPLIED TO PRODUCTION · WAITING FOR THE PRODUCT OWNER TO REVIEW THE LOCAL RESULT.** See the first section below. After approval: rehearse step 18 on a fresh Neon branch, apply to production (index only, no data), fast-forward `main`, deploy, verify. Then: **Priority Compass redesign (Priority 2 of the 2026-10-15 brief, approved to follow this release).**
+>
+> **TOGETHER UI REDESIGN (OVERVIEW ACTIONS + SPACE PAGE): RELEASED AND VERIFIED 2026-10-09 · `a768682` FAST-FORWARDED FROM `3b937f3` (ONE COMMIT, 12 FILES, PRESENTATION + 2 STRINGS PER LANGUAGE) · NO MIGRATION · NO API CHANGE BEYOND REMOVING THE UNUSED `space.canInvite` · RENDER `dep-db46s23tqb8s73e9q1kg` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS · NO DATA CHANGE.** See the first section below. The header Invite button from `3b937f3` moved to the overview's People.
+>
+> **TOGETHER "INVITE PEOPLE" (SPACE HEADER): RELEASED AND VERIFIED 2026-10-09 (SUPERSEDED IN PART BY THE REDESIGN ABOVE) · `3b937f3` FAST-FORWARDED FROM `83a9d51` (ONE COMMIT, 9 FILES, UI + ONE SHARED SERVER RULE) · NO MIGRATION · NO DATA CHANGE · RENDER `dep-db466sm0tbcc73d9faj0` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS.** See the second section below.
+>
+> **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): RELEASED AND CLOSED 2026-10-09 · `83a9d51` · PRODUCTION MIGRATED 2026-10-07 05:07 UTC (STEP 17: 3 CHANGES, SECOND RUN NO-OP, ADDITIVE) · GATE A PASS (V7) · GATE B PASS · PRODUCT OWNER SMOKE TEST PASSED.** See the third section below.
 >
 > **TOGETHER V1B — SHARED WORK (BOARD + BACKLOG): RELEASED AND CLOSED 2026-10-05 · DEPLOYED APPLICATION = `main` = `a52fe8303ef94746b29270d2e00565454f0a226f` (manual Render deploy; served build proven by bundle probe on richhabit.rosalytics.com and richhabit.onrender.com) · PRODUCTION MIGRATED 2026-10-05 14:28 UTC (STEP 16, 42 → 45 TABLES, ADDITIVE) · GATE A PASS (V5) · GATE B PASS · RELEASE PASS.** This status record is a later documentation-only commit on `feature/together-v1b`; it was not deployed, and `main` stays at `a52fe83`. See the Together V1B section below.
 >
@@ -91,11 +101,248 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Together — unified Board + Backlog + History (CANDIDATE · NOT MIGRATED/DEPLOYED)
+## Together — in-app invitations + notification bell (CANDIDATE · NOT MIGRATED/DEPLOYED)
 
-**State:** implemented on `feature/together-board-history` (branched from `db60151`,
-the V1B close record). One candidate commit (see `git log`). Production, `main`
-(`a52fe83`), Headband, the restore branches, V5/V6 and the allow-list untouched.
+Priority 1 of the Product Owner's 2026-10-15 brief: invite existing RichHabit
+users inside the platform, no email link required; a clear notification bell
+with an unread count; keep the secure email flow for people without accounts.
+
+**State:** implemented on `feature/together-inapp-invites` (from `a768682`).
+Production, `main`, and every database are untouched. The local demo instance
+(test database, throwaway accounts hippo/meimei/charliew) was used for browser
+verification; production data was never read or written.
+
+**What changed**
+
+- **Invite by email or username — one field** on a space's Members page
+  (`#invite`, still reached from the overview's "+ Invite people" in PEOPLE).
+  An input with "@" goes down the unchanged email path; without "@" it is
+  treated as a public username (the handle the Community board shows) and
+  resolved on the server into an in-platform invitation — no email, no link.
+  An unknown username is refused plainly ("No RichHabit account has that
+  username"), which reveals nothing about email addresses. Members, people
+  already invited by this inviter, and recent decliners are skipped quietly
+  with one combined answer; the in-platform daily limit (50) and per-board
+  open-invitation cap apply.
+- **Email invitations now also wait in-app** for the account whose *proved*
+  address they name (`addressedTo`, `src/lib/together/access.ts`): verified,
+  or never asked to verify (grandfathered and admin-created accounts, which
+  were vouched for). That account sees the invitation in its Together home and
+  the new bell, and may Accept or Decline without the emailed link. The email
+  still goes out exactly as before, the inviter is told nothing about whether
+  the address has an account, and an unproved address keeps only the token
+  link, which proves control of the inbox itself. Membership is granted only
+  to the one invited space, only on Accept.
+- **Notification bell** (`NotificationBell`, `src/components/HeaderControls.tsx`)
+  in the signed-in header, before What's New, only for accounts with Together
+  access. It shows the waiting-invitation count as a number (9+ cap), opens a
+  popover (desktop) or bottom sheet (phone) listing each invitation with
+  Accept and Decline, an empty state, and "Open Together". Accept navigates to
+  the joined space; the count, the sidebar dot and the list stay in step via
+  `router.refresh()`. New list endpoint: `GET /api/together/invitations`.
+- **Invariant change, documented** in `docs/architecture/Together.md`: the
+  "invited" access tier now includes holding an open invitation emailed to the
+  account's proved address (it used to be in-platform only). Declining answers
+  every invitation addressed to that account on that board, both kinds.
+- **Analytics:** username invitations track `together_invitation_sent` with
+  `channel: "username"` and a count — never the username (asserted in tests).
+
+**Schema — migration step 18, `scripts/migrations/together-invite-email.mjs`**
+
+One additive partial index, nothing else; mirrored in `db/schema.sql`:
+
+```sql
+create index if not exists together_invitations_email_open
+  on together_invitations (email_normalized)
+  where email_normalized is not null
+    and accepted_at is null and declined_at is null and revoked_at is null;
+```
+
+It exists because the waiting-invitation check now matches by address on every
+signed-in page load. No table, column or row changes; safe to apply before the
+deploy; the deployed `a768682` ignores it. `tests/together-invite-email-migration.test.ts`
+proves: adds exactly one index, rows byte-identical, idempotent, equals a
+fresh install, no-op before Together exists.
+
+**Verification, 2026-10-15/16 (local only)**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| unit suite | 1482 of 1483; the 1 failure is the known uncommitted `inspect-prod-readonly` baseline |
+| together-db suite (routes against real Postgres/PGlite), including new coverage: in-app accept/decline of email invitations, unproved-address exclusion, username invites (case-insensitive, unknown, member/repeat skips, access and archived refusals), bell list endpoint authorization, analytics privacy | 61 of 61 |
+| four migration parity suites (steps 15, 16, 17, 18) | pass |
+| browser, real build on a throwaway test database: username invite end to end, bell badge/open/accept/decline on two accounts, email-to-account invite appearing in the invitee's bell, decline clearing hippo's pending list and ending access, quiet repeat-invite answer, withdraw, unknown-username error, empty states; 1440 and 390 widths; English and 中文; no horizontal overflow | 24 of 24 |
+| email path for strangers | unchanged; the invitation email was written to the local outbox and the pending entry shows the address with Withdraw |
+
+**Decisions taken (flagging, not asked):** username lookups answer honestly
+("no such username") because usernames are public handles on the Community
+board — email enumeration remains impossible by design; grandfathered and
+admin-created accounts count as proved addresses for in-app answering (new
+self-signups must verify before they can sign in at all).
+
+**Next step:** Product Owner reviews the local result (`zsh <scratchpad>/reset.sh`
+starts it at http://127.0.0.1:3100; accounts hippo / meimei / charliew, password
+`Verdant-Meadow-42`). On approval: fresh Neon rehearsal branch for step 18,
+production index, fast-forward `main`, manual Render deploy, verify; then the
+Priority Compass redesign.
+
+## Priority Compass — redesigned entry (CANDIDATE · NO MIGRATION · NOT DEPLOYED)
+
+Priority 2 of the Product Owner's 2026-10-15 brief: make daily prioritization
+extremely easy — one obvious place to enter a priority, quick category choice,
+clear hierarchy, calm on phones.
+
+**State:** implemented on `feature/priority-compass-redesign`, branched from
+`a768682` (main), independent of the invitations candidate. Presentation only:
+no schema, API, scoring, rollover or quota change; `src/lib/priorities.ts` is
+untouched and all its tests pass unchanged.
+
+**What changed (all in `src/components/Priorities.tsx`, `globals.css`, dictionaries)**
+
+- **The composer moved to the top of the card**, above the matrix: one quiet
+  full-width field, first on the page and on the first phone screen. Typing
+  reveals the four quadrants as a 2×2 of labelled cards (dot, title,
+  subtitle); **tapping one classifies and files the line in the same tap**. It
+  replaces the bottom field with the two Important?/Urgent? questions — the
+  four choices are both questions asked at once, still with no default. Enter
+  in the field hands focus to the choices; a choice taken from the keyboard
+  files the line; the filing is announced to screen readers (`addedTo`).
+- **Finished lines sink** to the foot of their box, open lines stay on top, in
+  presentation only — `sortOrder` is never rewritten, so reopening a line
+  returns it to its exact place (proved in the browser).
+- The heading's 📌 emoji was removed (no other screen titles itself with one).
+- Unchanged: the per-quadrant "+ Add here", drag on desktop, the category
+  pill and menu, Plan on Q2 only, inline rewording, delete confirmation for
+  accomplishments, carried-from labels, the cue line, rollover, Community
+  scoring, and the Free plan's 5-new-priorities-per-day quota (the browser
+  suite creates exactly five and proves the sixth is refused). Clarify Your
+  Intention's own Important?/Urgent? drafts flow is untouched (`.pask` stays).
+
+**Verification, 2026-10-16 (local only)**
+
+| Check | Result |
+| --- | --- |
+| typecheck, lint, production build | clean |
+| unit suite | green except the known `inspect-prod-readonly` baseline; `tests/ai-workspace-migration.test.ts` failed once at file level under full-suite load with all its tests skipped, and passes 16/16 alone — unrelated to this diff |
+| priorities + i18n unit tests | 126 of 126 |
+| browser, real build on the throwaway test database: composer-above-matrix, choices appear only with text, one-tap filing, field clears, Q2-only Plan, done-sinks and exact restore on reopen, tally, category menu move, inline rewording, + Add here, keyboard path, Free daily limit refusal of the sixth line, phone 390 with Chinese and no horizontal overflow | 22 of 22 |
+
+**Next step:** Product Owner reviews both candidates locally, in either order
+(`zsh <scratchpad>/reset.sh` serves whichever branch was last built at
+http://127.0.0.1:3100). Release order on approval: invitations first (it has
+the step-18 migration), then this, as two fast-forwards; this branch needs no
+database action at all.
+
+## Together — UI redesign: Overview actions + space page (RELEASED · DEPLOYED · VERIFIED)
+
+**Overview:** each section has one action at its heading's right edge, styled and
+aligned identically — **+ New space** by SPACES (the dashed "New space" tile is
+gone; the no-spaces empty state has no button of its own) and **+ Invite people**
+by PEOPLE (full Together access only). An invitation is always to one space: with
+one active space Invite people opens its Members page at `#invite` (email
+focused); with several it first asks "Invite to which space?" and says the person
+joins only that space. The space header no longer has an Invite button; Members
+is first in ⋯ and on the avatars. `work.ts`'s `space.canInvite` (added in
+`3b937f3`, now unread) was removed; `mayInvite` still feeds Members.
+
+**Space page (presentation only):** four equal-height lanes (`--tg-lane`, a
+shade deeper than the page) with borderless cards; each column heading has its
+count and a quiet + that opens the add field (the full-width "Add to …" row stays
+in the one-stage narrow view); card metadata wraps instead of clipping (group +
+date left, effort + people right); sentence-case section titles; Backlog and
+History side by side when the content is ≥ 1000px, otherwise stacked at ≤ 820px;
+lighter capture, borderless Commit actions (accent on hover; always on touch),
+actions under the title in a narrow Backlog/History; compact History.
+Drag-and-drop, ordering, Position, History's 24 hours, keyboard and reduced
+motion unchanged.
+
+**Release:** branch `feature/together-ui-refine`, candidate `a768682`, parent
+`3b937f3`; no migration, schema, env, dependency, script or deploy-config change;
+every CSS line changed is Together's. Checks on the exact commit: typecheck, lint,
+1,470/1,470, build; local browser: surface suite 62/62 (drag, Position, History,
+Reopen, axe, strict contrast) and refinement suite 62/62 (overview actions and
+alignment at 5 locale×width combos, chooser flow + axe, column + by mouse and
+keyboard with focus return, order after reload, equal lanes, no clipped metadata
+at 7 combos, no overflow, reduced motion). Before/after screenshots:
+`~/dev/together-ui-review/index.html` (local only). `main` fast-forwarded
+2026-10-09; Render `dep-db46s23tqb8s73e9q1kg` (manual). Verified 04:46 UTC on
+richhabit.rosalytics.com and richhabit.onrender.com: 5/5 new markers, 0/3 removed
+classes, 5/5 controls (three probes); served app stylesheet byte-identical to the
+local build; health 200; signed out, Together pages and `/priorities` → 307
+/login, home / work / members / invite / move APIs → 401. Read-only database
+before vs after: schema unchanged (45 tables, `af22097977f6296b721aa5d4b4199628`),
+no Together event, spaces / members / invitations / both tasks identical; only
+one analytics event and a session timestamp (ordinary use).
+
+**Production Together state (Product Owner's own activity, 2026-10-09 03:52 UTC,
+not from any release):** hippo sent an email invitation to Headband (open,
+expires 2026-10-23) and removed a member four seconds later — Headband now has
+only hippo (owner); meimei is no longer a member. Flagged to the Product Owner;
+not changed by the agent.
+
+**Release tooling (ignored, never committed):** `.pgdata-deploy/probe-ui.mjs` and
+`.pgdata-deploy/ev-together.mjs` (read-only Together activity) in the
+`rich-habits-together` worktree.
+
+## Together — "Invite people" in the space header (RELEASED · DEPLOYED · VERIFIED · PARTLY SUPERSEDED)
+
+**Why:** inviting was reachable only through the member avatars, which do not
+look clickable; the ⋯ menu had only Groups, Recently deleted, Refresh.
+
+**What:** the space header shows **Invite people** (邀请伙伴; "Invite" on a phone,
+the full name kept as the accessible name) to whoever may invite. It opens Members
+at its invite form (`#invite`) with the email field focused; on Members it brings
+the form into view. ⋯ now lists **Members** first, for everyone. On a phone the
+header's tools sit on their own line under the space name. The invitation and
+acceptance flow, permissions and privacy are unchanged.
+
+**Rule:** `mayInvite(userId, archived)` in `src/lib/together/access.ts` = full
+Together access (preview list) and space not archived — the rule the invitation
+routes already enforce; now shared by the Members payload (`boards.ts`) and the
+work payload (`work.ts`, `space.canInvite`). An invited-only member (e.g. meimei)
+sees no Invite action, and the route still refuses them (403).
+
+**Release:** branch `feature/together-invite-action`; candidate `3b937f3`, parent
+`83a9d51` (production `main` at the time), 9 files; no migration, schema, env,
+dependency or deploy-config change. Checks on the exact commit: typecheck, lint,
+full suite 1,470/1,470, production build; local browser suite 89/89 (owner,
+preview member, invited-only member, archived space; click, tap, keyboard;
+EN / 中文 / 双语 × 1440 / 390 / 320; light/dark; axe; no overflow; long names).
+`main` fast-forwarded 2026-10-09 03:38 UTC; Render `dep-db466sm0tbcc73d9faj0`
+(manual). Verified on richhabit.rosalytics.com and richhabit.onrender.com: the
+four new CSS markers present (absent before); the served stylesheet
+`cc9814d9843c0ac2.css` byte-identical to the local build of `3b937f3`; the
+`83a9d51` controls still present; health 200; signed out, every Together page and
+`/priorities` → 307 /login, and the work, members, invite and move APIs → 401.
+Read-only database comparison before vs after: no row in any table changed;
+Headband (hippo owner, meimei member, 1 accepted invitation) identical. The
+signed-in check of the button and the ⋯ entry is the Product Owner's.
+
+**Release tooling (ignored, never committed):** `.pgdata-deploy/probe-invite.mjs`
+in the `rich-habits-together` worktree.
+
+## Together — unified Board + Backlog + History (RELEASED · MIGRATED · DEPLOYED · VERIFIED · CLOSED)
+
+**State:** released as `83a9d5100667e33d103e1818c61cf2fed934c597` (branch
+`feature/together-board-history`). Gate A on V7 (`REHEARSAL_DATABASE_URLV7`, a
+production clone): 3 changes then none, preservation exact, real-PostgreSQL and
+browser suites all passing. Gate B: B1 preflight; B2 restore branch
+`restore-before-together-board-history-2026-10-07`
+(`RESTORE_DATABASE_URL_TOGETHER_BOARD`, parity with production exact, 2,470 rows);
+B3 production step 17 on 2026-10-07 05:07 UTC — "added together_tasks.rank",
+"created index together_tasks_rank", "ranked 1 existing task(s)", second run
+"Nothing to do"; B4 preservation exact (45 tables, only the column and index added,
+structure hash = Gate A's `af22097977f6296b721aa5d4b4199628`, every other row
+identical, the task identical except rank, order and History unchanged); B5 `main`
+fast-forwarded `a52fe83` → `83a9d51`; B6 manual Render deploy, served build proven
+on both domains (the drag data type lives in a signed-in-only chunk, so it cannot
+be probed signed out); B7 health, schema, Headband, signed-out 307/401. Product
+Owner smoke test passed (2026-10-09 03:06–03:09 UTC: reopened the Amazon task from
+History, captured and moved a new task, created a group, dragged across stages).
+Final read-only comparison: schema unchanged, Headband identical, every change
+explained by that smoke test and ordinary use. Retained by decision: the restore
+branch, V7, V5/V6 and older restore branches, all environment variables.
 
 **What it is (approved design):** one work surface per space — Board (4 fixed
 stages), Backlog directly below, History below that. Done shows a task for exactly
@@ -134,8 +381,8 @@ structure lines added, 0 removed), ordering races 6/6, V1B deletion+concurrency
 Independent review: 0 critical/high; 2 medium (renumber vs account-deletion
 deadlock; unbounded Done renumber) and low items — all fixed and tested.
 
-**Next step:** Product Owner approves the candidate; creates a fresh Neon branch
-cloned from production as `REHEARSAL_DATABASE_URLV7`; approves Gate A.
+**Cleanup (optional, needs explicit approval):** the restore branch above and V7
+can be deleted once the Product Owner is satisfied; nothing depends on them.
 
 ## Together V1B — shared work: Board + Backlog (RELEASED · MIGRATED · DEPLOYED · VERIFIED · CLOSED)
 
