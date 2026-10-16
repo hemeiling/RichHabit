@@ -1,5 +1,61 @@
 # RichHabit — Project Status
 
+> **NOTE, 2026-10-16 (`feature/local-mail-outbox-reader`):** the banner below is
+> main's and is stale; the current candidate records live on
+> `feature/priority-compass-redesign` (Compass V2) and
+> `feature/together-inapp-invites` (invitations + release readiness). This
+> branch adds only local dev tooling; its record follows here.
+
+## Forgot Password in local testing — investigated; dev tooling added (2026-10-16)
+
+**Symptom (Product Owner, local preview):** Forgot Password answers "Check
+your email" and no email ever arrives.
+
+**Root cause — three layers, no application defect:**
+
+1. **By design, a reset is only issued for a verified address**
+   (`src/lib/auth/passwordReset.ts`): an unverified account is treated exactly
+   like a missing one — same sentence, nothing sent, nothing logged. The local
+   demo accounts were unverified, so every request was a silent `not_eligible`.
+2. **Local mail never leaves the machine, by design:** with `MAIL_OUTBOX_DIR`
+   the composed message (with its real link) is written as a JSON file; with
+   no mail variables at all (`.env.local` had none) sending fails and is
+   logged, with the neutral answer preserved either way.
+3. **Incidentally, at the time of the report the demo database's single
+   PGlite connection was wedged** ("timeout exceeded when trying to connect"
+   in the forgot route's log). Recovered by restarting the app and re-serving
+   the existing data directory; no data lost.
+
+**What changed (commit `339b2d7`, dev-only; no application logic touched):**
+`scripts/dev-mail.mjs` + `npm run dev:mail` print the newest outbox message(s)
+and their links — the safe way to pick up a reset link locally. It reads one
+local folder, refuses to run where `RESEND_API_KEY` is set, and does not exist
+as a route, page or API, so no token can ever surface in production, logs or
+the UI. `.env.example`'s outbox section now documents the whole local test
+path, including that the test account must be verified first. `.env.local`
+gained one **add-only** line (`MAIL_OUTBOX_DIR=.mail-outbox`, the documented
+example value; the folder was already gitignored); nothing existing was
+changed. The demo reset script now marks its throwaway accounts verified.
+
+**Verified in a real browser against the local instance (16 checks + 1 rerun):**
+request for a verified account → the email lands in the outbox, addressed from
+the account row, link on this environment's origin with the token in the URL
+fragment; the confirmation quotes the 30-minute lifetime (configured TTL:
+`PASSWORD_RESET_TTL_MINUTES`, default 30; limits 60 s between requests, 5 a
+day); an unknown identifier gets the byte-identical sentence and no email;
+the link sets a new password, the new password signs in, the old one is dead;
+the same link again is refused and the newly set password stands; a malformed
+token is refused; a token aged past expiry answers "expired" with "request
+another"; the forgot and reset screens read correctly in English, 中文 and
+bilingual. Production sending (Resend on Render), credentials and data were
+untouched; all of this ran on the throwaway local database.
+
+**Flagged for the Product Owner (pre-existing, unchanged):** by the verified-
+address rule, the 14 of 17 production accounts whose addresses were never
+verified cannot use Forgot Password in production today. Deliberate per the
+module's design notes; whether to prompt those users to verify is a product
+decision, not changed here.
+
 > Last updated: 2026-10-06
 >
 > **TOGETHER BOARD + BACKLOG + HISTORY (UNIFIED SURFACE, DRAG-AND-DROP, TRUE REORDERING, 24-HOUR DONE → HISTORY): CANDIDATE COMMITTED AND PUSHED ON `feature/together-board-history` (from `db60151`) · LOCALLY VERIFIED · NOT MERGED · PRODUCTION NOT MIGRATED (STEP 17 PENDING) · NOT DEPLOYED · GATE A NOT STARTED — WAITING FOR THE PRODUCT OWNER TO APPROVE THE CANDIDATE AND CREATE A FRESH REHEARSAL BRANCH (`REHEARSAL_DATABASE_URLV7`).** See the first section below. Production remains V1B at `a52fe83`.
