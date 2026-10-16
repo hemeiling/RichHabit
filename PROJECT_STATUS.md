@@ -1,8 +1,8 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-16 (the three approved improvements assembled into ONE combined release candidate)
+> Last updated: 2026-10-16 (the combined release DEPLOYED to production and verified)
 >
-> **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · 17 USERS · NOTHING APPLIED OR DEPLOYED SINCE.**
+> **CURRENT PRODUCTION: `main` = DEPLOYED = `efd95427803e215af691674b3e68efa9e7d9f1a5` (Together in-app invitations + bell · global collaborators · Priority Compass V2 + details panel) · DATABASE 48 TABLES AT MIGRATION STEP 20 (MIGRATED 2026-10-16 ~21:40 UTC, OUTPUT VERBATIM AS PINNED, IDEMPOTENT, ZERO ROWS LOST) · RENDER AUTO-DEPLOYED `main`, SERVED BUILD PROVEN BY BUNDLE PROBE ON BOTH DOMAINS · RECOVERY BRANCH `restore-before-rc1-20261016` PRISTINE. SEE THE "RELEASED 2026-10-16" SECTION.**
 >
 > **RELEASE READINESS (SEE THE FIRST SECTION): ONE COMBINED CANDIDATE — `efd9542` (`efd95427803e215af691674b3e68efa9e7d9f1a5`) ON `release/together-priorities-rc1` — CARRYING ALL THREE APPROVED IMPROVEMENTS (TOGETHER IN-APP INVITATIONS + BELL · TOGETHER GLOBAL COLLABORATORS · PRIORITY COMPASS V2 + DETAILS PANEL WITH ATTACHMENTS) · MIGRATION = THREE ADDITIVE STEPS 18→19→20 IN ONE RUNNER PASS, COMBINED REHEARSAL PASSED ON PRODUCTION-SHAPED DATA (44/44 PRE-EXISTING TABLES BYTE-IDENTICAL, SECOND RUN NO-OP) · E2E ON THE CANDIDATE BUILD PASSED (COLLABORATORS 24/24, PRIORITY DETAILS 23/23; EARLIER SUITES CARRY OVER BY TREE IDENTITY WITH THE VERIFIED PREVIEW MERGE `9719750`) · FRESH READ-ONLY PRODUCTION PREFLIGHT PASSED (ZERO PENDING BACKFILLS, ALL CANDIDATE OBJECTS ABSENT, 45-TABLE BASELINE RE-CAPTURED) · WAITING ON TWO PRODUCT-OWNER GATES — (R0) APPROVE THE RELEASE AFTER THE LOCAL REVIEW · (R1) CREATE A FRESH NEON RESTORE-POINT/REHEARSAL BRANCH AND PUT ITS URL IN `.env.local` (EVERY EXISTING REHEARSAL URL FAILS AUTH, 28P01). NOTHING HAS BEEN DEPLOYED AND NO PRODUCTION DATA WAS TOUCHED; ALL PRODUCTION ACCESS WAS READ-ONLY.**
 >
@@ -113,7 +113,39 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Release readiness, 2026-10-16 — ONE combined candidate (NOTHING DEPLOYED OR MIGRATED)
+## RELEASED 2026-10-16 — the combined release is LIVE · MIGRATED · VERIFIED
+
+Executed with the Product Owner's explicit approval ("I approve the
+production deployment of RichHabit release candidate
+efd95427803e215af691674b3e68efa9e7d9f1a5"), in the documented stages:
+
+| Stage | Result |
+| --- | --- |
+| final pre-migration baseline | 45/45 tables unchanged since the R1 snapshot, schema still pre-migration, immediately before the run |
+| production migration (~21:40 UTC) | target `ep-jolly-hall-…` `** REMOTE **`; output VERBATIM as pinned (informational line + six creations, `Done — 6 change(s).`); second run `Nothing to do; already up to date.` |
+| post-migration integrity (read-only) | 44/44 tables byte-identical to the pre-migration snapshot; `priorities` 177 rows byte-identical over original columns (hash = the R1-recorded `248c789a759c`); new columns pure defaults; 3 new tables present and empty; 48 tables total |
+| `main` | fast-forwarded `a768682 → efd9542` by refspec push — the approved candidate only, no documentation commits |
+| Render | **auto-deployed** `main` within minutes (no manual deploy needed this time); `REQUIRE_EMAIL_VERIFICATION` and all Render config untouched |
+| served-build proof | 6/6 release markers present on BOTH domains, absent in the pre-deploy measurement, 2 controls present in both runs. (Two markers originally pinned in step 6 — "Where does this belong?" / 它属于哪一类？ — were stale Compass-V1 strings that do not exist in the candidate; replaced by real V2 markers "Drop here" / 拖到这里 / 粘贴网址（https://…）.) |
+| live signed-out authorization | 7/7: /together and /priorities → 307; together home/invitations/connections, priorities PATCH, attachments → 401 |
+| post-deploy data verification | live activity began immediately (+1 board, +1 invitation, +1 member, +1 priority, +5 analytics, +1 session; 11 priorities with changed mutable content from layout/tick use). LOSS test against the rehearsal branch's pristine pre-release copies: every pre-release row present — Together rows whole-row-identical, priorities 177/177 by immutable identity (id+owner+created_on), users 17/17, habits 195/195, goals 51/51, completions/dates/notes all identical. **No pre-release row lost or changed except by ordinary use.** |
+| recovery branch | `restore-before-rc1-20261016` untouched throughout (never connected to) |
+| 3100 preview, `.env.local` | untouched |
+
+**Remaining:** the Product Owner's signed-in functional smoke (bell, invite
+by username, collaborator round-trip, + Add members, compass drag, details
+panel with one upload) — live activity during verification suggests this may
+already be underway. Scope note: the Free/Advanced/Admin membership design is
+design-only and is NOT in this release.
+
+**Cleanup available on request (never automatic):** the rehearsal branch
+`richhabit-rc1-r1-rehearsal-20261016` (migrated; carries smoke accounts
+rc1smokea/rc1smokeb) is disposable in the Neon console. Keep
+`restore-before-rc1-20261016` until the Product Owner retires it.
+
+The record below is the readiness work that led to this release.
+
+## Release readiness, 2026-10-16 — ONE combined candidate
 
 Prepared at the Product Owner's request: the three approved improvements as
 one coordinated production release. No deploy, no production migration, no
