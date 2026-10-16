@@ -14,6 +14,7 @@
     "test": "vitest run",
     "inspect:prod": "node scripts/inspect-prod-readonly.mjs",
     "db:dev": "node scripts/dev-db.mjs",
+    "dev:mail": "node scripts/dev-mail.mjs",
     "db:setup": "node scripts/db-setup.mjs",
     "admin:grant": "node scripts/grant-admin.mjs",
     "admin:password": "node scripts/set-password.mjs",
