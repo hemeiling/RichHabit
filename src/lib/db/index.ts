@@ -86,6 +86,35 @@ export const setPriorityPlannedOn = (id: string, plannedOn: string | null) =>
 /** `date` is the day on screen, which is the day a completion is recorded on. */
 export const setPriorityText = (id: string, text: string) =>
   patch("/api/priorities", { id, text });
+export const setPriorityDescription = (id: string, description: string) =>
+  patch("/api/priorities", { id, description });
+export const setPriorityLinks = (id: string, links: { url: string; label: string }[]) =>
+  patch("/api/priorities", { id, links });
+
+/* Attachments. Metadata travels as JSON; the bytes go as multipart up and as
+   a session-checked download back. The URL is same-origin API, never public. */
+export interface PriorityAttachment {
+  id: string; priorityId: string; originalFilename: string;
+  kind: string; mimeType: string; byteSize: number; createdAt: string;
+}
+export const listPriorityAttachments = (priorityId: string): Promise<{ attachments: PriorityAttachment[] }> =>
+  send(`/api/priorities/attachments?priorityId=${encodeURIComponent(priorityId)}`, { method: "GET" });
+export const deletePriorityAttachment = (id: string) =>
+  send(`/api/priorities/attachments?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+export const priorityAttachmentUrl = (id: string) =>
+  `/api/priorities/attachments?id=${encodeURIComponent(id)}`;
+export async function uploadPriorityAttachment(
+  priorityId: string, file: File,
+): Promise<{ attachment: PriorityAttachment }> {
+  const form = new FormData();
+  form.set("priorityId", priorityId);
+  form.set("file", file);
+  // No JSON Content-Type here: the browser writes the multipart boundary itself.
+  const res = await fetch("/api/priorities/attachments", { method: "POST", body: form });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+  return data;
+}
 export const setPriorityDone = (id: string, done: boolean, date: string) =>
   patch("/api/priorities", { id, done, date });
 export const reorderPriorities = (ids: string[]) => patch("/api/priorities", { ids });

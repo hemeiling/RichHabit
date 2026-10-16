@@ -4,7 +4,7 @@ import {
   NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, hasDraft, isPlanOverdue,
   layoutAfterMove, prioritiesOn, quadrantAdd, quadrantFor,
 } from "../src/lib/priorities";
-import { DEFAULT_PRIORITY_CATEGORY, emptyState, normalizePriorityCategory } from "../src/lib/types";
+import { DEFAULT_PRIORITY_CATEGORY, NO_PRIORITY_DETAILS, emptyState, normalizePriorityCategory } from "../src/lib/types";
 import type { Priority } from "../src/lib/types";
 import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
@@ -13,7 +13,7 @@ const ID = "11111111-1111-4111-8111-111111111111";
 
 let n = 0;
 const p = (createdOn: string, completedOn: string | null = null, text = `item ${++n}`): Priority =>
-  ({ id: `${n}`, text, createdOn, completedOn, category: "unsorted", plannedOn: null, sortOrder: 0 });
+  ({ id: `${n}`, text, createdOn, completedOn, category: "unsorted", plannedOn: null, sortOrder: 0, ...NO_PRIORITY_DETAILS });
 
 describe("what is on a given day", () => {
   it("shows a line on the day it was written", () => {
@@ -268,7 +268,7 @@ describe("bilingual", () => {
 describe("moving a priority between quadrants", () => {
   const at = (id: string, category: string, sortOrder: number): Priority =>
     ({ id, text: `t-${id}`, createdOn: "2026-09-01", completedOn: null,
-       category: category as Priority["category"], plannedOn: null, sortOrder });
+       category: category as Priority["category"], plannedOn: null, sortOrder, ...NO_PRIORITY_DETAILS });
 
   const day = [
     at("a", "urgent_important", 0),
@@ -433,7 +433,7 @@ describe("the four boxes, in the order the method reads them", () => {
 describe("planning a Q2 line", () => {
   const q2 = (plannedOn: string | null, completedOn: string | null = null): Priority =>
     ({ id: "p", text: "read", createdOn: "2026-09-01", completedOn,
-       category: "important_not_urgent", plannedOn, sortOrder: 0 });
+       category: "important_not_urgent", plannedOn, sortOrder: 0, ...NO_PRIORITY_DETAILS });
 
   it("takes a real date, or nothing", () => {
     expect(parsePriorityPlan({ id: ID, plannedOn: "2026-09-12" }).plannedOn).toBe("2026-09-12");
@@ -464,7 +464,7 @@ describe("planning a Q2 line", () => {
 describe("the one line under the heading", () => {
   const at = (id: string, category: string, completedOn: string | null = null): Priority =>
     ({ id, text: `t-${id}`, createdOn: "2026-09-01", completedOn,
-       category: category as Priority["category"], plannedOn: null, sortOrder: 0 });
+       category: category as Priority["category"], plannedOn: null, sortOrder: 0, ...NO_PRIORITY_DETAILS });
   const TODAY = "2026-09-09";
 
   it("says nothing on a quiet day", () => {

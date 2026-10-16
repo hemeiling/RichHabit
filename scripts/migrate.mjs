@@ -28,6 +28,7 @@ import { migrateWhatsNew } from "./migrations/whats-new.mjs";
 import { migrateTogetherV1A } from "./migrations/together-v1a.mjs";
 import { migrateTogetherV1B } from "./migrations/together-v1b.mjs";
 import { migrateTogetherTaskRank } from "./migrations/together-task-rank.mjs";
+import { migratePriorityDetails } from "./migrations/priority-details.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -952,6 +953,17 @@ try {
    * scripts/migrations/together-task-rank.mjs.
    */
   changed += await migrateTogetherTaskRank(client, console.log);
+
+  /*
+   * ---- 18*. Priority details: description, links, attachments --------------
+   *
+   * Two defaulted columns on `priorities` and one new table, nothing else;
+   * every existing row is valid untouched. See
+   * scripts/migrations/priority-details.mjs. (*The Together invitations
+   * candidate numbers its email-index step 18 as well; whichever release goes
+   * second renumbers this comment — the runner itself only cares about order.)
+   */
+  changed += await migratePriorityDetails(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

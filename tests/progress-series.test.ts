@@ -5,7 +5,7 @@ import { dayScore } from "../src/lib/habits";
 import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
 import { both } from "../src/lib/i18n/both";
-import { emptyState } from "../src/lib/types";
+import { NO_PRIORITY_DETAILS, emptyState } from "../src/lib/types";
 import type { Habit, Priority } from "../src/lib/types";
 
 /**
@@ -21,7 +21,7 @@ const other = { ...habit, id: "g" } as Habit;
 
 let n = 0;
 const pr = (completedOn: string | null, createdOn = "2026-09-01"): Priority => ({
-  id: `p${++n}`, text: "x", createdOn, completedOn, category: "urgent_important", plannedOn: null, sortOrder: 0,
+  id: `p${++n}`, text: "x", createdOn, completedOn, category: "urgent_important", plannedOn: null, sortOrder: 0, ...NO_PRIORITY_DETAILS,
 });
 
 function scenario() {

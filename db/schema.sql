@@ -430,6 +430,41 @@ create table priorities (
 create index priorities_user_order on priorities (user_id, category, sort_order, created_on);
 create index priorities_user_open  on priorities (user_id) where completed_on is null;
 
+-- ---- Priority details: description, links, attachments -------------------------
+-- Optional satellite information on a priority. Mirrors
+-- scripts/migrations/priority-details.mjs exactly; the parity test proves it.
+alter table priorities add column if not exists description text not null default ''
+  constraint priorities_description_length check (length(description) <= 5000);
+alter table priorities add column if not exists links jsonb not null default '[]'
+  constraint priorities_links_list check (jsonb_typeof(links) = 'array' and jsonb_array_length(links) <= 10);
+
+-- Files on a priority, stored as bytes in the row (the AI Workspace's file
+-- pattern): the server
+-- decides the type from the bytes, never the browser; a CHECK pins the size;
+-- and the bytes live exactly as long as the priority and its owner — deleting
+-- either cascades the content away, which is the whole retention policy.
+create table if not exists priority_attachments (
+  id                 uuid primary key default gen_random_uuid(),
+  user_id            uuid not null references users on delete cascade,
+  priority_id        uuid not null references priorities on delete cascade,
+  -- As uploaded, after removing control characters and path separators.
+  original_filename  text not null check (length(original_filename) between 1 and 255),
+  kind               text not null check (kind in ('pdf', 'image', 'text')),
+  -- Decided by the server from the bytes, never taken from the browser.
+  mime_type          text not null check (mime_type in ('application/pdf', 'image/png',
+                       'image/jpeg', 'image/gif', 'image/webp', 'text/plain')),
+  byte_size          integer not null check (byte_size between 1 and 5242880),
+  sha256             text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  content            bytea not null check (octet_length(content) = byte_size),
+  created_at         timestamptz not null default now()
+);
+
+create index if not exists priority_attachments_priority
+  on priority_attachments (priority_id);
+create index if not exists priority_attachments_user
+  on priority_attachments (user_id);
+-- ---- end Priority details --------------------------------------------------------
+
 -- How many new priorities an account has created on one of its own calendar
 -- days. Free accounts are allowed five; Pro and Admin never reach this table,
 -- because the write path returns on an unlimited entitlement before it gets here.

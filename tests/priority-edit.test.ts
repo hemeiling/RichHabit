@@ -6,6 +6,7 @@ import { en } from "../src/lib/i18n/en";
 import { zh } from "../src/lib/i18n/zh";
 import { both } from "../src/lib/i18n/both";
 import type { Priority } from "../src/lib/types";
+import { NO_PRIORITY_DETAILS } from "../src/lib/types";
 
 /**
  * Rewording a priority changes its words and nothing else. These tests pin the
@@ -55,7 +56,7 @@ describe("the update touches the words and nothing else", () => {
 
   it("leaves the accomplishment count where it was", () => {
     const row: Priority = { id: "p1", text: "Book the clinc", createdOn: "2026-09-09", completedOn: "2026-09-12",
-      category: "important_not_urgent", plannedOn: null, sortOrder: 2 };
+      category: "important_not_urgent", plannedOn: null, sortOrder: 2, ...NO_PRIORITY_DETAILS };
     const reworded = { ...row, text: "Book the clinic" };
     expect(accomplishedInMonth([reworded], "2026-09", "2026-09-12")).toHaveLength(accomplishedInMonth([row], "2026-09", "2026-09-12").length);
   });
@@ -95,33 +96,34 @@ describe("the store", () => {
 
 describe("the card", () => {
   const card = read("src/components/Priorities.tsx");
+  const panel = read("src/components/PriorityDetails.tsx");
 
-  it("opens the editor from the words themselves", () => {
-    expect(card).toMatch(/className="pcard-text pcard-title"[\s\S]{0,120}onClick=\{startEdit\}/);
+  it("opens the details from the words — a stretched button, not an inline editor", () => {
+    expect(card).toMatch(/className="pcard-text pcard-title pcard-open"[\s\S]{0,260}onClick=\{onOpen\}/);
+    // The old inline editor is gone for good; editing lives in the panel.
+    expect(card).not.toMatch(/setEditing|onRename|pcard-field/);
   });
 
-  it("saves on Enter, cancels on Escape, and leaves Chinese composition alone", () => {
+  it("is draggable as a whole, except from a control", () => {
+    expect(card).toMatch(/pressedControl\.current = !!\(e\.target as Element\)\.closest\("\[data-no-drag\]"\)/);
+    expect(card).toMatch(/if \(pressedControl\.current\) \{ e\.preventDefault\(\); return; \}/);
+    // Every control is flagged so a press on it can never carry the card…
+    expect(card).toContain('className="tick" data-no-drag');
+    expect(card).toContain('className="qpill" data-no-drag');
+    expect(card).toContain('className="pcard-x" data-no-drag');
+    // …and the words deliberately are not: a drag from the title is a drag.
+    expect(card).not.toMatch(/pcard-open"[^>]*data-no-drag="?true/);
+  });
+
+  it("renames through the panel, which refuses emptiness and keeps the last words", () => {
+    expect(panel).toMatch(/setTitleEmpty\(!oneLine\.trim\(\)\)/);
+    expect(panel).toMatch(/if \(oneLine\.trim\(\)\) \{/);               // only non-empty pauses save
+    expect(panel).toMatch(/titleEmpty && <p[^>]*role="alert"/);           // and the refusal is said
+    expect(panel).toMatch(/actions\.setPriorityText\(item\.id, oneLine\.trim\(\)\)/);
+  });
+
+  it("keeps Chinese composition out of the composer's Enter handling", () => {
     expect(card).toMatch(/isComposing \|\| e\.keyCode === 229\) return;/);
-    expect(card).toMatch(/e\.key === "Enter"\) \{ e\.preventDefault\(\); saveEdit\(\); \}/);
-    expect(card).toMatch(/e\.key === "Escape"\)[^\n]*cancelEdit\(\)/);
-  });
-
-  it("will not save empty wording", () => {
-    expect(card).toMatch(/if \(!text\) \{ setEditError\(t\.priorities\.editEmpty\)/);
-    expect(card).toMatch(/disabled=\{!draft\.trim\(\)\} onClick=\{saveEdit\}/);
-  });
-
-  it("reopens with the typed draft when a save fails", () => {
-    expect(card).toMatch(/onRename\(text\)\.catch\(\(\) => \{ setEditError\(t\.priorities\.editFailed\); setEditing\(true\); \}\)/);
-  });
-
-  it("switches drag off for the card being edited", () => {
-    expect(card).toMatch(/draggable=\{!editing\}/);
-    expect(card).toMatch(/if \(editing\) return;\s*e\.preventDefault\(\); e\.stopPropagation\(\); e\.dataTransfer\.dropEffect/);
-  });
-
-  it("offers the rename for every card, completed or not", () => {
-    expect(card).toMatch(/onRename=\{\(text\) => actions\.setPriorityText\(item\.id, text\)\}/);
   });
 });
 

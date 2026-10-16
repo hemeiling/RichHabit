@@ -7,7 +7,7 @@ import { trimIntention } from "@/lib/intention";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayJournal, DayMetrics, Goal, Habit, ImportantDate, Intention,
-  Prefs, Priority, PriorityCategory,
+  Prefs, Priority, PriorityCategory, PriorityLink,
   SpendingRecord,
   Stack, WeeklyReview,
 } from "@/lib/types";
@@ -31,6 +31,10 @@ interface Actions {
    */
   /** Returns the new priority's id, for callers that need to refer to it. */
   addPriority: (date: string, text: string, category: PriorityCategory) => { id: string; saved: Promise<boolean> };
+  setPriorityDescription: (id: string, description: string) => void;
+  setPriorityLinks: (id: string, links: PriorityLink[]) => Promise<boolean>;
+  /** Local bookkeeping only: the details panel did the server work itself. */
+  notePriorityAttachments: (id: string, attachmentCount: number) => void;
   setPriorityPlannedOn: (id: string, plannedOn: string | null) => void;
   /** `date` is the day on screen: the day the completion is recorded against. */
   /** Resolves once saved; rejects, with the old wording restored, if it was not. */
@@ -326,6 +330,9 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
             category,
             plannedOn: null,
             sortOrder: s.priorities.filter((p) => p.category === category).length,
+            description: "",
+            links: [],
+            attachmentCount: 0,
           }],
         }),
         () => db.addPriority(id, text, date, category),
@@ -338,6 +345,37 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
        * quadrant rules.
        */
       return { id, saved };
+    },
+
+    /*
+     * Notes follow the journal's shape: the screen stays live while someone
+     * types, one write goes out when the typing stops, and the timer lives
+     * here rather than in the panel — closing the panel never loses words.
+     */
+    setPriorityDescription: (id, description) => runDebounced(
+      `priority-description:${id}`,
+      (s) => ({
+        ...s,
+        priorities: s.priorities.map((p) => (p.id === id ? { ...p, description } : p)),
+      }),
+      () => db.setPriorityDescription(id, description),
+    ),
+
+    /* The whole list, like the layout: add and remove are both "this is the
+       list now". Reports acceptance so the panel can keep a refused entry. */
+    setPriorityLinks: (id, links) => run(
+      (s) => ({
+        ...s,
+        priorities: s.priorities.map((p) => (p.id === id ? { ...p, links } : p)),
+      }),
+      () => db.setPriorityLinks(id, links),
+    ),
+
+    notePriorityAttachments: (id, attachmentCount) => {
+      setState((s) => ({
+        ...s,
+        priorities: s.priorities.map((p) => (p.id === id ? { ...p, attachmentCount } : p)),
+      }));
     },
 
     /*

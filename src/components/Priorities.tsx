@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import PriorityDetails from "@/components/PriorityDetails";
 import { useHabits } from "@/components/store";
 import { Sheet } from "@/components/ui";
 import { needsDeleteConfirmation } from "@/lib/accomplishments";
@@ -219,7 +220,7 @@ function PlanMenu({ value, anchor, t, onPick, onClose }: {
 
 function PriorityCard({
   item, category, date, locale, t, dragging, over, settling, menuOpen, planOpen,
-  onToggle, onDelete, onRename, onSetCategory, onMenu, onPlanMenu, onSetPlan,
+  onToggle, onDelete, onOpen, onSetCategory, onMenu, onPlanMenu, onSetPlan,
   onDragStart, onDragEnd, onDragOverCard, onDropOnCard,
 }: {
   item: Priority;
@@ -234,8 +235,8 @@ function PriorityCard({
   planOpen: boolean;
   onToggle: () => void;
   onDelete: () => void;
-  /** Saves new wording for this same row; rejects if the save failed. */
-  onRename: (text: string) => Promise<void>;
+  /** Opens the details panel — where words, notes, links and files are edited. */
+  onOpen: () => void;
   onSetCategory: (category: PriorityCategory) => void;
   onMenu: (open: boolean) => void;
   onPlanMenu: (open: boolean) => void;
@@ -254,119 +255,45 @@ function PriorityCard({
    * finishing late is still finishing.
    */
   const overdue = isPlanOverdue(item, date);
-  const cardRef = useRef<HTMLDivElement>(null);
   const categoryRef = useRef<HTMLButtonElement>(null);
   const planRef = useRef<HTMLButtonElement>(null);
-
   /*
-   * Rewording in place. Tapping the words turns them into a field with the same
-   * size and position, so there is no modal and no Edit button taking up room
-   * on every card. Only `text` is ever sent; see `setPriorityText`.
-   *
-   * The draft lives here rather than in the store, so a failed save can reopen
-   * the field with exactly what was typed.
+   * Whether the press that may become this drag began on a control. The whole
+   * card is the draggable surface — the browser itself decides when a press
+   * becomes a drag, so an ordinary click stays a click — and this one flag is
+   * what keeps the tick, the pills and the delete from being carried away.
+   * The Together board ships the same two lines.
    */
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(item.text);
-  const [editError, setEditError] = useState<string | null>(null);
-  const editorRef = useRef<HTMLDivElement>(null);
-  const fieldRef = useRef<HTMLTextAreaElement>(null);
-  const errorId = useId();
-
-  const startEdit = () => { setDraft(item.text); setEditError(null); setEditing(true); };
-  const cancelEdit = () => { setEditing(false); setEditError(null); };
-  const saveEdit = () => {
-    const text = draft.trim();
-    if (!text) { setEditError(t.priorities.editEmpty); fieldRef.current?.focus(); return; }
-    setEditing(false);
-    setEditError(null);
-    if (text === item.text) return;
-    // Closed straight away: the new words are already on screen. If the write
-    // fails, the field comes back holding the draft, which was never cleared.
-    onRename(text).catch(() => { setEditError(t.priorities.editFailed); setEditing(true); });
-  };
-
-  /* The field grows with the words, as the text it replaces did. */
-  useLayoutEffect(() => {
-    const el = fieldRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    // scrollHeight leaves out the border, and the field is border-box, so add it
-    // back or the last line is clipped by two pixels and the field scrolls.
-    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
-  }, [draft, editing]);
-
-  useEffect(() => {
-    if (!editing) return;
-    const el = fieldRef.current;
-    if (!el) return;
-    el.focus();
-    el.setSelectionRange(el.value.length, el.value.length);
-  }, [editing]);
-
-  /*
-   * On a phone the keyboard covers the lower half of the screen, and the browser
-   * only guarantees the caret is visible — not Save and Cancel under it. While
-   * editing, keep the whole editor inside what can actually be seen.
-   */
-  useEffect(() => {
-    if (!editing) return;
-    const vv = window.visualViewport;
-    const keepVisible = () => {
-      const box = editorRef.current?.getBoundingClientRect();
-      if (!box) return;
-      const top = vv ? vv.offsetTop : 0;
-      const bottom = top + (vv ? vv.height : window.innerHeight);
-      if (box.bottom > bottom - 12) window.scrollBy({ top: box.bottom - bottom + 12 });
-      else if (box.top < top + 12) window.scrollBy({ top: box.top - top - 12 });
-    };
-    const settle = window.setTimeout(keepVisible, 350);
-    vv?.addEventListener("resize", keepVisible);
-    return () => { window.clearTimeout(settle); vv?.removeEventListener("resize", keepVisible); };
-  }, [editing]);
+  const pressedControl = useRef(false);
+  const hasDetails = item.description.trim().length > 0 || item.links.length > 0;
 
   return (
     <div
-      ref={cardRef} className="pcard"
-      data-editing={editing || undefined}
+      className="pcard"
       data-dragging={dragging || undefined}
       data-over={over || undefined}
       data-settling={settling || undefined}
+      draggable
+      onPointerDown={(e) => { pressedControl.current = !!(e.target as Element).closest("[data-no-drag]"); }}
+      onDragStart={(e) => {
+        if (pressedControl.current) { e.preventDefault(); return; }
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", item.id);
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
       onDragOver={(e) => {
-        // A card being reworded is not a place to drop another one.
-        if (editing) return;
         e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; onDragOverCard();
       }}
-      onDrop={(e) => { if (editing) return; e.preventDefault(); e.stopPropagation(); onDropOnCard(); }}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropOnCard(); }}
     >
-      {/* Pointer devices only, as with a habit row. Dragging the grip carries
-          the whole card as the drag image, so what you pick up is what you see. */}
-      <span
-        className="drag-handle faint"
-        // Off while the words are being edited: selecting text in the field
-        // must never pick the card up.
-        draggable={!editing}
-        onDragStart={(e) => {
-          if (editing) { e.preventDefault(); return; }
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/plain", item.id);
-          // What you pick up is the card, not the grip. Without this the drag
-          // image is the 13px handle alone, which gives no sense of what is
-          // moving or where it would land.
-          const card = cardRef.current;
-          if (card) {
-            const box = card.getBoundingClientRect();
-            e.dataTransfer.setDragImage(card, e.clientX - box.left, e.clientY - box.top);
-          }
-          onDragStart();
-        }}
-        onDragEnd={onDragEnd}
-        aria-hidden="true" title={t.priorities.drag(item.text)}
-        style={{ cursor: "grab", fontSize: 13, lineHeight: 1, userSelect: "none", marginTop: 5 }}
-      >⠿</span>
+      {/* The grip is the visual promise that the card moves; the whole card
+          keeps it. Pointer devices only, as before. */}
+      <span className="drag-handle faint" aria-hidden="true" title={t.priorities.drag(item.text)}
+        style={{ cursor: "grab", fontSize: 13, lineHeight: 1, userSelect: "none", marginTop: 5 }}>⠿</span>
 
       <button
-        className="tick" data-on={checked} onClick={onToggle} aria-pressed={checked}
+        className="tick" data-no-drag data-on={checked} onClick={onToggle} aria-pressed={checked}
         aria-label={checked ? t.priorities.uncheck(item.text) : t.priorities.check(item.text)}
         style={{ width: 22, height: 22, borderRadius: 7, marginTop: 1 }}
       >
@@ -379,63 +306,30 @@ function PriorityCard({
       </button>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* The line itself, and the only thing at full strength. `anywhere`
-            wraps an unbroken English URL and a run of Chinese alike. */}
-        {editing ? (
-          <div
-            ref={editorRef} className="pcard-edit"
-            onBlur={(e) => {
-              // Leaving an unchanged field closes it. Leaving a changed one does
-              // not: a stray tap elsewhere must never throw away what was typed.
-              if (editorRef.current?.contains(e.relatedTarget as Node)) return;
-              if (draft.trim() === item.text && !editError) cancelEdit();
-            }}
-          >
-            <textarea
-              ref={fieldRef} className="pcard-field" rows={1}
-              value={draft} maxLength={200} enterKeyHint="done"
-              aria-label={t.priorities.editField}
-              aria-invalid={editError ? true : undefined}
-              aria-describedby={editError ? errorId : undefined}
-              // One line, like the field it was written in. A pasted line break
-              // becomes a space rather than a second line.
-              onChange={(e) => { setDraft(e.target.value.replace(/[\r\n]+/g, " ")); if (editError) setEditError(null); }}
-              onKeyDown={(e) => {
-                // Enter while composing Chinese confirms the characters, not the edit.
-                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                if (e.key === "Enter") { e.preventDefault(); saveEdit(); }
-                if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancelEdit(); }
-              }}
-            />
-            {editError && <p id={errorId} role="alert" className="pcard-edit-error">{editError}</p>}
-            <div className="pcard-edit-actions">
-              <button type="button" className="pcard-edit-btn" onClick={cancelEdit}>{t.common.cancel}</button>
-              <button type="button" className="pcard-edit-btn" data-primary
-                disabled={!draft.trim()} onClick={saveEdit}>{t.common.save}</button>
-            </div>
-          </div>
-        ) : (
-          /* The words are the way in. Kept exactly as written in every
-             language; only the label around them is translated. */
-          <button
-            type="button" className="pcard-text pcard-title"
-            aria-label={t.priorities.editTitle(item.text)}
-            onClick={startEdit}
-            style={{
-              fontSize: 14.5, lineHeight: 1.4, overflowWrap: "anywhere",
-              textDecoration: checked ? "line-through" : undefined, opacity: checked ? 0.5 : 1,
-            }}
-          >
-            {item.text}
-          </button>
-        )}
+        {/*
+          * The words open the details — a stretched button, so the card's whole
+          * quiet surface is one click target and one keyboard stop. It carries
+          * no data-no-drag on purpose: a drag that starts on the words is a
+          * drag, which is exactly what was asked of this surface; the browser
+          * never turns an ordinary click into one.
+          */}
+        <button
+          type="button" className="pcard-text pcard-title pcard-open"
+          aria-label={t.priorities.details.open(item.text)} aria-haspopup="dialog"
+          onClick={onOpen}
+          style={{
+            fontSize: 14.5, lineHeight: 1.4, overflowWrap: "anywhere",
+            textDecoration: checked ? "line-through" : undefined, opacity: checked ? 0.5 : 1,
+          }}
+        >
+          {item.text}
+        </button>
 
-        {/* Metadata and the quadrant control share a line, at the same weight:
-            where it sits and where it came from are the same kind of fact. */}
+        {/* Metadata and the quadrant control share a line, at the same weight. */}
         <div className="flex flex-wrap items-center" style={{ gap: "0 6px", marginTop: 2 }}>
           <button
             ref={categoryRef}
-            type="button" className="qpill"
+            type="button" className="qpill" data-no-drag
             aria-haspopup="menu" aria-expanded={menuOpen}
             aria-label={t.priorities.setCategory(item.text, label.title)}
             onClick={() => onMenu(!menuOpen)}
@@ -443,16 +337,10 @@ function PriorityCard({
             <span className="quad-dot" aria-hidden="true" style={{ background: QUADRANT_COLOR[category] }} />
             <span>{label.short}</span>
           </button>
-          {/*
-            * Q2 only. The quadrant the method says to protect is the one where
-            * "when?" is the question that stops it becoming Q1, and it is the
-            * only quadrant where the question earns a control. A Q2 line with
-            * no day is completely ordinary — nothing here is required.
-            */}
           {category === "important_not_urgent" && (
             <button
               ref={planRef}
-              type="button" className="qpill"
+              type="button" className="qpill" data-no-drag
               aria-haspopup="dialog" aria-expanded={planOpen}
               aria-label={item.plannedOn
                 ? t.priorities.plannedFor(item.text, shortDateFor(item.plannedOn, locale as any))
@@ -465,6 +353,21 @@ function PriorityCard({
                 : `+ ${t.priorities.plan}`}</span>
             </button>
           )}
+          {/* That there is more behind the words — never the contents. */}
+          {(hasDetails || item.attachmentCount > 0) && (
+            <span className="pdetail-ind" title={t.priorities.details.hasDetails} aria-hidden="true">
+              {hasDetails && (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2.2" strokeLinecap="round"><path d="M5 7h14 M5 12h14 M5 17h8" /></svg>
+              )}
+              {item.attachmentCount > 0 && (<>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.5l-8.1 8.1a5.4 5.4 0 0 1-7.6-7.6l8.4-8.4a3.6 3.6 0 0 1 5.1 5.1l-8.2 8.2a1.8 1.8 0 0 1-2.5-2.5l7.6-7.6" /></svg>
+                <span className="num">{item.attachmentCount}</span>
+              </>)}
+            </span>
+          )}
           {from && !checked && (
             <span className="faint" style={{ fontSize: 11.5 }}>
               {t.priorities.carriedFrom(shortDateFor(from, locale as any))}
@@ -473,7 +376,7 @@ function PriorityCard({
         </div>
       </div>
 
-      <button className="pcard-x" aria-label={t.priorities.remove(item.text)} onClick={onDelete}>×</button>
+      <button className="pcard-x" data-no-drag aria-label={t.priorities.remove(item.text)} onClick={onDelete}>×</button>
 
       {menuOpen && (
         <CategoryMenu current={category} anchor={categoryRef.current} t={t}
@@ -590,6 +493,9 @@ export default function Priorities({ date }: { date: string }) {
    * a second, deliberate step. An open line is still removed in one click.
    */
   const [confirmDelete, setConfirmDelete] = useState<Priority | null>(null);
+  /* Which line's details panel is open. The panel reads the live row from the
+     store, so edits made in it are on the card the moment they are typed. */
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout>>();
   const composerRef = useRef<HTMLInputElement>(null);
   const pickRef = useRef<HTMLDivElement>(null);
@@ -849,7 +755,7 @@ export default function Priorities({ date }: { date: string }) {
                     onDelete={() => (needsDeleteConfirmation(item, date)
                       ? setConfirmDelete(item)
                       : actions.deletePriority(item.id))}
-                    onRename={(text) => actions.setPriorityText(item.id, text)}
+                    onOpen={() => setDetailsFor(item.id)}
                     onMenu={(open) => setMenuFor(open ? item.id : null)}
                     onPlanMenu={(open) => setPlanFor(open ? item.id : null)}
                     onSetPlan={(plannedOn) => {
@@ -910,6 +816,22 @@ export default function Priorities({ date }: { date: string }) {
           }}>{confirmDelete.text}</p>
         </Sheet>
       )}
+
+      {(() => {
+        /* The live row, so edits in the panel appear on the card as typed.
+           A row deleted while its panel is open closes the panel. */
+        const detail = detailsFor ? state.priorities.find((p) => p.id === detailsFor) : undefined;
+        if (detailsFor && !detail) setTimeout(() => setDetailsFor(null), 0);
+        return detail ? (
+          <PriorityDetails
+            item={detail} date={date}
+            onSetCategory={(next) => {
+              if (next !== normalizePriorityCategory(detail.category)) move(detail.id, next, null);
+            }}
+            onClose={() => setDetailsFor(null)}
+          />
+        ) : null;
+      })()}
 
       {/* A move made from the keyboard or the category control changes nothing
           a screen reader would otherwise notice. This says what happened. */}
