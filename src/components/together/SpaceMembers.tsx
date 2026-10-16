@@ -20,7 +20,7 @@ interface Invitation { id: string; kind: "email" | "person"; label: string; invi
 interface Board {
   id: string; name: string; role: "owner" | "member"; archived: boolean;
   members: Member[]; invitations: Invitation[]; otherInvitations: number;
-  canInvite: boolean; invitable: (Person & { collaborator?: boolean })[];
+  canInvite: boolean; invitable: (Person & { username: string | null; collaborator: boolean; pending: boolean })[];
 }
 
 export default function SpaceMembers({ boardId, viewerId }: { boardId: string; viewerId: string }) {
@@ -162,15 +162,19 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
                 )}
                 <div className="flex flex-wrap gap-1.5">
                   {board.invitable
-                    .filter((p) => !search.trim() || p.name.toLowerCase().includes(search.trim().toLowerCase()))
+                    .filter((p) => {
+                      const q = search.trim().toLowerCase();
+                      return !q || p.name.toLowerCase().includes(q) || (p.username ?? "").toLowerCase().includes(q);
+                    })
                     .map((p) => (
                     <button key={p.id} type="button" className="chip" aria-pressed={adding.includes(p.id)}
-                      data-on={adding.includes(p.id)}
-                      title={p.collaborator ? t.together.collaboratorTag : undefined}
+                      data-on={adding.includes(p.id)} disabled={p.pending}
+                      title={p.pending ? t.together.invitationPending : p.collaborator ? t.together.collaboratorTag : undefined}
                       onClick={() => setAdding((v) => (v.includes(p.id) ? v.filter((x) => x !== p.id) : [...v, p.id]))}>
                       {p.collaborator && <span className="quad-dot" aria-hidden="true"
                         style={{ background: "var(--accent)" }} />}
                       {p.name}
+                      {p.pending && <span className="faint"> · {t.together.invitationPending}</span>}
                     </button>
                   ))}
                 </div>
@@ -230,6 +234,12 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
               <p className="faint mt-2" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.together.inviteHow}</p>
             </form>
           </div>
+        )}
+
+        {!board.canInvite && writable && (
+          <p className="muted mt-5" role="note" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+            {t.together.ownerInvitesOnly}
+          </p>
         )}
 
         {(board.invitations.length > 0 || board.otherInvitations > 0) && (

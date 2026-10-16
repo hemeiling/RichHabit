@@ -23,7 +23,7 @@ off for everyone, invitations included. Otherwise each account has one of:
 
 | Access | Who | May |
 | --- | --- | --- |
-| **full** | on the list | everything: create boards, invite (People, username or email) |
+| **full** | on the list | everything: create boards, invite to the boards they own (People, username or email) |
 | **invited** | not on the list, but a member of a board, a collaborator (or holding an open collaborator request addressed to it), or holding an open board invitation *addressed to it* — in-platform, or emailed to its proved address | see its own boards and invitations, accept/decline, act as a member (and as owner if ownership passes to it), leave — **not** create boards or invite |
 | none | everyone else | nothing: no nav item, pages render not-found, APIs answer 404 |
 
@@ -86,7 +86,15 @@ list.
 7. **Removal is effective until a new invitation is accepted.** Removing or
    leaving withdraws every open invitation *for* that person on that board (and
    every one *they* sent), so only an invitation created afterwards, explicitly
-   accepted, restores access. Any member with full access may re-invite.
+   accepted, restores access. The owner may re-invite.
+9. **Inviting is the owner's** (since the Add members change, 2026-10). Only a
+   space's owner — with full access, on a live space — may invite, on every
+   channel (People, username, email); a member is refused (403) and told so in
+   plain words. An invitation is answerable only while its sender still holds
+   that right (`AUTHORIZED` in `access.ts`, checked when listing, counting and
+   accepting), so invitations members sent before this change are inert. A
+   later per-member grant (Phase 2, pending entitlement design) extends
+   `mayInvite` and `AUTHORIZED` in one place each.
 8. **Analytics carry counts, booleans and a channel name only** — never names, addresses or
    board content.
 
@@ -114,14 +122,18 @@ in either order.
 One table, two kinds, both pending until answered:
 
 - **In-platform** (`invitee_id`): to someone in the inviter's People — chosen
-  when creating a board or from the board's "Invite from People" — or to a
+  when creating a board, from **+ Add members** (a dialog over the space:
+  accepted collaborators first, then people from the inviter's other spaces,
+  searchable by name or username, several ticked and invited at once — the
+  same directory in every space), or from the Members page — or to a
   typed **username** (the public handle the Community board shows; an unknown
   username is refused plainly, which reveals nothing about email addresses). No
   email. It waits in the invitee's Together home (Invitations · 邀请) and the
   header's notification bell with Accept and Decline, and the navigation (and,
-  on a phone, the menu button) shows a quiet dot. Members, people this inviter
-  already invited, and people who declined this inviter's invitation in the
-  last 7 days are skipped; 50 per inviter a day.
+  on a phone, the menu button) shows a quiet dot. Members, anyone already
+  invited to the space (by anyone, in-app or to their proved address), and
+  people who declined this inviter's invitation in the last 7 days are
+  skipped; 50 per inviter a day.
 - **Email** (`email_normalized` + `token_hash`): to any typed address — always
   email, even if the address belongs to someone in the inviter's People, so the
   inviter learns nothing about who has an account. When the address belongs to
@@ -129,11 +141,14 @@ One table, two kinds, both pending until answered:
   account's home and bell (`addressedTo`), answerable in-app without the link;
   the inviter is told nothing either way, and no other member ever sees it.
 
-Invitations are **per inviter**: at most one open per board, invitee and inviter.
-A retry replaces the inviter's own and never touches — or reveals — another
-member's. Accepting any one closes every other open invitation for that person
-on that board; declining declines every invitation addressed to that account
-there, and the invitee sees one card per board.
+Invitations are **one per person per space**: a live invitation addressed to
+someone (in-app, or emailed to their proved address) blocks another, and the
+inviter's list shows them as "Invitation pending" instead of offering a
+duplicate. Emailing an address again replaces its open email invitation (a
+resend); emailing the address of someone already invited in-app sends nothing
+and gives the ordinary answer. Accepting any one closes every other open
+invitation for that person on that board; declining declines every invitation
+addressed to that account there, and the invitee sees one card per board.
 
 Answers: `accepted_at` / `declined_at` / `revoked_at` (at most one, by CHECK).
 Everything that changes a board's membership or invitations locks the board row

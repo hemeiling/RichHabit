@@ -2,7 +2,8 @@ import { query } from "@/lib/db/pool";
 import { isUuid } from "@/lib/http";
 import type { Locale } from "@/lib/i18n";
 import {
-  DISPLAY_NAME, OPEN, TogetherError, USABLE, mayInvite, peopleOf, requireAccess, requireBoard, togetherLive,
+  AUTHORIZED, DISPLAY_NAME, OPEN, TogetherError, USABLE, addressedTo, mayInvite, peopleOf, requireAccess, requireBoard,
+  togetherLive,
   type BoardRole, type PersonView, type TogetherAccess,
 } from "@/lib/together/access";
 import {
@@ -185,11 +186,21 @@ export interface BoardView {
   invitations: InvitationView[];
   /** Open invitations sent by other members, which this reader may not see. */
   otherInvitations: number;
-  /** Whether this reader may invite (full access, board not archived). */
+  /** Whether this reader may invite (the owner, full access, board not archived). */
   canInvite: boolean;
-  /** Who could be invited in-platform — collaborators first — excluding
-   *  members and this reader's own pending invitees. */
-  invitable: (PersonView & { collaborator?: boolean })[];
+  /** Who could be invited in-platform — accepted collaborators first, then
+   *  people from the reader's other spaces — never current members. Someone
+   *  already invited here (by anyone, in-app or to their proved address) is
+   *  kept, marked `pending`, so the screen can say so instead of offering a
+   *  duplicate. Empty unless the reader may invite. */
+  invitable: InvitablePerson[];
+}
+
+export interface InvitablePerson extends PersonView {
+  /** The public handle, for searching — the same one the Community board shows. */
+  username: string | null;
+  collaborator: boolean;
+  pending: boolean;
 }
 
 export async function loadBoard(userId: string, boardId: unknown): Promise<BoardView> {
@@ -208,23 +219,32 @@ export async function loadBoard(userId: string, boardId: unknown): Promise<Board
             (select ${DISPLAY_NAME} from users u left join profiles p on p.id = u.id where u.id = i.invited_by) as "invitedBy",
             i.invited_by::text as "invitedById", i.invitee_id::text as "inviteeId", i.expires_at as "expiresAt"
        from together_invitations i
-      where i.board_id = $1 and ${USABLE}
+      where i.board_id = $1 and ${USABLE} and ${AUTHORIZED}
       order by i.created_at desc, i.id`, [access.boardId]);
   const visible = open.filter((i) => access.role === "owner" || i.invitedById === userId);
-  const canInvite = mayInvite(userId, access.archived);
-  // Only this reader's own invitations count as "already invited": another
-  // member's pending invitation is theirs, and is not revealed here.
-  const taken = new Set([...members.map((m) => m.id),
-    ...open.filter((i) => i.invitedById === userId).map((i) => i.inviteeId)]);
-  // Collaborators lead; co-members of other spaces follow; nobody twice.
-  let invitable: (PersonView & { collaborator?: boolean })[] = [];
+  const canInvite = mayInvite(userId, access.role, access.archived);
+  // One directory for every space: the reader's accepted collaborators lead,
+  // co-members of their other spaces follow; nobody twice, members never.
+  let invitable: InvitablePerson[] = [];
   if (canInvite) {
+    const memberIds = new Set(members.map((m) => m.id));
     const [collabs, peers] = await Promise.all([collaboratorsOf(userId), peopleOf(query, userId)]);
     const collabIds = new Set(collabs.map((c) => c.id));
     const seen = new Set<string>();
-    invitable = [...collabs, ...peers]
-      .filter((p) => !taken.has(p.id) && !seen.has(p.id) && seen.add(p.id))
-      .map((p) => ({ ...p, collaborator: collabIds.has(p.id) }))
+    const people = [...collabs, ...peers].filter((p) => !memberIds.has(p.id) && !seen.has(p.id) && seen.add(p.id));
+    const ids = people.map((p) => p.id);
+    // Only the reader who may invite sees this, and today that is the owner,
+    // who sees every pending invitation below anyway.
+    const facts = ids.length ? await query<{ id: string; username: string | null; pending: boolean }>(
+      `select p.id::text as id, u.username,
+              exists (select 1 from together_invitations i
+                       where i.board_id = $1 and ${addressedTo("p.id")} and ${USABLE} and ${AUTHORIZED}) as pending
+         from unnest($2::uuid[]) as p(id) join users u on u.id = p.id`,
+      [access.boardId, ids]) : [];
+    const byId = new Map(facts.map((f) => [f.id, f]));
+    invitable = people
+      .map((p) => ({ ...p, username: byId.get(p.id)?.username ?? null,
+        collaborator: collabIds.has(p.id), pending: byId.get(p.id)?.pending ?? false }))
       .sort((a, b) => Number(b.collaborator) - Number(a.collaborator)
         || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
   }

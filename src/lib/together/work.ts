@@ -238,7 +238,7 @@ async function readWork(query: Q, userId: string, boardId: unknown): Promise<Wor
   const first = await historyRows(query, id, null);
   return {
     space: { id, name: space.name, role: access.role, archived: access.archived,
-      canInvite: mayInvite(userId, access.archived) },
+      canInvite: mayInvite(userId, access.role, access.archived) },
     members, groups, tasks,
     history: { ...first, total },
     serverNow: now,

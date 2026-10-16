@@ -94,12 +94,26 @@ export const addressedTo = (param: string) =>
                 and (me.created_at < timestamptz '${PROVED_ADDRESS_CUTOFF}' or me.created_via = 'admin'))))))`;
 
 /**
- * Invitations waiting for account `$1` — in-platform, or emailed to its proved
- * address: usable, on a live board it is not already on. Columns of
- * `together_invitations i` joined to `together_boards b`. The one definition
- * behind access, the list, the count and the header's notification bell.
+ * A space invitation whose sender still holds the right to invite to that
+ * space. Today that right is ownership (`mayInvite`); an invitation sent
+ * under a right since lost — by a member, before invitations became the
+ * owner's — can no longer be answered, appear in a bell, or admit anyone.
+ * Checked when an invitation is listed, counted and accepted, so no later
+ * change of authority ever needs a sweep of old rows. Columns of
+ * `together_invitations i`. (Space invitations only: collaborator requests
+ * have no space and are untouched.)
  */
-export const WAITING = `${addressedTo("$1")} and ${USABLE} and b.archived_at is null
+export const AUTHORIZED = `exists (select 1 from together_members auth
+   where auth.board_id = i.board_id and auth.user_id = i.invited_by and auth.role = 'owner')`;
+
+/**
+ * Invitations waiting for account `$1` — in-platform, or emailed to its proved
+ * address: usable, from someone still entitled to send it, on a live board it
+ * is not already on. Columns of `together_invitations i` joined to
+ * `together_boards b`. The one definition behind access, the list, the count
+ * and the header's notification bell.
+ */
+export const WAITING = `${addressedTo("$1")} and ${USABLE} and ${AUTHORIZED} and b.archived_at is null
    and not exists (select 1 from together_members m where m.board_id = i.board_id and m.user_id = $1)`;
 
 /** Together is switched on at all: during the preview, only while somebody is on the list. */
@@ -110,11 +124,14 @@ export const isPreviewUser = (userId: string): boolean =>
   together.previewUserIds.has(userId.toLowerCase());
 
 /**
- * Whether this reader may invite to a space: full access, and the space not
- * archived — what the invitation routes enforce (requireAccess full, a writable
- * board). Screens use it only to show or hide their invite controls.
+ * Whether this reader may invite to a space: its owner, with full access, and
+ * the space not archived — what the invitation functions enforce
+ * (requireAccess full, then requireBoard owner + write). Invitations are the
+ * owner's by default; a member asking is told so plainly, never shown a
+ * control that would be refused. Screens use this only for presentation.
  */
-export const mayInvite = (userId: string, archived: boolean): boolean => !archived && isPreviewUser(userId);
+export const mayInvite = (userId: string, role: BoardRole, archived: boolean): boolean =>
+  role === "owner" && !archived && isPreviewUser(userId);
 
 export type TogetherAccess = "full" | "invited";
 

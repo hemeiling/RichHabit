@@ -7,8 +7,8 @@ import { AvatarRow, BoardMark, type Person } from "@/components/together/shared"
 
 /**
  * The top of a space: its mark and name, who is in it (which opens Members) and
- * a quiet ⋯ for the space's housekeeping (Members first). Inviting starts from
- * the Together overview's People, or from Members itself. The work — Board, Backlog, History —
+ * a quiet ⋯ for the space's housekeeping (Members first). + Add members opens
+ * in place (AddMembers); Members keeps the full management. The work — Board, Backlog, History —
  * is one surface below it, so there are no view tabs; when Calendar arrives, a
  * small view switcher joins here. On the Members page a quiet link leads back
  * to the work.
@@ -22,15 +22,16 @@ export function spaceStyle(id: string): CSSProperties {
   return { "--space-l": c.light.ink, "--space-d": c.dark.ink } as CSSProperties;
 }
 
-export default function SpaceHeader({ id, name, members, view, onMore, canAddMembers = false }: {
+export default function SpaceHeader({ id, name, members, view, onMore, onAddMembers }: {
   id: string;
   name: string;
   members: Person[];
   view: SpaceView;
   /** Opens the ⋯ menu; absent where the page has no housekeeping. */
   onMore?: (anchor: HTMLElement) => void;
-  /** Shows the + Add members shortcut — only where the server would allow it. */
-  canAddMembers?: boolean;
+  /** Opens + Add members in place. Every member of a live space sees it: the
+   *  owner to invite, anyone else to learn how people are invited here. */
+  onAddMembers?: () => void;
 }) {
   const t = useT().together;
   const href = (path: string) => `/together/b/${id}${path}`;
@@ -42,10 +43,11 @@ export default function SpaceHeader({ id, name, members, view, onMore, canAddMem
           <h2 className="display tg-board-title">{name}</h2>
         </div>
         <div className="tg-space-tools">
-          {canAddMembers && view !== "members" && (
-            <Link href={href("/members#invite")} className="btn btn-quiet tg-small tg-add-members">
+          {onAddMembers && view !== "members" && (
+            <button type="button" className="btn btn-quiet tg-small tg-add-members" aria-haspopup="dialog"
+              onClick={onAddMembers}>
               + {t.addMembers}
-            </Link>
+            </button>
           )}
           <Link href={href("/members")} className="tg-members-link" aria-current={view === "members" ? "page" : undefined}>
             <AvatarRow people={members} label={t.work.membersOf(members.map((m) => m.name).join(", "))} />

@@ -13,6 +13,7 @@ import Backlog from "@/components/together/Backlog";
 import History from "@/components/together/History";
 import TaskSheet from "@/components/together/TaskSheet";
 import { DeletedSheet, GroupsSheet } from "@/components/together/SpaceSheets";
+import AddMembers from "@/components/together/AddMembers";
 import { useFinePointer, useListDrag, type DropIntent } from "@/components/together/useListDrag";
 
 /**
@@ -64,7 +65,7 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   const [openId, setOpenId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
   const [more, setMore] = useState<HTMLElement | null>(null);
-  const [panel, setPanel] = useState<null | "groups" | "deleted">(null);
+  const [panel, setPanel] = useState<null | "groups" | "deleted" | "add">(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [announce, setAnnounce] = useState("");
   const [today, setToday] = useState(todayISO);
@@ -330,7 +331,7 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   return (
     <div className="tg-space" style={spaceStyle(work.space.id)}>
       <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work" onMore={setMore}
-        canAddMembers={work.space.canInvite} />
+        onAddMembers={readOnly ? undefined : () => setPanel("add")} />
 
       {readOnly && <p className="tg-archived mt-4" role="status">{t.readOnly}</p>}
       {error && (
@@ -382,6 +383,9 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       )}
       {more && <Menu anchor={more} title={t.more} currentLabel="" items={moreItems} onClose={() => setMore(null)} />}
 
+      {panel === "add" && (
+        <AddMembers boardId={boardId} canInvite={work.space.canInvite} onClose={() => setPanel(null)} />
+      )}
       {panel === "groups" && (
         <GroupsSheet boardId={boardId} groups={work.groups} readOnly={readOnly} onClose={() => setPanel(null)} onChanged={load} />
       )}

@@ -7,7 +7,8 @@ import { isUuid } from "@/lib/http";
 import { isLocale, type Locale } from "@/lib/i18n";
 import { isPlausibleEmail, normaliseEmail } from "@/lib/identity";
 import {
-  DISPLAY_NAME, OPEN, TogetherError, USABLE, WAITING, addressedTo, peopleOf, requireAccess, requireBoard, togetherLive,
+  AUTHORIZED, DISPLAY_NAME, OPEN, TogetherError, USABLE, WAITING, addressedTo, peopleOf, requireAccess, requireBoard,
+  togetherLive,
 } from "@/lib/together/access";
 import { togetherTransaction as transaction } from "@/lib/together/tx";
 
@@ -137,7 +138,8 @@ const lockInviter = (q: Q, userId: string) =>
 
 async function requireRoomFor(q: Q, boardId: string, n: number) {
   const [{ open }] = await q<{ open: number }>(
-    `select count(*)::int open from together_invitations i where i.board_id = $1 and ${USABLE}`, [boardId]);
+    `select count(*)::int open from together_invitations i where i.board_id = $1 and ${USABLE} and ${AUTHORIZED}`,
+    [boardId]);
   if (open + n > MAX_OPEN_INVITES_PER_BOARD) throw new TogetherError("tooManyOpenInvites", 409);
 }
 
@@ -175,8 +177,10 @@ async function insertInvitationsFor(q: Q, boardId: string, inviterId: string, pe
   const fresh = (await q<{ id: string }>(
     `select p.id::text as id from unnest($2::uuid[]) as p(id)
       where not exists (select 1 from together_members m where m.board_id = $1 and m.user_id = p.id)
+        -- One live invitation per person per space, whoever sent it, in-app or
+        -- emailed to their proved address. The board lock serializes this check.
         and not exists (select 1 from together_invitations i
-                         where i.board_id = $1 and i.invitee_id = p.id and i.invited_by = $3 and ${USABLE})
+                         where i.board_id = $1 and ${addressedTo("p.id")} and ${USABLE} and ${AUTHORIZED})
         and not exists (select 1 from together_invitations i
                          where i.board_id = $1 and i.invitee_id = p.id and i.invited_by = $3
                            and i.declined_at > now() - ($4 || ' days')::interval)`,
@@ -196,13 +200,13 @@ async function insertInvitationsFor(q: Q, boardId: string, inviterId: string, pe
   return fresh.length;
 }
 
-/** Invite some of your People to a board, in-platform. Any member with full access. */
+/** Invite some of your People to a board, in-platform. The owner, with full access. */
 export async function invitePeople(userId: string, boardId: unknown, rawPeople: unknown): Promise<number> {
   await requireAccess(userId, { full: true });
   const people = cleanPeople(rawPeople);
   if (!people.length) return 0;
   return transaction(async (q) => {
-    const access = await requireBoard(q, userId, boardId, { write: true, lock: true });
+    const access = await requireBoard(q, userId, boardId, { owner: true, write: true, lock: true });
     return insertPeopleInvitations(q, access.boardId, userId, people);
   });
 }
@@ -222,7 +226,7 @@ export async function inviteByUsername(userId: string, boardId: unknown, rawUser
   // predates today's rules must still be invitable by it.
   if (!username || username.length > 254 || /\s/.test(username)) throw new TogetherError("usernameUnknown", 404);
   return transaction(async (q) => {
-    const access = await requireBoard(q, userId, boardId, { write: true, lock: true });
+    const access = await requireBoard(q, userId, boardId, { owner: true, write: true, lock: true });
     const [target] = await q<{ id: string }>(
       `select id::text as id from users where lower(username) = $1`, [username]);
     if (!target) throw new TogetherError("usernameUnknown", 404);
@@ -243,16 +247,24 @@ export async function createInvitation(
   // 1. Commit an unsent invitation.
   const token = randomBytes(TOKEN_BYTES).toString("base64url");
   const created = await transaction(async (q) => {
-    const access = await requireBoard(q, userId, boardId, { write: true, lock: true });
+    const access = await requireBoard(q, userId, boardId, { owner: true, write: true, lock: true });
     await lockBoard(q, access.boardId);
     await lockInviter(q, userId);
     const [{ today }] = await q<{ today: number }>(
       `select count(*)::int today from together_invitations
         where invited_by = $1 and token_hash is not null and created_at > now() - interval '24 hours'`, [userId]);
     if (today >= MAX_INVITES_PER_DAY) throw new TogetherError("tooManyInvites", 429);
-    // A retry replaces this inviter's own; another member's is left alone.
+    // One live invitation per person per space. Someone the inviter already
+    // invited in-app, by this very address, keeps that one: nothing new is sent,
+    // and the answer is the ordinary one, so it says nothing about the address.
+    const [already] = await q<{ id: string }>(
+      `select i.id::text as id from together_invitations i join users u on u.id = i.invitee_id
+        where i.board_id = $1 and lower(u.email) = $2 and ${USABLE} and ${AUTHORIZED} limit 1`,
+      [access.boardId, email]);
+    if (already) return { id: already.id, board: "", inviter: "", locale: null, existing: true };
+    // Inviting the same address again replaces the open one (a resend), whoever sent it.
     await q(`update together_invitations set revoked_at = now()
-      where board_id = $1 and email_normalized = $2 and invited_by = $3 and ${OPEN}`, [access.boardId, email, userId]);
+      where board_id = $1 and email_normalized = $2 and ${OPEN}`, [access.boardId, email]);
     await requireRoomFor(q, access.boardId, 1);
     const [row] = await q<{ id: string; board: string; inviter: string; locale: string | null }>(
       `insert into together_invitations (board_id, email_normalized, token_hash, invited_by, expires_at)
@@ -263,8 +275,9 @@ export async function createInvitation(
          (select up.locale from users u2 join user_preferences up on up.user_id = u2.id
            where lower(u2.email) = $2 limit 1) as locale`,
       [access.boardId, email, hash(token), userId, String(INVITE_TTL_DAYS)]);
-    return row;
+    return { ...row, existing: false };
   });
+  if (created.existing) return { id: created.id };
 
   // 2. Send. The recipient's own language when they already have an account
   //    (decided here, on the server, and never reported back), else the inviter's.
@@ -391,7 +404,7 @@ export async function respondToInvitation(
     const [inv] = await q<{ id: string; board_id: string; invited_by: string }>(
       `select i.id, i.board_id::text, i.invited_by::text
          from together_invitations i join together_boards b on b.id = i.board_id
-        where i.id = $1 and ${addressedTo("$2")} and ${USABLE} and b.archived_at is null
+        where i.id = $1 and ${addressedTo("$2")} and ${USABLE} and ${AUTHORIZED} and b.archived_at is null
         for update of i`, [inviteId, userId]);
     if (!inv) throw new TogetherError("invitationInvalid", 404);
     if (accept) {
@@ -453,7 +466,7 @@ export async function previewInvitation(token: unknown, viewerId: string | null 
        join together_boards b on b.id = i.board_id
        join users u on u.id = i.invited_by
        left join profiles p on p.id = u.id
-      where i.token_hash = $1 and ${USABLE} and b.archived_at is null`,
+      where i.token_hash = $1 and ${USABLE} and ${AUTHORIZED} and b.archived_at is null`,
     [hash(token), viewer]);
   if (!row) return { status: "invalid" };
   return { status: "ok", board: row.board, inviter: row.inviter, to: maskEmail(row.email),
@@ -474,7 +487,7 @@ export async function acceptInvitation(userId: string, token: unknown): Promise<
     const [inv] = await q<{ id: string; board_id: string; email: string; invited_by: string }>(
       `select i.id, i.board_id::text, i.email_normalized as email, i.invited_by::text
          from together_invitations i join together_boards b on b.id = i.board_id
-        where i.token_hash = $1 and ${USABLE} and b.archived_at is null
+        where i.token_hash = $1 and ${USABLE} and ${AUTHORIZED} and b.archived_at is null
         for update of i`, [hash(token)]);
     if (!inv) throw new TogetherError("invitationInvalid", 404);
     const [me] = await q<{ email: string | null }>(`select lower(email) as email from users where id = $1`, [userId]);

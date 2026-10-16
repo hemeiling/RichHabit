@@ -1209,6 +1209,38 @@ body {
 .tg-title-input:focus-visible { box-shadow: 0 2px 0 -1px var(--accent); }
 .tg-desc-input[readonly], .tg-title-input[readonly] { cursor: default; }
 .tg-sheet-error { margin-top: 10px; font-size: 13.5px; color: var(--warn); }
+
+/* + Add members, in place: one directory, tick several, invite once. */
+.tg-am-note { font-size: 13.5px; line-height: 1.55; }
+.tg-am-notice { margin: 8px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--accent); }
+.tg-am-notice:empty { margin: 0; }
+.tg-am-search { width: 100%; margin-top: 12px; font-size: 14px; }
+.tg-am-list { margin-top: 8px; max-height: min(46vh, 360px); overflow-y: auto; overscroll-behavior: contain; }
+.tg-am-list fieldset { border: 0; padding: 0; margin: 0 0 6px; min-width: 0; }
+.tg-am-legend { padding: 0; margin: 8px 0 2px; }
+.tg-am-list ul { list-style: none; margin: 0; padding: 0; }
+.tg-am-row {
+  display: flex; align-items: center; gap: 10px; min-height: 44px;
+  padding: 6px 8px; border-radius: 10px; cursor: pointer;
+}
+.tg-am-row:hover { background: var(--raise); }
+.tg-am-row[data-on] { background: var(--accent-soft); }
+.tg-am-row[data-pending] { cursor: default; }
+.tg-am-row[data-pending] .tg-am-name { color: var(--muted); }
+.tg-am-row:has(.tg-am-check:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tg-am-check { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--accent); }
+.tg-am-who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tg-am-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-am-handle { font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-am-pending { flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.tg-am-send { display: flex; justify-content: flex-end; margin-top: 10px; }
+.tg-am-other { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.tg-am-link {
+  background: none; border: 0; padding: 4px 0; font: inherit; font-size: 13.5px;
+  color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+}
+.tg-am-manage { display: inline-block; margin-top: 14px; font-size: 13.5px; color: var(--muted); }
+.tg-am-manage:hover, .tg-am-manage:focus-visible { color: var(--ink); }
 .tg-sheet-note {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
   margin: 2px 0 8px; padding: 8px 8px 8px 12px; border-radius: 12px; font-size: 13.5px; background: var(--warn-soft); color: var(--warn);

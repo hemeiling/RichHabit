@@ -211,9 +211,12 @@ describe("authorization", () => {
     expect((await board.PATCH(req({ name: "Eddie's" }), { params: { id } })).status).toBe(403);
     expect((await board.PATCH(req({ archived: true }), { params: { id } })).status).toBe(403);
     expect((await member.DELETE(req(), { params: { id, userId: xx.id } })).status).toBe(403);
-    expect((await invite.POST(req({ people: [] }), { params: { id } })).status).toBe(200);   // nobody to invite
-    // A member may invite.
-    expect((await inviteTo(id, eddie.id, "friend@example.com")).status).toBe(200);
+    // Inviting is the owner's too: a member — here on the preview list — is
+    // refused on every channel, and nothing is written.
+    expect((await invite.POST(req({ people: [xx.id] }), { params: { id } })).status).toBe(403);
+    expect((await inviteTo(id, eddie.id, "friend@example.com")).status).toBe(403);
+    expect(await sql("select id from together_invitations where invited_by = $1", [eddie.id])).toEqual([]);
+    expect((await inviteTo(id, owner.id, "friend@example.com")).status).toBe(200);
   });
 
   it("makes an archived board read-only for everyone, and restorable by its owner", async () => {
@@ -225,7 +228,7 @@ describe("authorization", () => {
     as(owner.id);
     expect((await board.PATCH(req({ archived: true }), { params: { id } })).status).toBe(200);
     expect((await board.PATCH(req({ name: "New" }), { params: { id } })).status).toBe(409);
-    expect((await inviteTo(id, eddie.id, "late@example.com")).status).toBe(409);
+    expect((await inviteTo(id, owner.id, "late@example.com")).status).toBe(409);
     as(eddie.id);
     expect((await json(await board.GET(req(undefined, "GET"), { params: { id } }))).body.archived).toBe(true);
     as(owner.id);
@@ -322,58 +325,70 @@ describe("boards and People", () => {
     expect((await sql(`select count(*)::int n from together_invitations where board_id = $1 and invitee_id is not null`, [second]))[0].n).toBe(2);
   });
 
-  it("keeps each member's invitations their own: no withdrawing or detecting another's by re-inviting", async () => {
+  it("voids an invitation whose sender no longer holds the right to invite — by link, in-app and in the bell", async () => {
     const owner = await account("Meiling");
-    const y = await account("Yu");
     const z = await account("Zed");
     const x = await account("Xin", { email: "xin@example.com" });
-    allow(owner.id, y.id, z.id, x.id);
+    const w = await account("Wen");
+    allow(owner.id, z.id, x.id, w.id);
     const id = await newBoard(owner.id);
-    await join(id, owner.id, y);
     await join(id, owner.id, z);
-    await inviteTo(id, z.id, "xin@example.com");
-    const zToken = tokenOf(sent.at(-1)!);
-    const yView = async () => { as(y.id); return (await json(await board.GET(req(undefined, "GET"), { params: { id } }))).body; };
-    const before = (await yView()).otherInvitations;
-    expect((await inviteTo(id, y.id, "xin@example.com")).status).toBe(200);
-    const yToken = tokenOf(sent.at(-1)!);
-    expect((await yView()).otherInvitations).toBe(before);   // nothing to read off the count
-    expect((await json(await preview.POST(req({ token: zToken })))).body.status).toBe("ok");   // Z's untouched
-    // Y cannot withdraw Z's.
-    const [{ id: zInvite }] = await sql(`select id from together_invitations where token_hash = $1`,
-      [createHash("sha256").update(zToken).digest("hex")]);
-    as(y.id);
-    expect((await inviteOne.DELETE(req(), { params: { id, inviteId: zInvite } })).status).toBe(404);
-    // Accepting one spends the other.
+    // Invitations a member sent while members could still invite (none exist
+    // in production; planted here as they would have been written).
+    const legacyToken = "L".repeat(43);
+    await sql(`insert into together_invitations (board_id, email_normalized, token_hash, invited_by, sent_at, expires_at)
+      values ($1, 'xin@example.com', $2, $3, now(), now() + interval '14 days')`,
+      [id, createHash("sha256").update(legacyToken).digest("hex"), z.id]);
+    await sql(`insert into together_invitations (board_id, invitee_id, invited_by, sent_at, expires_at)
+      values ($1, $2, $3, now(), now() + interval '14 days')`, [id, w.id, z.id]);
+    // Neither can be previewed, answered, accepted or waited on.
+    expect((await json(await preview.POST(req({ token: legacyToken })))).body.status).toBe("invalid");
     as(x.id);
-    expect((await accept.POST(req({ token: yToken }))).status).toBe(200);
-    expect((await json(await preview.POST(req({ token: zToken })))).body.status).toBe("invalid");
-    expect((await accept.POST(req({ token: zToken }))).status).toBe(404);
+    expect((await accept.POST(req({ token: legacyToken }))).status).toBe(404);
+    expect(await waitingFor(w.id)).toEqual([]);
+    const [{ id: stale }] = await sql(`select id from together_invitations where invitee_id = $1`, [w.id]);
+    expect((await answer(w.id, stale, true)).status).toBe(404);
+    expect(await sql(`select user_id from together_members where board_id = $1 and user_id = any($2::uuid[])`,
+      [id, [x.id, w.id]])).toEqual([]);
+    // …nor do they stand in the owner's way: a fresh invitation goes out and works.
+    expect((await inviteTo(id, owner.id, "xin@example.com")).status).toBe(200);
+    as(x.id);
+    expect((await accept.POST(req({ token: tokenOf(sent.at(-1)!) }))).status).toBe(200);
   });
 
-  it("shows one invitation per board however many members sent one, and answers them together", async () => {
+  it("keeps one live invitation per person per space: a repeat is refused quietly, and a member cannot withdraw the owner's", async () => {
     const owner = await account("Meiling");
     const eddie = await account("Eddie");
-    const xx = await account("Xiaoxuan");
+    const xx = await account("Xiaoxuan", { email: "xx@example.com" });
     allow(owner.id, eddie.id, xx.id);
     const a = await newBoard(owner.id, "A");
     await join(a, owner.id, eddie);
     await join(a, owner.id, xx);
     const b = await newBoard(owner.id, "B");
     await join(b, owner.id, eddie);
-    // Owner and Eddie both invite Xiaoxuan to B, in-platform.
     as(owner.id);
     expect((await json(await invite.POST(req({ people: [xx.id] }), { params: { id: b } }))).body).toEqual({ invited: 1 });
+    // Again in-app, and by her username: nothing new.
+    expect((await json(await invite.POST(req({ people: [xx.id] }), { params: { id: b } }))).body).toEqual({ invited: 0 });
+    // By her address: the ordinary answer, but no email and no second invitation.
+    const mails = sent.length;
+    expect((await inviteTo(b, owner.id, "xx@example.com")).status).toBe(200);
+    expect(sent.length).toBe(mails);
+    expect((await sql(`select count(*)::int n from together_invitations where board_id = $1 and revoked_at is null
+      and (invitee_id = $2 or email_normalized = 'xx@example.com')`, [b, xx.id]))[0].n).toBe(1);
+    // The owner's list keeps her, marked pending, rather than offering a duplicate.
+    const listed = (await json(await board.GET(req(undefined, "GET"), { params: { id: b } }))).body.invitable
+      .find((p: any) => p.id === xx.id);
+    expect(listed).toMatchObject({ pending: true, collaborator: false });
+    // Eddie, a member, cannot withdraw it.
+    const [{ id: theirs }] = await sql(`select id from together_invitations where board_id = $1 and invitee_id = $2`, [b, xx.id]);
     as(eddie.id);
-    // Eddie's list does not hide her because of the owner's invitation.
-    expect((await json(await board.GET(req(undefined, "GET"), { params: { id: b } }))).body.invitable.map((p: any) => p.id)).toContain(xx.id);
-    expect((await json(await invite.POST(req({ people: [xx.id] }), { params: { id: b } }))).body).toEqual({ invited: 1 });
+    expect((await inviteOne.DELETE(req(), { params: { id: b, inviteId: theirs } })).status).toBe(404);
+    // One in her bell; declining clears it.
     const waiting = await waitingFor(xx.id);
     expect(waiting).toHaveLength(1);
     expect((await answer(xx.id, waiting[0].id, false)).status).toBe(200);
     expect(await waitingFor(xx.id)).toEqual([]);
-    expect((await sql(`select count(*)::int n from together_invitations where board_id = $1 and invitee_id = $2
-      and declined_at is not null`, [b, xx.id]))[0].n).toBe(2);
   });
 
   it("refuses an answer that is not a plain yes or no, and leaves the invitation open", async () => {
@@ -435,7 +450,8 @@ describe("boards and People", () => {
     const view = (await json(await board.GET(req(undefined, "GET"), { params: { id: second } }))).body;
     expect(view.invitations).toMatchObject([{ kind: "person", label: "Eddie", invitedBy: "Meiling" }]);
     expect(JSON.stringify(view)).not.toContain("eddie-private");
-    expect(view.invitable).toEqual([]);   // already invited
+    // Still in the owner's directory, marked pending — never offered twice.
+    expect(view.invitable).toMatchObject([{ id: eddie.id, name: "Eddie", pending: true }]);
   });
 
   it("ends access the moment someone is removed; only a new invitation, accepted, restores it", async () => {
@@ -446,9 +462,11 @@ describe("boards and People", () => {
     const id = await newBoard(owner.id);
     await join(id, owner.id, eddie);
     await join(id, owner.id, xx);
-    // Invitations for Eddie that predate his removal: by email and in-platform.
-    await inviteTo(id, xx.id, eddie.email);
-    const older = tokenOf(sent.at(-1)!);
+    // An invitation for Eddie that predates his removal.
+    await sql(`insert into together_invitations (board_id, email_normalized, token_hash, invited_by, sent_at, expires_at)
+      values ($1, lower($2), $3, $4, now(), now() + interval '14 days')`,
+      [id, eddie.email, createHash("sha256").update("O".repeat(43)).digest("hex"), owner.id]);
+    const older = "O".repeat(43);
     as(owner.id);
     expect((await member.DELETE(req(), { params: { id, userId: eddie.id } })).status).toBe(200);
     expect(await canSee(eddie.id, id)).toBe(false);
@@ -456,8 +474,9 @@ describe("boards and People", () => {
     expect((await accept.POST(req({ token: older }))).status).toBe(404);
     expect(await canSee(eddie.id, id)).toBe(false);
 
-    // Any member may invite him again — Xiaoxuan, not the owner. Pending is not access.
-    expect((await inviteTo(id, xx.id, eddie.email)).status).toBe(200);
+    // A member cannot bring him back; the owner can invite him again. Pending is not access.
+    expect((await inviteTo(id, xx.id, eddie.email)).status).toBe(403);
+    expect((await inviteTo(id, owner.id, eddie.email)).status).toBe(200);
     const fresh = tokenOf(sent.at(-1)!);
     expect(await canSee(eddie.id, id)).toBe(false);
     as(eddie.id);
@@ -563,7 +582,7 @@ describe("boards and People", () => {
     expect(text).toContain("Meiling");
   });
 
-  it("shows a pending address only to the owner and to whoever sent it", async () => {
+  it("shows a pending address only to the owner who sent it — members see a count, never the address", async () => {
     const owner = await account("Meiling");
     const eddie = await account("Eddie");
     const xx = await account("Xiaoxuan");
@@ -571,14 +590,15 @@ describe("boards and People", () => {
     const id = await newBoard(owner.id);
     await join(id, owner.id, eddie);
     await join(id, owner.id, xx);
-    await inviteTo(id, eddie.id, "eddies-friend@example.com");
+    await inviteTo(id, owner.id, "owners-friend@example.com");
     const view = async (who: string) => { as(who); return (await json(await board.GET(req(undefined, "GET"), { params: { id } }))).body; };
-    expect((await view(owner.id)).invitations.map((i: any) => i.label)).toEqual(["eddies-friend@example.com"]);
-    expect((await view(eddie.id)).invitations.map((i: any) => i.label)).toEqual(["eddies-friend@example.com"]);
-    const x = await view(xx.id);
-    expect(x.invitations).toEqual([]);
-    expect(x.otherInvitations).toBe(1);
-    expect(JSON.stringify(x)).not.toContain("eddies-friend");
+    expect((await view(owner.id)).invitations.map((i: any) => i.label)).toEqual(["owners-friend@example.com"]);
+    for (const who of [eddie.id, xx.id]) {
+      const v = await view(who);
+      expect(v.invitations).toEqual([]);
+      expect(v.otherInvitations).toBe(1);
+      expect(JSON.stringify(v)).not.toContain("owners-friend");
+    }
   });
 
   it("lets a member leave, keeps the owner from leaving, and removing someone voids their invitations", async () => {
@@ -592,11 +612,17 @@ describe("boards and People", () => {
     as(owner.id);
     expect((await leave.POST(req(), { params: { id } })).status).toBe(409);
     expect((await member.DELETE(req(), { params: { id, userId: owner.id } })).status).toBe(400);
-    await inviteTo(id, eddie.id, "pending@example.com");
-    const token = tokenOf(sent.at(-1)!);
+    // An invitation Eddie sent back when members could invite.
+    const token = "E".repeat(43);
+    await sql(`insert into together_invitations (board_id, email_normalized, token_hash, invited_by, sent_at, expires_at)
+      values ($1, 'pending@example.com', $2, $3, now(), now() + interval '14 days')`,
+      [id, createHash("sha256").update(token).digest("hex"), eddie.id]);
     as(owner.id);
     expect((await member.DELETE(req(), { params: { id, userId: eddie.id } })).status).toBe(200);
     expect((await json(await preview.POST(req({ token })))).body).toEqual({ status: "invalid" });
+    // Withdrawn outright, not merely unanswerable.
+    expect((await sql(`select revoked_at is not null as gone from together_invitations where invited_by = $1`,
+      [eddie.id]))[0].gone).toBe(true);
     as(xx.id);
     expect((await leave.POST(req(), { params: { id } })).status).toBe(200);
     expect((await board.GET(req(undefined, "GET"), { params: { id } })).status).toBe(404);   // stale tab
@@ -744,12 +770,21 @@ describe("invitations", () => {
     const id = await newBoard(owner.id);
     await join(id, owner.id, eddie);
     await join(id, owner.id, xx);
-    await inviteTo(id, eddie.id, "friend@example.com");
+    await inviteTo(id, owner.id, "friend@example.com");
     const [{ id: inviteId }] = await sql(`select id from together_invitations where email_normalized = 'friend@example.com'`);
-    as(xx.id);
-    expect((await inviteOne.DELETE(req(), { params: { id, inviteId } })).status).toBe(404);
-    as(eddie.id);
+    for (const who of [xx.id, eddie.id]) {
+      as(who);
+      expect((await inviteOne.DELETE(req(), { params: { id, inviteId } })).status).toBe(404);
+    }
+    as(owner.id);
     expect((await inviteOne.DELETE(req(), { params: { id, inviteId } })).status).toBe(200);
+    // A member's own invitation from before invitations were the owner's: they
+    // may still withdraw it (it only takes something away).
+    await sql(`insert into together_invitations (board_id, invitee_id, invited_by, sent_at, expires_at)
+      values ($1, $2, $3, now(), now() + interval '14 days')`, [id, owner.id, eddie.id]);
+    const [{ id: legacy }] = await sql(`select id from together_invitations where invited_by = $1`, [eddie.id]);
+    as(eddie.id);
+    expect((await inviteOne.DELETE(req(), { params: { id, inviteId: legacy } })).status).toBe(200);
   });
 
   it("is rate-limited per inviter, in the database", async () => {
@@ -1201,9 +1236,9 @@ describe("account deletion", () => {
     const { id, people: [owner, eddie, xx] } = await team("Meiling", "Eddie", "Xiaoxuan");
     const yu = await account("Yu");
     allow(owner.id, eddie.id, xx.id, yu.id);
-    await inviteTo(id, eddie.id, yu.email);
-    as(yu.id);
-    await accept.POST(req({ token: tokenOf(sent.at(-1)!) }));
+    // Yu was brought in by Eddie, back when members could invite.
+    await sql(`insert into together_members (board_id, user_id, role, added_by) values ($1, $2, 'member', $3)`,
+      [id, yu.id, eddie.id]);
     expect((await sql("select added_by from together_members where user_id = $1", [yu.id]))[0].added_by).toBe(eddie.id);
     await sql("delete from users where id = any($1::uuid[])", [[owner.id, eddie.id, xx.id]]);
     expect(await roles(id)).toEqual(["Yu:owner"]);
@@ -1236,5 +1271,118 @@ describe("account deletion", () => {
     await sql("delete from users where id = $1", [a.people[1].id]);
     expect(await roles(b)).toEqual(["Other:owner"]);
     expect(await roles(a.id)).toEqual(["Meiling:owner"]);
+  });
+});
+
+describe("Add members: one directory, owner-only, one invitation per person", () => {
+  const connect = (a: string, b: string) => sql(
+    `insert into together_connections (user_low, user_high) values (least($1::uuid, $2::uuid), greatest($1::uuid, $2::uuid))`,
+    [a, b]);
+  const view = async (who: string, id: string) => {
+    as(who);
+    return (await json(await board.GET(req(undefined, "GET"), { params: { id } }))).body;
+  };
+  const usernameOf = async (id: string) => (await sql(`select username from users where id = $1`, [id]))[0].username;
+
+  it("offers the same accepted collaborators in every space the owner has — new ones too — and a space gives no other", async () => {
+    const owner = await account("Meiling");
+    const eddie = await account("Eddie");
+    allow(owner.id);
+    await connect(owner.id, eddie.id);
+    const a = await newBoard(owner.id, "A");
+    const b = await newBoard(owner.id, "B");
+    for (const id of [a, b]) {
+      expect((await view(owner.id, id)).invitable).toMatchObject([{ id: eddie.id, collaborator: true, pending: false }]);
+    }
+    // Invite and accept in A only.
+    as(owner.id);
+    expect((await json(await invite.POST(req({ people: [eddie.id] }), { params: { id: a } }))).body).toEqual({ invited: 1 });
+    expect((await view(owner.id, b)).invitable).toMatchObject([{ id: eddie.id, pending: false }]);   // A's is A's
+    expect((await answer(eddie.id, (await waitingFor(eddie.id))[0].id, true)).status).toBe(200);
+    expect(await canSee(eddie.id, a)).toBe(true);
+    expect(await canSee(eddie.id, b)).toBe(false);
+    // B still offers him; a space created later does too.
+    expect((await view(owner.id, b)).invitable.map((p: any) => p.id)).toEqual([eddie.id]);
+    const c = await newBoard(owner.id, "C");
+    expect((await view(owner.id, c)).invitable).toMatchObject([{ id: eddie.id, collaborator: true }]);
+    // A no longer offers him: he is a member there.
+    expect((await view(owner.id, a)).invitable).toEqual([]);
+  });
+
+  it("invites several at once, skipping anyone already invited, and lists them as pending", async () => {
+    const owner = await account("Meiling");
+    const [p1, p2, p3, p4] = await Promise.all(["Ann", "Bo", "Cy", "Di"].map((n) => account(n)));
+    allow(owner.id);
+    for (const p of [p1, p2, p3, p4]) await connect(owner.id, p.id);
+    const id = await newBoard(owner.id);
+    as(owner.id);
+    expect((await json(await invite.POST(req({ people: [p1.id, p2.id, p3.id] }), { params: { id } }))).body)
+      .toEqual({ invited: 3 });
+    expect((await json(await invite.POST(req({ people: [p1.id, p4.id] }), { params: { id } }))).body)
+      .toEqual({ invited: 1 });
+    // By username, someone already invited: nothing new.
+    expect((await json(await invite.POST(req({ username: await usernameOf(p2.id) }), { params: { id } }))).body)
+      .toEqual({ invited: 0 });
+    const v = await view(owner.id, id);
+    expect(v.invitable.every((p: any) => p.pending)).toBe(true);
+    expect(v.invitable).toHaveLength(4);
+    expect((await sql(`select count(*)::int n from together_invitations where board_id = $1 and revoked_at is null`, [id]))[0].n)
+      .toBe(4);
+  });
+
+  it("counts an invitation emailed to someone's proved address as pending for them", async () => {
+    const owner = await account("Meiling");
+    const eddie = await account("Eddie", { email: "eddie@example.com", verified: true });
+    allow(owner.id);
+    await connect(owner.id, eddie.id);
+    const id = await newBoard(owner.id);
+    expect((await inviteTo(id, owner.id, "eddie@example.com")).status).toBe(200);
+    expect((await view(owner.id, id)).invitable).toMatchObject([{ id: eddie.id, pending: true }]);
+    as(owner.id);
+    expect((await json(await invite.POST(req({ people: [eddie.id] }), { params: { id } }))).body).toEqual({ invited: 0 });
+  });
+
+  it("writes one invitation when the same person is invited twice at the same moment", async () => {
+    const owner = await account("Meiling");
+    const eddie = await account("Eddie");
+    allow(owner.id);
+    await connect(owner.id, eddie.id);
+    const id = await newBoard(owner.id);
+    as(owner.id);
+    const results = await Promise.all([1, 2].map(() =>
+      invite.POST(req({ people: [eddie.id] }), { params: { id } }).then(json)));
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    expect(results.map((r) => r.body.invited).sort()).toEqual([0, 1]);
+    expect((await sql(`select count(*)::int n from together_invitations where board_id = $1 and invitee_id = $2`,
+      [id, eddie.id]))[0].n).toBe(1);
+  });
+
+  it("gives a member no directory, no usernames and no way to invite — whatever they send", async () => {
+    const owner = await account("Meiling");
+    const eddie = await account("Eddie");
+    const friend = await account("Friend");
+    allow(owner.id, eddie.id);
+    await connect(eddie.id, friend.id);   // Eddie's own collaborator
+    const id = await newBoard(owner.id);
+    await join(id, owner.id, eddie);
+    const v = await view(eddie.id, id);
+    expect(v.canInvite).toBe(false);
+    expect(v.invitable).toEqual([]);
+    expect(JSON.stringify(v)).not.toContain(await usernameOf(friend.id));
+    as(eddie.id);
+    for (const body of [{ people: [friend.id] }, { username: await usernameOf(friend.id) }, { email: "x@example.com" }]) {
+      expect((await invite.POST(req(body), { params: { id } })).status).toBe(403);
+    }
+    expect(await sql(`select id from together_invitations where invited_by = $1`, [eddie.id])).toEqual([]);
+  });
+
+  it("refuses to name, by id, anyone who is not the owner's collaborator or co-member", async () => {
+    const owner = await account("Meiling");
+    const stranger = await account("Stranger");
+    allow(owner.id);
+    const id = await newBoard(owner.id);
+    as(owner.id);
+    expect((await invite.POST(req({ people: [stranger.id] }), { params: { id } })).status).toBe(400);
+    expect(await sql(`select id from together_invitations where invitee_id = $1`, [stranger.id])).toEqual([]);
   });
 });

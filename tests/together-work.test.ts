@@ -208,12 +208,17 @@ describe("who may touch a space's work", () => {
     const id = await space(owner, [peer, meimei]);
     const members = async (who: string) => { as(who); return (await json(await boardRoute.GET(req(undefined, "GET"), P(id)))).body; };
 
-    // On the preview list: owner and member alike may invite.
-    for (const who of [owner, peer]) expect((await members(who)).canInvite).toBe(true);
-    // Here by invitation only: no invite form, and the route refuses (403 — they already know the space).
-    expect((await members(meimei)).canInvite).toBe(false);
-    as(meimei);
-    expect((await invitations.POST(req({ email: "someone@example.com" }), P(id))).status).toBe(403);
+    // Inviting is the owner's. A member — even one on the preview list — is told
+    // so, and every invitation channel refuses them (403: they know the space).
+    expect((await members(owner)).canInvite).toBe(true);
+    for (const who of [peer, meimei]) {
+      expect((await members(who)).canInvite).toBe(false);
+      expect((await members(who)).invitable).toEqual([]);
+      as(who);
+      expect((await invitations.POST(req({ email: "someone@example.com" }), P(id))).status).toBe(403);
+      expect((await invitations.POST(req({ username: "hippo" }), P(id))).status).toBe(403);
+      expect((await invitations.POST(req({ people: [owner] }), P(id))).status).toBe(403);
+    }
     expect(await sql(`select id from together_invitations`)).toEqual([]);
 
     // Archived: nobody may invite.
