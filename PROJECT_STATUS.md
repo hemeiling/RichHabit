@@ -1,12 +1,12 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-16 (global collaborators candidate added on top of release readiness)
+> Last updated: 2026-10-16 (the three approved improvements assembled into ONE combined release candidate)
 >
 > **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · 17 USERS · NOTHING APPLIED OR DEPLOYED SINCE.**
 >
-> **RELEASE READINESS (SEE THE FIRST SECTION): BOTH CANDIDATES PREPARED, VERIFIED AND WAITING ON TWO PRODUCT-OWNER GATES — (R0) APPROVE THE CANDIDATES AFTER THE LOCAL REVIEW · (R1) CREATE A FRESH NEON RESTORE-POINT/REHEARSAL BRANCH AND PUT ITS URL IN `.env.local` (EVERY EXISTING REHEARSAL URL FAILS AUTH, 28P01). NOTHING HAS BEEN DEPLOYED AND NO PRODUCTION DATA WAS TOUCHED; ALL PRODUCTION ACCESS WAS READ-ONLY.**
+> **RELEASE READINESS (SEE THE FIRST SECTION): ONE COMBINED CANDIDATE — `efd9542` (`efd95427803e215af691674b3e68efa9e7d9f1a5`) ON `release/together-priorities-rc1` — CARRYING ALL THREE APPROVED IMPROVEMENTS (TOGETHER IN-APP INVITATIONS + BELL · TOGETHER GLOBAL COLLABORATORS · PRIORITY COMPASS V2 + DETAILS PANEL WITH ATTACHMENTS) · MIGRATION = THREE ADDITIVE STEPS 18→19→20 IN ONE RUNNER PASS, COMBINED REHEARSAL PASSED ON PRODUCTION-SHAPED DATA (44/44 PRE-EXISTING TABLES BYTE-IDENTICAL, SECOND RUN NO-OP) · E2E ON THE CANDIDATE BUILD PASSED (COLLABORATORS 24/24, PRIORITY DETAILS 23/23; EARLIER SUITES CARRY OVER BY TREE IDENTITY WITH THE VERIFIED PREVIEW MERGE `9719750`) · FRESH READ-ONLY PRODUCTION PREFLIGHT PASSED (ZERO PENDING BACKFILLS, ALL CANDIDATE OBJECTS ABSENT, 45-TABLE BASELINE RE-CAPTURED) · WAITING ON TWO PRODUCT-OWNER GATES — (R0) APPROVE THE RELEASE AFTER THE LOCAL REVIEW · (R1) CREATE A FRESH NEON RESTORE-POINT/REHEARSAL BRANCH AND PUT ITS URL IN `.env.local` (EVERY EXISTING REHEARSAL URL FAILS AUTH, 28P01). NOTHING HAS BEEN DEPLOYED AND NO PRODUCTION DATA WAS TOUCHED; ALL PRODUCTION ACCESS WAS READ-ONLY.**
 >
-> **TOGETHER GLOBAL COLLABORATORS (2026-10-16 BRIEF): CANDIDATE `fe06636` ON `feature/together-collaborators` (BUILT ON THE INVITATIONS CANDIDATE `f5d1bc3`) · MIGRATION STEP 19 = TWO ADDITIVE TABLES (`together_connections`, `together_connection_invitations`); EVERY CONNECTIONS READER ANSWERS "NONE" UNTIL IT RUNS, SO DEPLOY ORDER IS FREE · NO MEMBERSHIP IS EVER CONVERTED INTO A CONNECTION · VERIFIED: unit 1496/1498 (the known baseline + one boundary rule updated for the second signed-out preview), 9/9 connections suite + 5/5 migration parity on real Postgres, 24/24 browser checks (request→bell→accept both ways, invited-tier self-service, collaborators-first Add members with one-tick space invite, withdraw, email channel with #c token, removal leaving memberships intact, 中文 phone) · NOT MERGED · NOT MIGRATED · NOT DEPLOYED.**
+> **TOGETHER GLOBAL COLLABORATORS (2026-10-16 BRIEF): CANDIDATE `fe06636` ON `feature/together-collaborators` (BUILT ON THE INVITATIONS CANDIDATE `f5d1bc3`) · MIGRATION STEP 19 = TWO ADDITIVE TABLES (`together_connections`, `together_connection_invitations`); EVERY CONNECTIONS READER ANSWERS "NONE" UNTIL IT RUNS, SO DEPLOY ORDER IS FREE · NO MEMBERSHIP IS EVER CONVERTED INTO A CONNECTION · VERIFIED: unit 1496/1498 (the known baseline + one boundary rule updated for the second signed-out preview), 9/9 connections suite + 5/5 migration parity on real Postgres, 24/24 browser checks (request→bell→accept both ways, invited-tier self-service, collaborators-first Add members with one-tick space invite, withdraw, email channel with #c token, removal leaving memberships intact, 中文 phone) · NOT MERGED · NOT MIGRATED · NOT DEPLOYED · CONSOLIDATED INTO `release/together-priorities-rc1` (`efd9542`).**
 >
 > **Overview answers the reviewer's question:** meimei saw no PEOPLE section
 > because it was preview-list-only; MY COLLABORATORS now renders for every
@@ -16,9 +16,9 @@
 > unchanged). A connection grants no space access, shares only display
 > names, and removal deletes exactly the connection row.
 >
-> **RELEASE 1 — TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: `e2212b1` ON `feature/together-inapp-invites` (`cab8a51` + the proved-address cutoff hardening) · MIGRATION STEP 18 = ONE ADDITIVE PARTIAL INDEX · FULL-RUNNER REHEARSAL ON A PRODUCTION-LEVEL POSTGRES COPY PASSED (ADDITIVE, IDEMPOTENT, 44/44 TABLES BYTE-IDENTICAL) · PRODUCTION READ-ONLY PREFLIGHT PASSED (ZERO PENDING BACKFILLS; BASELINE FINGERPRINTS OF ALL 45 TABLES CAPTURED) · SECURITY REVIEW DONE, ONE FINDING FIXED IN `e2212b1` · UNIT 1483/1484 (KNOWN BASELINE) · NOT MERGED · NOT MIGRATED · NOT DEPLOYED.**
+> **RELEASE 1 — TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: `e2212b1` ON `feature/together-inapp-invites` (`cab8a51` + the proved-address cutoff hardening) · MIGRATION STEP 18 = ONE ADDITIVE PARTIAL INDEX · FULL-RUNNER REHEARSAL ON A PRODUCTION-LEVEL POSTGRES COPY PASSED (ADDITIVE, IDEMPOTENT, 44/44 TABLES BYTE-IDENTICAL) · PRODUCTION READ-ONLY PREFLIGHT PASSED (ZERO PENDING BACKFILLS; BASELINE FINGERPRINTS OF ALL 45 TABLES CAPTURED) · SECURITY REVIEW DONE, ONE FINDING FIXED IN `e2212b1` · UNIT 1483/1484 (KNOWN BASELINE) · NOT MERGED · NOT MIGRATED · NOT DEPLOYED · CONSOLIDATED INTO `release/together-priorities-rc1` (`efd9542`).**
 >
-> **RELEASE 2 — PRIORITY COMPASS REDESIGN: `fbed122` ON `release/priority-compass-on-invites` (the feature commit `2a912a9` REBASED ONTO RELEASE 1; ONE CONFLICT, `PROJECT_STATUS.md` ONLY, RESOLVED) · NO MIGRATION · NO API OR DATA CHANGE · BUILD + 188/188 KEY-SUITE TESTS ON THE COMBINED TREE · `feature/priority-compass-redesign` (`2a912a9`) PRESERVED UNCHANGED · NOT MERGED · NOT DEPLOYED.**
+> **RELEASE 2 — PRIORITY COMPASS REDESIGN: `fbed122` ON `release/priority-compass-on-invites` (the feature commit `2a912a9` REBASED ONTO RELEASE 1; ONE CONFLICT, `PROJECT_STATUS.md` ONLY, RESOLVED) · NO MIGRATION · NO API OR DATA CHANGE · BUILD + 188/188 KEY-SUITE TESTS ON THE COMBINED TREE · `feature/priority-compass-redesign` (`2a912a9`) PRESERVED UNCHANGED · NOT MERGED · NOT DEPLOYED · SUPERSEDED: THE COMPASS WORK (V2 + WHOLE-CARD DRAG + DETAILS PANEL) IS CONSOLIDATED INTO `release/together-priorities-rc1` (`efd9542`).**
 >
 > **TOGETHER UI REDESIGN (OVERVIEW ACTIONS + SPACE PAGE): RELEASED AND VERIFIED 2026-10-09 · `a768682` FAST-FORWARDED FROM `3b937f3` (ONE COMMIT, 12 FILES, PRESENTATION + 2 STRINGS PER LANGUAGE) · NO MIGRATION · NO API CHANGE BEYOND REMOVING THE UNUSED `space.canInvite` · RENDER `dep-db46s23tqb8s73e9q1kg` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS · NO DATA CHANGE.** See the first section below. The header Invite button from `3b937f3` moved to the overview's People.
 >
@@ -113,91 +113,139 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Release readiness, 2026-10-16 (both candidates · NOTHING DEPLOYED OR MIGRATED)
+## Release readiness, 2026-10-16 — ONE combined candidate (NOTHING DEPLOYED OR MIGRATED)
 
-Prepared at the Product Owner's request while they review the local preview.
-No deploy, no production migration, no production write: every production
-access below was a `begin read only` transaction, rolled back.
+Prepared at the Product Owner's request: the three approved improvements as
+one coordinated production release. No deploy, no production migration, no
+production write: every production access below was a `begin read only`
+transaction, rolled back.
 
-### The candidates and how they integrate
+### The candidate
 
-| | Release 1 | Release 2 |
+**`efd9542` — full SHA `efd95427803e215af691674b3e68efa9e7d9f1a5` — on
+`release/together-priorities-rc1`.**
+
+| | |
+| --- | --- |
+| carries | (1) Together in-app invitations + notification bell (incl. the proved-address cutoff hardening) · (2) Together global collaborators · (3) Priority Compass V2 + whole-card drag + priority details panel (description, links, attachments) |
+| assembly | branched from `feature/together-collaborators` (`0d7c8ee`, which sits on the invitations candidate), then the five compass/details commits cherry-picked in order, plus one comment-only tidy settling the details migration at runner step 20 |
+| tree identity | identical to the browser-verified preview merge `9719750` (the build the 3100 preview serves) except two comment lines in `scripts/migrations/priority-details.mjs` — proven by `git diff 9719750 efd9542`; every browser result on the preview therefore applies to this tree |
+| base | `a768682` = `main` = production is an ancestor; the chain is linear |
+| release move | fast-forward `main` `a768682 → efd9542`, one move, all three improvements |
+| source branches | `feature/together-inapp-invites`, `feature/together-collaborators`, `feature/priority-compass-redesign` and the preview merge are all preserved unchanged |
+
+### Migration sequence — three additive steps, one runner pass
+
+`npm run db:migrate` runs them in order inside one transaction:
+
+| step | file (`scripts/migrations/`) | objects |
 | --- | --- | --- |
-| commit | `e2212b1` (= `cab8a51` + cutoff hardening) | `fbed122` |
-| branch | `feature/together-inapp-invites` | `release/priority-compass-on-invites` |
-| base | `a768682` = `main` = `origin/main` = production (verified by `ls-remote` and `merge-base` on 2026-10-16) | `e2212b1` (release 1) |
-| migration | step 18: one additive partial index | none |
-| release move | fast-forward `main` `a768682 → e2212b1` | fast-forward `main` `e2212b1 → fbed122` |
+| 18 | `together-invite-email.mjs` | one partial index on `together_invitations` |
+| 19 | `together-connections.mjs` | two new tables, `together_connections` + `together_connection_invitations` (with their checks and partial indexes) |
+| 20 | `priority-details.mjs` | two defaulted columns on `priorities` (`description`, `links`) + new table `priority_attachments` + two indexes |
 
-Integration was proven by performing the real release-2 rebase: `2a912a9`
-(the compass feature commit, preserved untouched on its own branch) rebased
-onto release 1 produced exactly one conflict — `PROJECT_STATUS.md`, resolved
-by taking the compass version — with code, CSS and both dictionaries merging
-cleanly. The combined tree typechecks, builds, and passes together-db (62),
-priorities and i18n suites (188 total). Neither improvement is lost: the
-bundle carries both releases' strings, and the earlier combined preview
-(2026-10-16, 24/24 + 22/22 browser checks) ran this same union. If release 1
-changes during review, re-rebase `release/priority-compass-on-invites` the
-same way before release 2.
+No step reads, rewrites or deletes an existing row; there are no backfills.
+Deploy order is free in both directions: the new code answers "none"/"empty"
+until the tables exist (guarded queries), and the deployed `a768682` names its
+columns explicitly and never touches the new objects.
 
-### Migration step 18 — rehearsed (local full runner) · Neon rehearsal waits on gate R1
+**Expected production output — exactly:**
 
-Every rehearsal URL in `.env.local` now fails Neon auth (28P01; the branches
-were reset or their passwords rotated), so the Neon rehearsal needs a fresh
-branch of production from the Product Owner (gate R1). What ran instead, on
-2026-10-16: the **full `scripts/migrate.mjs` runner over the real wire
-protocol** (PGlite socket, port 5438, its own data directory; the local
-preview on 5436 was untouched) against a copy at production's exact schema
-level (db/schema.sql minus the step-18 marker block) seeded with app-shaped
-data in every user and Together table:
+```
+  created index together_invitations_email_open
+  created together_connections
+  created together_connection_invitations
+  added priorities.description
+  added priorities.links
+  created priority_attachments
+
+Done — 6 change(s).
+```
+
+Anything else — any backfill line, any `created day_priorities` (production
+already has that legacy table), any other count — means STOP; do not deploy.
+A second run must print `Nothing to do; already up to date.`
+
+### Combined rehearsal (local full runner) — PASSED · Neon rehearsal waits on gate R1
+
+Every rehearsal URL in `.env.local` still fails Neon auth (28P01), so the
+Neon rehearsal needs a fresh branch of production from the Product Owner
+(gate R1). What ran instead, on 2026-10-16 on the candidate: the **full
+`scripts/migrate.mjs` runner over the real wire protocol** (PGlite socket,
+port 5438, its own data directory; the 3100 preview and its 5436 database
+untouched) against a copy at production's exact schema level (db/schema.sql
+minus all three candidate marker blocks) seeded with production-shaped
+volumes — 17 users, 195 habits with schedules, 356 completions, 175
+priorities across all quadrants (a third completed), journal notes, important
+dates, an intention, two Together spaces with members, a group, 12 ranked
+tasks in four stages, an assignee, open invitations of both kinds:
 
 | Check | Result |
 | --- | --- |
-| first run | `created day_priorities`, `created index together_invitations_email_open`, `Done — 2 change(s).` |
-| `day_priorities` | the documented pre-existing schema.sql gap — production HAS the table (2 rows), so this line cannot occur there; created empty here, no other table touched |
-| structure diff | exactly the one index plus the day_priorities objects; nothing removed or altered |
-| data | 44 of 44 seeded tables byte-identical in row count and content hash (habits, completions, schedules, priorities, journal, intention, important dates, boards, members, groups, ranked tasks, assignees, both invitation kinds) |
+| first run | exactly the six expected lines (plus `created day_priorities`, which cannot occur in production — the table exists there) · `Done — 7 change(s).` here, `6` expected in production |
+| data preservation | 44 of 44 pre-existing tables byte-identical in row count and content hash over their original columns, after BOTH passes |
+| new columns | `priorities.description` = `''` and `links` = `[]` on every one of the 175 existing rows (0 deviations) |
+| structure | exactly the expected objects added; nothing removed or altered; step-18 index present; both connections tables present; `priority_attachments` present |
 | second run | `Nothing to do; already up to date.`; fingerprints unchanged |
-| step-level parity | `tests/together-invite-email-migration.test.ts`: adds exactly one index, rows untouched, idempotent, equals a fresh install, no-op before Together exists |
+| step-level parity | migration parity suites for steps 18, 19 and 20 (each proves: adds exactly its objects, rows untouched, idempotent, equals a fresh install) all pass in the unit run below |
 
-**Expected production output: exactly `created index
-together_invitations_email_open` and `Done — 1 change(s).` Anything else —
-any backfill line, any second change — means STOP; do not deploy.**
+### Test results on `efd9542`
 
-### Production read-only preflight, 2026-10-16 (the Phase 4B lesson applied)
-
-Every data-changing predicate in the runner was tested against production:
-
-| Backfill predicate | Matching rows |
+| Check | Result |
 | --- | --- |
-| users with `username` null | 0 |
-| habits with `template_key` null and a starter-alias name | 0 |
-| habits `read_for_learning` at nighttime (re-key) | 0 |
-| habit unit aliases (min/glasses/tasks/hr) | 0, 0, 0, 0 |
-| goals with `template_key` null and an alias name | 0 |
-| intentions with legacy `priority_id` but empty `priority_ids` | 0 |
-| together_tasks with `rank` null | 0 |
-| analytics_events / user_sessions FK delete rule | both already SET NULL |
-| habits.status column present (its backfill branch is skipped) | yes |
+| typecheck · lint · production build | clean / clean / ✓ Compiled successfully |
+| unit suite | 1489 passed, 16 skipped — the skip is the known load-flake of `tests/ai-workspace-migration.test.ts` failing at file level only under full-suite load; it passes 16/16 run alone (re-verified today on this commit) |
+| E2E, candidate build on the isolated 3200 app / 5437 database (fresh database and accounts per suite) | collaborators 24/24 · priority details 23/23 (incl. cross-account authorization: another account's attachment fetch is 404 and its delete refused) |
+| carried over by tree identity with `9719750` | invitations 24/24 · navigation 6/6 · Compass V2 29/29 · password-reset flow checks — the trees differ only in migration-file comments |
 
-So the production run has **nothing to do but create the index**. State found:
-45 tables, Postgres 18.6, endpoint `ep-jolly-…` (matches the documented
-production endpoint), step-17 marker present, step-18 index absent, 17 users.
+### Production read-only preflight — re-run on the RC, 2026-10-16 (the Phase 4B lesson applied)
 
-**Baseline fingerprints** (row count + whole-table content hash) were captured
-for all 45 tables for the after-release comparison. User-data tables at
-capture (2026-10-16 ~13:49 UTC): users 17 · habits 195 · habit_schedules 203 ·
-habit_completions 179 · priorities 175 · goals 51 · goal_habits 155 ·
-day_notes 11 · day_priorities 2 · intentions 3 · important_dates 41 ·
-together_boards 1 · together_members 2 · together_invitations 3 ·
-together_groups 1 · together_tasks 3 · together_task_assignees 1 ·
-priority_quota_usage 0 · habit_awareness_entries 0 · habit_library 0 ·
-habit_stacks 0. The verification after each release re-reads these: every
-table must be identical except for rows users themselves created meanwhile,
-and no row may be lost. (The full 45-table JSON lives in this session's
-scratchpad; the probe is three read-only queries and is trivially re-run.)
+Every data-changing predicate in the runner was re-tested against production:
+users with `username` null **0** · habits with `template_key` null and a
+starter-alias name **0** · `read_for_learning` at nighttime **0** · habit unit
+aliases **0,0,0,0** · goals with `template_key` null and an alias name **0** ·
+intentions with legacy `priority_id` but empty `priority_ids` **0** ·
+together_tasks with `rank` null **0** · analytics_events / user_sessions FK
+delete rules already SET NULL · habits.status present (its branch skipped).
 
-### Security and privacy review (release 1), 2026-10-16
+Candidate-object state in production: step-18 index **absent** ·
+`together_connections` **absent** · `together_connection_invitations`
+**absent** · `priorities.description` / `priorities.links` **absent** ·
+`priority_attachments` **absent** — the migration will create exactly them.
+Legacy `day_priorities` **present** (2 rows), so that old runner step is a
+no-op in production.
+
+**Baseline fingerprints re-captured** (row count + whole-table content hash,
+all 45 tables, 2026-10-16 ~20:02 UTC; JSON in the session scratchpad):
+users 17 · habits 195 · habit_schedules 203 · habit_completions 179 ·
+priorities 175 · goals 51 · goal_habits 155 · day_notes 11 · day_priorities 2 ·
+intentions 3 · important_dates 41 · together_boards 1 · together_members 2 ·
+together_invitations 3 · together_groups 1 · together_tasks 3 ·
+together_task_assignees 1 · priority_quota_usage 0. The after-release
+verification re-reads these: every table identical except rows users created
+meanwhile; `priorities` may differ only by the two defaulted columns; no row
+may be lost.
+
+### Attachment storage assessment (step 20)
+
+- Production database today: **15 MB** total; the largest table is `ai_files`
+  at 2.9 MB — the same in-row `bytea` pattern the new attachments use.
+- Server-enforced caps: **5 MB/file · 5 files/priority · 50 MB/account**
+  (`PRIORITY_ATTACHMENT_LIMITS`, checked inside the insert transaction with
+  the priority row locked). With 17 users the worst case is ~0.85 GB; growth
+  is bounded linearly by accounts (50 MB × users), never by priority count.
+- Backups: in-row bytes ride the same Neon point-in-time restore and
+  branching as every other row — one backup/restore path, no external object
+  store to lose or desynchronize. The R1 restore branch covers attachments
+  exactly as it covers habits.
+- Retention is the schema itself: `ON DELETE CASCADE` from priority and owner
+  — deleting a priority or an account removes its bytes in the same
+  transaction; there are no tombstones and nothing to purge later.
+- Reads stay cheap: list views fetch a count subquery only (never bytes);
+  downloads stream one row by id after session + ownership checks, with
+  nosniff/Content-Disposition/CSP headers and no public URL.
+
+### Security and privacy review (Together invitations — carried into the RC), 2026-10-16
 
 - **Username invitations.** Full Together access plus a writable board is
   checked before anything (`requireAccess` → `requireBoard(write, lock)`);
@@ -246,75 +294,76 @@ scratchpad; the probe is three read-only queries and is trivially re-run.)
 
 ### Release plan and gates
 
-**Gate R0 (Product Owner):** approve both candidates after the local review.
+**Gate R0 (Product Owner):** approve the release after reviewing the local
+preview at http://127.0.0.1:3100 (it serves `9719750`, content-identical to
+the candidate).
 **Gate R1 (Product Owner):** in Neon, create a fresh branch of production —
 it doubles as the restore point — and put its URL in `.env.local` (add a new
 variable or update `REHEARSAL_DATABASE_URL`; the file is add-only and is
 never committed).
 
-**Release 1 — Together in-app invitations (`e2212b1`):**
+**The release (`efd9542`), once R0 and R1 are given:**
 
-1. Neon rehearsal (one command once R1 exists): run
+1. Neon rehearsal (one command): run
    `RH_ALLOW_REMOTE=1 DATABASE_URL='<rehearsal URL>' npm run db:migrate`
-   from `e2212b1`; expect exactly the index line and `Done — 1 change(s).`,
-   then `Nothing to do` on a second run; verify no row of any table changed.
+   from `efd9542`; expect exactly the six lines and `Done — 6 change(s).`,
+   then `Nothing to do` on a second run; verify no row of any table changed
+   and the two new columns are pure defaults everywhere.
 2. Re-run the read-only production preflight (backfill predicates still 0).
 3. Production migration: same command against `PRODUCTION_DATABASE_URL`;
    check the target line shows the production host with `** REMOTE **`.
    Expected output exactly as above; anything else → stop, do not deploy.
    (Order note: migration-first is convention, but both orders are safe here
-   — the new code works without the index, and `a768682` ignores it.)
-4. Fast-forward `main` `a768682 → e2212b1`, push. Render deploys only `main`;
+   — the new code tolerates the missing objects, and `a768682` ignores them.)
+4. Fast-forward `main` `a768682 → efd9542`, push. Render deploys only `main`;
    recent releases needed a **manual** deploy by the Product Owner.
-5. Verify: `/api/health`; signed-out routes; served-bundle probe — release
-   strings present after and absent before ("No RichHabit account has that
-   username", "Invite by email or username", 用邮箱或用户名邀请, "Notifications,"
-   with a control string in both runs); re-read the baseline tables (no lost
-   rows); Product Owner signed-in smoke: bell with count, invite by username,
-   email invitation appearing in the invitee's bell, Accept/Decline, withdraw.
-6. Record the release here.
-
-**Release 2 — Priority Compass (`fbed122`):** after release 1 is verified:
-re-verify (or re-rebase) `release/priority-compass-on-invites`, fast-forward
-`main` `e2212b1 → fbed122`, push, manual deploy, then verify: no migration and
-no database action; bundle probe ("Where does this belong?" / 它属于哪一类？);
-Product Owner smoke: top composer, one-tap filing, done-sinks, per-quadrant
-add, inline edit, phone width; baseline tables again unchanged.
+5. Keep `REQUIRE_EMAIL_VERIFICATION=true` on Render (the proved-address
+   cutoff makes the feature safe even if toggled, but true is the gate).
+6. Verify: `/api/health`; signed-out routes still 307/401; served-bundle
+   probe — strings unique to this release present after and absent before
+   ("No RichHabit account has that username", "Invite collaborator",
+   我的协作者, "Where does this belong?", 它属于哪一类？, with a control
+   string in both runs); re-read the 45-table baseline (no lost rows;
+   `priorities` differing only by the two defaulted columns); Product Owner
+   signed-in smoke: bell with count, invite by username, invite a
+   collaborator and accept from the other account, + Add members showing
+   collaborators first, compass whole-card drag, details panel with one
+   small upload and download.
+7. Record the release here.
 
 ### Rollback
 
-**Release 1.** Roll the application back in the Render dashboard to the
-previous deploy (`a768682`) or revert on `main`. **Leave the index in place**:
-it is invisible to `a768682` (planner-only, no API or data dependency), costs
-nothing at this table's size, and the rolled-back app runs exactly as today.
-Never drop it as a rollback step; if it is ever truly unwanted,
-`drop index if exists together_invitations_email_open` removes it without
-touching a row, and re-running the migration recreates it. Data written by
-the new code before a rollback stays valid for the old code: a username
-invitation is an ordinary V1A `invitee_id` row, and an in-app acceptance
-produces an ordinary membership — `a768682` reads both; the only loss is the
-new UI. In-app answering disappears with the rollback; pending email
-invitations keep working through their links.
+**Application:** roll back in the Render dashboard to the previous deploy
+(`a768682`) or revert on `main`. **Leave all migrated objects in place** —
+each is invisible to the old code: the index is planner-only; `a768682`
+never queries the connections tables, the two `priorities` columns (its
+selects and inserts name their columns) or `priority_attachments`. Data
+written by the new code before a rollback stays valid: username invitations
+and acceptances are ordinary V1A rows the old code reads; connection rows,
+descriptions, links and attachments simply sit unread until a redeploy; the
+compass writes ordinary priority rows. Never drop objects as a rollback step.
+If ever truly unwanted, each removal is a single `drop index/table if exists`
+or `alter table … drop column` touching no other row — but there is no
+operational reason to.
 
-**Release 2.** Roll back to the release-1 deploy or revert on `main`. No
-schema or data-shape change exists; priorities created through the redesigned
-composer are ordinary rows from the same `addPriority` action, and the done-
-sink was presentation only (`sortOrder` was never rewritten), so the old
-screen renders the same data in the same places.
-
-**Either release, data corruption only:** restoring production from the R1
-Neon branch discards every write since its creation — Product Owner only,
-last resort.
+**Data corruption only:** restoring production from the R1 Neon branch
+discards every write since its creation — Product Owner only, last resort.
 
 ### `.env.local`
 
 Preserved exactly: read-only throughout (hosts printed masked, never a
 credential), nothing added, removed or rewritten; the file is gitignored and
-appears in no commit in any branch's history; the three release commits
-contain no connection string or key material; the captured baseline holds
-only row counts and hashes. Noted in passing: the file now carries fewer
-variables than on 2026-10-15 (the V2–V7 rehearsal URLs are gone) — the
-Product Owner's own housekeeping, untouched by the agent.
+appears in no commit on any branch; the candidate's commits contain no
+connection string or key material; the captured baseline holds only row
+counts and hashes.
+
+### Local environments after this session
+
+The Product Owner's stable preview stays at **http://127.0.0.1:3100**
+(`~/RichHabitPreview` worktree, its own database on 5436, self-healing
+supervisors; `preview-ops/start.sh` / `stop.sh`). The isolated test stack the
+candidate was verified on (port 3200, database 5437, throwaway accounts
+hippo/meimei/charliew/dana, password `Verdant-Meadow-42`) is disposable.
 
 ## Together — in-app invitations + notification bell (CANDIDATE · NOT MIGRATED/DEPLOYED)
 
