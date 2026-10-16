@@ -1,10 +1,20 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-16 (release readiness for both 2026-10-15 candidates)
+> Last updated: 2026-10-16 (global collaborators candidate added on top of release readiness)
 >
 > **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · 17 USERS · NOTHING APPLIED OR DEPLOYED SINCE.**
 >
 > **RELEASE READINESS (SEE THE FIRST SECTION): BOTH CANDIDATES PREPARED, VERIFIED AND WAITING ON TWO PRODUCT-OWNER GATES — (R0) APPROVE THE CANDIDATES AFTER THE LOCAL REVIEW · (R1) CREATE A FRESH NEON RESTORE-POINT/REHEARSAL BRANCH AND PUT ITS URL IN `.env.local` (EVERY EXISTING REHEARSAL URL FAILS AUTH, 28P01). NOTHING HAS BEEN DEPLOYED AND NO PRODUCTION DATA WAS TOUCHED; ALL PRODUCTION ACCESS WAS READ-ONLY.**
+>
+> **TOGETHER GLOBAL COLLABORATORS (2026-10-16 BRIEF): CANDIDATE `fe06636` ON `feature/together-collaborators` (BUILT ON THE INVITATIONS CANDIDATE `f5d1bc3`) · MIGRATION STEP 19 = TWO ADDITIVE TABLES (`together_connections`, `together_connection_invitations`); EVERY CONNECTIONS READER ANSWERS "NONE" UNTIL IT RUNS, SO DEPLOY ORDER IS FREE · NO MEMBERSHIP IS EVER CONVERTED INTO A CONNECTION · VERIFIED: unit 1496/1498 (the known baseline + one boundary rule updated for the second signed-out preview), 9/9 connections suite + 5/5 migration parity on real Postgres, 24/24 browser checks (request→bell→accept both ways, invited-tier self-service, collaborators-first Add members with one-tick space invite, withdraw, email channel with #c token, removal leaving memberships intact, 中文 phone) · NOT MERGED · NOT MIGRATED · NOT DEPLOYED.**
+>
+> **Overview answers the reviewer's question:** meimei saw no PEOPLE section
+> because it was preview-list-only; MY COLLABORATORS now renders for every
+> account Together admits, with exactly one action (+ Invite collaborator),
+> while SPACES keeps its one + New space and each space gains + Add members
+> (header + Members page, collaborators first with search, email fallback
+> unchanged). A connection grants no space access, shares only display
+> names, and removal deletes exactly the connection row.
 >
 > **RELEASE 1 — TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: `e2212b1` ON `feature/together-inapp-invites` (`cab8a51` + the proved-address cutoff hardening) · MIGRATION STEP 18 = ONE ADDITIVE PARTIAL INDEX · FULL-RUNNER REHEARSAL ON A PRODUCTION-LEVEL POSTGRES COPY PASSED (ADDITIVE, IDEMPOTENT, 44/44 TABLES BYTE-IDENTICAL) · PRODUCTION READ-ONLY PREFLIGHT PASSED (ZERO PENDING BACKFILLS; BASELINE FINGERPRINTS OF ALL 45 TABLES CAPTURED) · SECURITY REVIEW DONE, ONE FINDING FIXED IN `e2212b1` · UNIT 1483/1484 (KNOWN BASELINE) · NOT MERGED · NOT MIGRATED · NOT DEPLOYED.**
 >
