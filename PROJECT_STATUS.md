@@ -113,7 +113,26 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Drag auto-scroll — CANDIDATE `e7844c6` on `feature/drag-autoscroll` (NOT MERGED · NOT DEPLOYED)
+## Drag auto-scroll — `main` = `e7844c6` (MERGED 2026-10-16 ~22:37 UTC · RENDER DEPLOY UNCONFIRMED)
+
+**Release state:** approved by the Product Owner; `main` fast-forwarded
+`efd9542 → e7844c6` (code only, one commit, 6 files; this status commit stays
+off `main`). Final checks on a CLEAN worktree of `e7844c6`: 89/89 test files
+(1516 tests), typecheck, lint, production build. The `inspect-prod-readonly`
+failure seen in the working tree was confirmed unrelated: the test passes 3/3
+on clean `efd9542` and clean `e7844c6`; it fails only with the PO's
+uncommitted local edits to that excluded file. No migration.
+**Deploy proof is pending:** the new code ships only in signed-in chunks, the
+live site exposes no build id, and Render's chunk hashes differ from local
+builds (even unchanged login chunks), so signed-out probing cannot prove the
+live commit. Needs the Product Owner to confirm in the Render dashboard that
+the latest deploy is `e7844c6` (or trigger Manual Deploy), then a signed-in
+check (drag a card to a page edge on Compass / a Space board / Rich Habits).
+**Verified anyway:** health up on both domains; signed-out authorization
+7/7 (pages 307, APIs 401); production row-identity check — every one of
+2,817 pre-deploy row identities across 48 tables still present, no growth.
+
+### The candidate record
 
 Product Owner request (2026-10-16): keep dragging a card past the visible
 edge of a long list while the page scrolls. Branched from the deployed
