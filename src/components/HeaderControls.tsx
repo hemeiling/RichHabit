@@ -377,7 +377,9 @@ function WhatsNewPanel({
 
 /* ------------------------------ Notifications ------------------------------ */
 
-interface WaitingInvitation { id: string; board: string; inviter: string; expiresAt: string }
+type WaitingInvitation =
+  | { kind: "space"; id: string; board: string; inviter: string; expiresAt: string }
+  | { kind: "connection"; id: string; inviter: string; expiresAt: string };
 
 /**
  * The notification bell: Together invitations waiting for this account, with
@@ -430,16 +432,17 @@ export function NotificationBell({ count }: { count: number }) {
     load();
   };
 
-  const answer = async (id: string, accept: boolean) => {
+  const answer = async (w: WaitingInvitation, accept: boolean) => {
     if (answering) return;
-    setAnswering(id);
+    setAnswering(w.id);
     setProblem(null);
     try {
-      const r = await call<{ boardId?: string }>("/api/together/invitations/respond", {
-        method: "POST", body: JSON.stringify({ id, accept }),
-      });
-      setItems((v) => (v ? v.filter((i) => i.id !== id) : v));
-      if (accept && r.boardId) {
+      const r = await call<{ boardId?: string }>(
+        w.kind === "connection" ? "/api/together/connections/respond" : "/api/together/invitations/respond",
+        { method: "POST", body: JSON.stringify({ id: w.id, accept }) },
+      );
+      setItems((v) => (v ? v.filter((i) => i.id !== w.id) : v));
+      if (w.kind === "space" && accept && r.boardId) {
         setAnswering(null);
         close(false);
         router.push(`/together/b/${r.boardId}`);
@@ -471,12 +474,16 @@ export function NotificationBell({ count }: { count: number }) {
         <ul className="bell-items">
           {items.map((i) => (
             <li key={i.id} className="bell-item">
-              <p className="bell-text">{t.together.invitePage.invitedYou(i.inviter, i.board)}</p>
+              <p className="bell-text">
+                {i.kind === "connection"
+                  ? t.together.collabRequestCard(i.inviter)
+                  : t.together.invitePage.invitedYou(i.inviter, i.board)}
+              </p>
               <div className="bell-actions">
-                <button className="btn" disabled={answering !== null} onClick={() => answer(i.id, false)}>
+                <button className="btn" disabled={answering !== null} onClick={() => answer(i, false)}>
                   {t.together.decline}
                 </button>
-                <button className="btn btn-primary" disabled={answering !== null} onClick={() => answer(i.id, true)}>
+                <button className="btn btn-primary" disabled={answering !== null} onClick={() => answer(i, true)}>
                   {t.together.accept}
                 </button>
               </div>

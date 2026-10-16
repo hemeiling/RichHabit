@@ -29,6 +29,7 @@ import { migrateTogetherV1A } from "./migrations/together-v1a.mjs";
 import { migrateTogetherV1B } from "./migrations/together-v1b.mjs";
 import { migrateTogetherTaskRank } from "./migrations/together-task-rank.mjs";
 import { migrateTogetherInviteEmail } from "./migrations/together-invite-email.mjs";
+import { migrateTogetherConnections } from "./migrations/together-connections.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -963,6 +964,15 @@ try {
    * scripts/migrations/together-invite-email.mjs.
    */
   changed += await migrateTogetherInviteEmail(client, console.log);
+
+  /*
+   * ---- 19. Together: global collaborators -----------------------------------
+   *
+   * Two new tables, created only if absent; nothing existing is read or
+   * rewritten, and no membership is converted into a connection. See
+   * scripts/migrations/together-connections.mjs.
+   */
+  changed += await migrateTogetherConnections(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

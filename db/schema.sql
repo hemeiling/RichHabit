@@ -1068,6 +1068,64 @@ create index if not exists together_invitations_email_open
     and accepted_at is null and declined_at is null and revoked_at is null;
 -- ---- end Together email invitations by address ----------------------------------
 
+-- ---- Together: global collaborators (step 19) ----------------------------------
+-- An accepted collaborator pair (symmetric, smaller id first; grants no space
+-- access) and its pending requests, with the same two kinds and answer
+-- discipline as space invitations. Mirrors
+-- scripts/migrations/together-connections.mjs exactly; the parity test proves it.
+create table if not exists together_connections (
+    user_low     uuid not null references users on delete cascade,
+    user_high    uuid not null references users on delete cascade,
+    connected_at timestamptz not null default now(),
+    check (user_low < user_high),
+    primary key (user_low, user_high)
+  );
+
+create index if not exists together_connections_high
+    on together_connections (user_high);
+
+create table if not exists together_connection_invitations (
+    id               uuid primary key default gen_random_uuid(),
+    invited_by       uuid not null references users on delete cascade,
+    invitee_id       uuid references users on delete cascade,
+    email_normalized text check (email_normalized is null or length(email_normalized) between 3 and 254),
+    token_hash       text unique check (token_hash is null or token_hash ~ '^[0-9a-f]{64}$'),
+    sent_at          timestamptz,
+    expires_at       timestamptz not null,
+    accepted_at      timestamptz,
+    accepted_by      uuid references users on delete set null,
+    declined_at      timestamptz,
+    revoked_at       timestamptz,
+    created_at       timestamptz not null default now(),
+    check (num_nonnulls(accepted_at, declined_at, revoked_at) <= 1),
+    check ((invitee_id is null) <> (email_normalized is null)),
+    check ((email_normalized is null) = (token_hash is null))
+  );
+
+create unique index if not exists together_connection_invitations_one_open_person
+    on together_connection_invitations (invited_by, invitee_id)
+    where invitee_id is not null
+      and accepted_at is null and declined_at is null and revoked_at is null;
+
+create unique index if not exists together_connection_invitations_one_open_email
+    on together_connection_invitations (invited_by, email_normalized)
+    where email_normalized is not null
+      and accepted_at is null and declined_at is null and revoked_at is null;
+
+create index if not exists together_connection_invitations_invitee
+    on together_connection_invitations (invitee_id)
+    where invitee_id is not null
+      and accepted_at is null and declined_at is null and revoked_at is null;
+
+create index if not exists together_connection_invitations_email_open
+    on together_connection_invitations (email_normalized)
+    where email_normalized is not null
+      and accepted_at is null and declined_at is null and revoked_at is null;
+
+create index if not exists together_connection_invitations_inviter_time
+    on together_connection_invitations (invited_by, created_at desc);
+-- ---- end Together global collaborators -------------------------------------------
+
 create or replace function together_before_user_delete() returns trigger
 language plpgsql as $$
 declare

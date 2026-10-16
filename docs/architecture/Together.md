@@ -24,7 +24,7 @@ off for everyone, invitations included. Otherwise each account has one of:
 | Access | Who | May |
 | --- | --- | --- |
 | **full** | on the list | everything: create boards, invite (People, username or email) |
-| **invited** | not on the list, but a member of a board or holding an open invitation *addressed to it* — in-platform, or emailed to its proved address | see its own boards and invitations, accept/decline, act as a member (and as owner if ownership passes to it), leave — **not** create boards or invite |
+| **invited** | not on the list, but a member of a board, a collaborator (or holding an open collaborator request addressed to it), or holding an open board invitation *addressed to it* — in-platform, or emailed to its proved address | see its own boards and invitations, accept/decline, act as a member (and as owner if ownership passes to it), leave — **not** create boards or invite |
 | none | everyone else | nothing: no nav item, pages render not-found, APIs answer 404 |
 
 An invitation is **addressed to** an account (`addressedTo`, access.ts) when it
@@ -57,6 +57,7 @@ list.
 | Access, errors, display name | `src/lib/together/access.ts` |
 | Boards, membership, People | `src/lib/together/boards.ts` |
 | Invitations | `src/lib/together/invitations.ts` |
+| Global collaborators (connections) | `src/lib/together/connections.ts` |
 | Shared work (V1B): tasks, groups, ordering, conflicts | `src/lib/together/work.ts`; stages and effort choices (browser-safe) in `stages.ts`; due-date reading in `due.ts` |
 | Route wrapper (session, gate, translated errors) | `src/lib/together/route.ts` |
 | API | `src/app/api/together/**` — every handler is `return togetherRoute(...)`, except the signed-out invitation preview |
@@ -88,6 +89,25 @@ list.
    accepted, restores access. Any member with full access may re-invite.
 8. **Analytics carry counts, booleans and a channel name only** — never names, addresses or
    board content.
+
+## Global collaborators
+
+`together_connections` holds an accepted collaborator pair — symmetric, one
+row, smaller id first — and `together_connection_invitations` its pending
+requests, with the same grammar as board invitations: two kinds (in-platform
+by id, email by token), one open per inviter and person, at most one of
+accepted/declined/revoked, answered only through `addressedTo`. A connection
+**grants no board access** and shares nothing beyond display names: it only
+makes the next board invitation one tick. Inviting someone whose own request
+to you is waiting accepts it (both halves of the handshake exist). Removing a
+collaborator deletes exactly the connection row plus any open requests
+between the pair; memberships, tasks and board invitations are untouched.
+Managing one's own connections needs no preview place — any account Together
+admits may do it — while creating boards and inviting board members keep
+their stricter rules. The in-platform board-invite eligibility (`notInPeople`)
+is the union of shared-board People and collaborators. Before the step-19
+migration every connections reader answers "none", so the release can deploy
+in either order.
 
 ## Invitations
 

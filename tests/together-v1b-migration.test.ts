@@ -23,8 +23,10 @@ const FULL_SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.
 const without = (schema: string, start: string, end: string) =>
   schema.slice(0, schema.indexOf(start)) + schema.slice(schema.indexOf(end) + end.length);
 const SCHEMA = without(
-  without(FULL_SCHEMA, "-- ---- Together: task ordering (rank) ----", "-- ---- end Together task ordering ----"),
-  "-- ---- Together: email invitations by address (step 18) ----", "-- ---- end Together email invitations by address ----");
+  without(
+    without(FULL_SCHEMA, "-- ---- Together: task ordering (rank) ----", "-- ---- end Together task ordering ----"),
+    "-- ---- Together: email invitations by address (step 18) ----", "-- ---- end Together email invitations by address ----"),
+  "-- ---- Together: global collaborators (step 19) ----", "-- ---- end Together global collaborators ----");
 const START = "-- ---- Together V1B: groups, tasks, assignees ----";
 const END = "-- ---- end Together V1B ----";
 const EXISTING_SCHEMA = SCHEMA.slice(0, SCHEMA.indexOf(START)) + SCHEMA.slice(SCHEMA.indexOf(END) + END.length);

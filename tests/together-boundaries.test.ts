@@ -31,7 +31,11 @@ describe("Together API routes", () => {
       const wrapped = [...src.matchAll(/export async function (GET|POST|PATCH|PUT|DELETE)\(.*\) \{\n\s*return togetherRoute\(/g)].length;
       if (wrapped !== handlers.length) unwrapped.push(rel(f));
     }
-    expect(unwrapped).toEqual(["src/app/api/together/invitations/preview/route.ts"]);
+    // Both previews: an emailed token must be inspectable before signing in.
+    expect(unwrapped.sort()).toEqual([
+      "src/app/api/together/connections/preview/route.ts",
+      "src/app/api/together/invitations/preview/route.ts",
+    ]);
   });
 
   it("the preview only reads, and is never cached", () => {

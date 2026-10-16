@@ -726,6 +726,18 @@ body {
 .tg-more { width: 26px; height: 26px; font-size: 10.5px; background: var(--raise); color: var(--muted); }
 .tg-people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .tg-person { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; min-height: 36px; }
+/* Removing a collaborator: quiet until the row is hovered or focused. */
+.tg-person-x {
+  border: none; background: none; color: var(--faint); cursor: pointer;
+  font: inherit; font-size: 14px; line-height: 1; padding: 3px 7px; border-radius: 6px;
+  opacity: 0; transition: .12s ease;
+}
+.tg-person:hover .tg-person-x, .tg-person:focus-within .tg-person-x { opacity: 1; }
+.tg-person-x:hover { color: var(--warn); background: var(--line-soft); }
+@media (hover: none) { .tg-person-x { opacity: .6; } }
+
+/* The space header's + Add members: a quiet button that never wraps oddly. */
+.tg-add-members { white-space: nowrap; flex: none; }
 .tg-pick { list-style: none; margin: 0; padding: 0; }
 .tg-pick-row { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14.5px; cursor: pointer; }
 .tg-pick-row input { width: 18px; height: 18px; accent-color: var(--accent); }

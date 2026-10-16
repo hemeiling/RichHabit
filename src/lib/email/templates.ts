@@ -182,3 +182,31 @@ export function togetherInviteEmail(
   };
   return compose(blocks(locale, en, zh), locale, url, days);
 }
+
+/** A collaborator request: a connection between two people, no space named. */
+export function connectionInviteEmail(locale: Locale, url: string, inviter: string, days: number) {
+  const en: Copy = {
+    subject: `${inviter} wants to collaborate with you on RichHabit`,
+    heading: "A collaborator request",
+    lead: `${inviter} asked to connect with you in RichHabit Together, so you can invite each other `
+      + "to shared spaces without retyping addresses. Connecting shares only your display name — "
+      + "your habits, priorities and journal stay private, and no space is shared until you accept "
+      + "a separate invitation to it.",
+    button: "View the request",
+    fallback: "If the button does not work, copy this link into your browser:",
+    expiry: (d) => `This request works for ${d} days and can be accepted once.`,
+    ignore: "If you were not expecting this, you can ignore this email — nothing happens unless you accept.",
+  };
+  const zh: Copy = {
+    subject: `${inviter} 想在 RichHabit 上与你建立协作`,
+    heading: "协作邀请",
+    lead: `${inviter} 希望在 RichHabit「一起」中与你建立联系，这样今后互相邀请加入共享空间时无需再输入邮箱。`
+      + "建立联系只会共享你的显示名称——你的习惯、优先事项和日志保持私密，"
+      + "并且在你接受某个空间的单独邀请之前，不会共享任何空间。",
+    button: "查看邀请",
+    fallback: "如果按钮无法使用，请把下面的链接复制到浏览器打开：",
+    expiry: (d) => `此邀请在 ${d} 天内有效，且只能接受一次。`,
+    ignore: "如果这封邮件出乎你的意料，可以忽略它——除非你接受，否则不会发生任何事。",
+  };
+  return compose(blocks(locale, en, zh), locale, url, days);
+}

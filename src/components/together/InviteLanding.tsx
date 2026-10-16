@@ -31,15 +31,24 @@ import { useSignOut } from "@/components/useSignOut";
 
 const KEY = "rh_together_invite";
 
-function takeToken(): string | null {
+/** Space tokens travel as `#t=`, collaborator requests as `#c=`. */
+type Held = { token: string; what: "space" | "connection" };
+
+function takeToken(): Held | null {
   try {
-    const m = window.location.hash.match(/[#&]t=([A-Za-z0-9_-]{43})/);
+    const m = window.location.hash.match(/[#&](t|c)=([A-Za-z0-9_-]{43})/);
     if (m) {
-      sessionStorage.setItem(KEY, m[1]);
+      const held: Held = { token: m[2], what: m[1] === "c" ? "connection" : "space" };
+      sessionStorage.setItem(KEY, JSON.stringify(held));
       window.history.replaceState(null, "", window.location.pathname);
-      return m[1];
+      return held;
     }
-    return sessionStorage.getItem(KEY);
+    const kept = sessionStorage.getItem(KEY);
+    if (!kept) return null;
+    // Older sessions stored the bare space token.
+    if (/^[A-Za-z0-9_-]{43}$/.test(kept)) return { token: kept, what: "space" };
+    const parsed = JSON.parse(kept);
+    return parsed?.token ? parsed as Held : null;
   } catch {
     return null;
   }
@@ -50,12 +59,12 @@ type State =
   | { kind: "checking" }
   | { kind: "missing" }
   | { kind: "invalid" }
-  | { kind: "ok"; board: string; inviter: string; to: string; forYou: boolean | null };
+  | { kind: "ok"; what: "space" | "connection"; board: string | null; inviter: string; to: string; forYou: boolean | null };
 
 export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
   const t = useT();
   const router = useRouter();
-  const [token, setToken] = useState<string | null>(null);
+  const [held, setHeld] = useState<Held | null>(null);
   const [state, setState] = useState<State>({ kind: "checking" });
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,27 +74,37 @@ export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
 
   useEffect(() => {
     const tok = takeToken();
-    setToken(tok);
+    setHeld(tok);
     if (!tok) { setState({ kind: "missing" }); return; }
-    call<{ status: "ok"; board: string; inviter: string; to: string; forYou: boolean | null } | { status: "invalid" }>(
-      "/api/together/invitations/preview", { method: "POST", body: JSON.stringify({ token: tok }) })
+    const endpoint = tok.what === "connection"
+      ? "/api/together/connections/preview" : "/api/together/invitations/preview";
+    call<{ status: "ok"; board?: string; inviter: string; to: string; forYou: boolean | null } | { status: "invalid" }>(
+      endpoint, { method: "POST", body: JSON.stringify({ token: tok.token }) })
       .then((r) => setState(r.status === "ok"
-        ? { kind: "ok", board: r.board, inviter: r.inviter, to: r.to, forYou: r.forYou }
+        ? { kind: "ok", what: tok.what, board: r.board ?? null, inviter: r.inviter, to: r.to, forYou: r.forYou }
         : { kind: "invalid" }))
       .catch(() => setState({ kind: "invalid" }));
   }, []);
 
   const accept = async () => {
-    if (!token || busy) return;
+    if (!held || busy) return;
     setBusy(true);
     setProblem(null);
     try {
-      const { boardId } = await call<{ boardId: string }>("/api/together/invitations/accept", {
-        method: "POST", body: JSON.stringify({ token }),
-      });
-      forget();
-      router.push(`/together/b/${boardId}`);
-      router.refresh();   // the sidebar's board shortcuts
+      if (held.what === "connection") {
+        await call("/api/together/connections/accept", {
+          method: "POST", body: JSON.stringify({ token: held.token }),
+        });
+        forget();
+        router.push("/together");
+      } else {
+        const { boardId } = await call<{ boardId: string }>("/api/together/invitations/accept", {
+          method: "POST", body: JSON.stringify({ token: held.token }),
+        });
+        forget();
+        router.push(`/together/b/${boardId}`);
+      }
+      router.refresh();   // the sidebar's shortcuts and indicator
     } catch (e) {
       setProblem(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -103,8 +122,14 @@ export default function InviteLanding({ signedIn }: { signedIn: boolean }) {
 
         {state.kind === "ok" && (
           <>
-            <p className="mt-3" style={{ fontSize: 16 }}>{t.together.invitePage.invitedYou(state.inviter, state.board)}</p>
-            <p className="muted mt-2" style={{ fontSize: 13.5, lineHeight: 1.55 }}>{t.together.invitePage.privacy}</p>
+            <p className="mt-3" style={{ fontSize: 16 }}>
+              {state.what === "connection"
+                ? t.together.collabRequestCard(state.inviter)
+                : t.together.invitePage.invitedYou(state.inviter, state.board ?? "")}
+            </p>
+            <p className="muted mt-2" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+              {state.what === "connection" ? t.together.collabPrivacyLine : t.together.invitePage.privacy}
+            </p>
 
             {/* Which account it is for — masked, informational, never a link. */}
             {(!signedIn || state.forYou === false) && (

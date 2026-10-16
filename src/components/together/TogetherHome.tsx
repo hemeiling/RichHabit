@@ -16,8 +16,18 @@ import { boardColor } from "@/lib/together/identity";
  */
 
 interface BoardSummary { id: string; name: string; role: "owner" | "member"; archived: boolean; members: Person[] }
-interface Waiting { id: string; board: string; inviter: string; expiresAt: string }
-interface Home { access: "full" | "invited"; boards: BoardSummary[]; people: Person[]; invitations: Waiting[] }
+type Waiting =
+  | { kind: "space"; id: string; board: string; inviter: string; expiresAt: string }
+  | { kind: "connection"; id: string; inviter: string; expiresAt: string };
+interface SentConnection { id: string; kind: "email" | "person"; label: string; expiresAt: string }
+interface Home {
+  access: "full" | "invited";
+  boards: BoardSummary[];
+  people: Person[];
+  collaborators: Person[];
+  sentConnections: SentConnection[];
+  invitations: Waiting[];
+}
 
 export default function TogetherHome() {
   const t = useT();
@@ -25,7 +35,7 @@ export default function TogetherHome() {
   const [home, setHome] = useState<Home | null>(null);
   const [failed, setFailed] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [choosing, setChoosing] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -43,15 +53,20 @@ export default function TogetherHome() {
     return () => document.removeEventListener("visibilitychange", onFocus);
   }, [load, router]);
 
-  const answer = async (id: string, accept: boolean) => {
+  const answer = async (w: Waiting, accept: boolean) => {
     if (answering) return;
-    setAnswering(id);
+    setAnswering(w.id);
     setProblem(null);
     try {
-      const r = await call<{ boardId?: string }>("/api/together/invitations/respond", {
-        method: "POST", body: JSON.stringify({ id, accept }),
-      });
-      if (accept && r.boardId) { router.push(`/together/b/${r.boardId}`); router.refresh(); return; }
+      const r = await call<{ boardId?: string }>(
+        w.kind === "connection" ? "/api/together/connections/respond" : "/api/together/invitations/respond",
+        { method: "POST", body: JSON.stringify({ id: w.id, accept }) },
+      );
+      if (w.kind === "space" && accept && r.boardId) {
+        router.push(`/together/b/${r.boardId}`);
+        router.refresh();
+        return;
+      }
       router.refresh();   // the navigation's indicator
       load();
     } catch (e) {
@@ -77,8 +92,6 @@ export default function TogetherHome() {
   const active = home.boards.filter((b) => !b.archived);
   const archived = home.boards.filter((b) => b.archived);
   const newBoard = () => setCreating(true);
-  const inviteTo = (id: string) => router.push(`/together/b/${id}/members#invite`);
-  const invitePeople = () => (active.length === 1 ? inviteTo(active[0].id) : setChoosing(true));
 
   return (
     <div className="tg-home">
@@ -90,12 +103,23 @@ export default function TogetherHome() {
           <ul className="tg-invites mt-3">
             {home.invitations.map((i) => (
               <li key={i.id} className="card tg-waiting">
-                <p style={{ fontSize: 15 }}>{t.together.invitePage.invitedYou(i.inviter, i.board)}</p>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 15 }}>
+                    {i.kind === "connection"
+                      ? t.together.collabRequestCard(i.inviter)
+                      : t.together.invitePage.invitedYou(i.inviter, i.board)}
+                  </p>
+                  {i.kind === "connection" && (
+                    <p className="faint" style={{ fontSize: 12.5, marginTop: 3, lineHeight: 1.5 }}>
+                      {t.together.collabPrivacyLine}
+                    </p>
+                  )}
+                </div>
                 <div className="flex gap-2 flex-wrap">
-                  <button className="btn" disabled={answering !== null} onClick={() => answer(i.id, false)}>
+                  <button className="btn" disabled={answering !== null} onClick={() => answer(i, false)}>
                     {t.together.decline}
                   </button>
-                  <button className="btn btn-primary" disabled={answering !== null} onClick={() => answer(i.id, true)}>
+                  <button className="btn btn-primary" disabled={answering !== null} onClick={() => answer(i, true)}>
                     {t.together.accept}
                   </button>
                 </div>
@@ -150,30 +174,129 @@ export default function TogetherHome() {
         )}
       </section>
 
-      {full && (
-        <section className="mt-8" aria-labelledby="tg-people">
-          <div className="tg-section-head">
-            <h2 id="tg-people" className="eyebrow">{t.together.people}</h2>
-            {active.length > 0 && (
-              <button className="btn btn-quiet tg-new-quiet" aria-haspopup={active.length > 1 ? "dialog" : undefined}
-                onClick={invitePeople}>+ {t.together.addPeople}</button>
+      {/*
+        * MY COLLABORATORS — for every account Together admits, because one's
+        * own connections are not an administrative power. One action, beside
+        * the heading like SPACES' one. A connection grants no space access;
+        * it only makes the next invitation one tick instead of an address.
+        */}
+      <section className="mt-8" aria-labelledby="tg-people">
+        <div className="tg-section-head">
+          <h2 id="tg-people" className="eyebrow">{t.together.collaborators}</h2>
+          <button className="btn btn-quiet tg-new-quiet" aria-haspopup="dialog"
+            onClick={() => setConnecting(true)}>+ {t.together.inviteCollaborator}</button>
+        </div>
+        {home.collaborators.length === 0 && home.sentConnections.length === 0 ? (
+          <p className="muted mt-2" style={{ fontSize: 14 }}>{t.together.noCollaborators}</p>
+        ) : (
+          <>
+            {home.collaborators.length > 0 && (
+              <ul className="tg-people mt-2">
+                {home.collaborators.map((p) => (
+                  <li key={p.id} className="tg-person">
+                    <Avatar name={p.name} /> <span>{p.name}</span>
+                    <button type="button" className="tg-person-x"
+                      aria-label={t.together.removeCollaborator(p.name)}
+                      onClick={() => {
+                        if (window.confirm(t.together.confirmRemoveCollaborator(p.name))) {
+                          call(`/api/together/connections?userId=${encodeURIComponent(p.id)}`, { method: "DELETE" })
+                            .then(() => { load(); router.refresh(); })
+                            .catch((e) => setProblem(e instanceof Error ? e.message : String(e)));
+                        }
+                      }}>×</button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
-          {home.people.length === 0 ? (
-            <p className="muted mt-2" style={{ fontSize: 14 }}>{t.together.noPeople}</p>
-          ) : (
-            <ul className="tg-people mt-2">
-              {home.people.map((p) => (
-                <li key={p.id} className="tg-person"><Avatar name={p.name} /> <span>{p.name}</span></li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
+            {home.sentConnections.length > 0 && (
+              <div className="mt-3">
+                <h3 className="eyebrow" style={{ fontSize: 10.5 }}>{t.together.collabWaiting}</h3>
+                <ul className="tg-people mt-1">
+                  {home.sentConnections.map((s) => (
+                    <li key={s.id} className="tg-person" style={{ opacity: .75 }}>
+                      <Avatar name={s.label} /> <span style={{ overflowWrap: "anywhere" }}>{s.label}</span>
+                      <button type="button" className="btn btn-quiet tg-small" onClick={() => {
+                        call(`/api/together/connections/invitations?id=${s.id}`, { method: "DELETE" })
+                          .then(load)
+                          .catch((e) => setProblem(e instanceof Error ? e.message : String(e)));
+                      }}>{t.together.withdraw}</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+        <p className="faint mt-2" style={{ fontSize: 12, lineHeight: 1.5 }}>{t.together.collaboratorsNote}</p>
+      </section>
 
       {creating && <NewBoardSheet people={home.people} onClose={() => setCreating(false)} />}
-      {choosing && <ChooseSpaceSheet spaces={active} onPick={inviteTo} onClose={() => setChoosing(false)} />}
+      {connecting && (
+        <InviteCollaboratorSheet
+          onDone={() => { load(); router.refresh(); }}
+          onClose={() => setConnecting(false)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * One field for either name: a username connects inside the app; an address
+ * goes by email either way, so nothing about it is learnable here. The sheet
+ * stays open after sending, because connecting with a few people in a row is
+ * the normal case.
+ */
+function InviteCollaboratorSheet({ onDone, onClose }: { onDone: () => void; onClose: () => void }) {
+  const t = useT();
+  const [who, setWho] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const invite = async () => {
+    const to = who.trim();
+    if (busy || !to) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      if (to.includes("@")) {
+        await call("/api/together/connections", { method: "POST", body: JSON.stringify({ email: to }) });
+        setNotice(t.together.collabRequestedEmail(to));
+      } else {
+        const r = await call<{ invited: number; connected: boolean }>("/api/together/connections", {
+          method: "POST", body: JSON.stringify({ username: to }),
+        });
+        setNotice(r.connected ? t.together.collabConnected(to)
+          : r.invited ? t.together.collabRequested(to) : t.together.collabNothing);
+      }
+      setWho("");
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Sheet open onClose={onClose} title={t.together.collabSheetTitle}
+      footer={<button className="btn" onClick={onClose}>{t.common.close}</button>}>
+      <p className="muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>{t.together.collabSheetNote}</p>
+      <form className="mt-3" onSubmit={(e) => { e.preventDefault(); void invite(); }}>
+        <label className="eyebrow block mb-1.5" htmlFor="tg-connect">{t.together.inviteByEmailOrUsername}</label>
+        <div className="flex gap-2 flex-wrap">
+          <input id="tg-connect" className="input" type="text" autoFocus autoComplete="off" autoCapitalize="none"
+            spellCheck={false} placeholder={t.together.inviteWhoPlaceholder} value={who} maxLength={254}
+            onChange={(e) => setWho(e.target.value)} style={{ flex: "1 1 200px" }} />
+          <button className="btn btn-primary" type="submit" disabled={busy || !who.trim()}>
+            {t.together.invite}
+          </button>
+        </div>
+      </form>
+      {notice && <p className="mt-3" role="status" style={{ fontSize: 13.5, color: "var(--accent)" }}>{notice}</p>}
+      {error && <p className="mt-3" role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>{error}</p>}
+    </Sheet>
   );
 }
 
@@ -199,28 +322,6 @@ function BoardTile({ board, showRole }: { board: BoardSummary; showRole: boolean
         </span>
       </Link>
     </li>
-  );
-}
-
-/** Which space to invite into: one at a time, so nobody is told an invitation reaches all of them. */
-function ChooseSpaceSheet({ spaces, onPick, onClose }: { spaces: BoardSummary[]; onPick: (id: string) => void; onClose: () => void }) {
-  const t = useT();
-  return (
-    <Sheet open onClose={onClose} title={t.together.inviteChoose}
-      footer={<button className="btn" onClick={onClose}>{t.common.cancel}</button>}>
-      <p className="muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>{t.together.inviteChooseNote}</p>
-      <ul className="tg-choose mt-3">
-        {spaces.map((b) => (
-          <li key={b.id}>
-            <button type="button" className="tg-choose-row" onClick={() => onPick(b.id)}>
-              <BoardMark id={b.id} name={b.name} size={32} />
-              <span className="tg-choose-name">{b.name}</span>
-              <AvatarRow people={b.members} label={b.members.map((m) => m.name).join(", ")} />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Sheet>
   );
 }
 

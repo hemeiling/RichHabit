@@ -7,6 +7,7 @@ import { databaseUrl, isLocalDatabase } from "@/lib/env";
 import { togetherAccess } from "@/lib/together/access";
 import { sidebarBoards } from "@/lib/together/boards";
 import { pendingCount } from "@/lib/together/invitations";
+import { pendingConnectionCount } from "@/lib/together/connections";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // The real session check. Middleware only looked at whether a cookie existed.
@@ -45,7 +46,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
    */
   const together = await togetherAccess(user.id)
     .then(async (access) => (access
-      ? { pending: await pendingCount(user.id), boards: await sidebarBoards(user.id) }
+      ? { pending: (await pendingCount(user.id)) + (await pendingConnectionCount(user.id)),
+          boards: await sidebarBoards(user.id) }
       : null))
     .catch(() => null);
 

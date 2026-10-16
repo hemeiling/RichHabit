@@ -9,6 +9,9 @@ import {
   MAX_EMAILS_PER_CREATE, cleanEmail, cleanPeople, createInvitation, insertPeopleInvitations, lockBoard, pendingFor,
   withdrawInvitationsFor, type PendingInvitation,
 } from "@/lib/together/invitations";
+import {
+  collaboratorsOf, pendingConnectionsFor, sentConnectionsBy, type SentConnection,
+} from "@/lib/together/connections";
 import { togetherTransaction as transaction } from "@/lib/together/tx";
 
 /**
@@ -35,14 +38,23 @@ export interface BoardSummary {
   archived: boolean;
   members: PersonView[];
 }
+/** Something waiting for this account: a space invitation, or a collaborator request. */
+export type HomeInvitation =
+  | ({ kind: "space" } & PendingInvitation)
+  | { kind: "connection"; id: string; inviter: string; expiresAt: string };
 export interface HomeView {
-  /** "invited": may use the boards it is on, but not create boards or invite. */
+  /** "invited": may use the boards it is on, but not create boards or invite to them. */
   access: TogetherAccess;
   boards: BoardSummary[];
-  /** People this account can invite in-platform (empty without full access). */
+  /** People one tick can name when inviting to a space (full access only):
+   *  co-members and collaborators, deduplicated. */
   people: PersonView[];
-  /** In-platform invitations waiting for this account. */
-  invitations: PendingInvitation[];
+  /** Accepted collaborator connections — every tier manages its own. */
+  collaborators: PersonView[];
+  /** This account's own open collaborator requests, withdrawable. */
+  sentConnections: SentConnection[];
+  /** Everything waiting for this account, requests before rooms. */
+  invitations: HomeInvitation[];
 }
 
 export function cleanBoardName(raw: unknown): string {
@@ -86,11 +98,25 @@ export async function loadHome(userId: string): Promise<HomeView> {
        from together_members mine join together_boards b on b.id = mine.board_id
       where mine.user_id = $1
       order by b.archived_at is not null, lower(b.name), b.name, b.id`, [userId]);
+  const [peers, collaborators, sentConnections, spaceInvitations, connectionRequests] = await Promise.all([
+    access === "full" ? peopleOf(query, userId) : Promise.resolve([]),
+    collaboratorsOf(userId),
+    sentConnectionsBy(userId),
+    pendingFor(userId),
+    pendingConnectionsFor(userId),
+  ]);
+  const seen = new Set<string>();
+  const people = [...collaborators, ...peers].filter((p) => !seen.has(p.id) && seen.add(p.id));
   return {
     access,
     boards,
-    people: access === "full" ? await peopleOf(query, userId) : [],
-    invitations: await pendingFor(userId),
+    people: access === "full" ? people.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) : [],
+    collaborators,
+    sentConnections,
+    invitations: [
+      ...connectionRequests.map((c) => ({ kind: "connection" as const, ...c })),
+      ...spaceInvitations.map((i) => ({ kind: "space" as const, ...i })),
+    ],
   };
 }
 
@@ -161,8 +187,9 @@ export interface BoardView {
   otherInvitations: number;
   /** Whether this reader may invite (full access, board not archived). */
   canInvite: boolean;
-  /** People who could be invited in-platform: not members, not already invited. */
-  invitable: PersonView[];
+  /** Who could be invited in-platform — collaborators first — excluding
+   *  members and this reader's own pending invitees. */
+  invitable: (PersonView & { collaborator?: boolean })[];
 }
 
 export async function loadBoard(userId: string, boardId: unknown): Promise<BoardView> {
@@ -189,7 +216,18 @@ export async function loadBoard(userId: string, boardId: unknown): Promise<Board
   // member's pending invitation is theirs, and is not revealed here.
   const taken = new Set([...members.map((m) => m.id),
     ...open.filter((i) => i.invitedById === userId).map((i) => i.inviteeId)]);
-  const invitable = canInvite ? (await peopleOf(query, userId)).filter((p) => !taken.has(p.id)) : [];
+  // Collaborators lead; co-members of other spaces follow; nobody twice.
+  let invitable: (PersonView & { collaborator?: boolean })[] = [];
+  if (canInvite) {
+    const [collabs, peers] = await Promise.all([collaboratorsOf(userId), peopleOf(query, userId)]);
+    const collabIds = new Set(collabs.map((c) => c.id));
+    const seen = new Set<string>();
+    invitable = [...collabs, ...peers]
+      .filter((p) => !taken.has(p.id) && !seen.has(p.id) && seen.add(p.id))
+      .map((p) => ({ ...p, collaborator: collabIds.has(p.id) }))
+      .sort((a, b) => Number(b.collaborator) - Number(a.collaborator)
+        || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  }
   return {
     id: access.boardId, name: board.name, role: access.role, archived: access.archived, members,
     invitations: visible.map(({ invitedById: _a, inviteeId: _b, ...i }) => i),

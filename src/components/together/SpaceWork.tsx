@@ -329,7 +329,8 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
 
   return (
     <div className="tg-space" style={spaceStyle(work.space.id)}>
-      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work" onMore={setMore} />
+      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work" onMore={setMore}
+        canAddMembers={work.space.canInvite} />
 
       {readOnly && <p className="tg-archived mt-4" role="status">{t.readOnly}</p>}
       {error && (

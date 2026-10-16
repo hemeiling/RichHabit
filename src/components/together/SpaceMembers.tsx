@@ -20,7 +20,7 @@ interface Invitation { id: string; kind: "email" | "person"; label: string; invi
 interface Board {
   id: string; name: string; role: "owner" | "member"; archived: boolean;
   members: Member[]; invitations: Invitation[]; otherInvitations: number;
-  canInvite: boolean; invitable: Person[];
+  canInvite: boolean; invitable: (Person & { collaborator?: boolean })[];
 }
 
 export default function SpaceMembers({ boardId, viewerId }: { boardId: string; viewerId: string }) {
@@ -35,6 +35,7 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
   const [adding, setAdding] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -149,15 +150,26 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
 
         {board.canInvite && (
           <div id="invite" className="tg-invite-area mt-5" tabIndex={-1} aria-labelledby="tg-invite-h">
-            <h4 id="tg-invite-h" className="tg-invite-h">{t.together.addPeople}</h4>
+            <h4 id="tg-invite-h" className="tg-invite-h">{t.together.addMembers}</h4>
             {board.invitable.length > 0 && (
               <fieldset className="mt-3">
                 <legend className="eyebrow mb-1.5">{t.together.addFromPeople}</legend>
+                {board.invitable.length > 6 && (
+                  <input className="input mb-2" type="search" value={search}
+                    placeholder={t.together.searchPeople} aria-label={t.together.searchPeople}
+                    onChange={(e) => setSearch(e.target.value)}
+                    style={{ maxWidth: 260, fontSize: 13, padding: "7px 10px" }} />
+                )}
                 <div className="flex flex-wrap gap-1.5">
-                  {board.invitable.map((p) => (
+                  {board.invitable
+                    .filter((p) => !search.trim() || p.name.toLowerCase().includes(search.trim().toLowerCase()))
+                    .map((p) => (
                     <button key={p.id} type="button" className="chip" aria-pressed={adding.includes(p.id)}
                       data-on={adding.includes(p.id)}
+                      title={p.collaborator ? t.together.collaboratorTag : undefined}
                       onClick={() => setAdding((v) => (v.includes(p.id) ? v.filter((x) => x !== p.id) : [...v, p.id]))}>
+                      {p.collaborator && <span className="quad-dot" aria-hidden="true"
+                        style={{ background: "var(--accent)" }} />}
                       {p.name}
                     </button>
                   ))}

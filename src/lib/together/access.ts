@@ -42,6 +42,7 @@ export type TogetherErrorCode =
   | "emailInvalid" | "tooManyInvites" | "tooManyOpenInvites" | "sendFailed"
   | "invitationInvalid" | "wrongAccount" | "ownerCannotLeave" | "cannotRemoveSelf"
   | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly" | "conflict" | "usernameUnknown"
+  | "tooManyConnections"
   // V1B — shared work
   | "titleRequired" | "titleTooLong" | "descriptionTooLong" | "stageInvalid" | "effortInvalid"
   | "dueInvalid" | "notAMember" | "tooManyAssignees" | "tooManyTasks" | "taskDeleted" | "textConflict"
@@ -117,6 +118,31 @@ export const mayInvite = (userId: string, archived: boolean): boolean => !archiv
 
 export type TogetherAccess = "full" | "invited";
 
+/**
+ * An open collaborator request addressed to this account also admits it —
+ * otherwise the invitee could never see the request to answer it. In its own
+ * guarded query because the tables arrive with a later migration than the
+ * rest: until then this reads as "none", and Together behaves exactly as the
+ * release before it. (The richer rule lives in lib/together/connections.ts;
+ * this copy exists because connections.ts imports this module.)
+ */
+async function waitingConnection(userId: string, q: Q): Promise<boolean> {
+  try {
+    const rows = await q(
+      `select 1 where exists (
+         select 1 from together_connections c where c.user_low = $1 or c.user_high = $1
+       ) or exists (
+         select 1 from together_connection_invitations i
+          where ${addressedTo("$1")} and ${USABLE} and i.invited_by <> $1
+       ) limit 1`, [userId]);
+    return rows.length > 0;
+  } catch (e) {
+    const code = (e as { code?: string } | null)?.code;
+    if (code === "42P01" || code === "42703") return false;
+    throw e;
+  }
+}
+
 /** What this account may do in Together, or null for "it does not exist". */
 export async function togetherAccess(userId: string, q: Q = query): Promise<TogetherAccess | null> {
   if (!togetherLive()) return null;
@@ -126,7 +152,8 @@ export async function togetherAccess(userId: string, q: Q = query): Promise<Toge
          or exists (select 1 from together_invitations i join together_boards b on b.id = i.board_id
                      where ${WAITING}) as yes`,
     [userId]);
-  return row?.yes ? "invited" : null;
+  if (row?.yes) return "invited";
+  return (await waitingConnection(userId, q)) ? "invited" : null;
 }
 
 /** Refuses — as "not found" — anyone with no access; `full` also requires the preview list. */

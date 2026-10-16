@@ -13,10 +13,15 @@ import { migrateTogetherInviteEmail } from "../scripts/migrations/together-invit
  */
 
 const FULL_SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
+const without = (schema: string, start: string, end: string) =>
+  schema.slice(0, schema.indexOf(start)) + schema.slice(schema.indexOf(end) + end.length);
+// Step 19 (global collaborators) comes later and has its own test; here the
+// schema is taken as of step 17.
+const BASE = without(FULL_SCHEMA,
+  "-- ---- Together: global collaborators (step 19) ----", "-- ---- end Together global collaborators ----");
 const START = "-- ---- Together: email invitations by address (step 18) ----";
 const END = "-- ---- end Together email invitations by address ----";
-const EXISTING_SCHEMA = FULL_SCHEMA.slice(0, FULL_SCHEMA.indexOf(START))
-  + FULL_SCHEMA.slice(FULL_SCHEMA.indexOf(END) + END.length);
+const EXISTING_SCHEMA = without(BASE, START, END);
 
 const clientFor = (db: PGlite) => ({
   async query(sql: string, params?: unknown[]) { return { rows: (await db.query(sql, params as any[])).rows as any[] }; },
@@ -89,7 +94,7 @@ describe("the Together email-invitation index migration (step 18)", () => {
   it("produces exactly what a fresh install has", async () => {
     const migrated = await fresh(EXISTING_SCHEMA);
     await migrateTogetherInviteEmail(clientFor(migrated), () => {});
-    const installed = await fresh(FULL_SCHEMA);
+    const installed = await fresh(BASE);
     expect(await structure(migrated)).toEqual(await structure(installed));
     expect(await migrateTogetherInviteEmail(clientFor(installed), () => {})).toBe(0);
   });

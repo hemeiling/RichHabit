@@ -150,7 +150,14 @@ async function requireRoomFor(q: Q, boardId: string, n: number) {
  */
 export async function insertPeopleInvitations(q: Q, boardId: string, inviterId: string, people: string[]): Promise<number> {
   if (!people.length) return 0;
-  const mine = new Set((await peopleOf(q, inviterId)).map((p) => p.id));
+  // Whom you may name by id: People you share a space with, and the
+  // collaborators you connected with — both relationships the other person
+  // entered knowingly. Anyone else is reached by username or email.
+  const { collaboratorsOf } = await import("@/lib/together/connections");
+  const mine = new Set([
+    ...(await peopleOf(q, inviterId)).map((p) => p.id),
+    ...(await collaboratorsOf(inviterId, q)).map((p) => p.id),
+  ]);
   if (people.some((id) => !mine.has(id))) throw new TogetherError("notInPeople");
   return insertInvitationsFor(q, boardId, inviterId, people);
 }
