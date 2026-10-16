@@ -316,14 +316,23 @@ asserted programmatically before every step). Evidence:
 | application + authorization smoke (candidate app on port 3300 against the MIGRATED branch, production's `TOGETHER_PREVIEW_USER_IDS` mirrored, two throwaway accounts — never a real user's session) | 20/20: health/db up · signed-out writes 401, /together 307 · priority create/description/links on the new columns · PNG upload, owner download 200 with nosniff · cross-account: fetch 404, delete 404, foreign PATCH 404, foreign attachment list empty (user-scoped SQL, no existence oracle) · non-preview account gets 404 from Together home and connections |
 | production untouched | only `begin read only` transactions, rolled back; the runner never pointed at the production host; the 3100 preview untouched |
 
-**Restore point — IMPORTANT:** the rehearsal branch is **no longer suitable
-as the restore point**: it has been migrated and carries smoke accounts
-(rc1smokea/rc1smokeb) and their test rows. Before the production migration,
-create a second, untouched Neon branch (e.g.
-`restore-before-rc1-<date>`) and leave it pristine — that is the restore
-point, per this project's convention. (Neon's own point-in-time restore on
-the production branch is a backstop, but the pristine branch is the tested
-path.)
+**Restore point — IN PLACE, 2026-10-16:** the Product Owner created
+`restore-before-rc1-20261016` (`br-sweet-dream-ayqqn18n`, project
+`noisy-boat-87993934`, parent production). It was **never connected to** by
+the agent — no URL exists in `.env.local` and none is needed; it stays
+pristine. Its content is verified indirectly: production today is byte-
+identical (45/45 tables, rows + whole-row hash) to the state verified at R1
+and still pre-migration, so the branch — an exact copy of production at
+creation — necessarily holds exactly that verified state. (The earlier
+rehearsal branch is NOT a restore point: it is migrated and carries smoke
+accounts rc1smokea/rc1smokeb.)
+
+**Recovery procedure (data corruption only, Product Owner only, last
+resort):** in the Neon console, restore the production branch from
+`restore-before-rc1-20261016` (or branch from it and repoint the production
+connection). This discards every write since the branch's creation. The
+ordinary rollback is the application-level one below and needs no database
+action at all.
 
 **The release (`efd9542`), once R0 and R1 are given:**
 
@@ -369,8 +378,10 @@ If ever truly unwanted, each removal is a single `drop index/table if exists`
 or `alter table … drop column` touching no other row — but there is no
 operational reason to.
 
-**Data corruption only:** restoring production from the R1 Neon branch
-discards every write since its creation — Product Owner only, last resort.
+**Data corruption only:** restoring production from
+`restore-before-rc1-20261016` discards every write since its creation —
+Product Owner only, last resort. (Never restore from the rehearsal branch;
+it is migrated and carries smoke data.)
 
 ### `.env.local`
 
