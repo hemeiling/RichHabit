@@ -789,7 +789,13 @@ export default function Priorities({ date }: { date: string }) {
           return (
             <div
               key={category} className="quad"
-              data-over={(overQuad === category && dragId) || undefined}
+              /*
+               * A boolean, deliberately: `dragId` alone would render the
+               * dragged card's id as the attribute value, and the stylesheet
+               * matches [data-over="true"] — which is why the quadrant
+               * highlight never actually showed until this read `!== null`.
+               */
+              data-over={(overQuad === category && dragId !== null) || undefined}
               onDragOver={(e) => {
                 if (!dragId) return;
                 e.preventDefault();
