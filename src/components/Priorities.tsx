@@ -7,8 +7,8 @@ import { needsDeleteConfirmation } from "@/lib/accomplishments";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import {
-  NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, hasDraft, isPlanOverdue,
-  layoutAfterMove, prioritiesOn, quadrantAdd, quadrantFor,
+  NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, isPlanOverdue,
+  layoutAfterMove, prioritiesOn, quadrantAdd,
 } from "@/lib/priorities";
 import { normalizePriorityCategory, type Priority, type PriorityCategory } from "@/lib/types";
 
@@ -570,13 +570,6 @@ export default function Priorities({ date }: { date: string }) {
   const allItems = prioritiesOn(state.priorities, date);
 
   const [draft, setDraft] = useState("");
-  /*
-   * The two answers. `null` is "not answered yet", which is distinct from "no"
-   * — that distinction is the entire point of the change, so it cannot be a
-   * boolean with a default.
-   */
-  const [important, setImportant] = useState<boolean | null>(null);
-  const [urgent, setUrgent] = useState<boolean | null>(null);
   const [planFor, setPlanFor] = useState<string | null>(null);
   const [nudgeAllowed, setNudgeAllowed] = useState(false);
   const [cueGone, setCueGone] = useState(false);
@@ -595,6 +588,8 @@ export default function Priorities({ date }: { date: string }) {
    */
   const [confirmDelete, setConfirmDelete] = useState<Priority | null>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const composerRef = useRef<HTMLInputElement>(null);
+  const pickRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => () => clearTimeout(settleTimer.current), []);
 
@@ -642,33 +637,35 @@ export default function Priorities({ date }: { date: string }) {
     try { window.localStorage.setItem(NUDGE_KEY, date); } catch { /* nothing to do */ }
   };
 
-  const answered = important !== null && urgent !== null;
-
-  const add = () => {
-    const text = draft.trim();
-    if (!text || !answered) return;
-    actions.addPriority(date, text, quadrantFor(important, urgent));
-    setDraft("");
-    setImportant(null);
-    setUrgent(null);
-  };
-
-  /*
-   * Clearing the box clears the answers. The next line starts unclassified,
-   * rather than inheriting a judgement made about a different thing.
+  /**
+   * The composer's one decision: where it belongs. Choosing the quadrant is
+   * the classification — the four choices *are* Important?/Urgent? asked at
+   * once — so tapping one creates the line there and then.
    */
-  const setText = (value: string) => {
-    setDraft(value);
-    if (!value.trim()) { setImportant(null); setUrgent(null); }
+  const addFromComposer = (category: PriorityCategory) => {
+    const text = draft.trim();
+    if (!text) return;
+    actions.addPriority(date, text, category);
+    setDraft("");
+    setAnnounce(t.priorities.addedTo(text, t.priorities.quadrants[category].title));
+    composerRef.current?.focus();
   };
 
   const groups = useMemo(() => {
     const base = Object.fromEntries(QUADRANTS.map((q) => [q, [] as Priority[]])) as
       Record<PriorityCategory, Priority[]>;
     for (const item of allItems) base[normalizePriorityCategory(item.category)].push(item);
-    for (const q of QUADRANTS) base[q].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    /*
+     * Open lines first, finished ones at the foot of their box, each side in
+     * its own kept order. Presentation only: `sortOrder` is not rewritten, so
+     * reopening a line returns it to exactly the place it had.
+     */
+    for (const q of QUADRANTS) {
+      base[q].sort((a, b) =>
+        Number(doneOn(a, date)) - Number(doneOn(b, date)) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    }
     return base;
-  }, [allItems]);
+  }, [allItems, date]);
 
   /**
    * Every move, however it was started. The record is never recreated: only
@@ -701,7 +698,7 @@ export default function Priorities({ date }: { date: string }) {
           quiet weight. The date is supportive, not a title: with past-day
           navigation gone it only has to say which day "today" is, and on a phone
           it is the one place that says so without scrolling to the calendar. */}
-      <div className="eyebrow" id="todays-priorities-title">📌 {t.priorities.title}</div>
+      <div className="eyebrow" id="todays-priorities-title">{t.priorities.title}</div>
       <div className="flex items-baseline justify-between flex-wrap" style={{ gap: "2px 12px", marginTop: 3 }}>
         <span className="faint" style={{ fontSize: 12.5 }}>{prettyDateFor(date, locale as any)}</span>
         {total > 0 && (
@@ -724,6 +721,53 @@ export default function Priorities({ date }: { date: string }) {
             onClick={dismissCue}>×</button>
         </div>
       )}
+
+      {/*
+        * The one obvious place to write a priority, first on the page, above
+        * what it feeds. Typing reveals the four quadrants as the whole second
+        * step: choosing one is the classification (it is Important?/Urgent?
+        * asked at once, with no default), and the tap that answers it is the
+        * tap that files the line. Resting state: one quiet field.
+        */}
+      <div className="pnew">
+        <input
+          ref={composerRef} className="input pnew-field" value={draft}
+          placeholder={t.priorities.placeholder}
+          aria-label={t.priorities.add} maxLength={200}
+          enterKeyHint="next"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+            // Enter hands the keyboard to the four choices; it cannot create,
+            // because nothing should be filed anywhere by default.
+            if (e.key === "Enter" && draft.trim()) {
+              e.preventDefault();
+              pickRef.current?.querySelector("button")?.focus();
+            }
+          }}
+        />
+        {draft.trim() && (
+          <div ref={pickRef} role="group" aria-label={t.priorities.chooseQuadrant} className="pnew-pick">
+            <p className="pnew-ask">{t.priorities.chooseQuadrant}</p>
+            <div className="pnew-grid">
+              {QUADRANTS.map((category) => {
+                const label = t.priorities.quadrants[category];
+                return (
+                  <button key={category} type="button" className="pnew-choice"
+                    onClick={() => addFromComposer(category)}>
+                    <span className="quad-dot" aria-hidden="true"
+                      style={{ background: QUADRANT_COLOR[category], marginTop: 5 }} />
+                    <span style={{ minWidth: 0 }}>
+                      <span className="pnew-choice-title">{label.title}</span>
+                      <span className="pnew-choice-sub">{label.subtitle}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         {QUADRANTS.map((category) => {
@@ -809,56 +853,6 @@ export default function Priorities({ date }: { date: string }) {
             </div>
           );
         })}
-      </div>
-
-      <div className="mt-3">
-        <div className="flex gap-2">
-          <input className="input" value={draft} placeholder={t.priorities.placeholder}
-            aria-label={t.priorities.add} maxLength={200}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()} />
-          <button className="btn" style={{ flex: "none" }}
-            disabled={!draft.trim() || !answered} onClick={add}>
-            {t.priorities.add}
-          </button>
-        </div>
-
-        {/*
-          * The two questions, and nothing else. They appear with the text and
-          * disappear with it, so the resting state of this screen is still a
-          * box and a button.
-          *
-          * Add stays disabled until both are answered. There is no default
-          * because there is no honest one: every value this could fall back to
-          * would be the app deciding what matters to someone, which is the one
-          * thing it must not do.
-          */}
-        {draft.trim() && (
-          <div className="pask">
-            <span className="pask-q">
-              <span className="faint">{t.priorities.askImportant}</span>
-              <button type="button" className="chip" data-on={important === true}
-                onClick={() => setImportant(true)}>{t.priorities.yes}</button>
-              <button type="button" className="chip" data-on={important === false}
-                onClick={() => setImportant(false)}>{t.priorities.no}</button>
-            </span>
-            <span className="pask-q">
-              <span className="faint">{t.priorities.askUrgent}</span>
-              <button type="button" className="chip" data-on={urgent === true}
-                onClick={() => setUrgent(true)}>{t.priorities.yes}</button>
-              <button type="button" className="chip" data-on={urgent === false}
-                onClick={() => setUrgent(false)}>{t.priorities.no}</button>
-            </span>
-            {/* The derived quadrant, shown the moment it is decided. */}
-            {answered && (
-              <span className="pask-derived">
-                <span className="quad-dot" aria-hidden="true"
-                  style={{ background: QUADRANT_COLOR[quadrantFor(important, urgent)] }} />
-                <span>{t.priorities.quadrants[quadrantFor(important, urgent)].short}</span>
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       {total === 0 && (
