@@ -1001,9 +1001,13 @@ export const en = {
       not_important_not_urgent: { title: "Not Urgent & Not Important", subtitle: "Limit or eliminate", short: "Limit" },
     },
     /*
-     * Two answers, not a form. Asked of every new line and never guessed: the
-     * app has no way to know whether something matters to you.
+     * The composer's second step: the four quadrants as one question. Never
+     * guessed and never defaulted — the app has no way to know whether
+     * something matters to you.
      */
+    chooseQuadrant: "Where does this belong?",
+    addedTo: (text: string, quadrant: string) => `"${text}" added to ${quadrant}.`,
+    /* The same two answers, still asked by Clarify Your Intention's drafts. */
     askImportant: "Important?",
     askUrgent: "Urgent?",
     yes: "Yes",
