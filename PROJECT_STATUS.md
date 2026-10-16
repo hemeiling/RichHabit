@@ -1,10 +1,14 @@
 # RichHabit — Project Status
 
-> Last updated: 2026-10-16 (Together in-app invitations candidate)
+> Last updated: 2026-10-16 (release readiness for both 2026-10-15 candidates)
 >
-> **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · NOTHING PENDING IN PRODUCTION.**
+> **CURRENT PRODUCTION: `main` = DEPLOYED = `a768682bcf5009abac5d3afe65ee7a412abe820d` (Together UI redesign) · DATABASE 45 TABLES AT MIGRATION STEP 17 · 17 USERS · NOTHING APPLIED OR DEPLOYED SINCE.**
 >
-> **TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: CANDIDATE ON `feature/together-inapp-invites` (from `a768682`) · LOCALLY VERIFIED (typecheck, lint, build; unit suite 1482/1483, the 1 failure is the known `inspect-prod-readonly` baseline; 24/24 browser checks at 1440 and 390, English and 中文) · NOT MERGED · NOT DEPLOYED · MIGRATION STEP 18 (ONE ADDITIVE PARTIAL INDEX) NOT APPLIED TO PRODUCTION · WAITING FOR THE PRODUCT OWNER TO REVIEW THE LOCAL RESULT.** See the first section below. After approval: rehearse step 18 on a fresh Neon branch, apply to production (index only, no data), fast-forward `main`, deploy, verify. Then: **Priority Compass redesign (Priority 2 of the 2026-10-15 brief, approved to follow this release).**
+> **RELEASE READINESS (SEE THE FIRST SECTION): BOTH CANDIDATES PREPARED, VERIFIED AND WAITING ON TWO PRODUCT-OWNER GATES — (R0) APPROVE THE CANDIDATES AFTER THE LOCAL REVIEW · (R1) CREATE A FRESH NEON RESTORE-POINT/REHEARSAL BRANCH AND PUT ITS URL IN `.env.local` (EVERY EXISTING REHEARSAL URL FAILS AUTH, 28P01). NOTHING HAS BEEN DEPLOYED AND NO PRODUCTION DATA WAS TOUCHED; ALL PRODUCTION ACCESS WAS READ-ONLY.**
+>
+> **RELEASE 1 — TOGETHER IN-APP INVITATIONS + NOTIFICATION BELL: `e2212b1` ON `feature/together-inapp-invites` (`cab8a51` + the proved-address cutoff hardening) · MIGRATION STEP 18 = ONE ADDITIVE PARTIAL INDEX · FULL-RUNNER REHEARSAL ON A PRODUCTION-LEVEL POSTGRES COPY PASSED (ADDITIVE, IDEMPOTENT, 44/44 TABLES BYTE-IDENTICAL) · PRODUCTION READ-ONLY PREFLIGHT PASSED (ZERO PENDING BACKFILLS; BASELINE FINGERPRINTS OF ALL 45 TABLES CAPTURED) · SECURITY REVIEW DONE, ONE FINDING FIXED IN `e2212b1` · UNIT 1483/1484 (KNOWN BASELINE) · NOT MERGED · NOT MIGRATED · NOT DEPLOYED.**
+>
+> **RELEASE 2 — PRIORITY COMPASS REDESIGN: `fbed122` ON `release/priority-compass-on-invites` (the feature commit `2a912a9` REBASED ONTO RELEASE 1; ONE CONFLICT, `PROJECT_STATUS.md` ONLY, RESOLVED) · NO MIGRATION · NO API OR DATA CHANGE · BUILD + 188/188 KEY-SUITE TESTS ON THE COMBINED TREE · `feature/priority-compass-redesign` (`2a912a9`) PRESERVED UNCHANGED · NOT MERGED · NOT DEPLOYED.**
 >
 > **TOGETHER UI REDESIGN (OVERVIEW ACTIONS + SPACE PAGE): RELEASED AND VERIFIED 2026-10-09 · `a768682` FAST-FORWARDED FROM `3b937f3` (ONE COMMIT, 12 FILES, PRESENTATION + 2 STRINGS PER LANGUAGE) · NO MIGRATION · NO API CHANGE BEYOND REMOVING THE UNUSED `space.canInvite` · RENDER `dep-db46s23tqb8s73e9q1kg` (MANUAL) · SERVED BUILD PROVEN ON BOTH DOMAINS · NO DATA CHANGE.** See the first section below. The header Invite button from `3b937f3` moved to the overview's People.
 >
@@ -99,6 +103,209 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
+## Release readiness, 2026-10-16 (both candidates · NOTHING DEPLOYED OR MIGRATED)
+
+Prepared at the Product Owner's request while they review the local preview.
+No deploy, no production migration, no production write: every production
+access below was a `begin read only` transaction, rolled back.
+
+### The candidates and how they integrate
+
+| | Release 1 | Release 2 |
+| --- | --- | --- |
+| commit | `e2212b1` (= `cab8a51` + cutoff hardening) | `fbed122` |
+| branch | `feature/together-inapp-invites` | `release/priority-compass-on-invites` |
+| base | `a768682` = `main` = `origin/main` = production (verified by `ls-remote` and `merge-base` on 2026-10-16) | `e2212b1` (release 1) |
+| migration | step 18: one additive partial index | none |
+| release move | fast-forward `main` `a768682 → e2212b1` | fast-forward `main` `e2212b1 → fbed122` |
+
+Integration was proven by performing the real release-2 rebase: `2a912a9`
+(the compass feature commit, preserved untouched on its own branch) rebased
+onto release 1 produced exactly one conflict — `PROJECT_STATUS.md`, resolved
+by taking the compass version — with code, CSS and both dictionaries merging
+cleanly. The combined tree typechecks, builds, and passes together-db (62),
+priorities and i18n suites (188 total). Neither improvement is lost: the
+bundle carries both releases' strings, and the earlier combined preview
+(2026-10-16, 24/24 + 22/22 browser checks) ran this same union. If release 1
+changes during review, re-rebase `release/priority-compass-on-invites` the
+same way before release 2.
+
+### Migration step 18 — rehearsed (local full runner) · Neon rehearsal waits on gate R1
+
+Every rehearsal URL in `.env.local` now fails Neon auth (28P01; the branches
+were reset or their passwords rotated), so the Neon rehearsal needs a fresh
+branch of production from the Product Owner (gate R1). What ran instead, on
+2026-10-16: the **full `scripts/migrate.mjs` runner over the real wire
+protocol** (PGlite socket, port 5438, its own data directory; the local
+preview on 5436 was untouched) against a copy at production's exact schema
+level (db/schema.sql minus the step-18 marker block) seeded with app-shaped
+data in every user and Together table:
+
+| Check | Result |
+| --- | --- |
+| first run | `created day_priorities`, `created index together_invitations_email_open`, `Done — 2 change(s).` |
+| `day_priorities` | the documented pre-existing schema.sql gap — production HAS the table (2 rows), so this line cannot occur there; created empty here, no other table touched |
+| structure diff | exactly the one index plus the day_priorities objects; nothing removed or altered |
+| data | 44 of 44 seeded tables byte-identical in row count and content hash (habits, completions, schedules, priorities, journal, intention, important dates, boards, members, groups, ranked tasks, assignees, both invitation kinds) |
+| second run | `Nothing to do; already up to date.`; fingerprints unchanged |
+| step-level parity | `tests/together-invite-email-migration.test.ts`: adds exactly one index, rows untouched, idempotent, equals a fresh install, no-op before Together exists |
+
+**Expected production output: exactly `created index
+together_invitations_email_open` and `Done — 1 change(s).` Anything else —
+any backfill line, any second change — means STOP; do not deploy.**
+
+### Production read-only preflight, 2026-10-16 (the Phase 4B lesson applied)
+
+Every data-changing predicate in the runner was tested against production:
+
+| Backfill predicate | Matching rows |
+| --- | --- |
+| users with `username` null | 0 |
+| habits with `template_key` null and a starter-alias name | 0 |
+| habits `read_for_learning` at nighttime (re-key) | 0 |
+| habit unit aliases (min/glasses/tasks/hr) | 0, 0, 0, 0 |
+| goals with `template_key` null and an alias name | 0 |
+| intentions with legacy `priority_id` but empty `priority_ids` | 0 |
+| together_tasks with `rank` null | 0 |
+| analytics_events / user_sessions FK delete rule | both already SET NULL |
+| habits.status column present (its backfill branch is skipped) | yes |
+
+So the production run has **nothing to do but create the index**. State found:
+45 tables, Postgres 18.6, endpoint `ep-jolly-…` (matches the documented
+production endpoint), step-17 marker present, step-18 index absent, 17 users.
+
+**Baseline fingerprints** (row count + whole-table content hash) were captured
+for all 45 tables for the after-release comparison. User-data tables at
+capture (2026-10-16 ~13:49 UTC): users 17 · habits 195 · habit_schedules 203 ·
+habit_completions 179 · priorities 175 · goals 51 · goal_habits 155 ·
+day_notes 11 · day_priorities 2 · intentions 3 · important_dates 41 ·
+together_boards 1 · together_members 2 · together_invitations 3 ·
+together_groups 1 · together_tasks 3 · together_task_assignees 1 ·
+priority_quota_usage 0 · habit_awareness_entries 0 · habit_library 0 ·
+habit_stacks 0. The verification after each release re-reads these: every
+table must be identical except for rows users themselves created meanwhile,
+and no row may be lost. (The full 45-table JSON lives in this session's
+scratchpad; the probe is three read-only queries and is trivially re-run.)
+
+### Security and privacy review (release 1), 2026-10-16
+
+- **Username invitations.** Full Together access plus a writable board is
+  checked before anything (`requireAccess` → `requireBoard(write, lock)`);
+  the username resolves on the server, parameterised; the shared insert core
+  applies the member/already-invited/declined skips, the 50-a-day limit and
+  the per-board cap; nobody joins without accepting. "No account has that
+  username" reveals only username existence — usernames are public handles on
+  the Community board, and the email flow stays enumeration-proof because a
+  typed address behaves identically whether or not it has an account.
+  Accepted residuals, by design: the inviter learns the display name behind a
+  username they typed (the same name the Community board shows); a repeated
+  invite answering `invited: 0` does not distinguish "already invited" from
+  "recently declined" (deliberately one combined answer).
+- **Verified-email (addressed) invitations.** FINDING, fixed in `e2212b1`:
+  the preflight showed `REQUIRE_EMAIL_VERIFICATION` was off for part of the
+  last month (3 recent self-signups are exempt from verifying), so "never
+  asked to verify" was an open set — a future off-spell could mint an account
+  squatting someone else's unregistered address and read/accept that
+  address's invitations in-app. `addressedTo` now trusts an exempt account
+  only if it predates the fixed cutoff **2026-10-17T00:00:00Z** (all 17
+  current accounts qualify; the set is closed forever) or was admin-created
+  (vouched). Anyone newer proves the address via the in-app verify flow or
+  the emailed token, which proves the inbox itself. Covered by a new test
+  (post-cutoff exempt account sees nothing; admin-created and verified
+  accounts do). Also verified: no code path lets an account change its own
+  `users.email`, so an account cannot repoint itself at a victim's address.
+  **Release gate: keep `REQUIRE_EMAIL_VERIFICATION=true` on Render**; with
+  the cutoff the feature stays safe even if it is toggled off, but new
+  unverified accounts would then simply not see email invitations in-app.
+- **Notification access.** `GET /api/together/invitations` runs through
+  `togetherRoute` (session only) and `requireAccess`: 401 signed out, 404
+  without Together access, and only the caller's own rows ($1 is the session
+  account, never request input). The bell renders only when the server-side
+  layout says the account has Together access; the count crosses as one
+  number. Tested.
+- **Accept/Decline authorization.** `respondToInvitation` matches the
+  invitation id AND `addressedTo(session account)` inside one transaction
+  with the V1A lock order; anyone else gets the uniform 404; accepting joins
+  exactly the one board; declining answers only invitations addressed to that
+  account on that board. Imposter tests cover both kinds.
+- **Bundles and analytics.** The built client chunks contain no key names,
+  `sk-ant-`, database URLs, Neon hosts, `token_hash`/`password_hash` or the
+  preview list (grepped over every chunk of the combined build); analytics
+  for username invitations carry `channel: "username"` and a count, never
+  the username (asserted).
+
+### Release plan and gates
+
+**Gate R0 (Product Owner):** approve both candidates after the local review.
+**Gate R1 (Product Owner):** in Neon, create a fresh branch of production —
+it doubles as the restore point — and put its URL in `.env.local` (add a new
+variable or update `REHEARSAL_DATABASE_URL`; the file is add-only and is
+never committed).
+
+**Release 1 — Together in-app invitations (`e2212b1`):**
+
+1. Neon rehearsal (one command once R1 exists): run
+   `RH_ALLOW_REMOTE=1 DATABASE_URL='<rehearsal URL>' npm run db:migrate`
+   from `e2212b1`; expect exactly the index line and `Done — 1 change(s).`,
+   then `Nothing to do` on a second run; verify no row of any table changed.
+2. Re-run the read-only production preflight (backfill predicates still 0).
+3. Production migration: same command against `PRODUCTION_DATABASE_URL`;
+   check the target line shows the production host with `** REMOTE **`.
+   Expected output exactly as above; anything else → stop, do not deploy.
+   (Order note: migration-first is convention, but both orders are safe here
+   — the new code works without the index, and `a768682` ignores it.)
+4. Fast-forward `main` `a768682 → e2212b1`, push. Render deploys only `main`;
+   recent releases needed a **manual** deploy by the Product Owner.
+5. Verify: `/api/health`; signed-out routes; served-bundle probe — release
+   strings present after and absent before ("No RichHabit account has that
+   username", "Invite by email or username", 用邮箱或用户名邀请, "Notifications,"
+   with a control string in both runs); re-read the baseline tables (no lost
+   rows); Product Owner signed-in smoke: bell with count, invite by username,
+   email invitation appearing in the invitee's bell, Accept/Decline, withdraw.
+6. Record the release here.
+
+**Release 2 — Priority Compass (`fbed122`):** after release 1 is verified:
+re-verify (or re-rebase) `release/priority-compass-on-invites`, fast-forward
+`main` `e2212b1 → fbed122`, push, manual deploy, then verify: no migration and
+no database action; bundle probe ("Where does this belong?" / 它属于哪一类？);
+Product Owner smoke: top composer, one-tap filing, done-sinks, per-quadrant
+add, inline edit, phone width; baseline tables again unchanged.
+
+### Rollback
+
+**Release 1.** Roll the application back in the Render dashboard to the
+previous deploy (`a768682`) or revert on `main`. **Leave the index in place**:
+it is invisible to `a768682` (planner-only, no API or data dependency), costs
+nothing at this table's size, and the rolled-back app runs exactly as today.
+Never drop it as a rollback step; if it is ever truly unwanted,
+`drop index if exists together_invitations_email_open` removes it without
+touching a row, and re-running the migration recreates it. Data written by
+the new code before a rollback stays valid for the old code: a username
+invitation is an ordinary V1A `invitee_id` row, and an in-app acceptance
+produces an ordinary membership — `a768682` reads both; the only loss is the
+new UI. In-app answering disappears with the rollback; pending email
+invitations keep working through their links.
+
+**Release 2.** Roll back to the release-1 deploy or revert on `main`. No
+schema or data-shape change exists; priorities created through the redesigned
+composer are ordinary rows from the same `addPriority` action, and the done-
+sink was presentation only (`sortOrder` was never rewritten), so the old
+screen renders the same data in the same places.
+
+**Either release, data corruption only:** restoring production from the R1
+Neon branch discards every write since its creation — Product Owner only,
+last resort.
+
+### `.env.local`
+
+Preserved exactly: read-only throughout (hosts printed masked, never a
+credential), nothing added, removed or rewritten; the file is gitignored and
+appears in no commit in any branch's history; the three release commits
+contain no connection string or key material; the captured baseline holds
+only row counts and hashes. Noted in passing: the file now carries fewer
+variables than on 2026-10-15 (the V2–V7 rehearsal URLs are gone) — the
+Product Owner's own housekeeping, untouched by the agent.
+
 ## Together — in-app invitations + notification bell (CANDIDATE · NOT MIGRATED/DEPLOYED)
 
 Priority 1 of the Product Owner's 2026-10-15 brief: invite existing RichHabit
@@ -179,11 +386,15 @@ board — email enumeration remains impossible by design; grandfathered and
 admin-created accounts count as proved addresses for in-app answering (new
 self-signups must verify before they can sign in at all).
 
-**Next step:** Product Owner reviews the local result (`zsh <scratchpad>/reset.sh`
-starts it at http://127.0.0.1:3100; accounts hippo / meimei / charliew, password
-`Verdant-Meadow-42`). On approval: fresh Neon rehearsal branch for step 18,
-production index, fast-forward `main`, manual Render deploy, verify; then the
-Priority Compass redesign.
+**Follow-up, 2026-10-16:** the security review hardened `addressedTo` with the
+fixed `PROVED_ADDRESS_CUTOFF` (commit `e2212b1`; see the Release readiness
+section's security notes). The release candidate is now `e2212b1`.
+
+**Next step:** gates R0 and R1 in the Release readiness section above. The
+local preview runs at http://127.0.0.1:3100 (accounts hippo / meimei /
+charliew, password `Verdant-Meadow-42`); if it has been stopped, rebuilding is
+the standard local stack (test database via `scripts/dev-db.mjs --test` on a
+free port, `next start` against it with `MAIL_OUTBOX_DIR` set).
 
 ## Together — UI redesign: Overview actions + space page (RELEASED · DEPLOYED · VERIFIED)
 
