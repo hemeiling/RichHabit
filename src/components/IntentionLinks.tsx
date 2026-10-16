@@ -504,7 +504,7 @@ export function PrioritiesCard({ reflection, onChange }: { reflection: Intention
 
   /* An ordinary priority on today, in the quadrant the person's two answers chose. */
   const create = (text: string, important: boolean, urgent: boolean) => {
-    const id = actions.addPriority(today, text, quadrantFor(important, urgent));
+    const { id } = actions.addPriority(today, text, quadrantFor(important, urgent));
     onChange(linkPriorities(reflection, [id]));
   };
 

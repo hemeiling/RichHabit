@@ -875,7 +875,7 @@ export const zh: Dict = {
       urgent_not_important: { title: "紧急但不重要", subtitle: "委派或减少", short: "委派" },
       not_important_not_urgent: { title: "不紧急且不重要", subtitle: "减少或取消", short: "减少" },
     },
-    chooseQuadrant: "它属于哪一类？",
+    chooseQuadrant: "加入",
     addedTo: (text: string, quadrant: string) => `「${text}」已加入${quadrant}。`,
     askImportant: "重要吗？",
     askUrgent: "紧急吗？",
