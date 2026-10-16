@@ -30,7 +30,7 @@ interface Actions {
    * open priority is not owned by a day — see lib/priorities.
    */
   /** Returns the new priority's id, for callers that need to refer to it. */
-  addPriority: (date: string, text: string, category: PriorityCategory) => string;
+  addPriority: (date: string, text: string, category: PriorityCategory) => { id: string; saved: Promise<boolean> };
   setPriorityPlannedOn: (id: string, plannedOn: string | null) => void;
   /** `date` is the day on screen: the day the completion is recorded against. */
   /** Resolves once saved; rejects, with the old wording restored, if it was not. */
@@ -144,12 +144,18 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
   }, []);
 
   /** Update the screen immediately, write in the background, roll back if the write fails. */
-  const run = useCallback((next: (s: AppState) => AppState, write: () => Promise<unknown>) => {
+  /**
+   * Returns whether the write was accepted, so a caller that cleared an input
+   * optimistically can bring the words back when the server refuses — the
+   * rollback restores the data, and this restores what was typed. Every
+   * caller that has nothing to restore ignores the promise, as before.
+   */
+  const run = useCallback((next: (s: AppState) => AppState, write: () => Promise<unknown>): Promise<boolean> => {
     let previous: AppState;
     setState((s) => { previous = s; return next(s); });
     setPending((n) => n + 1);
-    write()
-      .then(() => setError(null))
+    return write()
+      .then(() => { setError(null); return true; })
       .catch((e: Error) => {
         // Roll back this write — but not What's New's seen mark, which is not
         // written through here and may have been recorded since; restoring the
@@ -162,6 +168,7 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
          * already made the outcome visible.
          */
         setError(db.isPlanLimit(e) ? e.message : `${e.message}. That change wasn't saved.`);
+        return false;
       })
       .finally(() => setPending((n) => n - 1));
   }, []);
@@ -308,7 +315,7 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
      */
     addPriority: (date, text, category) => {
       const id = uid();
-      run(
+      const saved = run(
         (s) => ({
           ...s,
           priorities: [...s.priorities, {
@@ -324,12 +331,13 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
         () => db.addPriority(id, text, date, category),
       );
       /*
-       * The id, so a caller can record which priority it just created. The
+       * The id, so a caller can record which priority it just created, and
+       * whether the write was accepted, so a composer that cleared its field
+       * can put the words back when the daily allowance refuses them. The
        * priority itself is an ordinary one — same table, same rollover, same
-       * quadrant rules — and handing the id back does not make it anything
-       * else. Every existing caller ignores the return value.
+       * quadrant rules.
        */
-      return id;
+      return { id, saved };
     },
 
     /*

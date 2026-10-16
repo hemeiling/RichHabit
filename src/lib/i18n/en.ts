@@ -1005,7 +1005,7 @@ export const en = {
      * guessed and never defaulted — the app has no way to know whether
      * something matters to you.
      */
-    chooseQuadrant: "Where does this belong?",
+    chooseQuadrant: "Add to",
     addedTo: (text: string, quadrant: string) => `"${text}" added to ${quadrant}.`,
     /* The same two answers, still asked by Clarify Your Intention's drafts. */
     askImportant: "Important?",

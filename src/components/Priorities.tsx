@@ -7,7 +7,7 @@ import { needsDeleteConfirmation } from "@/lib/accomplishments";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
 import {
-  NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, isPlanOverdue,
+  NO_QUADRANT_ADD, QUADRANTS, carriedFrom, cueFor, doneOn, hasDraft, isPlanOverdue,
   layoutAfterMove, prioritiesOn, quadrantAdd,
 } from "@/lib/priorities";
 import { normalizePriorityCategory, type Priority, type PriorityCategory } from "@/lib/types";
@@ -495,9 +495,13 @@ function PriorityCard({
  * Important? or Urgent? — asking again would be asking someone to justify a
  * decision they just made by pointing at it.
  *
- * Collapsed, it is one quiet line. It is a button in three wordings, or, while
- * something is being dragged over an empty box, not a button at all: a drop
- * target must not have to compete with something clickable sitting on top of it.
+ * Opened by the small + in the box's own header (which also carries back a
+ * draft that a refusal or Escape parked). At rest it renders nothing under a
+ * box with cards in it — the + is the affordance — and one slim dashed line
+ * in an empty box, so empty quadrants stay shallow instead of advertising
+ * their emptiness. While something is being dragged over an empty box it is a
+ * landing place and nothing else: a drop target must not have to compete with
+ * something clickable sitting on top of it.
  */
 function QuadrantAdd({
   category, empty, dragging, open, draft, t,
@@ -535,6 +539,7 @@ function QuadrantAdd({
           aria-label={t.priorities.addTo(quadrant)}
           onChange={(e) => onType(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return;
             if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
             // Escape closes either way; the draft outlives it. See quadrantAdd.
             if (e.key === "Escape") { e.stopPropagation(); onEscape(); }
@@ -548,17 +553,15 @@ function QuadrantAdd({
     );
   }
 
-  const waiting = draft.trim().length > 0;
+  if (!empty) return null;
   return (
     <button
       type="button"
-      className={empty ? "qempty qempty-add" : "qadd-open"}
-      aria-label={waiting ? t.priorities.continueIn(quadrant) : t.priorities.addTo(quadrant)}
+      className="qempty qempty-add"
+      aria-label={t.priorities.addTo(quadrant)}
       onClick={onOpen}
     >
-      {waiting
-        ? t.priorities.continueAdding
-        : empty ? t.priorities.addFirstHere : t.priorities.addHere}
+      {draft.trim() ? t.priorities.continueAdding : t.priorities.addFirstHere}
     </button>
   );
 }
@@ -626,10 +629,16 @@ export default function Priorities({ date }: { date: string }) {
   const addHere = (category: PriorityCategory) => {
     const text = (adding.drafts[category] ?? "").trim();
     if (!text) return;
-    // The same call the global row makes. The only difference is that the
+    // The same call the composer makes. The only difference is that the
     // quadrant was already known, so nothing had to be asked to learn it.
-    actions.addPriority(date, text, category);
+    const { saved } = actions.addPriority(date, text, category);
     setAdding((s) => quadrantAdd(s, { type: "added" }));
+    // A refused write (the daily allowance, a lost connection) rolls the card
+    // back and explains in the banner; the words come back with it, parked as
+    // this box's draft, which the box's + reopens.
+    void saved.then((ok) => {
+      if (!ok) setAdding((s) => quadrantAdd(s, { type: "type", category, text }));
+    });
   };
 
   const dismissCue = () => {
@@ -639,16 +648,20 @@ export default function Priorities({ date }: { date: string }) {
 
   /**
    * The composer's one decision: where it belongs. Choosing the quadrant is
-   * the classification — the four choices *are* Important?/Urgent? asked at
-   * once — so tapping one creates the line there and then.
+   * the classification — the four chips *are* Important?/Urgent? asked at
+   * once — so tapping one creates the line there and then. The field clears
+   * immediately for the next line; if the server refuses the write (the
+   * daily allowance, a lost connection), the rollback takes the card away
+   * and the words come back here, so nothing anyone typed is ever lost.
    */
   const addFromComposer = (category: PriorityCategory) => {
     const text = draft.trim();
     if (!text) return;
-    actions.addPriority(date, text, category);
+    const { saved } = actions.addPriority(date, text, category);
     setDraft("");
     setAnnounce(t.priorities.addedTo(text, t.priorities.quadrants[category].title));
     composerRef.current?.focus();
+    void saved.then((ok) => { if (!ok) setDraft((v) => (v.trim() ? v : text)); });
   };
 
   const groups = useMemo(() => {
@@ -723,11 +736,12 @@ export default function Priorities({ date }: { date: string }) {
       )}
 
       {/*
-        * The one obvious place to write a priority, first on the page, above
-        * what it feeds. Typing reveals the four quadrants as the whole second
-        * step: choosing one is the classification (it is Important?/Urgent?
-        * asked at once, with no default), and the tap that answers it is the
-        * tap that files the line. Resting state: one quiet field.
+        * The one place to write a priority, first on the page, above what it
+        * feeds. Typing reveals one compact row of four chips — the quadrants
+        * by their short names, each wearing its dot — so choosing where the
+        * line belongs is one tap, and the matrix below stays the only place
+        * the quadrants appear in full. There is no default chip and Enter
+        * cannot file: nothing decides for the person what matters.
         */}
       <div className="pnew">
         <input
@@ -738,8 +752,8 @@ export default function Priorities({ date }: { date: string }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-            // Enter hands the keyboard to the four choices; it cannot create,
-            // because nothing should be filed anywhere by default.
+            // Enter hands the keyboard to the chips (arrowing between them is
+            // the browser's ordinary Tab/Shift-Tab); Escape puts it back.
             if (e.key === "Enter" && draft.trim()) {
               e.preventDefault();
               pickRef.current?.querySelector("button")?.focus();
@@ -747,24 +761,23 @@ export default function Priorities({ date }: { date: string }) {
           }}
         />
         {draft.trim() && (
-          <div ref={pickRef} role="group" aria-label={t.priorities.chooseQuadrant} className="pnew-pick">
-            <p className="pnew-ask">{t.priorities.chooseQuadrant}</p>
-            <div className="pnew-grid">
-              {QUADRANTS.map((category) => {
-                const label = t.priorities.quadrants[category];
-                return (
-                  <button key={category} type="button" className="pnew-choice"
-                    onClick={() => addFromComposer(category)}>
-                    <span className="quad-dot" aria-hidden="true"
-                      style={{ background: QUADRANT_COLOR[category], marginTop: 5 }} />
-                    <span style={{ minWidth: 0 }}>
-                      <span className="pnew-choice-title">{label.title}</span>
-                      <span className="pnew-choice-sub">{label.subtitle}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          <div ref={pickRef} role="group" aria-label={t.priorities.chooseQuadrant} className="pnew-pick"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { e.stopPropagation(); composerRef.current?.focus(); }
+            }}>
+            <span className="pnew-ask" id="pnew-ask">{t.priorities.chooseQuadrant}</span>
+            {QUADRANTS.map((category) => {
+              const label = t.priorities.quadrants[category];
+              return (
+                <button key={category} type="button" className="chip pnew-chip"
+                  aria-label={t.priorities.addTo(label.title)} title={label.subtitle}
+                  onClick={() => addFromComposer(category)}>
+                  <span className="quad-dot" aria-hidden="true"
+                    style={{ background: QUADRANT_COLOR[category] }} />
+                  <span>{label.short}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -803,7 +816,18 @@ export default function Priorities({ date }: { date: string }) {
                     <div className="faint" style={{ fontSize: 11, lineHeight: 1.3, marginTop: 1 }}>{label.subtitle}</div>
                   </div>
                 </div>
-                <span className="num faint" style={{ fontSize: 12, flex: "none" }}>{items.length}</span>
+                <span className="flex items-center" style={{ gap: 7, flex: "none" }}>
+                  <span className="num faint" style={{ fontSize: 12 }}>{items.length}</span>
+                  {/* The box's own way in — and the way back to a parked draft. */}
+                  <button type="button" className="qplus" data-waiting={hasDraft(adding, category) || undefined}
+                    aria-label={t.priorities.addTo(label.title)}
+                    aria-expanded={adding.open === category}
+                    onClick={() => setAdding((s) => (s.open === category
+                      ? quadrantAdd(s, { type: "escape" })
+                      : quadrantAdd(s, { type: "open", category })))}>
+                    +
+                  </button>
+                </span>
               </div>
 
               <div className="space-y-1.5">
