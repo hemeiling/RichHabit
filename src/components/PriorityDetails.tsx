@@ -38,7 +38,11 @@ const QUADRANT_COLOR: Record<PriorityCategory, string> = {
 const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 function usePhone(): boolean {
-  const [phone, setPhone] = useState(false);
+  // Initialised synchronously: this component mounts only on interaction,
+  // client-side, so reading the viewport here is safe — and starting false
+  // would flash the desktop panel for a frame on every phone.
+  const [phone, setPhone] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 639px)");
     const sync = () => setPhone(mq.matches);
@@ -169,6 +173,13 @@ export default function PriorityDetails({
         aria-label={t.priorities.editField}
         aria-invalid={titleEmpty || undefined}
         onChange={(e) => editTitle(e.target.value)}
+        // Leaving the field flushes at once — belt and braces under the
+        // debounce, so no pause length can be mistaken for "saved".
+        onBlur={() => {
+          clearTimeout(titleTimer.current);
+          const v = title.trim();
+          if (v && v !== item.text) actions.setPriorityText(item.id, v);
+        }}
         onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
       />
       {titleEmpty && <p className="pdx-error" role="alert">{t.priorities.editEmpty}</p>}
@@ -202,6 +213,9 @@ export default function PriorityDetails({
         id="pdx-notes" className="pdx-notes" rows={4} value={item.description} maxLength={5000}
         placeholder={d.notesPlaceholder}
         onChange={(e) => editNotes(e.target.value)}
+        // Idempotent flush: scheduling the same words again is free, and it
+        // guarantees the field's final state is what the server hears.
+        onBlur={(e) => editNotes(e.currentTarget.value)}
       />
 
       {/* Links */}
