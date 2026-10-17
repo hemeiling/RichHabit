@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db/pool";
 import { describeFailure, describeTarget, suggestFix } from "@/lib/db/diagnose";
@@ -20,6 +22,22 @@ import { describeFailure, describeTarget, suggestFix } from "@/lib/db/diagnose";
  */
 export const dynamic = "force-dynamic";
 
+/**
+ * Which build this server is running, for the client's staleness check
+ * (VersionGuard): an opaque identifier, read once from the build's own
+ * artifact. Not a version number and not secret — the same value already names
+ * every static asset URL. "unknown" (a dev server, or an unreadable file)
+ * never counts as a mismatch.
+ */
+const BUILD_ID: string = (() => {
+  try {
+    return readFileSync(
+      path.join(process.cwd(), process.env.NEXT_DIST_DIR ?? ".next", "BUILD_ID"), "utf8").trim();
+  } catch {
+    return "unknown";
+  }
+})();
+
 export async function GET() {
   const target = describeTarget(process.env.DATABASE_URL);
 
@@ -33,7 +51,7 @@ export async function GET() {
 
   try {
     const rows = await query<{ now: string }>("select now() as now");
-    return NextResponse.json({ ok: true, db: "up", target, now: rows[0]?.now });
+    return NextResponse.json({ ok: true, db: "up", target, now: rows[0]?.now, build: BUILD_ID });
   } catch (e) {
     console.error("[health]", e);
     // An unparseable string never had a host to fail to find; say that instead.

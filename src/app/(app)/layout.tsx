@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import AppShell from "@/components/AppShell";
+import VersionGuard from "@/components/VersionGuard";
 import { currentAdmin } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n/server";
@@ -56,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell userId={user.id} email={user.email} locale={getLocale()} localDb={localDb} aiWorkspace={aiWorkspace}
       together={Boolean(together)} togetherPending={together?.pending ?? 0}
       togetherBoards={together?.boards}>
+      <VersionGuard />
       {children}
     </AppShell>
   );
