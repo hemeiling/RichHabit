@@ -51,6 +51,29 @@ export default function ResetContent({ queryToken }: { queryToken: string }) {
     if (window.location.hash || window.location.search) {
       window.history.replaceState(null, "", window.location.pathname);
     }
+    /*
+     * Pasting a fresh link into a tab that is already on this page changes
+     * only the fragment, and a browser answers that with a `hashchange`, not
+     * a load — the module-scope read above never runs again. Without this
+     * listener the page keeps whatever token it had, the person types a new
+     * password against a link the page never saw, and the refusal reads like
+     * a broken reset (the 2026-10-17 UAT). The newly pasted token replaces
+     * the old one, the form comes back whatever panel was showing, and the
+     * fragment is wiped from the address bar the same way as on load.
+     */
+    const onHashChange = () => {
+      const next = /^#token=(.+)$/.exec(window.location.hash)?.[1];
+      if (next) {
+        setToken(decodeURIComponent(next));
+        setStatus("form");
+        setError(null);
+      }
+      if (window.location.hash) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, [queryToken]);
 
   const mismatch = confirm.length > 0 && confirm !== password;
