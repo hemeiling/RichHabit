@@ -170,10 +170,31 @@
   entitlement was granted. Discoverability for non-preview users is a
   product decision for when Together leaves preview (recommendation in the
   conversation report).
+- **UAT incident 2026-10-17 (recovery test): NOT a code defect.** The PO's
+  password sign-in failed after an apparently completed reset. Investigated
+  with the app paused (read-only): one account matches both identifiers
+  (meimeimei, Google-created); `password_hash` still NULL; all four reset
+  tokens belonged to it and **none was ever redeemed** — each `consumed_at`
+  equals the next request's `created_at`, i.e. every older link was killed by
+  a newer "Forgot password" request (by design: the newest link is the only
+  live one). The handed-over saved link predated the PO's 10:09/10:12
+  re-requests, so its submit was refused; the refusal panel appears only
+  after the password is typed, which read as success. Production checked
+  read-only (rolled back): **zero** reset rows in 24h; `.env.local` has no
+  mail-provider key, so no local stack can mail a real inbox. Sign-in, reset
+  and forgot all share the one 3200 process/DATABASE_URL. Login does NOT
+  reject Google-origin accounts with a password — regressions added in
+  `4a792ae` (16/16; full suite 1543/1544, the 1 fail is the known local
+  inspect-prod-readonly edit; typecheck clean): after a redeem both email and
+  username sign in, account/habits/Google identity preserved; a superseded
+  token refuses calmly and sets nothing. Possible follow-up (PO decision, not
+  in this release): reset page could probe the token on load instead of after
+  typing.
 - **Pending (before asking for release approval):** the PO's manual real-Google
   steps on the isolated 3200 stack — Google-only password recovery (reset
-  requested; link handed over privately), explicit linking to a password
-  account (needs a 3200 DB reset first), returning login, Together invitation
+  requested; a FRESH link saved privately; use it without requesting again),
+  explicit linking to a password account (needs a 3200 DB reset first),
+  returning login, Together invitation
   — then the agent's no-duplicates check (`google-check.mjs`, app paused).
   iPhone cannot reach 127.0.0.1 and Google forbids plain-http non-localhost
   redirects, so real-Google-on-iPhone happens at release (layout and flow are
