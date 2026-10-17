@@ -141,7 +141,24 @@
   — health ok, password sign-in 200, signed-in page 200, wrong password 401.
   **A final rehearsal on a FRESH PO-created branch is still required before
   production.**
-- **Pending:** the PO's manual real-Google pass on the isolated 3200 stack
+- **PO's first real-Google sign-in on 3200: PASSED** (registration flow,
+  dashboard, 10 starter habits; this also proves the OAuth secret via a real
+  token exchange). PO noticed Together missing from the sidebar —
+  **investigated, NOT a Google defect:** the sidebar shows Together only when
+  `togetherAccess` is non-null — on `TOGETHER_PREVIEW_USER_IDS` ("full"), or a
+  member / open invitation addressed to the account / collaborator connection
+  or request ("invited"). Plan, role and sign-in method play no part. The new
+  Google account (Free, verified, 10 habits, no memberships/invites/
+  connections, not on the preview list) is in exactly the state of the
+  password accounts meimei/charliew/dana, which also have no Together; hippo
+  sees it only because it is on the preview list (it is Free too). Live proof
+  of the invited path: hippo invited the Google account by username to
+  "Google Test Space" on 3200 (in-app, `invited:1`) → Together appears on
+  reload. The branch changes no Together code; Together tests 187/187. No
+  entitlement was granted. Discoverability for non-preview users is a
+  product decision for when Together leaves preview (recommendation in the
+  conversation report).
+- **Pending:** the PO's remaining manual real-Google steps on the isolated 3200 stack
   (desktop; iPhone cannot reach 127.0.0.1 and Google forbids plain-http
   non-localhost redirects, so real-Google-on-iPhone happens at release —
   iPhone layout and flow are covered by the fake-Google emulation runs).
