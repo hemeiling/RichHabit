@@ -113,7 +113,7 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Sign in with Google — validation stage (2026-10-17) · candidate tip `44354d2`
+## Sign in with Google — validation stage (2026-10-17) · candidate tip `44354d2` · FINAL NEON REHEARSAL PASSED · NOT MERGED · NOT MIGRATED IN PRODUCTION · NOT DEPLOYED
 
 - **Configuration:** PO created the OAuth client; GOOGLE_CLIENT_ID (…apps.googleusercontent.com)
   and GOOGLE_CLIENT_SECRET (GOCSPX-…) present in `.env.local` (shapes checked,
@@ -129,18 +129,30 @@
   journey 14/14; Together + session 7/7 (Google-verified address counts as
   proved → email invitation in the bell → accept opens the Space; session
   survives reload/new tab; sign-out ends it everywhere).
-- **Neon rehearsal (PRELIMINARY, on the isolated rehearsal branch
-  `richhabit-rc1-r1-rehearsal-20261016`, a production clone at step 20; host
-  checked ≠ production):** pass 1 exactly 4 changes; pass 2 "Nothing to do";
-  48/48 pre-existing tables byte-identical; admins 5 → 5; constraints
-  verified; real-Postgres concurrency 10/10 rounds (two connections claim one
-  Google sub at once → exactly one winner, loser 23505); all test rows
-  removed (users 19 → 19, auth_identities 0). One harness crash (Neon pooler
-  ended an idle test transaction) left 2 test users — found and removed.
-  Rollback compatibility: the DEPLOYED build `1a59d51` on the migrated branch
-  — health ok, password sign-in 200, signed-in page 200, wrong password 401.
-  **A final rehearsal on a FRESH PO-created branch is still required before
-  production.**
+- **FINAL Neon step-21 rehearsal: PASSED (2026-10-17)** on the fresh PO-created
+  branch `google-signin-rehearsal-20261017` (`br-withered-grass-ayqzyrsf`,
+  parent `production`, endpoint `ep-blue-shadow-ayqajv6a`; `.env.local`
+  `REHEARSAL_DATABASE_URL_GOOGLE`). Identity proved before any write: host and
+  endpoint ≠ production and ≠ the RC1 branch, different Neon timeline from
+  production (production read in `begin read only` + rollback), unmigrated
+  copy (48 tables, 17 users, 5 admins = production). Baseline: per-table
+  count + md5 of all 48 tables, per-row md5 of the 5 admins (claire, hippo,
+  emma, richhabituser01, ecamacho773). Pass 1 exactly 4 changes; pass 2
+  "Nothing to do"; 48/48 byte-identical. Constraints: null-hash Google account
+  storable, junk `created_via` refused, second Google identity per account
+  refused. Concurrency: in-transaction race 1 winner + 23505; autocommit 10/10.
+  Backward compatibility, production build `1a59d51` on the migrated branch
+  (port 3300): 20/20 — signup, sign-in, wrong password 401, five signed-in
+  pages, change-password, Together still 404 for non-preview accounts.
+  **Rollback note:** on `1a59d51` a Google-only account's password sign-in
+  is refused with a 500 (old `verifyPassword` reads a null hash — no session,
+  no access; the candidate returns false instead), and the old emailed reset
+  recovers it while its Google link survives. Cleanup removed only the test
+  rows; final compare vs the pre-migration baseline: 48/48 identical, 5 admin
+  rows identical, `auth_identities` 0 and `google_pending` 0. Scripts
+  (scratchpad): `neon-identify21.mjs` (baseline / `compare`),
+  `neon-step21.mjs`, `neon-race21.mjs`, `neon-compat21.mjs`. The preliminary
+  run on the RC1 branch also passed (superseded).
 - **PO's first real-Google sign-in on 3200: PASSED** (registration flow,
   dashboard, 10 starter habits; this also proves the OAuth secret via a real
   token exchange). PO noticed Together missing from the sidebar —
@@ -158,10 +170,16 @@
   entitlement was granted. Discoverability for non-preview users is a
   product decision for when Together leaves preview (recommendation in the
   conversation report).
-- **Pending:** the PO's remaining manual real-Google steps on the isolated 3200 stack
-  (desktop; iPhone cannot reach 127.0.0.1 and Google forbids plain-http
-  non-localhost redirects, so real-Google-on-iPhone happens at release —
-  iPhone layout and flow are covered by the fake-Google emulation runs).
+- **Pending (before asking for release approval):** the PO's manual real-Google
+  steps on the isolated 3200 stack — Google-only password recovery (reset
+  requested; link handed over privately), explicit linking to a password
+  account (needs a 3200 DB reset first), returning login, Together invitation
+  — then the agent's no-duplicates check (`google-check.mjs`, app paused).
+  iPhone cannot reach 127.0.0.1 and Google forbids plain-http non-localhost
+  redirects, so real-Google-on-iPhone happens at release (layout and flow are
+  covered by the fake-Google emulation runs). Release itself (fresh read-only
+  production preflight → production step 21 → merge → Render env vars → deploy
+  → verify) waits for the PO's explicit approval.
 
 ## Sign in with Google — CANDIDATE `6537314` on `feature/google-signin` (NOT MERGED · NOT MIGRATED · NOT DEPLOYED)
 
