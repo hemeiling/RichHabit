@@ -296,6 +296,98 @@ describe("an existing account with the same address", () => {
   });
 });
 
+describe("what must not change", () => {
+  it("an Admin who connects Google stays exactly an Admin — role, plan and every other account untouched", async () => {
+    const admin = await makeAccount("boss", "boss@example.com");
+    await db.query(`update users set role = 'admin' where id = $1`, [admin]);
+    const others = await makeAccount("bystander", "by@example.com");
+    const snapshot = async () => (await db.query<any>(
+      `select id, role, email, username, password_hash, email_verified_at, disabled_at,
+              (select count(*)::int from user_plans p where p.user_id = u.id) as plans
+         from users u order by id`)).rows;
+    const before = await snapshot();
+
+    await comeBack(await begin(), { sub: "s-admin", email: "boss@example.com", email_verified: true });
+    await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "boss@example.com", password: "Verdant-Meadow-42" }));
+    expect((await finish.POST(post("http://app.test/api/auth/google/finish", { link: true }))).status).toBe(200);
+    jar.clear();
+    const viaGoogle = await comeBack(await begin(), { sub: "s-admin", email: "boss@example.com", email_verified: true });
+    expect(viaGoogle.pathname).toBe("/habits");
+    expect((await sessionUser())?.id).toBe(admin);
+
+    // Not one column of any account moved — the link lives in auth_identities alone.
+    expect(await snapshot()).toEqual(before);
+    void others;
+  });
+
+  it("a Google-only account gains a real password through the ordinary emailed reset — and keeps Google", async () => {
+    await comeBack(await begin(), { sub: "s-reset", email: "reset@example.com", email_verified: true });
+    await finish.POST(post("http://app.test/api/auth/google/finish", { username: "resetme", acceptedTerms: true }));
+    jar.clear();
+    const { requestReset, redeemReset } = await import("../src/lib/auth/passwordReset");
+    expect(await requestReset("reset@example.com", "en")).toBe("sent");
+    const mail = sent.at(-1) as unknown as { text: string };
+    const token = decodeURIComponent(mail.text.match(/#token=([^\s"<]+)/)![1]);
+    expect((await redeemReset(token, "Brand-New-Secret-77")).status).toBe("ok");
+
+    const withPassword: Response = await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "reset@example.com", password: "Brand-New-Secret-77" }));
+    expect(withPassword.status).toBe(200);
+    jar.clear();
+    const viaGoogle = await comeBack(await begin(), { sub: "s-reset", email: "reset@example.com", email_verified: true });
+    expect(viaGoogle.pathname).toBe("/habits");
+  });
+});
+
+describe("races", () => {
+  it("two sign-up handshakes for the same Google account: one account, and a calm refusal (never a 500)", async () => {
+    await comeBack(await begin(), { sub: "s-race", email: "race@example.com", email_verified: true });
+    const first = jar.get("rh_gpending")!;
+    await comeBack(await begin(), { sub: "s-race", email: "race@example.com", email_verified: true });
+    const second = jar.get("rh_gpending")!;
+    expect(first).not.toBe(second);
+
+    jar.set("rh_gpending", first);
+    const a: Response = await finish.POST(post("http://app.test/api/auth/google/finish", { username: "racer1", acceptedTerms: true }));
+    jar.delete("rh_session");
+    jar.set("rh_gpending", second);
+    const b: Response = await finish.POST(post("http://app.test/api/auth/google/finish", { username: "racer2", acceptedTerms: true }));
+    expect(a.status).toBe(200);
+    expect([409, 410]).toContain(b.status);
+    expect((await db.query<any>(`select count(*)::int as n from users where email = 'race@example.com'`)).rows[0].n).toBe(1);
+    expect((await db.query<any>(`select count(*)::int as n from auth_identities where provider_user_id = 's-race'`)).rows[0].n).toBe(1);
+  });
+
+  it("the same Google account finished twice with its address changed in between: one account, a calm 410", async () => {
+    await comeBack(await begin(), { sub: "s-moved", email: "old@example.com", email_verified: true });
+    const first = jar.get("rh_gpending")!;
+    await comeBack(await begin(), { sub: "s-moved", email: "new@example.com", email_verified: true });
+    const second = jar.get("rh_gpending")!;
+    jar.set("rh_gpending", first);
+    expect((await finish.POST(post("http://app.test/api/auth/google/finish",
+      { username: "moved1", acceptedTerms: true }))).status).toBe(200);
+    jar.delete("rh_session");
+    jar.set("rh_gpending", second);
+    expect((await finish.POST(post("http://app.test/api/auth/google/finish",
+      { username: "moved2", acceptedTerms: true }))).status).toBe(410);
+    expect((await db.query<any>(`select count(*)::int as n from users where username in ('moved1','moved2')`)).rows[0].n).toBe(1);
+  });
+
+  it("two link handshakes completed at once by the right account: linked once", async () => {
+    const owner = await makeAccount("twice", "twice@example.com");
+    await comeBack(await begin(), { sub: "s-twice", email: "twice@example.com", email_verified: true });
+    const t1 = jar.get("rh_gpending")!;
+    await comeBack(await begin(), { sub: "s-twice", email: "twice@example.com", email_verified: true });
+    const t2 = jar.get("rh_gpending")!;
+    await auth.createSession(owner);
+    const { linkPendingToAccount } = await import("../src/lib/auth/googleAccount");
+    const results = await Promise.all([linkPendingToAccount(t1, owner), linkPendingToAccount(t2, owner)]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await db.query<any>(`select count(*)::int as n from auth_identities where user_id = $1`, [owner])).rows[0].n).toBe(1);
+  });
+});
+
 describe("what the callback refuses", () => {
   it("a cancelled consent: a calm sentence, nothing created", async () => {
     await begin();

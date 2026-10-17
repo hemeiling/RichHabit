@@ -173,6 +173,12 @@ export async function finishGoogleSignup(
   } catch (e) {
     if (e instanceof Error && /users_username_idx/.test(e.message)) return { refused: "usernameTaken" };
     if (e instanceof Error && /users_email_idx/.test(e.message)) return { refused: "emailTaken" };
+    // The same Google account finished twice, its address changed in between:
+    // the identity key holds, the transaction rolled the account back, and
+    // starting again simply signs in.
+    if (e instanceof Error && /auth_identities_provider_provider_user_id_key/.test(e.message)) {
+      return { refused: "invalid" };
+    }
     throw e;
   }
 }
