@@ -8,7 +8,8 @@ import { AvatarRow, BoardMark, type Person } from "@/components/together/shared"
 /**
  * The top of a space: its mark and name, who is in it (which opens Members) and
  * a quiet ⋯ for the space's housekeeping (Members first). + Add members opens
- * in place (AddMembers); Members keeps the full management. The work — Board, Backlog, History —
+ * the one invite dialog (AddMembers) in place, on the work and on Members
+ * alike; Members itself manages who is in and who is pending. The work — Board, Backlog, History —
  * is one surface below it, so there are no view tabs; when Calendar arrives, a
  * small view switcher joins here. On the Members page a quiet link leads back
  * to the work.
@@ -43,7 +44,7 @@ export default function SpaceHeader({ id, name, members, view, onMore, onAddMemb
           <h2 className="display tg-board-title">{name}</h2>
         </div>
         <div className="tg-space-tools">
-          {onAddMembers && view !== "members" && (
+          {onAddMembers && (
             <button type="button" className="btn btn-quiet tg-small tg-add-members" aria-haspopup="dialog"
               onClick={onAddMembers}>
               + {t.addMembers}

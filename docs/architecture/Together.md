@@ -125,7 +125,9 @@ One table, two kinds, both pending until answered:
   when creating a board, from **+ Add members** (a dialog over the space:
   accepted collaborators first, then people from the inviter's other spaces,
   searchable by name or username, several ticked and invited at once — the
-  same directory in every space), or from the Members page — or to a
+  same directory in every space; the one invite interface, opened from the
+  space header on the work and on the Members page alike — Members itself
+  only manages who is in and who is pending) — or to a
   typed **username** (the public handle the Community board shows; an unknown
   username is refused plainly, which reveals nothing about email addresses). No
   email. It waits in the invitee's Together home (Invitations · 邀请) and the

@@ -746,7 +746,13 @@ body {
 @media (hover: none) { .tg-person-x { opacity: .6; } }
 
 /* The space header's + Add members: a quiet button that never wraps oddly. */
-.tg-add-members { white-space: nowrap; flex: none; }
+/* The space's one way to invite: easy to find, a thumb-sized target on touch. */
+.tg-add-members.btn-quiet {
+  white-space: nowrap; flex: none; font-weight: 500;
+  color: var(--accent); background: var(--accent-soft); border-color: transparent;
+}
+.tg-add-members.btn-quiet:hover { color: var(--accent); border-color: var(--accent); }
+@media (pointer: coarse) { .tg-add-members.btn-quiet { min-height: 44px; padding-inline: 14px; } }
 .tg-pick { list-style: none; margin: 0; padding: 0; }
 .tg-pick-row { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14.5px; cursor: pointer; }
 .tg-pick-row input { width: 18px; height: 18px; accent-color: var(--accent); }

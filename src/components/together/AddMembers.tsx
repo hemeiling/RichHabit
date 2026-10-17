@@ -23,8 +23,12 @@ import { Dialog } from "@/components/together/overlay";
 
 interface Invitable extends Person { username: string | null; collaborator: boolean; pending: boolean }
 
-export default function AddMembers({ boardId, canInvite, onClose }: {
+export default function AddMembers({ boardId, canInvite, onClose, onInvited, onMembersPage = false }: {
   boardId: string; canInvite: boolean; onClose: () => void;
+  /** After an invitation goes out — the Members page re-reads its pending list. */
+  onInvited?: () => void;
+  /** Opened from Members itself: no link back to the page already behind it. */
+  onMembersPage?: boolean;
 }) {
   const tt = useT();
   const t = tt.together;
@@ -76,6 +80,7 @@ export default function AddMembers({ boardId, canInvite, onClose }: {
     let done: string | null = null;
     try {
       done = await fn();
+      onInvited?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -124,7 +129,7 @@ export default function AddMembers({ boardId, canInvite, onClose }: {
       <Dialog label={t.addMembers} onClose={onClose}>
         {top}
         <p className="muted tg-am-note" role="note">{t.ownerInvitesOnly}</p>
-        <Link href={membersHref} className="tg-am-manage" data-autofocus>{t.seeMembers} →</Link>
+        {!onMembersPage && <Link href={membersHref} className="tg-am-manage" data-autofocus>{t.seeMembers} →</Link>}
       </Dialog>
     );
   }
@@ -210,7 +215,7 @@ export default function AddMembers({ boardId, canInvite, onClose }: {
         )}
       </div>
 
-      <Link href={membersHref} className="tg-am-manage">{t.manageMembers} →</Link>
+      {!onMembersPage && <Link href={membersHref} className="tg-am-manage">{t.manageMembers} →</Link>}
     </Dialog>
   );
 }
