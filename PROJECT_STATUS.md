@@ -113,6 +113,35 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
+## Add members in-place report — PRODUCTION CODE CORRECT · iOS sheet fix CANDIDATE `25efe43` (NOT MERGED)
+
+**PO report (2026-10-17, iPhone):** + Add members still seemed to navigate to
+the Members page. **Finding:** the deployed `1a59d51` already opens the
+dialog in place — proven by the PO's own validation script run as real
+browser interaction against the exact deployed commit's build: 57/57 at
+iPhone 390×844, iPhone SE 320×568 and desktop 1440×900, on the board and on
+Members — dialog rendered over the dimmed board, URL unchanged, zero
+navigations, bottom sheet on phones / centred modal on desktop, search +
+multi-select + email/username + Manage members inside, internal scrolling,
+closing restores the same URL/content/scroll (including from a scrolled
+board). Deploys are atomic and the live stylesheet is `1a59d51`'s, so the
+phone almost certainly showed a CACHED pre-fix page (an old server-rendered
+`<a href="…/members#invite">` keeps navigating even when its stale JS 404s).
+**Remedy for the phone: hard-reload / clear site data for
+richhabit.rosalytics.com, then retest.**
+
+**Real iOS defects found and fixed in `25efe43`** (one shared rule,
+`.sheet` in globals.css; every bottom sheet inherits): `max-height: 92vh`
+measured iOS's LARGE viewport, so a tall sheet ran behind Safari's visible
+toolbar → now `92dvh` with the vh fallback; and the sheet lacked
+`safe-area-inset-bottom` padding, so the last row could sit under the home
+indicator. Verified: in-place suite 57/57 on the fixed build; regressions
+Add members 51/51, collaborators 24/24, details 23/23; together unit
+187/187; lint + build clean. Screenshots with the popup OPEN over the board:
+scratchpad `shots7/fixed-*`. **Awaiting PO approval** — then fast-forward
+`main` `1a59d51 → 25efe43`, deploy, verify (live proof string: the
+`92dvh` rule in the served stylesheet).
+
 ## Add members follow-up fix — RELEASED · `main` = DEPLOYED = `1a59d51` (2026-10-17)
 
 **Release record:** PO approved `1a59d51`. `main` reconfirmed at `df75de8`;
