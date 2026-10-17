@@ -190,6 +190,26 @@
   token refuses calmly and sets nothing. Possible follow-up (PO decision, not
   in this release): reset page could probe the token on load instead of after
   typing.
+- **UAT incident, second occurrence + REAL frontend defect found and FIXED
+  (`f691b6c`).** The PO's second attempt also failed; evidence: the fresh
+  token was never consumed, hash still NULL, no server errors, and the PO's
+  own 11:26 Google session proved the browser reaches this exact server and
+  account. Root cause class: the reset page read `#token=` once per page
+  load; pasting a fresh link into a tab already on `/reset` is a
+  fragment-only navigation (`hashchange`, no load), so the page kept its old
+  token (or none) and the POST — if any — carried a stale token. Fix: a
+  `hashchange` listener adopts the pasted token, revives the form and strips
+  the fragment. Proven by a real-browser journey against the running 3200
+  stack (scratchpad `e2e/reset-journey.mjs`, **16/16**, network evidence
+  captured): forgot → outbox link → explicit "Password changed" → sign-in by
+  email AND username for the same user id; the exact stale-tab sequence now
+  succeeds; wrong password still 401; a second redeem ends earlier sessions;
+  PO's account untouched (hash null, 1 Google identity, 10 habits);
+  disposable probe account removed. Lint/typecheck/build clean. Ops note:
+  the 5437 PGlite socket server wedged during the run and was resumed
+  WITHOUT data loss via `e2e/dev-db-3200-resume.mjs` (no wipe; backup
+  `pgdata-dev3200-backup-wedge`); the PO's spent reset rows were aged out of
+  the daily cap so one more request works.
 - **Pending (before asking for release approval):** the PO's manual real-Google
   steps on the isolated 3200 stack — Google-only password recovery (reset
   requested; a FRESH link saved privately; use it without requesting again),
