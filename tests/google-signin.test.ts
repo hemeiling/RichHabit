@@ -301,8 +301,10 @@ describe("what must not change", () => {
     const admin = await makeAccount("boss", "boss@example.com");
     await db.query(`update users set role = 'admin' where id = $1`, [admin]);
     const others = await makeAccount("bystander", "by@example.com");
+    // Everything but email_verified_at, which the link is ALLOWED to set —
+    // Google attested the matching address and the password proved the account.
     const snapshot = async () => (await db.query<any>(
-      `select id, role, email, username, password_hash, email_verified_at, disabled_at,
+      `select id, role, email, username, password_hash, disabled_at,
               (select count(*)::int from user_plans p where p.user_id = u.id) as plans
          from users u order by id`)).rows;
     const before = await snapshot();
@@ -316,9 +318,38 @@ describe("what must not change", () => {
     expect(viaGoogle.pathname).toBe("/habits");
     expect((await sessionUser())?.id).toBe(admin);
 
-    // Not one column of any account moved — the link lives in auth_identities alone.
+    // Role, plan, credentials: not one of them moved, on any account. The one
+    // column the link may touch is the verified mark, on the admin alone.
     expect(await snapshot()).toEqual(before);
+    const marks = (await db.query<any>(
+      `select id, email_verified_at is not null v from users order by id`)).rows;
+    for (const m of marks) expect(m.v).toBe(m.id === admin);
     void others;
+  });
+
+  it("linking marks a matching, Google-verified address as verified — an unverified claim links but marks nothing", async () => {
+    // The common pre-flag account: signs in fine, address never proved.
+    const yes = await makeAccount("marky", "marky@example.com");
+    await comeBack(await begin(), { sub: "s-marky", email: "marky@example.com", email_verified: true });
+    await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "marky@example.com", password: "Verdant-Meadow-42" }));
+    expect((await finish.POST(post("http://app.test/api/auth/google/finish", { link: true }))).status).toBe(200);
+    const row = async (id: string) => (await db.query<any>(
+      `select email_verified_at is not null v,
+              (select count(*)::int from auth_identities a where a.user_id = u.id) g
+         from users u where id = $1`, [id])).rows[0];
+    const after = await row(yes);
+    expect(after).toEqual({ v: true, g: 1 }); // Google attested + password proved → the mark
+    jar.clear();
+
+    // Google itself does not vouch for this address: the identity still links
+    // (the password proved the account), but no verification is granted.
+    const no = await makeAccount("markn", "markn@example.com");
+    await comeBack(await begin(), { sub: "s-markn", email: "markn@example.com", email_verified: false });
+    await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "markn@example.com", password: "Verdant-Meadow-42" }));
+    expect((await finish.POST(post("http://app.test/api/auth/google/finish", { link: true }))).status).toBe(200);
+    expect(await row(no)).toEqual({ v: false, g: 1 });
   });
 
   it("a Google-only account gains a real password through the ordinary emailed reset — and keeps Google", async () => {

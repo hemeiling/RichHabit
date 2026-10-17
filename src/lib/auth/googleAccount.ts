@@ -115,6 +115,24 @@ export async function linkPendingToAccount(token: unknown, sessionUserId: string
        values ($1, 'google', $2, $3, now())
        on conflict do nothing returning id`,
       [sessionUserId, p.sub, p.email]);
+    /*
+     * The link just proved ownership twice over: Google attested the address
+     * (`email_verified`), and the password session proved the account. When
+     * the two name the same address, that address is as proved as a clicked
+     * emailed link, so it earns the same mark — which is what admits emailed
+     * Together invitations to the bell and makes password recovery possible.
+     *
+     * This cannot skip verification-gated capacity: an account still awaiting
+     * verification cannot sign in at all, so it can never reach either link
+     * flow. Only accounts that already sign in — above all the ones from
+     * before the flag — gain the mark here.
+     */
+    if (linked.length > 0 && p.emailVerified) {
+      await q(
+        `update users set email_verified_at = coalesce(email_verified_at, now())
+          where id = $1 and lower(email) = $2`,
+        [sessionUserId, p.email]);
+    }
     return linked.length > 0;
   });
 }
