@@ -177,6 +177,7 @@ export const zh: Dict = {
 
   today: {
     todayLabel: "今日",
+    seeProgress: "查看今日进度",
     avoid: "戒除",
     daysRunning: (n: number) => `已连续 ${n} 天`,
     highPriority: "高优先级",
@@ -363,7 +364,7 @@ export const zh: Dict = {
       emptyYear: (year: string) => `${year} 年还没有成果。完成的优先事项会汇集在这里。`,
     },
     score: "富习惯得分",
-    todaySuffix: "今天",
+    todayProgress: "今日 · 每日进度",
     sevenDays: "7 天",
     thirtyDays: "30 天",
     ninetyDays: "90 天",
@@ -599,7 +600,7 @@ export const zh: Dict = {
     todayIs: (pct: number) => `今天：${pct}%`,
     noneYet: "先完成几个习惯，这里就会画出你这个月的曲线。",
     tooEarly: "再记录一天，这里就会出现曲线。",
-    explain: "本月每一天：曲线是习惯完成度（0–100%），柱形是当天完成的优先事项数量，使用各自的刻度。今日页的圆环只代表今天。",
+    explain: "本月每一天：曲线是习惯完成度（0–100%），柱形是当天完成的优先事项数量，使用各自的刻度。只看今天，请看上方的圆环。",
     scheduledNone: "灰色的日期当天没有安排。",
     weightedNote: "你的数字计入了优先级权重；排行榜对所有人都不计权重。",
 

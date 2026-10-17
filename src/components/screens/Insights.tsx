@@ -3,9 +3,11 @@ import { useHabits } from "@/components/store";
 import Accomplishments from "@/components/Accomplishments";
 import AskCoach from "@/components/AskCoach";
 import MonthlyGratitude from "@/components/MonthlyGratitude";
+import { MonthProgress } from "@/components/ProgressPanel";
+import TodayProgress from "@/components/TodayProgress";
 import { Bars, Heatmap } from "@/components/ui";
 import { addDays, rangeBack, todayISO } from "@/lib/dates";
-import { CATEGORIES, dayScore, dayStreak, habitStats, rangeScore } from "@/lib/habits";
+import { CATEGORIES, dayStreak, habitStats, rangeScore } from "@/lib/habits";
 import { coach } from "@/lib/coach";
 import { correlations, strength } from "@/lib/correlate";
 import { useT } from "@/lib/i18n/context";
@@ -19,7 +21,6 @@ export default function Insights() {
   const week = rangeScore(state, rangeBack(today, 7));
   const month = rangeScore(state, rangeBack(today, 30));
   const quarter = rangeScore(state, rangeBack(today, 90));
-  const todayScore = dayScore(state, today);
 
   const totalCompleted = Object.values(state.completions)
     .reduce((a, day) => a + Object.values(day).filter((c) => c.done).length, 0);
@@ -39,18 +40,25 @@ export default function Insights() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/*
+        * Personal progress lives here, read from the nearest day outwards:
+        * today (moved from Rich Habits, which is for doing the habits), the
+        * score over 7/30/90 days with the streak, this month day by day (moved
+        * from the Today rail), then accomplishments and the longer history.
+        * Each figure appears once: today's percentage is the dial alone, and
+        * the score card no longer repeats it as a headline. The Community
+        * boards stay where connection happens — the Today rail and Community.
+        */}
+      <TodayProgress state={state} date={today} />
+
       <section className="card p-5">
         <div className="eyebrow">{t.insights.score}</div>
-        <div className="flex items-end gap-3 mt-1">
-          <span className="display num" style={{ fontSize: 46, lineHeight: 1 }}>
-            {todayScore.pct ?? "—"}<span style={{ fontSize: 22 }}>%</span>
-          </span>
-          <span className="muted mb-1.5" style={{ fontSize: 14 }}>{t.insights.todaySuffix}</span>
-        </div>
-        <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-3 mt-3">
           {([[t.insights.sevenDays, week.pct], [t.insights.thirtyDays, month.pct], [t.insights.ninetyDays, quarter.pct]] as const).map(([label, v]) => (
             <div key={label} className="flat p-3">
-              <div className="eyebrow" style={{ fontSize: 10 }}>{label}</div>
+              {/* Tighter tracking so "Habits completed" fits a phone's third
+                  column whole instead of breaking as "COMPLETE / D". */}
+              <div className="eyebrow" style={{ fontSize: 10, letterSpacing: ".08em" }}>{label}</div>
               <div className="display num mt-1" style={{ fontSize: 24 }}>{v == null ? "—" : `${v}%`}</div>
             </div>
           ))}
@@ -58,12 +66,19 @@ export default function Insights() {
         <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-3 mt-3">
           {([[t.insights.currentStreak, `${dayStreak(state)}d`], [t.insights.perfectDays, month.perfect], [t.insights.habitsCompleted, totalCompleted]] as const).map(([label, v]) => (
             <div key={label} className="flat p-3">
-              <div className="eyebrow" style={{ fontSize: 10 }}>{label}</div>
+              {/* Tighter tracking so "Habits completed" fits a phone's third
+                  column whole instead of breaking as "COMPLETE / D". */}
+              <div className="eyebrow" style={{ fontSize: 10, letterSpacing: ".08em" }}>{label}</div>
               <div className="display num mt-1" style={{ fontSize: 24 }}>{v}</div>
             </div>
           ))}
         </div>
       </section>
+
+      {/* The month, day by day — what was the Today rail's "My Progress".
+          Directly before Accomplishments, so the month's habits and the
+          month's finished priorities read together. */}
+      <MonthProgress />
 
       {/* What was accomplished, directly after how consistently habits were
           kept: two dimensions of the same period, deliberately not merged. */}

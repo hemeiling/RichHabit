@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { startDragAutoScroll, stopDragAutoScroll } from "@/lib/dragAutoScroll";
@@ -8,11 +9,11 @@ import ProgressPanel from "@/components/ProgressPanel";
 import GratitudeJournal from "@/components/GratitudeJournal";
 import HabitEditor from "@/components/HabitEditor";
 import HabitMenu from "@/components/HabitMenu";
-import { Empty, Field, ScoreDial, Sheet } from "@/components/ui";
+import { Empty, Field, Sheet } from "@/components/ui";
 import { isNumericTracking } from "@/lib/types";
 import { addDays, dow, prettyDate, todayISO } from "@/lib/dates";
 import {
-  CATEGORIES, blankHabit, dayScore, dayStreak, encouragement, habitStreak, isDone,
+  CATEGORIES, blankHabit, dayScore, encouragement, habitStreak, isDone,
   moveWithin, scheduledOn,
 } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
@@ -23,15 +24,14 @@ import type { AppState, Category, Habit } from "@/lib/types";
 /**
  * Rich Habits — the daily habit experience.
  *
- * This is what /today was, moved rather than rebuilt: the same day header and
- * score, the same three sections, the same rows, sheets, drag-and-drop and
- * journal, reading and writing the same records. Two things left, and nothing
- * else changed. The priority matrix is Priority Compass now, and Important
- * Dates went with it.
+ * This is what /today was, moved rather than rebuilt: the same day header, the
+ * same three sections, the same rows, sheets, drag-and-drop and journal,
+ * reading and writing the same records. Three things left, and nothing else
+ * changed. The priority matrix is Priority Compass now, Important Dates went
+ * with it, and the day's score dashboard is Insights' "Today · Daily progress".
  *
- * The date on screen drives the whole page, as it always did: the score, which
- * habits are scheduled, which are ticked, and which day's journal you are
- * writing in.
+ * The date on screen drives the whole page, as it always did: which habits are
+ * scheduled, which are ticked, and which day's journal you are writing in.
  */
 
 /**
@@ -293,10 +293,6 @@ export default function RichHabits() {
 
   const score = dayScore(state, date);
   const list = scheduledOn(state, date);
-  const segments = list.map((h) => ({
-    weight: state.prefs.weighted ? h.weight || 1 : 1,
-    done: isDone(state, date, h.id),
-  }));
 
   return (
     /*
@@ -307,46 +303,33 @@ export default function RichHabits() {
      */
     <div className="with-rail">
       <div className="flex flex-col gap-4">
-      <section className="card p-5">
-        <div className="flex items-center justify-between">
-          <div>
+      {/*
+        * The day, and nothing between it and the day's habits. The score dial,
+        * the per-section counts and the streak that used to fill this card are
+        * Insights' "Today · Daily progress" now (components/TodayProgress):
+        * this page is for doing the habits, Insights for reviewing them, and on
+        * a phone the first habit should be on the first screen. Each section
+        * below still shows its own "x of y" for whichever day is on screen.
+        */}
+      <section className="card px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="eyebrow">{isToday ? t.today.todayLabel : t.days.short[dow(date)]}</div>
-            <h1 className="display" style={{ fontSize: 27, lineHeight: 1.15, marginTop: 2 }}>{prettyDateFor(date, locale)}</h1>
+            <h1 className="display" style={{ fontSize: 25, lineHeight: 1.15, marginTop: 2 }}>{prettyDateFor(date, locale)}</h1>
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1" style={{ flex: "none" }}>
             <button className="btn btn-quiet" style={{ padding: "8px 12px" }}
               onClick={() => setDate(addDays(date, -1))} aria-label={t.common.previousDay}>‹</button>
             <button className="btn btn-quiet" style={{ padding: "8px 12px" }} disabled={isToday}
               onClick={() => setDate(addDays(date, 1))} aria-label={t.common.nextDay}>›</button>
           </div>
         </div>
-
-        <div className="flex flex-col sm:flex-row items-center gap-5 mt-4">
-          <ScoreDial score={score.pct} segments={segments.length ? segments : [{ weight: 1, done: false }]} />
-          <div className="flex-1 w-full">
-            <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-2">
-              {CATEGORIES.map((c) => {
-                const hs = list.filter((h) => h.category === c.id);
-                const done = hs.filter((h) => isDone(state, date, h.id)).length;
-                return (
-                  <div key={c.id} className="flat p-3">
-                    <div className="eyebrow" style={{ fontSize: 10 }}>{t.categories[c.id].label}</div>
-                    <div className="num display mt-1" style={{ fontSize: 20 }}>
-                      {done}<span className="faint">/{hs.length}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-4 mt-3" style={{ fontSize: 13 }}>
-              <span className="muted">{t.today.currentStreak} <b className="num" style={{ color: "var(--ink)" }}>{t.today.streakDays(dayStreak(state))}</b></span>
-              <span className="muted">{t.today.done} <b className="num" style={{ color: "var(--ink)" }}>{score.done}/{score.total}</b></span>
-            </div>
-            <p className="mt-2.5 muted" style={{ fontSize: 14, lineHeight: 1.45 }}>
-              {t.encouragement[encouragement(state, date, score)]}
-            </p>
-          </div>
-        </div>
+        <p className="mt-1.5 muted" style={{ fontSize: 14, lineHeight: 1.45 }}>
+          {t.encouragement[encouragement(state, date, score)]}{" "}
+          <Link href="/insights#today" className="faint" style={{ whiteSpace: "nowrap", textDecoration: "underline", textUnderlineOffset: 3 }}>
+            {t.today.seeProgress}
+          </Link>
+        </p>
       </section>
 
       {/*
@@ -478,13 +461,12 @@ export default function RichHabits() {
       </div>
 
       {/*
-        * The rail: how your own month is going, with the group one tap behind
-        * it. It is top-aligned beside the score card rather than below the
-        * habit list, because the two answer the same question at two time
-        * scales — today, and the month it belongs to.
+        * The rail: Community Progress, the existing board — for connection and
+        * motivation beside the day's work. Your own month is in Insights now
+        * (`MonthProgress`), with the rest of your personal statistics.
         *
         * Below 1280px the grid collapses and the rail follows the main content
-        * down the page — see `.with-rail` — which puts My Progress after the
+        * down the page — see `.with-rail` — which puts the board after the
         * checklist and the journal on a phone. That order is deliberate: the
         * first thing you should see is what you have to do, not how you
         * compare. Nothing is hidden and nothing is repositioned by script.

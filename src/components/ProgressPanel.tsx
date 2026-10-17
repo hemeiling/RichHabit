@@ -9,28 +9,25 @@ import { monthOf, monthSoFar, todayISO } from "@/lib/dates";
 import { accomplishedBetween } from "@/lib/accomplishments";
 import { barHeight, dailyProgress, dayIndexAt, type DayProgress } from "@/lib/progressSeries";
 import { fetchCommunity } from "@/lib/db";
-import type { Dict } from "@/lib/i18n";
 import { runsOf } from "@/lib/trend";
-import type { AppState } from "@/lib/types";
 import type { CommunitySnapshot } from "@/lib/community";
 
 /**
- * §20. The Today rail's progress card: your own month first, the board second.
+ * §20. Progress, at two scopes, in the two places each belongs.
  *
- * It used to be the board and only the board, which answered "how am I doing?"
- * with "here is where you rank" — a comparison, before the person had seen
- * their own month. So the default view is now theirs: the month-to-date figures
- * and a small chart of each day under them. The rankings are one tap away.
+ * - `MonthProgress` — your own month, day by day — is a section of Insights,
+ *   where personal statistics are reviewed. It used to be the "My Progress"
+ *   tab of the Today rail; Today is for doing the day's habits now.
+ * - The default export is the Today rail's Community Progress card: the live
+ *   board, for connection and motivation, beside the checklist on a wide
+ *   screen and below it on a phone, so it never pushes the habits down.
  *
  * Every habit number here comes from `dayScore` / `rangeScore`, the same
- * functions Today's dial and Insights use, and every accomplishment number from
- * the shared rule in lib/accomplishments — computed from state the browser
- * already holds. There is no second scoring rule and no extra request: a chart
- * that disagreed with the figures above it would be worse than no chart.
+ * functions Insights' dial and score card use, and every accomplishment number
+ * from the shared rule in lib/accomplishments — computed from state the browser
+ * already holds. The board reads the same `/api/community` the full Community
+ * page reads. There is no second scoring rule anywhere in this file.
  */
-
-/** How the two views are told apart in state and in the switch. */
-type View = "mine" | "community";
 
 /* ------------------------------- the chart -------------------------------- */
 
@@ -151,7 +148,18 @@ function DayChart({ days, month, locale }: { days: DayProgress[]; month: string;
 
 /* ----------------------------- my own month ------------------------------- */
 
-function MyProgress({ state }: { state: AppState }) {
+/**
+ * Insights' month section: the habit month-to-date figure and the day-by-day
+ * chart that used to be the Today rail's "My Progress" tab — the same
+ * calculation and the same chart, moved.
+ *
+ * Two of its old figures are not repeated, because Insights already shows them
+ * right beside this: today's percentage is the dial in "Today · Daily
+ * progress", and the month's accomplishment count heads the Accomplishments
+ * card that follows. The chart keeps both series, which is what it is for.
+ */
+export function MonthProgress() {
+  const { state } = useHabits();
   const t = useT();
   const locale = useLocale();
   const today = todayISO();
@@ -159,7 +167,7 @@ function MyProgress({ state }: { state: AppState }) {
 
   /*
    * Every day of the month so far. `dayScore` is the source of truth — the same
-   * call Today's dial makes — so the last habit point and the dial above are the
+   * call the dial makes — so the last habit point and the dial above are the
    * same measurement of the same day, and the month-to-date figure is
    * `rangeScore` over exactly these days.
    */
@@ -173,41 +181,25 @@ function MyProgress({ state }: { state: AppState }) {
   }, [state, today]);
 
   const scored = days.filter((d) => d.pct !== null).length;
-  const todayPct = days[days.length - 1]?.pct ?? null;
 
   return (
-    <>
-      {/* Two dimensions of the same month, side by side and never added up:
-          how consistently habits were kept, and what was actually finished. */}
-      <div className="flat p-3 mt-3">
-        <span className="faint block" style={{ fontSize: 11 }}>{t.progress.monthToDate}</span>
-        <div className="grid grid-cols-2 gap-3 mt-0.5">
-          <div style={{ minWidth: 0 }}>
-            {/* Both figures in the count face, so the pair reads as one set. */}
-            <span className="count block" style={{ fontSize: 24, lineHeight: 1.15 }}>
-              {mtd.pct === null ? "—" : `${mtd.pct}%`}
-            </span>
-            <span className="faint block" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
-              {t.progress.habitsLabel}
-              {todayPct !== null && <span className="num"> · {t.progress.todayIs(todayPct)}</span>}
-            </span>
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <span className="count block" style={{ fontSize: 24, lineHeight: 1.15 }}>{accomplished}</span>
-            <span className="faint block" style={{ fontSize: 11.5, lineHeight: 1.35 }}>
-              {t.progress.accomplishedLabel}
-            </span>
-          </div>
-        </div>
+    <section className="card p-5" aria-labelledby="month-progress-title">
+      <div id="month-progress-title" className="eyebrow">
+        {t.progress.thisMonth(monthTitleFor(month, locale))}
+      </div>
+      <div className="flex items-end gap-3 mt-1">
+        <span className="display num" style={{ fontSize: 40, lineHeight: 1 }}>
+          {mtd.pct === null ? "—" : `${mtd.pct}%`}
+        </span>
+        <span className="muted mb-1" style={{ fontSize: 14 }}>
+          {t.progress.monthToDate} · {t.progress.habitsLabel}
+        </span>
       </div>
 
       {scored === 0 && accomplished === 0 ? (
-        <p className="muted mt-3" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.progress.noneYet}</p>
+        <p className="muted mt-3" style={{ fontSize: 13, lineHeight: 1.5 }}>{t.progress.noneYet}</p>
       ) : (
         <>
-          <div className="eyebrow mt-3" style={{ fontSize: 10 }}>
-            {t.progress.thisMonth(monthTitleFor(month, locale))}
-          </div>
           <DayChart days={days} month={monthTitleFor(month, locale)} locale={locale} />
           <div className="flex justify-between faint num" style={{ fontSize: 10.5, marginTop: 2 }}>
             <span>1</span>
@@ -216,13 +208,13 @@ function MyProgress({ state }: { state: AppState }) {
           {/* The labels that stop the figures reading as a contradiction. */}
           <p className="faint mt-2" style={{ fontSize: 11.5, lineHeight: 1.45 }}>
             {t.progress.explain}
-            {/* Only when this card can show two different month figures: the
+            {/* Only when this figure and the Community board's can differ: the
                 reader's own is weighted by priority, the board's never is. */}
             {state.prefs.weighted && ` ${t.progress.weightedNote}`}
           </p>
         </>
       )}
-    </>
+    </section>
   );
 }
 
@@ -398,43 +390,26 @@ function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: bool
 
 /* ------------------------------- the card --------------------------------- */
 
+/**
+ * The Today rail's card: Community Progress, the existing board, unchanged —
+ * both rankings (habits, accomplishments), the reader's rank, usernames only,
+ * the show-me switch and the way through to the full Community page. It used
+ * to share the card with a "My Progress" tab; that tab is Insights' month
+ * section now (`MonthProgress`), so the board needs no switch to reach.
+ */
 export default function ProgressPanel() {
   const { state, actions } = useHabits();
   const t = useT();
-  const [view, setView] = useState<View>("mine");
-
-  const label = (v: View, d: Dict) => (v === "mine" ? d.progress.mine : d.progress.community);
 
   return (
     <section className="card p-4" aria-labelledby="progress-panel-title">
-      {/* A stable name for the card. The tabs below say which view is showing;
-          repeating the selected tab's own words up here said nothing twice. */}
       <div className="eyebrow" id="progress-panel-title" style={{ fontSize: 10 }}>
-        {t.progress.title}
+        {t.community.title}
       </div>
-
-      {/* Two views, one card. Tabs rather than a second card, because they
-          answer the same question at two scopes and only one is wanted at a time. */}
-      <div className="flex gap-1.5 mt-2" role="tablist">
-        {(["mine", "community"] as const).map((v) => (
-          <button key={v} type="button" className="chip" data-on={view === v}
-            role="tab" aria-selected={view === v}
-            aria-label={t.progress.switchTo(label(v, t))}
-            style={{ padding: "4px 10px", fontSize: 12 }}
-            onClick={() => setView(v)}>
-            {label(v, t)}
-          </button>
-        ))}
-      </div>
-
-      {view === "mine"
-        ? <MyProgress state={state} />
-        : (
-          <Community
-            visible={state.prefs.communityVisible}
-            onShowMe={(communityVisible) => actions.setPrefs({ communityVisible })}
-          />
-        )}
+      <Community
+        visible={state.prefs.communityVisible}
+        onShowMe={(communityVisible) => actions.setPrefs({ communityVisible })}
+      />
     </section>
   );
 }

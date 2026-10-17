@@ -227,6 +227,8 @@ export const en = {
   },
   today: {
     todayLabel: "Today",
+    /** The quiet link from the day's header to its progress on Insights. */
+    seeProgress: "See today's progress",
     avoid: "Avoid",
     daysRunning: (n: number) => (n === 1 ? "1 day running" : `${n} days running`),
     highPriority: "High priority",
@@ -419,7 +421,8 @@ export const en = {
       emptyYear: (year: string) => `Nothing crossed off in ${year} yet. Completed priorities gather here.`,
     },
     score: "Rich habit score",
-    todaySuffix: "today",
+    /** Insights' first section: the day's dial and counts, moved from Rich Habits. */
+    todayProgress: "Today · Daily progress",
     sevenDays: "7 days",
     thirtyDays: "30 days",
     ninetyDays: "90 days",
@@ -681,9 +684,10 @@ export const en = {
     todayIs: (pct: number) => `Today: ${pct}%`,
     noneYet: "Tick a few habits and your month will start drawing itself here.",
     tooEarly: "One more day and a line appears here.",
-    /* Says the span, because Today's dial is one day and this is the whole
-       month. Two different numbers, both correct, on the same screen. */
-    explain: "Each day this month: the line is habit completion on a 0–100% scale, and the columns count priorities completed that day, on their own scale. Today's dial is just today.",
+    /* Says the span, because this is the whole month — today alone is the
+       dial at the top of Insights. Two different numbers, both correct, so
+       the reader is told which is which. */
+    explain: "Each day this month: the line is habit completion on a 0–100% scale, and the columns count priorities completed that day, on their own scale. Today alone is the dial above.",
     scheduledNone: "Nothing was scheduled on the greyed days.",
     /* Shown only when the two figures in this card can actually differ —
        i.e. when the reader weights their own habits by priority and the
@@ -726,10 +730,10 @@ export const en = {
     view: "View Community",
     monthNames: ["January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"],
-    /* Says the window in the label itself. Today's dial and this figure are
-       different measurements over different spans, and side by side on the
-       Today page the smaller number reads as a stale copy of the bigger one
-       unless the label rules it out. */
+    /* Says the window in the label itself. Today's dial (Insights) and this
+       figure are different measurements over different spans, and a month's
+       number read beside a day's looks like a stale copy of it unless the
+       label rules that out. */
     myCompleteness: "Month-to-date completeness",
     /** The same thing, short enough for the 300px rail on Today. */
     monthToDate: "Month to date",
