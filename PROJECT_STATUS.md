@@ -210,12 +210,39 @@
   WITHOUT data loss via `e2e/dev-db-3200-resume.mjs` (no wipe; backup
   `pgdata-dev3200-backup-wedge`); the PO's spent reset rows were aged out of
   the daily cap so one more request works.
-- **Pending (before asking for release approval):** the PO's manual real-Google
-  steps on the isolated 3200 stack — Google-only password recovery (reset
-  requested; a FRESH link saved privately; use it without requesting again),
-  explicit linking to a password account (needs a 3200 DB reset first),
-  returning login, Together invitation
-  — then the agent's no-duplicates check (`google-check.mjs`, app paused).
+- **PO real-Google recovery UAT: PASSED (2026-10-17 ~13:25 local)** on the
+  fixed build — reset page showed "Password changed"; email+password,
+  username+password and Google all sign in. DB evidence before the approved
+  3200 reset: one account for both identifiers (same id), the one Google
+  identity points at it, password now set, 10 habits, role/plan unchanged,
+  0 duplicate addresses DB-wide.
+- **3200 test DB reset (PO-approved) → final regression, ALL PASS:**
+  linking journey `e2e/googlelink.mjs` **33/33** (password account with 10
+  habits, 3 completions, a priority and a Space → Continue with Google does
+  not sign in, asks → finishing with hippo's password links nothing and
+  burns the handshake → owner's password links → Google, username and email
+  all open the same habit ids → Together: pre-link Space still listed,
+  username invitation in the bell of the Google session and accepted →
+  users row byte-identical (all 12 columns), habits/completions/priority
+  byte-identical, plan unchanged, 1 Google identity (none on hippo), no
+  duplicates, 0 live handshakes); `googlesignin.mjs` 14/14;
+  `googletogether.mjs` 7/7; `reset-journey.mjs` 16/16; unit 1543/1544 (the
+  1 = the PO's uncommitted local inspect-prod-readonly edit, never in a
+  branch commit); typecheck + lint clean; build current (no app source
+  change since `f691b6c`).
+- **Design note, NOT a blocker (PO decision for later):** an EMAILED Together
+  invitation reaches the bell only for a proved address (RC1 rule). Linking
+  Google deliberately changes no users column, so an account whose address
+  was never verified stays unproved even though Google attested that address
+  at link time; its emailed invitation still works through the email link,
+  and username invitations reach the bell. Option: mark the address verified
+  when a link completes with a Google-verified, matching address.
+- **No release blockers found.** Remaining: PO's optional real-Google linking
+  pass on 3200 (now in real-Google mode, test DB with example.com accounts
+  only — the PO's Gmail is unused), then release authorization: fresh
+  read-only production preflight → production step 21 → fast-forward merge
+  → Render env vars GOOGLE_CLIENT_ID/SECRET + production redirect URIs in
+  Google Console → deploy → served-build proof → real iPhone smoke.
   iPhone cannot reach 127.0.0.1 and Google forbids plain-http non-localhost
   redirects, so real-Google-on-iPhone happens at release (layout and flow are
   covered by the fake-Google emulation runs). Release itself (fresh read-only
