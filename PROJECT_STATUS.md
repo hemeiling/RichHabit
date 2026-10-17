@@ -230,19 +230,33 @@
   1 = the PO's uncommitted local inspect-prod-readonly edit, never in a
   branch commit); typecheck + lint clean; build current (no app source
   change since `f691b6c`).
-- **Design note, NOT a blocker (PO decision for later):** an EMAILED Together
-  invitation reaches the bell only for a proved address (RC1 rule). Linking
-  Google deliberately changes no users column, so an account whose address
-  was never verified stays unproved even though Google attested that address
-  at link time; its emailed invitation still works through the email link,
-  and username invitations reach the bell. Option: mark the address verified
-  when a link completes with a Google-verified, matching address.
-- **No release blockers found.** Remaining: PO's optional real-Google linking
-  pass on 3200 (now in real-Google mode, test DB with example.com accounts
-  only — the PO's Gmail is unused), then release authorization: fresh
-  read-only production preflight → production step 21 → fast-forward merge
-  → Render env vars GOOGLE_CLIENT_ID/SECRET + production redirect URIs in
-  Google Console → deploy → served-build proof → real iPhone smoke.
+- **Email-verification investigation (PO question, 2026-10-17): enforcement is
+  LIVE in production, OFF locally by design.** Local 3200/3100 stacks never
+  set REQUIRE_EMAIL_VERIFICATION, so test signups get an immediate session
+  (`.env.example` documents the flag; the mail goes to a scratch outbox).
+  Production, read-only (rolled back): every self-signup since 2026-09-19
+  carries `verification_required: true` — the flag IS set on Render — the
+  newest (2026-10-16) is unverified and therefore locked out until its link;
+  email_verifications 4 rows / 3 consumed. The system already matches the
+  PO's desired behavior 1–3: flag-gated signup, no session until the link,
+  403 + resend at sign-in, confirmation page, Google-verified claim = born
+  verified, unverified Google = our flow. Desired behavior 4 was the one gap
+  and is now BUILT (`39d45eb`): a completed link (login prompt or Settings)
+  marks the account's address verified when Google attested that same
+  address — admitting emailed Together invitations to the bell and enabling
+  password recovery for those accounts; an unverified Google claim links but
+  marks nothing; verification-gated accounts cannot reach a link flow at
+  all, so capacity/lockout semantics are untouched. Existing accounts and
+  the 5 Admins keep access and data; an Admin who links gains only the
+  verified mark. Verified: suite 17/17, unit 1545 total (1 known
+  local-only), browser googlelink 34/34 + googlesignin 14/14 +
+  googletogether 7/7 + reset-journey 16/16 on the rebuilt app, typecheck +
+  lint clean.
+- **RELEASE APPROVED by the PO (2026-10-17): proceeding** — fresh read-only
+  production preflight → production step 21 (additive, rehearsed twice) →
+  fast-forward merge → Render env vars GOOGLE_CLIENT_ID/SECRET + production
+  redirect URIs (PO-configured; verified from the live app without
+  secrets) → deploy → served-build proof → PO's real iPhone smoke.
   iPhone cannot reach 127.0.0.1 and Google forbids plain-http non-localhost
   redirects, so real-Google-on-iPhone happens at release (layout and flow are
   covered by the fake-Google emulation runs). Release itself (fresh read-only
