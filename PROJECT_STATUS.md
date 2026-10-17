@@ -113,6 +113,39 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
+## Sign in with Google — validation stage (2026-10-17) · candidate tip `44354d2`
+
+- **Configuration:** PO created the OAuth client; GOOGLE_CLIENT_ID (…apps.googleusercontent.com)
+  and GOOGLE_CLIENT_SECRET (GOCSPX-…) present in `.env.local` (shapes checked,
+  values never printed). Google accepts the client and the
+  `http://127.0.0.1:3200/api/auth/google/callback` redirect (normal sign-in
+  page, no invalid_client / redirect_uri_mismatch). The secret is proven only
+  by a real token exchange → first manual sign-in.
+- **Added coverage (`44354d2`):** Admin who links Google keeps every column of
+  every account; Google-only account gains a password via the emailed reset
+  and keeps Google; races (two sign-up handshakes for one sub; two link
+  finishes) → one account/identity; a sub finishing with a changed address →
+  calm 410 instead of a 500. Integration suite 15/15. Browser (fake Google):
+  journey 14/14; Together + session 7/7 (Google-verified address counts as
+  proved → email invitation in the bell → accept opens the Space; session
+  survives reload/new tab; sign-out ends it everywhere).
+- **Neon rehearsal (PRELIMINARY, on the isolated rehearsal branch
+  `richhabit-rc1-r1-rehearsal-20261016`, a production clone at step 20; host
+  checked ≠ production):** pass 1 exactly 4 changes; pass 2 "Nothing to do";
+  48/48 pre-existing tables byte-identical; admins 5 → 5; constraints
+  verified; real-Postgres concurrency 10/10 rounds (two connections claim one
+  Google sub at once → exactly one winner, loser 23505); all test rows
+  removed (users 19 → 19, auth_identities 0). One harness crash (Neon pooler
+  ended an idle test transaction) left 2 test users — found and removed.
+  Rollback compatibility: the DEPLOYED build `1a59d51` on the migrated branch
+  — health ok, password sign-in 200, signed-in page 200, wrong password 401.
+  **A final rehearsal on a FRESH PO-created branch is still required before
+  production.**
+- **Pending:** the PO's manual real-Google pass on the isolated 3200 stack
+  (desktop; iPhone cannot reach 127.0.0.1 and Google forbids plain-http
+  non-localhost redirects, so real-Google-on-iPhone happens at release —
+  iPhone layout and flow are covered by the fake-Google emulation runs).
+
 ## Sign in with Google — CANDIDATE `6537314` on `feature/google-signin` (NOT MERGED · NOT MIGRATED · NOT DEPLOYED)
 
 PO approved the architecture and decisions 1–6 (explicit linking only;
