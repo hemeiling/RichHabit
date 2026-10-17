@@ -613,6 +613,8 @@ export const zh: Dict = {
   community: {
     habitRanking: "习惯排名",
     accomplishmentRanking: "成果排名",
+    accomplishmentsEntry: "社区成果",
+    accomplishmentsEntryHint: "本月完成的优先事项在这里排名。",
     boardHabits: "习惯",
     boardAccomplishments: "成果",
     showBoard: (name: string) => `查看${name}`,

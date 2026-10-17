@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { fetchCommunity } from "@/lib/db";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { instantDateFor } from "@/lib/i18n";
@@ -28,7 +29,11 @@ export default function Community() {
   const locale = useLocale();
   const [data, setData] = useState<CommunitySnapshot | null>(null);
   const [error, setError] = useState(false);
-  const [board, setBoard] = useState<Board>("habits");
+  /* `?board=accomplishments` opens on that ranking — the deep link Priority
+     Compass uses, since completed priorities are what that board counts.
+     Anything else means the usual front: habits. */
+  const wanted = useSearchParams().get("board");
+  const [board, setBoard] = useState<Board>(wanted === "accomplishments" ? "accomplishments" : "habits");
 
   useEffect(() => {
     let live = true;

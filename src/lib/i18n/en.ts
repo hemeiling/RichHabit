@@ -708,6 +708,9 @@ export const en = {
        adds them together. Plain words, no medals or "top performer". */
     habitRanking: "Habit Ranking",
     accomplishmentRanking: "Accomplishment Ranking",
+    /** Priority Compass's quiet way through to the accomplishments board. */
+    accomplishmentsEntry: "Community Accomplishments",
+    accomplishmentsEntryHint: "Where this month's completed priorities rank.",
     /** The shorter names the 300px rail's switch uses. */
     boardHabits: "Habits",
     boardAccomplishments: "Accomplishments",
