@@ -20,7 +20,29 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   if (!google.enabled) return NextResponse.redirect(new URL("/login", appUrl()), 302);
-  const q = new URL(request.url).searchParams;
+  const here = new URL(request.url);
+  const q = here.searchParams;
+
+  /*
+   * Google always returns to ONE callback — APP_URL's — and the handshake
+   * cookies planted below are host-only. Started on any other domain the
+   * app answers on (richhabit.onrender.com beside richhabit.rosalytics.com),
+   * the cookies would sit on the wrong host and every return would fail
+   * the state check. So the handshake begins on the canonical host: one hop
+   * there with the same query, nothing planted here.
+   *
+   * At most ONE hop: the hop carries `hop=1`, and a request that still looks
+   * foreign after it (a proxy that hides the public host) proceeds exactly
+   * as before rather than bouncing forever.
+   */
+  const canonical = new URL(appUrl());
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? here.host;
+  if (host.toLowerCase() !== canonical.host.toLowerCase() && !q.has("hop")) {
+    const next = new URL("/api/auth/google/start", canonical);
+    for (const [k, v] of q) next.searchParams.set(k, v);
+    next.searchParams.set("hop", "1");
+    return NextResponse.redirect(next, 302);
+  }
 
   const linking = q.get("flow") === "link";
   if (linking && !(await getSessionUser())) {

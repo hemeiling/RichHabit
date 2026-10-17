@@ -125,6 +125,35 @@ const post = (url: string, body: unknown) => req(url, {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
 });
 
+describe("two domains, one callback", () => {
+  it("a start on another domain hops to APP_URL's start first, keeping the query and planting nothing", async () => {
+    jar.clear();
+    const res: Response = await start.GET(req("http://other.example/api/auth/google/start?then=together",
+      { headers: { host: "other.example" } }));
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("http://app.test/api/auth/google/start?then=together&hop=1");
+    for (const name of ["rh_gstate", "rh_gnonce", "rh_gpkce", "rh_gflow"]) expect(jar.get(name)).toBeUndefined();
+  });
+
+  it("never more than one hop: still foreign after it, the start proceeds to Google instead of bouncing", async () => {
+    const res: Response = await start.GET(req("http://other.example/api/auth/google/start?hop=1",
+      { headers: { host: "other.example" } }));
+    expect(res.status).toBe(302);
+    const to = new URL(res.headers.get("location")!);
+    expect(to.pathname).not.toBe("/api/auth/google/start");   // not a second hop
+    expect(to.searchParams.get("redirect_uri")).toBe("http://app.test/api/auth/google/callback");
+    expect(to.searchParams.get("code_challenge_method")).toBe("S256");
+  });
+
+  it("behind a proxy, the forwarded host decides — a canonical forwarded host goes straight to Google", async () => {
+    const res: Response = await start.GET(req("http://10.0.0.5:10000/api/auth/google/start",
+      { headers: { host: "10.0.0.5:10000", "x-forwarded-host": "app.test" } }));
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get("location")!).searchParams.get("redirect_uri"))
+      .toBe("http://app.test/api/auth/google/callback");
+  });
+});
+
 /** start → Google's redirect, parsed. */
 async function begin(params = "") {
   const res: Response = await start.GET(req(`http://app.test/api/auth/google/start${params}`));
