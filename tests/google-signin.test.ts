@@ -331,12 +331,62 @@ describe("what must not change", () => {
     const token = decodeURIComponent(mail.text.match(/#token=([^\s"<]+)/)![1]);
     expect((await redeemReset(token, "Brand-New-Secret-77")).status).toBe("ok");
 
-    const withPassword: Response = await signin.POST(post("http://app.test/api/auth/signin",
+    // Both doors the login form offers — the address and the username — open
+    // with the password the reset set. created_via='google' plays no part.
+    const withEmail: Response = await signin.POST(post("http://app.test/api/auth/signin",
       { identifier: "reset@example.com", password: "Brand-New-Secret-77" }));
-    expect(withPassword.status).toBe(200);
+    expect(withEmail.status).toBe(200);
+    jar.clear();
+    const withUsername: Response = await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "resetme", password: "Brand-New-Secret-77" }));
+    expect(withUsername.status).toBe(200);
     jar.clear();
     const viaGoogle = await comeBack(await begin(), { sub: "s-reset", email: "reset@example.com", email_verified: true });
     expect(viaGoogle.pathname).toBe("/habits");
+
+    // One account throughout: the reset touched password_hash and nothing else.
+    const { rows: [acct] } = await db.query<any>(
+      `select (count(*) over ())::int as accounts, u.id, u.created_via,
+              (select count(*)::int from habits h where h.user_id = u.id) as habits,
+              (select count(*)::int from auth_identities a where a.user_id = u.id and a.provider = 'google') as google
+         from users u where lower(u.email) = 'reset@example.com'`);
+    expect(acct.accounts).toBe(1);
+    expect(acct.created_via).toBe("google");
+    expect(acct.habits).toBeGreaterThan(0);
+    expect(acct.google).toBe(1);
+    expect((await sessionUser())?.id).toBe(acct.id);
+  });
+
+  it("asking for a reset again kills the older link: the stale token refuses calmly, the newest one works", async () => {
+    await comeBack(await begin(), { sub: "s-stale", email: "stale@example.com", email_verified: true });
+    await finish.POST(post("http://app.test/api/auth/google/finish", { username: "stale", acceptedTerms: true }));
+    jar.clear();
+    const { requestReset, redeemReset } = await import("../src/lib/auth/passwordReset");
+    const token = async () => {
+      const mail = sent.at(-1) as unknown as { text: string };
+      return decodeURIComponent(mail.text.match(/#token=([^\s"<]+)/)![1]);
+    };
+    expect(await requestReset("stale@example.com", "en")).toBe("sent");
+    const older = await token();
+    // The real flow enforces a pause between two reset emails for one account;
+    // age the first row past it rather than wait it out.
+    await db.query(`update password_resets set created_at = created_at - interval '2 minutes'`);
+    expect(await requestReset("stale@example.com", "en")).toBe("sent");
+    const newest = await token();
+
+    // The older link died the moment the newer one was issued — the exact
+    // sequence of the 2026-10-17 UAT, where a saved link was used after a
+    // fresh request. No password lands, and the refusal is calm.
+    expect((await redeemReset(older, "Saved-Too-Early-11")).status).toBe("invalid");
+    expect((await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "stale", password: "Saved-Too-Early-11" }))).status).toBe(401);
+
+    expect((await redeemReset(newest, "Fresh-Enough-22")).status).toBe("ok");
+    expect((await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "stale", password: "Fresh-Enough-22" }))).status).toBe(200);
+    jar.clear();
+    expect((await signin.POST(post("http://app.test/api/auth/signin",
+      { identifier: "stale@example.com", password: "Fresh-Enough-22" }))).status).toBe(200);
   });
 });
 
