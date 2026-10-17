@@ -158,20 +158,53 @@ from `main` = `e7844c6`. **No schema change, no migration.**
   proves the check-then-insert logic, not parallel locking; real Postgres
   relies on the existing board row lock taken first in every invite path.
 
-**Next step:** Product Owner review → on approval, merge (no migration) and
-deploy. Phase 2 (per-member grants) waits on the entitlement design below.
+**Release readiness (2026-10-16, PO approved preparation only):** release
+candidate = `df75de8` alone (parent `e7844c6` = `origin/main`, fast-forward;
+14 files, none under `db/` or `scripts/`; the status commit stays off
+`main`). On a CLEAN worktree of `df75de8`: 1522/1522 unit tests (no failures
+— the `inspect-prod-readonly` failure exists only with the PO's local edits),
+typecheck, lint, build; browser suites against that clean build on the
+isolated 3200 stack: Add members 37/37, collaborators 24/24, priority details
+23/23. Production read-only: invitation baseline unchanged (0 non-owner
+inviters, 0 non-owner or orphaned invitations); all 2,817 pre-recorded row
+identities present (growth = ordinary use). **Awaiting explicit final
+release authorization** — then fast-forward `main` to `df75de8`, Render
+deploy, live verification.
+
+**Next step:** Product Owner final release authorization for Phase 1. Phase 2
+(per-member grants) waits on the entitlement design below.
 
 ### Phase 2 prerequisite — entitlement review (DESIGN ONLY, awaiting approval)
 
-Read-only production facts (2026-10-16): 17 accounts = 5 admin + 12 user;
-admins hold no plan rows. The first-50 non-admin cohort by creation order is
-those 12 (8 `pro:grandfathered`, 4 with no plan row = Free); 38 slots
-remain. **10 of the 12 have never verified their email** (they predate
-verification), which matters if "eligible" requires verification. No
-created_at ties. Current infra: `src/lib/entitlements` (Plan free|pro,
-sources incl. grandfathered, Admin bypass), `user_plans` (one row per user,
-CHECK on plan/source). Proposal and open decisions are in the conversation
-record of 2026-10-16 and summarised in the final report.
+PO direction (2026-10-16): two tiers only, **Free** and **Advanced**; Admin
+is a platform role (Advanced included, never a position, never a privacy
+bypass, **no admin role changes authorized**); the first 50 eligible
+non-admin, non-test accounts get **Advanced — Complimentary Lifetime** by
+creation order, unverified accounts included, positions permanent and never
+reused; Free = 20 active habits / 20 active priorities / 20 Important Dates;
+"Pro" renamed "Advanced" in the UI; no billing.
+
+Read-only audit (2026-10-16): 17 accounts = 5 admins (hippo, claire, emma,
+ecamacho773, richhabituser01 — unchanged, hold no plan rows) + 12 users. The
+two designated test accounts exist exactly as documented (`d2aeb944…`
+rhsmoke64t0ru, `48b3c3d9…` meimei). **Proposed positions 1–10** in creation
+order: richhabituser03, 04, 05, 06, 07, 08, 09, gazarfar (all 8 Grandfathered
+Pro), tom, testtesttest (both Free) — **40 positions left**.
+`testtesttest` (created 2026-10-16) looks like a test account but is not one
+of the two designated: PO decision. No created_at ties.
+
+**Five-habit limit — root cause (code + data):** every new account is seeded
+with 10 *active* starter habits (`src/lib/seed.ts`), and Free allows 15
+active habits (`FREE_LIMITS`, enforced only in `guardActiveHabitLimit`), so
+a Free account can add exactly 5 of its own. No code path limits habits to
+5; the only "5" is the daily new-priority quota. In production no Free
+account is near 15 and the PO's own account (hippo) is an Admin (unlimited),
+so the limit was met on a Free (test) account. Free = 20 lifts it to 10.
+
+Architecture proposal (additive migration, allocation lock, resolver,
+quotas, Together integration, rehearsal, rollback, tests) and the open
+decisions: see the conversation report of 2026-10-16. **Design only — not
+implemented; no migration; awaiting PO approval.**
 
 ## Drag auto-scroll — `main` = `e7844c6` (MERGED 2026-10-16 ~22:37 UTC · RENDER DEPLOY UNCONFIRMED)
 
