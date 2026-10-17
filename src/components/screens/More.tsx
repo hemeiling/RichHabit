@@ -21,7 +21,13 @@ const LINKS = [
   { href: "/more/review", key: "review" },
 ] as const;
 
-export default function More({ account }: { account: AccountSummary }) {
+export default function More({ account, googleEnabled = false, googleNote = null }: {
+  account: AccountSummary;
+  /** Whether this deployment has Google sign-in configured at all. */
+  googleEnabled?: boolean;
+  /** `?google=` after returning from a Connect: a key, said in the reader's language. */
+  googleNote?: "connected" | "notYours" | null;
+}) {
   const { state, actions, saving } = useHabits();
   const t = useT();
   const locale = useLocale();
@@ -196,6 +202,36 @@ export default function More({ account }: { account: AccountSummary }) {
         {account.emailVerified && (
           <div className="faint mt-3" style={{ fontSize: 12.5 }}>{t.protect.verified}</div>
         )}
+
+        {/*
+          * How this account signs in. Connecting Google is a navigation (the
+          * whole OAuth flow is top-level redirects); the server checks the
+          * session again, so this is convenience, never authorization. No
+          * unlinking here — its safety rules are a decision not yet taken.
+          */}
+        <div className="flat p-3.5 mt-3">
+          <div className="eyebrow">{t.more.signInMethods}</div>
+          <div className="mt-2 flex items-center justify-between gap-3" style={{ fontSize: 13.5 }}>
+            <span>
+              {account.googleEmail !== null
+                ? (account.googleEmail ? t.more.googleConnectedAs(account.googleEmail) : t.more.googleConnectedPlain)
+                : t.more.googleNotConnected}
+            </span>
+            {account.googleEmail === null && googleEnabled && (
+              <a className="btn" style={{ padding: "6px 14px", fontSize: 13 }} href="/api/auth/google/start?flow=link">
+                {t.more.connectGoogle}
+              </a>
+            )}
+          </div>
+          <div className="faint mt-1.5" style={{ fontSize: 12.5 }}>
+            {account.hasPassword ? t.more.passwordSet : t.more.passwordNotSet}
+          </div>
+          {googleNote && (
+            <p className="mt-1.5" role="status" style={{ fontSize: 12.5, color: "var(--accent)" }}>
+              {googleNote === "connected" ? t.more.googleJustConnected : t.more.googleNotYours}
+            </p>
+          )}
+        </div>
 
         {/* The same page the forced-change flow uses, reached deliberately
             rather than by redirect. One password form, one API route. */}

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LanguageToggle from "@/components/LanguageToggle";
@@ -25,10 +25,31 @@ type Mode = "signin" | "signup";
  * The language switcher is here as well as in More: a relative opening this for
  * the first time has to be able to change it before they have an account.
  */
-export default function LoginForm({ initialMode = "signin", returnTo }: {
+/** Google's "G", per its brand guidelines; decoration beside the words. */
+function GoogleMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" style={{ flex: "none" }}>
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
+  );
+}
+
+export default function LoginForm({ initialMode = "signin", returnTo, withGoogle = false,
+  googleStep = null, googleError = null, thenKeyword }: {
   initialMode?: Mode;
   /** An internal path from the page's fixed allow-list; /habits otherwise. */
   returnTo?: string;
+  /** Whether this deployment has Google sign-in configured at all. */
+  withGoogle?: boolean;
+  /** A pending Google handshake to finish: link to an existing account, or register. */
+  googleStep?: "linkExisting" | "finish" | null;
+  /** `?gerr=` — why the Google attempt came back, as a key, said in the reader's language. */
+  googleError?: "cancelled" | "failed" | "disabled" | null;
+  /** The allow-list keyword to carry through the Google flow. */
+  thenKeyword?: string;
 }) {
   const t = useT();
   const router = useRouter();
@@ -65,6 +86,28 @@ export default function LoginForm({ initialMode = "signin", returnTo }: {
   /** Offered after a sign-in refused for want of verification. */
   const [needsVerify, setNeedsVerify] = useState(false);
   const [resendNote, setResendNote] = useState<string | null>(null);
+  /** The pending Google handshake, read (never spent) from the server. */
+  const [gPending, setGPending] = useState<null | { step: "link" | "signup"; email: string }>(null);
+  const [gUsername, setGUsername] = useState("");
+  const [gAccepted, setGAccepted] = useState(false);
+  const [gLinked, setGLinked] = useState(false);
+  /** Signed in, but the Google link itself was refused: continue is still right there. */
+  const [signedInAnyway, setSignedInAnyway] = useState(false);
+  const [gBusy, setGBusy] = useState(false);
+
+  useEffect(() => {
+    if (!googleStep) return;
+    (async () => {
+      try {
+        const r = await fetch("/api/auth/google/finish");
+        const data = await r.json().catch(() => null);
+        if (data?.step) setGPending({ step: data.step, email: String(data.email ?? "") });
+        else setError(t.errors.googleExpired);
+      } catch { setError(t.errors.googleExpired); }
+    })();
+    // The handshake is read once, for the screen it arrived on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleStep]);
 
   const resend = async () => {
     setBusy(true);
@@ -120,6 +163,32 @@ export default function LoginForm({ initialMode = "signin", returnTo }: {
       if (data?.pending) {
         setPending({ email: data.email ?? identifier, sent: data.sent !== false });
         return;
+      }
+      /*
+       * Signed in with a Google link waiting: attach it now, while the password
+       * is freshly proved. A refusal (expired, or the wrong account) is said
+       * plainly; either way the person is signed in and continues.
+       */
+      if (gPending?.step === "link") {
+        try {
+          const linked = await fetch("/api/auth/google/finish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ link: true }),
+          });
+          if (linked.ok) {
+            setGLinked(true);
+            setGPending(null);
+            return;   // one calm confirmation card, then Continue
+          }
+          const body = await linked.json().catch(() => null);
+          setError(body?.error || t.errors.googleLinkInvalid);
+          setGPending(null);
+          setSignedInAnyway(true);
+          return;
+        } catch {
+          /* signed in regardless; the link can be made again from Settings */
+        }
       }
       router.push(returnTo ?? "/habits");
       router.refresh();
@@ -197,6 +266,83 @@ export default function LoginForm({ initialMode = "signin", returnTo }: {
     );
   }
 
+  // Google linked to the account that just proved itself: one calm confirmation.
+  if (gLinked) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="card p-7 w-full" style={{ maxWidth: 400 }}>
+          <div className="eyebrow">{t.appName}</div>
+          <h1 className="display mt-1" style={{ fontSize: 26, lineHeight: 1.15 }}>{t.login.googleLinked}</h1>
+          <button className="btn btn-primary w-full mt-5"
+            onClick={() => { router.push(returnTo ?? "/habits"); router.refresh(); }}>
+            {t.login.continueAction}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // Registering through Google: the username and the terms — the two things
+  // only the person can decide — then the same account creation as sign-up.
+  if (googleStep === "finish" && gPending?.step === "signup") {
+    const finish = async () => {
+      if (gBusy) return;
+      if (!gAccepted) { setError(t.earlyAccess.mustAgree); return; }
+      setGBusy(true); setError(null);
+      try {
+        const res = await fetch("/api/auth/google/finish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: gUsername, acceptedTerms: gAccepted }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.status === 409 && data?.full) { setFull(true); return; }
+        if (!res.ok) throw new Error(data?.error || t.login.genericError);
+        if (data?.pending) { setPending({ email: data.email ?? gPending.email, sent: data.sent !== false }); return; }
+        router.push(returnTo ?? "/habits");
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t.login.genericError);
+      } finally {
+        setGBusy(false);
+      }
+    };
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4">
+        <div className="card p-7 w-full" style={{ maxWidth: 400 }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="eyebrow">{t.appName}</div>
+            <LanguageToggle />
+          </div>
+          <h1 className="display mt-1" style={{ fontSize: 26, lineHeight: 1.15 }}>{t.login.googleFinishTitle}</h1>
+          <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.55 }}>
+            {t.login.googleFinishIntro(gPending.email)}
+          </p>
+          <div className="mt-5 flex flex-col gap-3">
+            <label className="block">
+              <div className="eyebrow mb-1.5">{t.login.username}</div>
+              <input className="input" value={gUsername} autoComplete="username" autoCapitalize="none"
+                spellCheck={false} placeholder="emma" onChange={(e) => setGUsername(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && finish()} />
+              <div className="faint mt-1" style={{ fontSize: 11.5 }}>{t.login.usernameHint}</div>
+            </label>
+            <label className="flex items-start gap-2.5" style={{ fontSize: 13, lineHeight: 1.5 }}>
+              <input type="checkbox" checked={gAccepted} onChange={(e) => setGAccepted(e.target.checked)}
+                style={{ marginTop: 3 }} />
+              <span>{t.earlyAccess.agree}</span>
+            </label>
+            {full && <p role="alert" style={{ fontSize: 13.5 }}>{t.earlyAccess.fullTitle} {t.earlyAccess.fullBody}</p>}
+            {error && <p role="alert" style={{ fontSize: 13.5, color: "var(--warn)" }}>{error}</p>}
+            <button className="btn btn-primary w-full" disabled={gBusy || !gUsername.trim() || !gAccepted}
+              onClick={finish}>
+              {t.login.createAccount}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="card p-7 w-full" style={{ maxWidth: 400 }}>
@@ -208,6 +354,41 @@ export default function LoginForm({ initialMode = "signin", returnTo }: {
           {mode === "signup" ? t.login.createAccount : t.login.welcomeBack}
         </h1>
         <p className="muted mt-2" style={{ fontSize: 14, lineHeight: 1.5 }}>{t.tagline}</p>
+
+        {googleError && (
+          <p className="mt-4" role="status" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+            {googleError === "cancelled" ? t.login.googleCancelled
+              : googleError === "disabled" ? t.errors.accountDisabled : t.login.googleFailed}
+          </p>
+        )}
+        {googleStep === "linkExisting" && gPending?.step === "link" && (
+          <p className="mt-4" role="status" style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+            {t.login.googleLinkIntro(gPending.email)}
+          </p>
+        )}
+        {signedInAnyway && (
+          <p className="mt-3" style={{ fontSize: 13.5 }}>
+            <Link href={returnTo ?? "/habits"} style={{ textDecoration: "underline" }}>
+              {t.login.continueAction} →
+            </Link>
+          </p>
+        )}
+
+        {withGoogle && !googleStep && (
+          <>
+            <a className="btn w-full mt-5 flex items-center justify-center gap-2.5"
+              href={`/api/auth/google/start${thenKeyword ? `?then=${encodeURIComponent(thenKeyword)}` : ""}`}
+              style={{ minHeight: 44 }}>
+              <GoogleMark />
+              {t.login.continueWithGoogle}
+            </a>
+            <div className="flex items-center gap-3 mt-4" aria-hidden="true">
+              <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
+              <span className="faint" style={{ fontSize: 12 }}>{t.login.orWithEmail}</span>
+              <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
+            </div>
+          </>
+        )}
 
         <div className="mt-5 flex flex-col gap-3">
           {mode === "signup" && (

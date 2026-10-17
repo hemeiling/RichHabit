@@ -1401,6 +1401,10 @@ export interface AccountSummary {
    * the address *or* the username, so it cannot answer this on its own.
    */
   hasEmail: boolean;
+  /** False only on an account that signs in with Google alone. */
+  hasPassword: boolean;
+  /** The address Google reported when it was connected, or null. */
+  googleEmail: string | null;
   /**
    * Whether that address has actually been proved. Deliberately independent of
    * `verification_required`: a grandfathered account is never required to
@@ -1419,6 +1423,7 @@ export async function loadAccount(userId: string): Promise<AccountSummary | null
             u.role = 'admin' as is_admin,
             u.email is not null as has_email,
             u.email_verified_at is not null as email_verified,
+            u.password_hash is not null as has_password,
             (select count(*) from habits h
               where h.user_id = u.id and h.status = 'active')          as active_habits,
             (select count(distinct done_on) from habit_completions c
@@ -1428,9 +1433,25 @@ export async function loadAccount(userId: string): Promise<AccountSummary | null
   );
   const r = rows[0];
   if (!r) return null;
+  /*
+   * In its own guarded query because the table arrives with a later migration
+   * (step 21) than the rest: until then this reads as "not connected", and the
+   * account page behaves exactly as the release before it.
+   */
+  let googleEmail: string | null = null;
+  try {
+    const [g] = await query<{ email_at_link: string | null }>(
+      `select email_at_link from auth_identities where user_id = $1 and provider = 'google'`, [userId]);
+    googleEmail = g?.email_at_link ?? null;
+  } catch (e) {
+    const code = (e as { code?: string } | null)?.code;
+    if (code !== "42P01" && code !== "42703") throw e;
+  }
   return {
     email: r.email,
     username: r.username ?? null,
+    hasPassword: r.has_password === true,
+    googleEmail,
     // The full instant, not a calendar date: the server has no idea what
     // timezone the reader is in, so the browser decides which day it was.
     createdAt: new Date(r.created_at).toISOString(),

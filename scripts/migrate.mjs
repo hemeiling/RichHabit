@@ -31,6 +31,7 @@ import { migrateTogetherTaskRank } from "./migrations/together-task-rank.mjs";
 import { migrateTogetherInviteEmail } from "./migrations/together-invite-email.mjs";
 import { migrateTogetherConnections } from "./migrations/together-connections.mjs";
 import { migratePriorityDetails } from "./migrations/priority-details.mjs";
+import { migrateGoogleSignin } from "./migrations/google-signin.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -983,6 +984,16 @@ try {
    * scripts/migrations/priority-details.mjs.
    */
   changed += await migratePriorityDetails(client, console.log);
+
+  /*
+   * ---- 21. Google sign-in ----------------------------------------------------
+   *
+   * password_hash becomes nullable, created_via admits 'google', and two new
+   * tables arrive (external identities, and the short-lived link/signup
+   * handshake). No existing row is read or rewritten. See
+   * scripts/migrations/google-signin.mjs.
+   */
+  changed += await migrateGoogleSignin(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

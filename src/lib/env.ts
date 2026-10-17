@@ -123,6 +123,28 @@ export const auth = {
   attemptWindowMinutes: num("AUTH_ATTEMPT_WINDOW_MINUTES", 15),
 };
 
+/**
+ * Sign in with Google. Both unset = the feature is off and no button renders,
+ * so a deployment without credentials behaves exactly as before. Server-only:
+ * the secret must never ride a NEXT_PUBLIC_* name, and even the client id is
+ * only ever embedded in the redirect this server builds.
+ *
+ * The three endpoint overrides exist for the test stub alone; unset in every
+ * real deployment, they resolve to Google's published endpoints.
+ */
+export const google = {
+  clientId: str("GOOGLE_CLIENT_ID", ""),
+  clientSecret: str("GOOGLE_CLIENT_SECRET", ""),
+  get enabled(): boolean { return Boolean(this.clientId && this.clientSecret); },
+  authUrl: str("GOOGLE_AUTH_URL", "https://accounts.google.com/o/oauth2/v2/auth"),
+  tokenUrl: str("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token"),
+  jwksUrl: str("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
+  get issuers(): string[] {
+    const override = str("GOOGLE_ISSUER", "");
+    return override ? [override] : ["https://accounts.google.com", "accounts.google.com"];
+  },
+};
+
 // ─────────────────────────────── AI coach ────────────────────────────────────
 
 /**

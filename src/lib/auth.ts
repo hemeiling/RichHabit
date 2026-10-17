@@ -36,7 +36,10 @@ export async function hashPassword(password: string): Promise<string> {
   return `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
 }
 
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+export async function verifyPassword(password: string, stored: string | null): Promise<boolean> {
+  // A Google-only account holds no password; nothing can ever match it. A real
+  // password arrives through the ordinary emailed reset, never by comparison.
+  if (!stored) return false;
   if (password.length > MAX_PASSWORD) return false;
   const [scheme, saltHex, keyHex] = stored.split("$");
   if (scheme !== "scrypt" || !saltHex || !keyHex) return false;
@@ -103,7 +106,8 @@ export async function destroySession(): Promise<void> {
  */
 export interface Credentials {
   id: string;
-  passwordHash: string;
+  /** Null on an account that signs in only with Google. */
+  passwordHash: string | null;
   disabledAt: string | null;
   /**
    * True only for accounts registered while verification was switched on. Every

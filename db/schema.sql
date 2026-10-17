@@ -465,6 +465,46 @@ create index if not exists priority_attachments_user
   on priority_attachments (user_id);
 -- ---- end Priority details --------------------------------------------------------
 
+-- ---- Google sign-in (step 21) -----------------------------------------------------
+-- External identities and the short-lived link/signup handshake. Mirrors
+-- scripts/migrations/google-signin.mjs exactly; the parity test proves it.
+-- A Google-only account holds no password: null can never pass password
+-- sign-in, and a real password arrives through the ordinary emailed reset.
+alter table users alter column password_hash drop not null;
+create table if not exists auth_identities (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references users on delete cascade,
+  provider          text not null check (provider in ('google')),
+  -- The provider's permanent subject ("sub"): the identity key. Never email.
+  provider_user_id  text not null check (length(provider_user_id) between 1 and 255),
+  -- The address the provider reported when this link was made. A record for
+  -- the person and for support, never used to match accounts.
+  email_at_link     text,
+  created_at        timestamptz not null default now(),
+  last_signin_at    timestamptz,
+  unique (provider, provider_user_id),
+  unique (user_id, provider)
+);
+create table if not exists google_pending (
+  token_hash        text primary key check (token_hash ~ '^[0-9a-f]{64}$'),
+  purpose           text not null check (purpose in ('link', 'signup')),
+  provider_user_id  text not null check (length(provider_user_id) between 1 and 255),
+  email_normalized  text not null,
+  email_verified    boolean not null,
+  -- For 'link': the one account this may be attached to, fixed at creation.
+  user_id           uuid references users on delete cascade,
+  created_at        timestamptz not null default now(),
+  expires_at        timestamptz not null,
+  used_at           timestamptz,
+  check (purpose <> 'link' or user_id is not null)
+);
+create index if not exists google_pending_expiry on google_pending (expires_at);
+-- Accounts registered through Google carry their own provenance.
+alter table users drop constraint users_created_via_check;
+alter table users add constraint users_created_via_check
+  check (created_via in ('self_signup', 'admin', 'test', 'google'));
+-- ---- end Google sign-in -----------------------------------------------------------
+
 -- How many new priorities an account has created on one of its own calendar
 -- days. Free accounts are allowed five; Pro and Admin never reach this table,
 -- because the write path returns on an unlimited entitlement before it gets here.
