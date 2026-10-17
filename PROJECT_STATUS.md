@@ -113,7 +113,37 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Add members in-place report — PRODUCTION CODE CORRECT · iOS sheet fix CANDIDATE `25efe43` (NOT MERGED)
+## iOS sheet fix — RELEASE CANDIDATE `8b326c0` on `release/ios-sheet-fix` (VALIDATED · AWAITING PO AUTHORIZATION)
+
+The PO approved the fix for release preparation. `25efe43` sat on top of two
+PROJECT_STATUS record commits on this branch, so fast-forwarding to it would
+have carried doc commits onto `main`; the release branch instead cherry-picks
+it onto `origin/main` (`1a59d51`) — **`8b326c0`, one commit, one file
+(globals.css), `src` byte-identical to `25efe43`** (`git diff 25efe43
+8b326c0 -- src` is empty). Clean-worktree validation: 1522/1522 unit,
+typecheck, lint, build; the built stylesheet carries
+`max-height:92vh;max-height:92dvh` + the safe-area padding with the ≥640px
+reset. Browser suites on that build: in-place 57/57 (board + Members, iPhone
+390/320 touch + desktop: dialog over the dimmed board, URL unchanged, zero
+navigations, sheet fits the viewport, internal scroll, close restores
+URL/content/scroll incl. from a scrolled board), Add members 51/51,
+collaborators 24/24, details 23/23 (the compass bottom sheet shares `.sheet`,
+so "other sheets" are covered by measurement). Release move once authorized:
+fast-forward `main` `1a59d51 → 8b326c0`; live proof string: `92dvh` in the
+served stylesheet. **PO retest of the live app on their iPhone comes first.**
+
+**Stale-page prevention (investigated, PROPOSAL ONLY):** live HTML is already
+`no-store` and hashed assets immutable — correct, nothing to change there.
+The stale behaviour is iOS restoring suspended tabs from a snapshot without
+network, while Render deletes old builds' chunks on deploy (verified: two of
+three df75de8-era stylesheets now 404) — a restored page degrades to its
+server-rendered links. Proposal: version-skew revalidation — expose the
+server's `.next/BUILD_ID` on the health endpoint; a ~40-line client guard in
+the app layout checks it on `pageshow(persisted)`/tab-wake (throttled ≥60s,
+fail-open) and does one `location.reload()` on mismatch. No cache disabled,
+no user data touched. Needs PO approval as its own small release.
+
+## Investigation record — PRODUCTION CODE CORRECT · iOS sheet fix built as `25efe43`
 
 **PO report (2026-10-17, iPhone):** + Add members still seemed to navigate to
 the Members page. **Finding:** the deployed `1a59d51` already opens the
