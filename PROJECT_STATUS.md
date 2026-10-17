@@ -113,7 +113,23 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Together Add members — Phase 1 CANDIDATE `df75de8` on `feature/together-add-members` (NOT MERGED · NOT DEPLOYED)
+## Together Add members — Phase 1 RELEASED · `main` = DEPLOYED = `df75de8` (2026-10-17)
+
+**Release record:** PO authorized `df75de8` only. `main` reconfirmed at
+`e7844c6`, fast-forwarded to `df75de839bc83184af8f0a25b0d14897e2d04856`
+(~00:18 UTC). Render did not auto-deploy within ~13 min; live by 00:38 UTC
+(PO manual deploy). Served build proven on richhabit.rosalytics.com and
+richhabit.onrender.com: 4/4 release-only dictionary strings ("Only the Space
+owner can invite people here", 按名字或用户名搜索, "Invitation pending",
+邀请待接受) absent before, present after; 2 controls present in both.
+Post-deploy (read-only): health up; signed-out 7/7 (pages 307, APIs 401);
+all 2,857 pre-release row identities present (growth: 5 analytics events, 1
+session); invitation baseline unchanged (2 spaces, 0 non-owner inviters, 0
+non-owner or orphaned invitations, 0 connections). No migration, no
+production write, 3100 preview untouched. Remaining: the PO's signed-in
+check (open a Space → + Add members). The record of how it got here:
+
+### Phase 1 candidate record
 
 Approved by the Product Owner 2026-10-16 (design decisions A–J). Branched
 from `main` = `e7844c6`. **No schema change, no migration.**
