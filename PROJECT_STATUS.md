@@ -113,7 +113,26 @@
 > intention migration applied to production on 2026-09-12) was deployed and
 > confirmed live by the Product Owner before Accomplishments; production includes it.
 
-## Add members follow-up fix — CANDIDATE `1a59d51` on `fix/add-members-single-entry` (NOT MERGED · NOT DEPLOYED)
+## Add members follow-up fix — RELEASED · `main` = DEPLOYED = `1a59d51` (2026-10-17)
+
+**Release record:** PO approved `1a59d51`. `main` reconfirmed at `df75de8`;
+scope = 5 files (4 UI + Together.md), no db/scripts/Phase 2. Clean worktree:
+1522/1522 unit, typecheck, lint, build; browser vs that build: Add members
+51/51, collaborators 24/24, details 23/23; Members page at 320/360/375/390/414
+px with a long pending address — no overflow, no element past the edge.
+Fast-forwarded `main` to `1a59d51cc9eb50b2ea934dc0d0f79f477ec191e5` (~01:33
+UTC); live on both domains by 01:57 UTC. Served-build proof: the stylesheet
+rule unique to `1a59d51` absent before and present after on
+richhabit.rosalytics.com and richhabit.onrender.com, the `df75de8` rule gone,
+control present; Phase 1 dictionary markers still present. Post-deploy
+read-only: health up; signed-out 7/7; all 2,865 pre-release row identities
+present (growth: 2 analytics events, 1 session); invitation baseline unchanged
+(2 spaces, 3 memberships, 0 non-owner inviters, 0 stale invitations, 0
+connections). No migration, no production write, 3100 untouched.
+Remaining: the PO's signed-in phone check (Members card edge — only ever seen
+on iPhone WebKit).
+
+### Fix candidate record
 
 **PO report (2026-10-17, production phone screenshot):** the Members page
 still showed the full inline Add members form. **Cause — an old entry point,
