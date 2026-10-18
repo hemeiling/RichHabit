@@ -12,8 +12,10 @@ import { query } from "@/lib/db/pool";
  * admin, and revoking someone takes effect on their next request rather than
  * whenever their session happens to expire.
  *
- * Nothing in the API can *set* a role. Granting admin is `npm run admin:grant`,
- * run against the database by whoever owns the deployment.
+ * A role is set only by someone who already holds one: the users PATCH route
+ * (`action: "role"`, through `setRole` with its last-admin and self-demotion
+ * refusals) and the operator's `npm run admin:grant`, run against the
+ * database directly. No request from an ordinary account can touch it.
  */
 
 export interface AdminUser {

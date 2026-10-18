@@ -1,9 +1,11 @@
 /**
  * Grants or revokes admin, against the database directly.
  *
- * This is deliberately not an API. Nothing a browser can send changes a role —
- * `users.role` has no write path anywhere in src/app/api, so an ordinary
- * account cannot promote itself even if every other check were bypassed.
+ * The first admin has to come from somewhere that is not an admin: this runs
+ * with the operator's own database credentials. Once one exists, roles are
+ * normally changed in Admin → Users (the PATCH route's `action: "role"`,
+ * admin-only, with last-admin and self-demotion refusals); an ordinary
+ * account still has no path to a role from the browser.
  *
  *   npm run admin:grant  -- someone@example.com
  *   npm run admin:grant  -- someone@example.com --revoke
