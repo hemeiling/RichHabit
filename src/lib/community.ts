@@ -214,7 +214,21 @@ export function displayName(u: { username: string | null }): string {
 }
 
 interface Row {
-  id: string; username: string | null; created_at: string;
+  /* `pg` hands a timestamptz back as a Date; a string only from other drivers. */
+  id: string; username: string | null; created_at: Date | string;
+}
+
+/**
+ * Account age as text that sorts in time order, which is what the tie-break
+ * compares.
+ *
+ * `String(date)` reads "Sat Aug 15 2026 …", so comparing two of them ordered
+ * ties by the weekday each account was created on — not by age, as the ranking
+ * rule says. ISO 8601 in UTC sorts chronologically as plain text.
+ */
+export function ageKey(createdAt: Date | string): string {
+  const d = new Date(createdAt);
+  return Number.isNaN(d.getTime()) ? String(createdAt) : d.toISOString();
 }
 
 /**
@@ -225,6 +239,7 @@ interface Row {
 export interface Member {
   id: string;
   name: string;
+  /** `ageKey` of the account's creation — compared as text to break ties. */
   createdAt: string;
   pct: number | null;
   count: number;
@@ -432,7 +447,7 @@ async function scoreMember(u: Row, dates: string[]): Promise<Member | null> {
   const count = dates.length
     ? accomplishedBetween(state.priorities, dates[0], dates[dates.length - 1]).length
     : 0;
-  return { id: u.id, name: displayName(u), createdAt: String(u.created_at), pct: score.pct, count };
+  return { id: u.id, name: displayName(u), createdAt: ageKey(u.created_at), pct: score.pct, count };
 }
 
 /**

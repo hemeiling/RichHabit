@@ -38,7 +38,8 @@ vi.mock("@/lib/db/pool", () => ({
     // Only the real rule filters; if the code ever stopped using it, disabled users would leak in.
     if (sql.includes("u.disabled_at is null")) rows = rows.filter((u) => u.disabled_at === null);
     if (sql.includes("any($1::uuid[])")) rows = rows.filter((u) => (params![0] as string[]).includes(u.id));
-    return rows.map(({ id, username, created_at }) => ({ id, username, created_at }));
+    // A Date, as `pg` returns a timestamptz — a string here once hid a tie-break bug.
+    return rows.map(({ id, username, created_at }) => ({ id, username, created_at: new Date(created_at) }));
   }),
 }));
 vi.mock("@/lib/db/queries", () => ({
@@ -122,6 +123,31 @@ describe("the habit ranking is unchanged", () => {
     const m = (id: string, createdAt: string, pct: number) => ({ id, name: id, createdAt, pct, count: 0 });
     expect(rankHabits([m("b", "2026-02-01", 50), m("a", "2026-01-01", 50)]).map((e) => [e.name, e.rank]))
       .toEqual([["a", 1], ["b", 2]]);
+  });
+
+  it("splits a tie by account age, not by the weekday the account was made", async () => {
+    // claire's account is the newer one, but it was made on a Friday: as
+    // `String(date)` text "Fri…" sorts before "Mon…", which is how ties were
+    // ordered while the board compared that text.
+    const [h, c] = [users[0], users[1]];
+    const saved = [h.created_at, c.created_at];
+    h.created_at = "2026-08-10T12:00:00Z";   // a Monday
+    c.created_at = "2026-08-14T12:00:00Z";   // the Friday after
+    states.set(CLAIRE, structuredClone(states.get(HIPPO)!));
+    try {
+      const top = (await communitySnapshot(HIPPO, TODAY)).top;
+      expect(top[0].pct).toBe(top[1].pct);
+      expect(top.slice(0, 2).map((e) => [e.rank, e.name])).toEqual([[1, "hippo"], [2, "claire"]]);
+    } finally {
+      [h.created_at, c.created_at] = saved;
+    }
+  });
+
+  it("orders account ages as text in time order whatever the driver returns", () => {
+    const { ageKey } = community;
+    expect(ageKey(new Date("2026-08-10T12:00:00Z"))).toBe("2026-08-10T12:00:00.000Z");
+    expect(ageKey("2026-08-14T12:00:00Z")).toBe("2026-08-14T12:00:00.000Z");
+    expect(ageKey(new Date("2026-08-10T12:00:00Z")) < ageKey(new Date("2026-08-14T12:00:00Z"))).toBe(true);
   });
 });
 
