@@ -119,13 +119,16 @@ describe("the habit ranking is unchanged", () => {
     expect(Object.keys(snap.me!).sort()).toEqual(["name", "pct", "rank"]);
   });
 
-  it("keeps ties split by account age, as before", () => {
+  it("gives equal percentages one shared rank, listed oldest account first (option B)", () => {
     const m = (id: string, createdAt: string, pct: number) => ({ id, name: id, createdAt, pct, count: 0 });
     expect(rankHabits([m("b", "2026-02-01", 50), m("a", "2026-01-01", 50)]).map((e) => [e.name, e.rank]))
-      .toEqual([["a", 1], ["b", 2]]);
+      .toEqual([["a", 1], ["b", 1]]);
+    // Competition ranking: the place after a tie skips, as the accomplishment board does.
+    expect(rankHabits([m("c", "2026-03-01", 40), m("b", "2026-02-01", 50), m("a", "2026-01-01", 50), m("d", "2026-04-01", 40), m("e", "2026-05-01", 10)])
+      .map((e) => [e.name, e.rank, e.pct])).toEqual([["a", 1, 50], ["b", 1, 50], ["c", 3, 40], ["d", 3, 40], ["e", 5, 10]]);
   });
 
-  it("splits a tie by account age, not by the weekday the account was made", async () => {
+  it("orders a tie by account age, not by the weekday the account was made", async () => {
     // claire's account is the newer one, but it was made on a Friday: as
     // `String(date)` text "Fri…" sorts before "Mon…", which is how ties were
     // ordered while the board compared that text.
@@ -137,9 +140,41 @@ describe("the habit ranking is unchanged", () => {
     try {
       const top = (await communitySnapshot(HIPPO, TODAY)).top;
       expect(top[0].pct).toBe(top[1].pct);
-      expect(top.slice(0, 2).map((e) => [e.rank, e.name])).toEqual([[1, "hippo"], [2, "claire"]]);
+      expect(top.slice(0, 2).map((e) => [e.rank, e.name])).toEqual([[1, "hippo"], [1, "claire"]]);
     } finally {
       [h.created_at, c.created_at] = saved;
+    }
+  });
+
+  it("at the Top 10 boundary: ten rows, the tie listed oldest first, and a member left out still sees their shared rank", async () => {
+    // Ten more members, all at 10% — tied with richhabit02 (10%) at place 3.
+    const extra = Array.from({ length: 10 }, (_, i) => ({
+      id: U(String(100 + i)), username: `extra${String(i + 1).padStart(2, "0")}`,
+      created_at: `2026-01-${String(10 + i).padStart(2, "0")}T00:00:00Z`, disabled_at: null, role: "member",
+    }));
+    users.push(...extra);
+    for (const u of extra) states.set(u.id, member((d) => d % 10 === 0, []));
+    try {
+      const newest = extra[9];
+      const snap = await communitySnapshot(newest.id, TODAY);
+      expect(snap.activeUsers).toBe(13);
+      expect(snap.top).toHaveLength(10);
+      expect(snap.top.map((e) => e.rank)).toEqual([1, 2, 3, 3, 3, 3, 3, 3, 3, 3]);
+      // The tie in account order: richhabit02 (Jan 3) first, then extra01…extra07.
+      expect(snap.top.slice(2).map((e) => e.name)).toEqual(
+        ["richhabit02", "extra01", "extra02", "extra03", "extra04", "extra05", "extra06", "extra07"]);
+      // extra10 is not among the ten rows, but its own rank is the shared 3.
+      expect(snap.top.some((e) => e.isMe)).toBe(false);
+      expect(snap.me).toEqual({ rank: 3, pct: 10, name: "extra10" });
+      // From inside the ten, the same rank and the row marked as theirs.
+      const mid = await communitySnapshot(extra[3].id, TODAY);
+      expect(mid.me).toMatchObject({ rank: 3, name: "extra04" });
+      expect(mid.top.find((e) => e.isMe)).toMatchObject({ rank: 3, name: "extra04" });
+      // Percentages are what they were: ranking never alters a score.
+      expect(snap.top.slice(0, 3).map((e) => e.pct)).toEqual([33, 20, 10]);
+    } finally {
+      users.splice(users.length - extra.length, extra.length);
+      for (const u of extra) states.delete(u.id);
     }
   });
 

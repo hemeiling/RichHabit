@@ -257,38 +257,42 @@ interface Board {
 }
 
 /**
- * The habit ranking — exactly the rule it has always had.
+ * The one rule both rankings use for ties (PO decision 2026-10-18, option B).
  *
- * Only members with something scheduled; highest percentage first; ties broken
- * by account age, oldest first. Any deterministic rule would do; the point is
- * that a refresh must not reshuffle equal scores — including a refresh caused
- * by one member's score being recomputed on its own.
+ * Equal scores share a rank — standard competition ranking, "#1, #2, #2, #4" —
+ * because nothing in the numbers says who "won" a tie. Within a shared rank,
+ * members are listed oldest account first (`ageKey`), so the order is stable:
+ * a refresh, including one caused by a single member being recomputed, never
+ * reshuffles equal scores. Scores themselves are never touched.
  */
-export function rankHabits(members: Member[]): HabitRow[] {
-  return members
-    .filter((m) => m.pct !== null)
-    .sort((a, b) => b.pct! - a.pct! || a.createdAt.localeCompare(b.createdAt))
-    .map((m, i) => ({ id: m.id, rank: i + 1, name: m.name, pct: m.pct!, createdAt: m.createdAt }));
+function competitionRank<T extends { createdAt: string }>(
+  items: T[], score: (item: T) => number,
+): { item: T; rank: number }[] {
+  const sorted = [...items].sort((a, b) => score(b) - score(a) || a.createdAt.localeCompare(b.createdAt));
+  let rank = 0;
+  return sorted.map((item, i) => {
+    if (i === 0 || score(item) !== score(sorted[i - 1])) rank = i + 1;
+    return { item, rank };
+  });
 }
 
 /**
- * The accomplishment ranking.
- *
- * Only members with at least one accomplishment; most first. Equal counts share
- * a rank ("#2, #2, #4") rather than being split by something the numbers do not
- * say — there is no fair way to decide who "won" a tie, and inventing one from
- * private priority data would be worse. Within a shared rank the listing order
- * is the board's existing stable convention, account age, so it never jitters.
+ * The habit ranking: only members with something scheduled; highest
+ * percentage first; equal percentages share a rank, oldest account first.
+ */
+export function rankHabits(members: Member[]): HabitRow[] {
+  return competitionRank(members.filter((m) => m.pct !== null), (m) => m.pct!)
+    .map(({ item: m, rank }) => ({ id: m.id, rank, name: m.name, pct: m.pct!, createdAt: m.createdAt }));
+}
+
+/**
+ * The accomplishment ranking: only members with at least one accomplishment;
+ * most first; equal counts share a rank, oldest account first — the same rule
+ * as the habit ranking, and no private priority data decides a tie.
  */
 export function rankAccomplishments(members: Member[]): AccomplishmentRow[] {
-  const sorted = members
-    .filter((m) => m.count > 0)
-    .sort((a, b) => b.count - a.count || a.createdAt.localeCompare(b.createdAt));
-  let rank = 0;
-  return sorted.map((m, i) => {
-    if (i === 0 || m.count !== sorted[i - 1].count) rank = i + 1;
-    return { id: m.id, rank, name: m.name, count: m.count, createdAt: m.createdAt };
-  });
+  return competitionRank(members.filter((m) => m.count > 0), (m) => m.count)
+    .map(({ item: m, rank }) => ({ id: m.id, rank, name: m.name, count: m.count, createdAt: m.createdAt }));
 }
 
 const boardFrom = (month: string, members: Member[]): Board => ({
