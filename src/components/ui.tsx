@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "@/lib/i18n/context";
 import { addDays, dow, rangeBack, shortDate, todayISO } from "@/lib/dates";
@@ -57,15 +57,24 @@ export function Sheet({
   ), document.body);
 }
 
+/**
+ * A labelled field. One control goes inside a `<label>`, so a tap on the
+ * words focuses it. A row of buttons (a `Segmented`, day chips) must say
+ * `group`: inside a `<label>` a tap on the words or a gap is forwarded to
+ * the FIRST button, which silently changed the choice — tapping "Frequency"
+ * set Every day, tapping a status hint reactivated a paused habit. A group is
+ * named by its words instead (`role="group"`) and forwards nothing.
+ */
 export function Field({
-  label, hint, children,
-}: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label className="block mb-3">
-      <div className="eyebrow mb-1.5">{label}</div>
-      {children}
-      {hint && <div className="faint mt-1" style={{ fontSize: 12 }}>{hint}</div>}
-    </label>
+  label, hint, children, group,
+}: { label: string; hint?: string; children: React.ReactNode; group?: boolean }) {
+  const id = useId();
+  const words = <div className="eyebrow mb-1.5" id={group ? id : undefined}>{label}</div>;
+  const note = hint && <div className="faint mt-1" style={{ fontSize: 12 }}>{hint}</div>;
+  return group ? (
+    <div className="block mb-3" role="group" aria-labelledby={id}>{words}{children}{note}</div>
+  ) : (
+    <label className="block mb-3">{words}{children}{note}</label>
   );
 }
 

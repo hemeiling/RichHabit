@@ -117,7 +117,7 @@ export default function FeedbackSheet({ onClose }: { onClose: () => void }) {
     >
       <p className="muted" style={{ fontSize: 13.5, lineHeight: 1.55 }}>{t.feedback.intro}</p>
 
-      <Field label={t.feedback.typeLabel}>
+      <Field label={t.feedback.typeLabel} group>
         <Segmented<FeedbackType> value={type} onChange={setType} small
           options={FEEDBACK_TYPES.map((v) => ({ value: v, label: t.feedback.types[v] }))} />
       </Field>
@@ -128,7 +128,7 @@ export default function FeedbackSheet({ onClose }: { onClose: () => void }) {
           onChange={(e) => setBody(e.target.value)} />
       </Field>
 
-      <Field label={t.feedback.ratingLabel} hint={t.feedback.ratingHint}>
+      <Field label={t.feedback.ratingLabel} hint={t.feedback.ratingHint} group>
         <div className="flex gap-1.5">
           {[1, 2, 3, 4, 5].map((n) => (
             <button key={n} type="button" className="chip" data-on={rating === n}
@@ -139,7 +139,9 @@ export default function FeedbackSheet({ onClose }: { onClose: () => void }) {
         </div>
       </Field>
 
-      <Field label={t.feedback.screenshotLabel} hint={t.feedback.screenshotHint}>
+      {/* A group: with a screenshot attached, a label would forward a tap on its
+          words to Remove. The file input names itself instead. */}
+      <Field label={t.feedback.screenshotLabel} hint={t.feedback.screenshotHint} group>
         {screenshot ? (
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -152,7 +154,7 @@ export default function FeedbackSheet({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         ) : (
-          <input type="file" accept="image/*" style={{ fontSize: 13 }}
+          <input type="file" accept="image/*" style={{ fontSize: 13 }} aria-label={t.feedback.screenshotLabel}
             onChange={(e) => attach(e.target.files?.[0])} />
         )}
       </Field>

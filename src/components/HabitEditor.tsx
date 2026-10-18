@@ -61,15 +61,15 @@ export default function HabitEditor({
           onChange={(e) => set("description", e.target.value)}
           placeholder={t.habits.descriptionPlaceholder} />
       </Field>
-      <Field label={t.habits.fieldTimeOfDay}>
+      <Field label={t.habits.fieldTimeOfDay} group>
         <Segmented<Category> value={h.category} onChange={(v) => set("category", v)}
           options={CATEGORIES.map((c) => ({ value: c.id, label: t.categories[c.id].label }))} />
       </Field>
-      <Field label={t.habits.fieldKind}>
+      <Field label={t.habits.fieldKind} group>
         <Segmented value={h.type} onChange={(v) => set("type", v)}
           options={[{ value: "good" as const, label: t.habits.kindBuild }, { value: "avoid" as const, label: t.habits.kindDrop }]} />
       </Field>
-      <Field label={t.habits.fieldFrequency}>
+      <Field label={t.habits.fieldFrequency} group>
         <Segmented value={h.frequency.mode} onChange={(v) => setFreq("mode", v)}
           options={[
             { value: "daily" as const, label: t.habits.freqDaily },
@@ -98,7 +98,7 @@ export default function HabitEditor({
         )}
       </Field>
       {/* §12. How it is measured decides what Today shows and what counts. */}
-      <Field label={t.habits.fieldTracking}>
+      <Field label={t.habits.fieldTracking} group>
         <Segmented<TrackingType> value={h.tracking} onChange={(v) => set("tracking", v)} small
           options={[
             { value: "boolean", label: t.habits.trackingBoolean },
@@ -134,7 +134,7 @@ export default function HabitEditor({
             placeholder={t.habits.unitPlaceholder} />
         </Field>
       </div>
-      <Field label={t.habits.fieldPriority} hint={t.habits.priorityHint}>
+      <Field label={t.habits.fieldPriority} hint={t.habits.priorityHint} group>
         <Segmented<1 | 2 | 3> value={h.weight} onChange={(v) => set("weight", v)}
           options={[{ value: 1, label: t.priority.low }, { value: 2, label: t.priority.medium }, { value: 3, label: t.priority.high }]} />
       </Field>
@@ -168,7 +168,7 @@ export default function HabitEditor({
           <input className="input num" type="date" value={h.startDate} max={todayISO()}
             onChange={(e) => e.target.value && set("startDate", e.target.value)} />
         </Field>
-        <Field label={t.habits.fieldStatus} hint={t.habits.statusHint}>
+        <Field label={t.habits.fieldStatus} hint={t.habits.statusHint} group>
           {/* §14. Only "active" reaches Today and the score; the rest keep the
               habit and its history without it being on the sheet. */}
           <Segmented<HabitStatus> value={h.status}

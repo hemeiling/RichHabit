@@ -189,19 +189,19 @@ export default function Refine() {
         </div>
 
         <div className="mt-3">
-          <Field label={t.refine.kindLabel}>
+          <Field label={t.refine.kindLabel} group>
             <Segmented<HabitKind> value={kind} onChange={setKind} small
               options={[
                 { value: "avoid", label: t.refine.kindAvoid },
                 { value: "good", label: t.refine.kindGood },
               ]} />
           </Field>
-          <Field label={t.habits.fieldTimeOfDay}>
+          <Field label={t.habits.fieldTimeOfDay} group>
             <Segmented<Category> value={category} onChange={setCategory} small
               options={(["morning", "daytime", "nighttime"] as Category[])
                 .map((c) => ({ value: c, label: t.categories[c].label }))} />
           </Field>
-          <Field label={t.refine.importance}>
+          <Field label={t.refine.importance} group>
             <Segmented<1 | 2 | 3> value={weight} onChange={setWeight} small
               options={[
                 { value: 1, label: t.priority.low },

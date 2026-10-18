@@ -88,7 +88,7 @@ export default function Spending() {
             onKeyDown={(e) => e.key === "Enter" && add()} />
         </Field>
 
-        <Field label={t.spending.category}>
+        <Field label={t.spending.category} group>
           <Segmented<string> value={category} onChange={setCategory} small
             options={SPENDING_CATEGORIES.map((c) => ({
               value: c, label: t.spending.categories[c] ?? c,
@@ -96,14 +96,14 @@ export default function Spending() {
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t.spending.needWant}>
+          <Field label={t.spending.needWant} group>
             <Segmented<"need" | "want"> value={needWant} onChange={setNeedWant} small
               options={[
                 { value: "need", label: t.spending.need },
                 { value: "want", label: t.spending.want },
               ]} />
           </Field>
-          <Field label={t.spending.plannedLabel}>
+          <Field label={t.spending.plannedLabel} group>
             <Segmented<boolean> value={planned} onChange={setPlanned} small
               options={[
                 { value: true, label: t.spending.planned },
