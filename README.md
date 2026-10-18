@@ -121,8 +121,11 @@ miss. Nothing derived — score, streak, consistency, perfect days — is stored
 computed from completions on read, and `daily_scores()` in the schema does the same in SQL so a
 future native client gets identical numbers without a second implementation to keep in sync.
 
-**Schedules are versioned.** `habit_schedules` rows carry `effective_from`, so changing a habit
-from daily to three-times-a-week doesn't silently rewrite what last month was supposed to look like.
+**Schedules are versioned.** `habit_schedules` rows carry `effective_from` — the person's own
+calendar date — and every day is scored by the version in force on it (`frequencyOn` in
+`src/lib/habits.ts`), so changing a habit from daily to three-times-a-week doesn't silently rewrite
+what last month was supposed to look like. Today, Insights and the Community board all score through
+that one rule. An unchanged schedule writes no new version.
 
 ### The account cap, off by default
 

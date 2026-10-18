@@ -1,13 +1,14 @@
 import { body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
-import { markMemberStale } from "@/lib/community";
+import { markMemberStale, viewerToday } from "@/lib/community";
 import { deleteHabit, saveHabit } from "@/lib/db/queries";
 import { parseHabit } from "@/lib/validate";
 
 export async function POST(request: Request) {
   return withUser(async (userId) => {
     const habit = parseHabit(await body(request));
-    const created = await saveHabit(userId, habit);
+    // A schedule change takes effect from the person's today, not the server's.
+    const created = await saveHabit(userId, habit, viewerToday(request.headers.get("x-rh-timezone")));
     // A new, edited or retired habit changes what counts as scheduled, and so
     // changes the denominator of this member's board figure.
     markMemberStale(userId);

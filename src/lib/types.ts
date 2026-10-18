@@ -29,6 +29,17 @@ export interface Frequency {
   timesPerWeek: number;
 }
 
+/**
+ * One version of a habit's schedule, in force from `from` (the person's local
+ * YYYY-MM-DD) until the next version starts. Past days are judged by the
+ * version that was in force on them, so changing a schedule today never
+ * re-scores yesterday.
+ */
+export interface FrequencyVersion {
+  from: string;
+  frequency: Frequency;
+}
+
 export interface Habit {
   id: string;
   /** Stored text. For a seeded habit this is the English wording; the display
@@ -39,7 +50,13 @@ export interface Habit {
   description: string;
   category: Category;
   type: HabitKind;
+  /** The schedule in force now — what the editor shows and saves. */
   frequency: Frequency;
+  /**
+   * Every schedule version, oldest first. Absent on a habit that has not been
+   * saved yet; then `frequency` is the whole story.
+   */
+  frequencyHistory?: FrequencyVersion[];
   tracking: TrackingType;
   /** §20. What still counts on a bad day. Null means the target is the only bar. */
   minimum: number | null;

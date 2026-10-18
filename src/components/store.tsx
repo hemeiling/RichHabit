@@ -1,7 +1,8 @@
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as db from "@/lib/db";
-import { isDone, uid } from "@/lib/habits";
+import { todayISO } from "@/lib/dates";
+import { isDone, uid, withScheduleVersion } from "@/lib/habits";
 import { seriesAfterEdit } from "@/lib/importantDates";
 import { trimIntention } from "@/lib/intention";
 import { emptyState, isNumericTracking } from "@/lib/types";
@@ -244,12 +245,17 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
     ),
 
     saveHabit: (h) => run(
-      (s) => ({
-        ...s,
-        habits: s.habits.some((x) => x.id === h.id)
-          ? s.habits.map((x) => (x.id === h.id ? h : x))
-          : [...s.habits, h],
-      }),
+      (s) => {
+        // The same versioning the server applies, so a schedule change shows
+        // on Today at once without re-judging the days before it.
+        const next = withScheduleVersion(h, todayISO());
+        return {
+          ...s,
+          habits: s.habits.some((x) => x.id === h.id)
+            ? s.habits.map((x) => (x.id === h.id ? next : x))
+            : [...s.habits, next],
+        };
+      },
       () => db.saveHabit(h),
     ),
 

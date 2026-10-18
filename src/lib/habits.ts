@@ -1,5 +1,5 @@
 import { addDays, daysBetween, dow, rangeBack, todayISO, weekStart } from "./dates";
-import type { AppState, Category, Habit } from "./types";
+import type { AppState, Category, Frequency, Habit } from "./types";
 
 export const CATEGORIES: { id: Category; label: string; note: string }[] = [
   { id: "morning", label: "Morning", note: "Phase one" },
@@ -58,10 +58,59 @@ function completedCount(s: AppState, habitId: string, fromISO: string, toISO: st
   return n;
 }
 
+/**
+ * The schedule that was in force on `date`.
+ *
+ * Each version runs from its own `from` until the next one starts, so a change
+ * made today leaves every earlier day judged by the rule it was lived under.
+ * A day before the first recorded version takes the first one: a habit's first
+ * schedule row can be dated a day after its start (rows written before this
+ * rule used the server's UTC date), and that day was always meant to follow it.
+ */
+export function frequencyOn(habit: Habit, date: string): Frequency {
+  const history = habit.frequencyHistory;
+  if (!history?.length) return habit.frequency;
+  let f = history[0].frequency;
+  for (const v of history) {
+    if (v.from > date) break;   // YYYY-MM-DD compares as text
+    f = v.frequency;
+  }
+  return f;
+}
+
+/** Same rule as stored: the weekly count only means something in `times` mode. */
+export function sameFrequency(a: Frequency, b: Frequency): boolean {
+  const days = (f: Frequency) => [...(f.days ?? [])].sort((x, y) => x - y).join();
+  return a.mode === b.mode && days(a) === days(b)
+    && (a.mode !== "times" || a.timesPerWeek === b.timesPerWeek);
+}
+
+/**
+ * The habit with its schedule history brought up to date for a save on
+ * `today` — the browser's copy of the rule `saveHabit` applies on the server,
+ * so Today shows the change before the next load confirms it.
+ *
+ * An unchanged schedule adds nothing. A changed one becomes a version from
+ * today, replacing one already made today; and it never starts before the
+ * newest version on record, so a version dated ahead of the person's calendar
+ * (written under the old UTC rule, or before crossing time zones) is amended
+ * rather than left to overrule the newer choice when its date arrives.
+ */
+export function withScheduleVersion(h: Habit, today: string): Habit {
+  const history = h.frequencyHistory ?? [];
+  const latest = history[history.length - 1];
+  if (latest && sameFrequency(latest.frequency, h.frequency)) return h;
+  const from = latest && latest.from > today ? latest.from : today;
+  return {
+    ...h,
+    frequencyHistory: [...history.filter((v) => v.from < from), { from, frequency: h.frequency }],
+  };
+}
+
 export function isScheduled(s: AppState, habit: Habit, date: string): boolean {
   if (!habit.active) return false;
   if (daysBetween(habit.startDate, date) < 0) return false;
-  const f = habit.frequency;
+  const f = frequencyOn(habit, date);
   if (f.mode === "daily") return true;
   if (f.mode === "days") return (f.days ?? []).includes(dow(date));
   // Flexible habits stay on the list until the week's target is met.

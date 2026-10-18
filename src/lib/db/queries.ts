@@ -7,9 +7,10 @@ import { getActor } from "@/lib/entitlements/actor";
 import { isReleaseId, releaseById, unreadReleases, visibleReleases } from "@/lib/releases";
 import { emptyState, isNumericTracking } from "@/lib/types";
 import type {
-  AppState, AwarenessEntry, DayMetrics, Goal, Habit, ImportantDate, Intention, Prefs, Priority,
-  SpendingRecord, Stack, WeeklyReview,
+  AppState, AwarenessEntry, DayMetrics, Frequency, FrequencyVersion, Goal, Habit, ImportantDate,
+  Intention, Prefs, Priority, SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
+import { sameFrequency } from "@/lib/habits";
 import { DEFAULT_PRIORITY_CATEGORY, normalizePriorityCategory } from "@/lib/types";
 import type { PriorityCategory } from "@/lib/types";
 import { legacyPriorityId, reconcilePriorityIds, uniqueIds } from "@/lib/intention";
@@ -24,6 +25,13 @@ import { legacyPriorityId, reconcilePriorityIds, uniqueIds } from "@/lib/intenti
  */
 
 const num = (v: unknown) => (v === "" || v == null ? null : Number(v));
+
+/** A `habit_schedules` row as the engine reads it. No row reads as every day. */
+const frequencyOf = (s: any): Frequency => ({
+  mode: s?.mode ?? "daily",
+  days: s?.days_of_week ?? [0, 1, 2, 3, 4, 5, 6],
+  timesPerWeek: s?.times_per_week ?? 3,
+});
 
 type Q = typeof query;
 
@@ -188,7 +196,7 @@ export async function loadState(userId: string): Promise<AppState> {
     actor, account] =
     await Promise.all([
       query("select * from habits where user_id = $1 order by sort_order, created_at", [userId]),
-      query("select * from habit_schedules where user_id = $1 order by effective_from desc", [userId]),
+      query("select * from habit_schedules where user_id = $1 order by effective_from", [userId]),
       query("select * from goal_habits where user_id = $1", [userId]),
       query("select * from goals where user_id = $1 and archived = false", [userId]),
       query("select * from habit_completions where user_id = $1", [userId]),
@@ -231,15 +239,22 @@ export async function loadState(userId: string): Promise<AppState> {
 
   const state = emptyState();
 
-  const latestSchedule = new Map<string, any>();
+  /*
+   * Every version, oldest first, so each past day is judged by the schedule in
+   * force on it (`frequencyOn`). Reading only the newest one made a change today
+   * re-score every day before it — and the Community board with them.
+   */
+  const scheduleHistory = new Map<string, FrequencyVersion[]>();
   schedules.forEach((s: any) => {
-    if (!latestSchedule.has(s.habit_id)) latestSchedule.set(s.habit_id, s); // ordered desc
+    const versions = scheduleHistory.get(s.habit_id) ?? [];
+    versions.push({ from: s.effective_from, frequency: frequencyOf(s) });
+    scheduleHistory.set(s.habit_id, versions);
   });
   const goalOf = new Map<string, string>();
   goalLinks.forEach((l: any) => goalOf.set(l.habit_id, l.goal_id));
 
   state.habits = habits.map((h: any): Habit => {
-    const s = latestSchedule.get(h.id);
+    const history = scheduleHistory.get(h.id) ?? [];
     return {
       id: h.id,
       name: h.name,
@@ -247,11 +262,8 @@ export async function loadState(userId: string): Promise<AppState> {
       description: h.description ?? "",
       category: h.category,
       type: h.kind,
-      frequency: {
-        mode: s?.mode ?? "daily",
-        days: s?.days_of_week ?? [0, 1, 2, 3, 4, 5, 6],
-        timesPerWeek: s?.times_per_week ?? 3,
-      },
+      frequency: history.length ? history[history.length - 1].frequency : frequencyOf(null),
+      frequencyHistory: history,
       tracking: h.tracking_type ?? "boolean",
       minimum: h.minimum == null ? null : Number(h.minimum),
       target: h.target == null ? null : Number(h.target),
@@ -466,8 +478,13 @@ async function guardActiveHabitLimit(q: Q, userId: string): Promise<void> {
   if (n >= limit) throw new PlanLimitError("activeHabits", limit);
 }
 
-/** Returns true when the row did not exist before — i.e. this was a create. */
-export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
+/**
+ * Returns true when the row did not exist before — i.e. this was a create.
+ *
+ * `today` is the person's calendar date (`viewerToday`), which is the day a
+ * schedule change takes effect from. Without it the server's date stands in.
+ */
+export async function saveHabit(userId: string, h: Habit, today?: string | null): Promise<boolean> {
   return transaction(async (q) => {
     /*
      * The previous status, read in the same breath as ownership, because the
@@ -514,17 +531,38 @@ export async function saveHabit(userId: string, h: Habit): Promise<boolean> {
         h.weight, h.startDate, h.status, h.replacesHabitId, h.rationale, h.sortOrder],
     );
 
-    // A schedule change opens a new version from today, so history keeps its own rules.
-    await q(
-      `insert into habit_schedules (habit_id, user_id, mode, days_of_week, times_per_week, effective_from)
-       values ($1,$2,$3::freq_mode,$4,$5, current_date)
-       on conflict (habit_id, effective_from) do update set
-         mode = excluded.mode, days_of_week = excluded.days_of_week,
-         times_per_week = excluded.times_per_week
-       where habit_schedules.user_id = $2`,
-      [h.id, userId, h.frequency.mode, h.frequency.days,
-        h.frequency.mode === "times" ? h.frequency.timesPerWeek : null],
-    );
+    /*
+     * A schedule change opens a new version from the person's today, so every
+     * earlier day keeps the rule it was lived under (`frequencyOn`). Two
+     * refinements, mirrored for the browser by `withScheduleVersion`:
+     *
+     *  - An unchanged schedule writes nothing. Renaming or recategorising a
+     *    habit is not a schedule decision, and history should record only the
+     *    ones that were.
+     *  - A version never starts before the newest one on record. Rows written
+     *    before this rule were dated by the server's UTC calendar, which can be
+     *    a day ahead of the person's; a newer choice made today amends that row
+     *    instead of being overruled by it when its date arrives.
+     *
+     * Earlier versions are never touched.
+     */
+    const [latest] = await q<any>(
+      `select effective_from, mode, days_of_week, times_per_week
+         from habit_schedules where habit_id = $1 and user_id = $2
+        order by effective_from desc limit 1`, [h.id, userId]);
+    if (!latest || !sameFrequency(frequencyOf(latest), h.frequency)) {
+      await q(
+        `insert into habit_schedules (habit_id, user_id, mode, days_of_week, times_per_week, effective_from)
+         values ($1,$2,$3::freq_mode,$4,$5, greatest(coalesce($6::date, current_date), $7::date))
+         on conflict (habit_id, effective_from) do update set
+           mode = excluded.mode, days_of_week = excluded.days_of_week,
+           times_per_week = excluded.times_per_week
+         where habit_schedules.user_id = $2`,
+        [h.id, userId, h.frequency.mode, h.frequency.days,
+          h.frequency.mode === "times" ? h.frequency.timesPerWeek : null,
+          today ?? null, latest?.effective_from ?? null],
+      );
+    }
 
     await q("delete from goal_habits where habit_id = $1 and user_id = $2", [h.id, userId]);
     if (h.goalId) {
