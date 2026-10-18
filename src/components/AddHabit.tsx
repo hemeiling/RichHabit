@@ -163,7 +163,8 @@ export default function AddHabit({
             ) : (
               <div className="mt-3">
                 {(() => {
-                  const fresh = shown.filter((i) => !has(i));
+                  // A rotating habit is added on its own: the shelf already has each of its items.
+                  const fresh = shown.filter((i) => !has(i) && !i.rotation);
                   return fresh.length ? (
                     <>
                       <button className="btn" style={{ fontSize: 13 }} onClick={() => addCollection(fresh)}>

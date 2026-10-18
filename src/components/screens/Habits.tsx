@@ -7,11 +7,12 @@ import { Empty, Segmented } from "@/components/ui";
 import { todayISO } from "@/lib/dates";
 import { CATEGORIES, blankHabit, habitStats } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
-import { frequencyLabel, goalName, habitName, habitUnit } from "@/lib/templates";
+import { frequencyLabel, goalName, habitDescription, habitName, habitUnit, rotationLabel } from "@/lib/templates";
 import { isNumericTracking } from "@/lib/types";
 import type { Category, Goal, Habit, HabitStatus, TrackingType } from "@/lib/types";
 
 export default function Habits() {
+  const today = todayISO();
   const { state, actions } = useHabits();
   const t = useT();
   const params = useSearchParams();
@@ -70,7 +71,12 @@ export default function Habits() {
                         {st.pct == null ? "—" : `${st.pct}%`}
                       </span>
                     </div>
-                    {h.description && <div className="muted mt-0.5" style={{ fontSize: 13 }}>{h.description}</div>}
+                    {/* HT-2c: which virtue this week is, and where it sits in the cycle. */}
+                    {rotationLabel(h, t, today) && (
+                      <div className="mt-0.5" style={{ fontSize: 13 }}>{rotationLabel(h, t, today)}</div>
+                    )}
+                    {/* A template's description follows the reader's language, as its name does. */}
+                    {h.description && <div className="muted mt-0.5" style={{ fontSize: 13 }}>{habitDescription(h, t)}</div>}
                     <div className="faint flex flex-wrap gap-x-3 mt-1" style={{ fontSize: 12 }}>
                       <span>{freq}</span>
                       {h.target != null && <span className="num">{h.target} {habitUnit(h, t)}</span>}

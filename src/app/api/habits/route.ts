@@ -1,7 +1,7 @@
 import { ApiError, body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
 import { markMemberStale, viewerToday } from "@/lib/community";
-import { isRepeatUnavailable } from "@/lib/db/diagnose";
+import { isRepeatUnavailable, isSchemaBehind } from "@/lib/db/diagnose";
 import { deleteHabit, saveHabit } from "@/lib/db/queries";
 import { getDict } from "@/lib/i18n/server";
 import { LEGACY_FREQ_MODES } from "@/lib/types";
@@ -20,6 +20,9 @@ export async function POST(request: Request) {
          every other schedule keeps working. */
       if (!LEGACY_FREQ_MODES.includes(habit.frequency.mode) && isRepeatUnavailable(e)) {
         throw new ApiError(getDict().habits.repeatUnavailable, 503);
+      }
+      if (habit.rotation && isSchemaBehind(e)) {
+        throw new ApiError(getDict().habits.rotationUnavailable, 503);
       }
       throw e;
     }

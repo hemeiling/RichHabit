@@ -1,3 +1,5 @@
+import type { Rotation } from "./rotation";
+
 export type Locale = "both" | "en" | "zh";
 export type Category = "morning" | "daytime" | "nighttime";
 export type HabitKind = "good" | "avoid";
@@ -82,6 +84,14 @@ export interface Habit {
    * saved yet; then `frequency` is the whole story.
    */
   frequencyHistory?: FrequencyVersion[];
+  /**
+   * HT-2c. A habit that rotates through a fixed list, one item per week
+   * (src/lib/rotation.ts), counted from `rotationStart` — a Sunday fixed when
+   * the habit is created, so each past week keeps its item. Absent or null on
+   * an ordinary habit.
+   */
+  rotation?: Rotation | null;
+  rotationStart?: string | null;
   tracking: TrackingType;
   /** §20. What still counts on a bad day. Null means the target is the only bar. */
   minimum: number | null;

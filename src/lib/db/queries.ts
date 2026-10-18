@@ -11,6 +11,7 @@ import type {
   Intention, Prefs, Priority, SpendingRecord, Stack, WeeklyReview,
 } from "@/lib/types";
 import { sameFrequency } from "@/lib/habits";
+import { isRotation } from "@/lib/rotation";
 import { DEFAULT_PRIORITY_CATEGORY, normalizePriorityCategory } from "@/lib/types";
 import type { PriorityCategory } from "@/lib/types";
 import { legacyPriorityId, reconcilePriorityIds, uniqueIds } from "@/lib/intention";
@@ -283,6 +284,9 @@ export async function loadState(userId: string): Promise<AppState> {
       type: h.kind,
       frequency: history.length ? history[history.length - 1].frequency : frequencyOf(null),
       frequencyHistory: history,
+      // Step 22; before it the columns are absent from `select *` and read as none.
+      rotation: isRotation(h.rotation) ? h.rotation : null,
+      rotationStart: h.rotation_start ?? null,
       tracking: h.tracking_type ?? "boolean",
       minimum: h.minimum == null ? null : Number(h.minimum),
       target: h.target == null ? null : Number(h.target),
@@ -549,6 +553,18 @@ export async function saveHabit(userId: string, h: Habit, today?: string | null)
         h.anchor || null, h.environment || null, h.friction || null,
         h.weight, h.startDate, h.status, h.replacesHabitId, h.rationale, h.sortOrder],
     );
+
+    /*
+     * HT-2c. A rotation is fixed when the habit is created and never changed
+     * afterwards — a later save cannot re-label the weeks already lived — so
+     * only a create names these columns. Every other save stays exactly what
+     * it was before step 22, which is what keeps a deploy ahead of its
+     * migration safe for every ordinary habit.
+     */
+    if (!existed && h.rotation && h.rotationStart) {
+      await q("update habits set rotation = $1, rotation_start = $2 where id = $3 and user_id = $4",
+        [h.rotation, h.rotationStart, h.id, userId]);
+    }
 
     /*
      * A schedule change opens a new version from the person's today, so every

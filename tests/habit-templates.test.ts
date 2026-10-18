@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COLLECTIONS, LIBRARY, habitFromLibrary, libraryByKey } from "../src/lib/library";
+import { ROTATIONS } from "../src/lib/rotation";
 import { canonical, canonicalDescription, habitDescription, habitSource } from "../src/lib/templates";
 import { parseHabit } from "../src/lib/validate";
 import { dict } from "../src/lib/i18n";
@@ -19,10 +20,15 @@ import { zh } from "../src/lib/i18n/zh";
 const collectionItems = LIBRARY.filter((i) => i.collection);
 
 describe("the collections", () => {
-  it("exist, with Franklin's thirteen virtues complete plus his two questions", () => {
+  it("exist, with Franklin's thirteen virtues complete plus his two questions and the weekly rotation", () => {
     expect(COLLECTIONS).toEqual(["franklin", "history"]);
     const franklin = LIBRARY.filter((i) => i.collection === "franklin").map((i) => i.key);
-    expect(franklin).toHaveLength(15);
+    expect(franklin).toHaveLength(16);
+    // HT-2c: one habit that rotates through exactly the shelf's thirteen, in his order.
+    const week = LIBRARY.find((i) => i.key === "franklin_virtue_week");
+    expect(week?.rotation).toBe("franklin_virtues");
+    expect(franklin.filter((k) => /^franklin_(?!virtue_week|morning|evening)/.test(k)))
+      .toEqual([...ROTATIONS.franklin_virtues]);
     for (const v of ["temperance", "silence", "order", "resolution", "frugality", "industry",
       "sincerity", "justice", "moderation", "cleanliness", "tranquility", "chastity", "humility"]) {
       expect(franklin).toContain(`franklin_${v}`);

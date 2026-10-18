@@ -143,6 +143,7 @@ export const zh: Dict = {
       meaningful_goal_hour: "花一小时投入有意义的目标",
       bed_on_time: "按时上床睡觉",
       /* ── 富兰克林十三美德（《自传》） ── */
+      franklin_virtue_week: "本周美德",
       franklin_temperance: "节制",
       franklin_silence: "慎言",
       franklin_order: "秩序",
@@ -170,6 +171,7 @@ export const zh: Dict = {
       bezos_sleep_eight: "保证八小时睡眠",
     },
     descriptions: {
+      franklin_virtue_week: "把富兰克林的方法做成一个习惯：依次用一周专心于十三种美德中的一种，周而复始。每天守住了本周的美德，就打个勾。",
       franklin_temperance: "“食不过饱，饮不过量。”——富兰克林的箴言",
       franklin_silence: "“非于人于己有益之言不谈，避免琐碎闲谈。”——富兰克林的箴言",
       franklin_order: "“物归其位，事有其时。”——富兰克林的箴言",
@@ -196,6 +198,7 @@ export const zh: Dict = {
       bezos_sleep_eight: "“对我来说，我需要八小时睡眠”——提前安排，而不是碰运气。",
     },
     sources: {
+      franklin_virtue_week: "本杰明·富兰克林《自传》（1791）",
       franklin_temperance: "本杰明·富兰克林《自传》（1791）",
       franklin_silence: "本杰明·富兰克林《自传》（1791）",
       franklin_order: "本杰明·富兰克林《自传》（1791）",
@@ -394,6 +397,12 @@ export const zh: Dict = {
       monthTimesRange: "每月次数请选择 1 到 31 次。",
     },
     repeatUnavailable: "这种重复方式暂时还不可用，请先选择其他方式",
+    virtueOfWeek: (key: string): string => `本周美德：${zh.templates.habits[key] ?? key}`,
+    rotationThisWeek: (key: string, n: number, of: number): string =>
+      `本周：${zh.templates.habits[key] ?? key} · 第 ${n}/${of} 周`,
+    rotationExplain: "按富兰克林的顺序，每周一种美德。第 13 周之后，从“节制”重新开始。错过一天只算那一天——下一周照常进入下一种美德，过去每一周的美德也都保持不变。",
+    rotationStartWith: "本周从这一项开始",
+    rotationUnavailable: "轮换习惯暂时还不可用，请稍后再试",
     fieldTracking: "怎么衡量？",
     trackingBoolean: "做了就算",
     trackingCount: "次数",

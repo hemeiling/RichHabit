@@ -18,7 +18,7 @@ import {
 } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { prettyDateFor, shortDateFor } from "@/lib/i18n";
-import { habitName, habitUnit } from "@/lib/templates";
+import { habitName, habitNameOn, habitUnit, rotationPrecept } from "@/lib/templates";
 import type { AppState, Category, Habit } from "@/lib/types";
 
 /**
@@ -158,7 +158,7 @@ function HabitRow({
       >⠿</span>
       <button
         className="tick" data-on={done} onClick={() => onToggle(habit.id)} aria-pressed={done}
-        aria-label={done ? t.today.uncheck(habitName(habit, t)) : t.today.check(habitName(habit, t))}
+        aria-label={done ? t.today.uncheck(habitNameOn(habit, t, date)) : t.today.check(habitNameOn(habit, t, date))}
       >
         {done && (
           <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -174,8 +174,14 @@ function HabitRow({
       >
         <div style={{ fontSize: 15.5, fontWeight: 500, opacity: done ? 0.55 : 1, letterSpacing: "-0.01em" }}>
           {habit.type === "avoid" && <span className="faint" style={{ fontWeight: 400 }}>{t.today.avoid} · </span>}
-          {habitName(habit, t)}
+          {habitNameOn(habit, t, date)}
         </div>
+        {/* HT-2c. A rotating habit carries the week's own words (Franklin's precept). */}
+        {rotationPrecept(habit, t, date) && (
+          <div className="muted mt-0.5" style={{ fontSize: 12.5, lineHeight: 1.4 }}>
+            {rotationPrecept(habit, t, date)}
+          </div>
+        )}
         {/* §11. The anchor is what makes the habit happen, so it belongs on the
             row rather than buried in the editor. */}
         {habit.anchor && (

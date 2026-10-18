@@ -1,5 +1,6 @@
 import { dictionaries } from "@/lib/i18n";
 import type { Dict } from "@/lib/i18n";
+import { rotationItemOn } from "@/lib/rotation";
 import type { Frequency, Goal, Habit } from "@/lib/types";
 
 /**
@@ -18,6 +19,32 @@ export const habitName = (h: Pick<Habit, "templateKey" | "name">, t: Dict): stri
 
 export const goalName = (g: Pick<Goal, "templateKey" | "name">, t: Dict): string =>
   (g.templateKey && t.templates.goals[g.templateKey]) || g.name;
+
+/**
+ * What a habit is called on a particular day. A rotating habit is named by
+ * that day's item ("Virtue of the week: Order"); everything else by
+ * `habitName`. Use it wherever a habit is shown against a date.
+ */
+export function habitNameOn(h: Pick<Habit, "templateKey" | "name" | "rotation" | "rotationStart">,
+  t: Dict, date: string): string {
+  if (h.rotation && h.rotationStart) {
+    return t.habits.virtueOfWeek(rotationItemOn(h.rotation, h.rotationStart, date).key);
+  }
+  return habitName(h, t);
+}
+
+/** "This week: Order · week 3 of 13", for a rotating habit; null otherwise. */
+export function rotationLabel(h: Pick<Habit, "rotation" | "rotationStart">, t: Dict, date: string): string | null {
+  if (!h.rotation || !h.rotationStart) return null;
+  const { key, index, length } = rotationItemOn(h.rotation, h.rotationStart, date);
+  return t.habits.rotationThisWeek(key, index + 1, length);
+}
+
+/** This day's item's own words (Franklin's precept), for a rotating habit; null otherwise. */
+export function rotationPrecept(h: Pick<Habit, "rotation" | "rotationStart">, t: Dict, date: string): string | null {
+  if (!h.rotation || !h.rotationStart) return null;
+  return t.templates.descriptions[rotationItemOn(h.rotation, h.rotationStart, date).key] ?? null;
+}
 
 /** How a habit repeats, in a few words: "Every day", "M W F", "Every 3 days"… */
 export function frequencyLabel(f: Frequency, t: Dict): string {

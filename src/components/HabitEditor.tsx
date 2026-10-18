@@ -4,7 +4,8 @@ import { Field, Segmented, Sheet } from "@/components/ui";
 import { todayISO } from "@/lib/dates";
 import { CATEGORIES, frequencyDefaults, scheduleProblem } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
-import { goalName, habitDescription, habitName } from "@/lib/templates";
+import { rotationItemOn, rotationKeys, rotationStartFor } from "@/lib/rotation";
+import { goalName, habitDescription, habitName, rotationLabel } from "@/lib/templates";
 import { MAX_INTERVAL_DAYS, MAX_TIMES_PER_MONTH, isNumericTracking } from "@/lib/types";
 import type { Category, FreqMode, Goal, Habit, HabitStatus, TrackingType } from "@/lib/types";
 
@@ -65,6 +66,27 @@ export default function HabitEditor({
           onChange={(e) => set("description", e.target.value)}
           placeholder={t.habits.descriptionPlaceholder} />
       </Field>
+      {/* HT-2c. A rotating habit says which item this week is and how the cycle
+          works. The start is chosen once, when it is added, and then fixed so
+          every past week keeps its virtue. */}
+      {h.rotation && h.rotationStart && (
+        <div className="flat p-3 mb-3" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 500 }}>{rotationLabel(h, t, todayISO())}</div>
+          <p className="muted mt-1">{t.habits.rotationExplain}</p>
+          {isNew && (
+            <label className="flex items-center flex-wrap gap-2 mt-2">
+              <span className="muted">{t.habits.rotationStartWith}</span>
+              <select className="select" style={{ width: "auto" }}
+                value={rotationItemOn(h.rotation, h.rotationStart, todayISO()).index}
+                onChange={(e) => set("rotationStart", rotationStartFor(todayISO(), Number(e.target.value)))}>
+                {rotationKeys(h.rotation).map((k, i) => (
+                  <option key={k} value={i}>{t.templates.habits[k] ?? k}</option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       <Field label={t.habits.fieldTimeOfDay} group>
         <Segmented<Category> value={h.category} onChange={(v) => set("category", v)}
           options={CATEGORIES.map((c) => ({ value: c.id, label: t.categories[c.id].label }))} />

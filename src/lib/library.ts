@@ -1,4 +1,7 @@
+import { todayISO } from "@/lib/dates";
 import { blankHabit } from "@/lib/habits";
+import { rotationStartFor } from "@/lib/rotation";
+import type { Rotation } from "@/lib/rotation";
 import { canonical, canonicalDescription } from "@/lib/templates";
 import type { Category, Habit, HabitKind, TrackingType } from "@/lib/types";
 
@@ -36,6 +39,12 @@ export interface LibraryHabit {
    * tag; the named collections are browsed and added as a set.
    */
   collection?: "franklin" | "history";
+  /**
+   * HT-2c. The habit rotates through this list, one item a week. Added on its
+   * own, never as part of its shelf's "add all": the shelf already carries
+   * each item as a habit of its own.
+   */
+  rotation?: Rotation;
   /**
    * The citation shown with a historical template — resolved through
    * `templates.sources`, present on every `collection` item. Each of those
@@ -78,9 +87,11 @@ export const LIBRARY: LibraryHabit[] = [
    * ── Franklin's thirteen virtues ──────────────────────────────────────────
    * From his Autobiography: a short precept per virtue (the descriptions
    * quote them), faults marked "every evening" — hence nighttime, daily.
-   * He took the virtues one week at a time; until schedules can rotate,
-   * each is an ordinary daily habit a person activates when its week comes.
+   * He took the virtues one week at a time. The rotating habit below does
+   * exactly that as ONE habit; each virtue is also here as an ordinary daily
+   * habit for anyone who wants to keep one all the time.
    */
+  { key: "franklin_virtue_week", category: "nighttime", kind: "good", lifeDomain: "home", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "franklin", source: true, rotation: "franklin_virtues" },
   ...([
     "temperance", "silence", "order", "resolution", "frugality", "industry",
     "sincerity", "justice", "moderation", "cleanliness", "tranquility",
@@ -148,6 +159,8 @@ export function habitFromLibrary(
     sortOrder: over.sortOrder ?? 0,
     status,
     active: status === "active",
+    // This week is the first item unless the person chooses otherwise in the editor.
+    ...(item.rotation ? { rotation: item.rotation, rotationStart: rotationStartFor(todayISO()) } : {}),
   };
 }
 

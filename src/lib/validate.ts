@@ -7,6 +7,8 @@ import { MAX_REPEAT_INTERVAL, isRepeatUnit } from "@/lib/recurrence";
 import { isTimeZone } from "@/lib/zonedTime";
 import { isTemplateWording } from "@/lib/templates";
 import { MAX_INTERVAL_DAYS, MAX_TIMES_PER_MONTH, SPENDING_CATEGORIES } from "@/lib/types";
+import { weekStart } from "@/lib/dates";
+import { isRotation } from "@/lib/rotation";
 import { QUADRANTS } from "@/lib/priorities";
 import {
   MAX_NOTE, MAX_VISION_TEXT, MAX_WANT, MAX_WHY, MAX_WHY_TEXT,
@@ -114,6 +116,13 @@ export function parseHabit(b: any): Habit {
     category: check.oneOf(b?.category, CATEGORIES, "category"),
     type: check.oneOf(b?.type, KINDS, "type"),
     frequency: { mode, days: chosen, timesPerWeek, ...repeatExtras(mode, b?.frequency, startDate) },
+    /* HT-2c. Only a known rotation; its start is always a Sunday (the week
+       it counts from). Stored on create only — see saveHabit. */
+    rotation: isRotation(b?.rotation) ? b.rotation : null,
+    rotationStart: isRotation(b?.rotation)
+      ? weekStart(b?.rotationStart == null || b.rotationStart === ""
+        ? startDate : check.date(b.rotationStart, "rotationStart"))
+      : null,
     tracking: check.oneOf(b?.tracking ?? "boolean", TRACKING, "tracking"),
     minimum: check.numberOrNull(b?.minimum, "minimum"),
     target: check.numberOrNull(b?.target, "target"),

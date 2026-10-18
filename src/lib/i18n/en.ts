@@ -196,6 +196,7 @@ export const en = {
       meaningful_goal_hour: "Spend an hour on a meaningful goal",
       bed_on_time: "Go to bed on time",
       /* ── Franklin's thirteen virtues (Autobiography) ── */
+      franklin_virtue_week: "Virtue of the week",
       franklin_temperance: "Temperance",
       franklin_silence: "Silence",
       franklin_order: "Order",
@@ -229,6 +230,7 @@ export const en = {
      * the habit makes anyone rich or successful.
      */
     descriptions: {
+      franklin_virtue_week: "Franklin's method as one habit: a week's strict attention to each of his thirteen virtues in turn, then round again. Tick each day you kept this week's virtue.",
       franklin_temperance: "“Eat not to dullness; drink not to elevation.” — Franklin's precept",
       franklin_silence: "“Speak not but what may benefit others or yourself; avoid trifling conversation.” — Franklin's precept",
       franklin_order: "“Let all your things have their places; let each part of your business have its time.” — Franklin's precept",
@@ -256,6 +258,7 @@ export const en = {
     } as Record<string, string>,
     /* The citation under each historical template. Short, honest, checkable. */
     sources: {
+      franklin_virtue_week: "Benjamin Franklin, Autobiography (1791)",
       franklin_temperance: "Benjamin Franklin, Autobiography (1791)",
       franklin_silence: "Benjamin Franklin, Autobiography (1791)",
       franklin_order: "Benjamin Franklin, Autobiography (1791)",
@@ -466,6 +469,15 @@ export const en = {
     },
     // No full stop: the store appends ". That change wasn't saved."
     repeatUnavailable: "This way of repeating isn't available yet — please choose another for now",
+    /* These take the item's template KEY and name it from this dictionary, so
+       the bilingual one reads "…: Order · 本周美德：秩序" rather than nesting a
+       bilingual name inside each half. */
+    virtueOfWeek: (key: string): string => `Virtue of the week: ${en.templates.habits[key] ?? key}`,
+    rotationThisWeek: (key: string, n: number, of: number): string =>
+      `This week: ${en.templates.habits[key] ?? key} · week ${n} of ${of}`,
+    rotationExplain: "One virtue a week, in Franklin's order. After the 13th week the cycle starts again with Temperance. A missed day is just that day — next week still moves on to the next virtue, and every past week keeps the virtue it had.",
+    rotationStartWith: "Start this week with",
+    rotationUnavailable: "Rotating habits aren't available yet — please try again later",
     fieldTracking: "How is it measured?",
     trackingBoolean: "Did it",
     trackingCount: "A number of times",
