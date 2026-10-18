@@ -342,13 +342,31 @@ export default function UsersTable({
     );
   };
 
-  /** A sortable header: a link when sorting by it helps, plain text otherwise. */
+  /**
+   * A sortable header: a link when sorting by it helps, plain text otherwise.
+   * One click sorts the column its natural way (largest or newest first), a
+   * second click turns it over — the pair is named here, and the arrow shows
+   * which way the rows run right now.
+   */
+  const FLIP: Partial<Record<UserSort, UserSort>> = {
+    active: "least_active", newest: "oldest", last_active: "last_active_asc",
+    sessions: "sessions_asc", habits: "habits_asc", completions: "completions_asc",
+    priorities: "priorities_asc", accomplishments: "accomplishments_asc",
+  };
   const sortable = (label: string, key: UserSort | undefined, title: string, extra = "") => {
-    const href = key && sortLinks[key];
-    const on = key && sort === key;
+    const flipped = key && FLIP[key];
+    const direction = key && sort === key ? "desc" : flipped && sort === flipped ? "asc" : null;
+    const href = key && (direction === "desc" ? sortLinks[flipped!] : sortLinks[key]);
     return href ? (
-      <a href={href} className={`au-sort${on ? " au-on" : ""} ${extra}`} title={`${title}\n\nSort by this column`}>
-        {label}{on && <span aria-hidden="true"> ↓</span>}
+      <a href={href} className={`au-sort${direction ? " au-on" : ""} ${extra}`}
+        title={`${title}\n\nSort by this column; click again to reverse`}>
+        {label}
+        {direction && (
+          <span aria-hidden="true"> {direction === "desc" ? "↓" : "↑"}</span>
+        )}
+        {direction && (
+          <span className="sr-only">{direction === "desc" ? " (largest first)" : " (smallest first)"}</span>
+        )}
       </a>
     ) : (
       <span className={extra} title={title}>{label}</span>

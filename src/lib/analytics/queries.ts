@@ -429,7 +429,12 @@ export type IntentionStatus = "none" | "started" | "completed";
 
 export type UserSort =
   | "active" | "least_active" | "newest" | "oldest" | "last_active"
-  | "habits" | "completions" | "priorities" | "accomplishments" | "sessions";
+  | "habits" | "completions" | "priorities" | "accomplishments" | "sessions"
+  /* The same columns, smallest first — what a second click on a column
+     header asks for. `active`/`least_active` and `newest`/`oldest` are the
+     pairs this union already had under their own names. */
+  | "last_active_asc" | "habits_asc" | "completions_asc" | "priorities_asc"
+  | "accomplishments_asc" | "sessions_asc";
 export type RoleFilter = "all" | "user" | "admin";
 export type StatusFilter = "all" | "active" | "pending" | "disabled";
 export type KindFilter = "all" | "email" | "username";
@@ -469,6 +474,13 @@ const SORT_SQL: Record<UserSort, string> = {
   priorities: "priorities desc, u.created_at asc",
   accomplishments: "accomplishments desc, u.created_at asc",
   sessions: "sessions desc, u.created_at asc",
+  /* Ascending, with the same account-age tie-break for the same reason. */
+  last_active_asc: "last_active asc nulls first",
+  habits_asc: "active_habits asc, u.created_at asc",
+  completions_asc: "completions asc, u.created_at asc",
+  priorities_asc: "priorities asc, u.created_at asc",
+  accomplishments_asc: "accomplishments asc, u.created_at asc",
+  sessions_asc: "sessions asc, u.created_at asc",
 };
 
 /**

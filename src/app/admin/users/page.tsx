@@ -21,6 +21,19 @@ const SORTS: [UserSort, string][] = [
   ["active", "Most active"], ["least_active", "Least active"],
   ["newest", "Newest"], ["oldest", "Oldest"], ["last_active", "Last active"],
 ];
+/*
+ * Every sort the URL may name. The chips above stay the five with friendly
+ * names; the rest arrive from the table's column headers. This list used to
+ * BE the chip list, which silently turned ?sort=habits (a link this very
+ * page emitted) back into "Most active".
+ */
+const SORT_PARAM: [UserSort, string][] = [
+  ...SORTS,
+  ["habits", ""], ["completions", ""], ["priorities", ""],
+  ["accomplishments", ""], ["sessions", ""],
+  ["last_active_asc", ""], ["habits_asc", ""], ["completions_asc", ""],
+  ["priorities_asc", ""], ["accomplishments_asc", ""], ["sessions_asc", ""],
+];
 const ROLES: [RoleFilter, string][] = [["all", "All"], ["user", "User"], ["admin", "Admin"]];
 const STATUSES: [StatusFilter, string][] =
   [["all", "All"], ["active", "Active"], ["pending", "Pending"], ["disabled", "Disabled"]];
@@ -45,7 +58,7 @@ export default async function Users({ searchParams }: {
   const admin = await requireAdminPage();
 
   const search = (searchParams.q ?? "").slice(0, 100);
-  const sort = pick(SORTS, searchParams.sort, "active");
+  const sort = pick(SORT_PARAM, searchParams.sort, "active");
   const role = pick(ROLES, searchParams.role, "all");
   const status = pick(STATUSES, searchParams.status, "all");
   const kind = pick(KINDS, searchParams.kind, "all");
@@ -188,17 +201,16 @@ export default async function Users({ searchParams }: {
         allMatchingIds={allMatchingIds} currentAdminId={admin.id}
         standings={standings} standingsAsOf={standingsAsOf}
         sort={sort}
-        /* Precomputed: a client component cannot receive `href` itself. */
-        sortLinks={{
-          newest: href({ sort: "newest" }),
-          last_active: href({ sort: "last_active" }),
-          active: href({ sort: "active" }),
-          sessions: href({ sort: "sessions" }),
-          habits: href({ sort: "habits" }),
-          completions: href({ sort: "completions" }),
-          priorities: href({ sort: "priorities" }),
-          accomplishments: href({ sort: "accomplishments" }),
-        }}
+        /* Precomputed: a client component cannot receive `href` itself. The
+           second entry of each pair is what a second click on that header
+           asks for — the same column, the other way up. */
+        sortLinks={Object.fromEntries(([
+          "newest", "oldest", "last_active", "last_active_asc",
+          "active", "least_active",
+          "sessions", "sessions_asc", "habits", "habits_asc",
+          "completions", "completions_asc", "priorities", "priorities_asc",
+          "accomplishments", "accomplishments_asc",
+        ] as const).map((s) => [s, href({ sort: s })]))}
       />
 
       {result.pages > 1 && (
