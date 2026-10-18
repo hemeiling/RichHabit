@@ -285,6 +285,38 @@ create table habit_schedules (
 );
 create unique index habit_schedule_version_idx on habit_schedules (habit_id, effective_from);
 
+-- ---- Flexible repetition and weekly rotation (step 22) ---------------------------
+-- Three more ways to repeat, each a schedule version like the others: every N
+-- days from an anchor date (so a missed day never moves the next one), N times
+-- in a calendar month, and specific days of the month (a day the month does not
+-- have falls on its last day). And a habit that rotates through a fixed list,
+-- one item per week from `rotation_start` — Franklin's thirteen virtues — so
+-- each past week keeps the virtue it had. All nullable; the checks compare
+-- `mode::text` because an enum value added in a transaction cannot be used as a
+-- literal before it commits. Same statements as scripts/migrations/flexible-repetition.mjs.
+alter type freq_mode add value if not exists 'every_n_days';
+alter type freq_mode add value if not exists 'month_times';
+alter type freq_mode add value if not exists 'month_days';
+alter table habit_schedules add column if not exists interval_days smallint;
+alter table habit_schedules add column if not exists anchor_date date;
+alter table habit_schedules add column if not exists times_per_month smallint;
+alter table habit_schedules add column if not exists days_of_month smallint[];
+alter table habits add column if not exists rotation text;
+alter table habits add column if not exists rotation_start date;
+alter table habit_schedules add constraint interval_days_range check (interval_days between 2 and 365);
+alter table habit_schedules add constraint times_per_month_range check (times_per_month between 1 and 31);
+alter table habit_schedules add constraint days_of_month_range
+  check (days_of_month <@ '{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}'::smallint[]);
+alter table habit_schedules add constraint every_n_days_valid
+  check (mode::text <> 'every_n_days' or (interval_days is not null and anchor_date is not null));
+alter table habit_schedules add constraint month_times_valid
+  check (mode::text <> 'month_times' or times_per_month is not null);
+alter table habit_schedules add constraint month_days_valid
+  check (mode::text <> 'month_days' or coalesce(array_length(days_of_month, 1), 0) > 0);
+alter table habits add constraint rotation_known check (rotation in ('franklin_virtues'));
+alter table habits add constraint rotation_has_start check (rotation is null or rotation_start is not null);
+-- ---- end flexible repetition and weekly rotation ---------------------------------
+
 -- Many-to-many: one habit can serve more than one goal.
 create table goal_habits (
   goal_id  uuid not null references goals on delete cascade,

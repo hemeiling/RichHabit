@@ -32,6 +32,7 @@ import { migrateTogetherInviteEmail } from "./migrations/together-invite-email.m
 import { migrateTogetherConnections } from "./migrations/together-connections.mjs";
 import { migratePriorityDetails } from "./migrations/priority-details.mjs";
 import { migrateGoogleSignin } from "./migrations/google-signin.mjs";
+import { migrateFlexibleRepetition } from "./migrations/flexible-repetition.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -994,6 +995,16 @@ try {
    * scripts/migrations/google-signin.mjs.
    */
   changed += await migrateGoogleSignin(client, console.log);
+
+  /*
+   * ---- 22. Flexible repetition and the weekly rotation ---------------------
+   *
+   * Three appended freq_mode values, four nullable schedule columns, two
+   * nullable habit columns, and CHECKs every existing row already satisfies.
+   * No existing row is read or rewritten. See
+   * scripts/migrations/flexible-repetition.mjs.
+   */
+  changed += await migrateFlexibleRepetition(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");
