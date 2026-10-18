@@ -5,7 +5,7 @@ import { requestRecommendations } from "@/lib/db";
 import { Empty, Field, Segmented } from "@/components/ui";
 import { useT } from "@/lib/i18n/context";
 import { blankHabit } from "@/lib/habits";
-import { LIBRARY, type LibraryHabit } from "@/lib/library";
+import { LIBRARY, habitFromLibrary, type LibraryHabit } from "@/lib/library";
 import { canonical, habitName } from "@/lib/templates";
 import type { Dict } from "@/lib/i18n";
 import type { Category, Habit, HabitKind } from "@/lib/types";
@@ -134,27 +134,11 @@ export default function Refine() {
    * Adopting a library habit copies the template into the user's own row.
    * It lands as `planned`: chosen, but not yet something they are tracking.
    */
-  const addFromLibrary = (item: LibraryHabit) => {
-    actions.saveHabit({
-      ...blankHabit(),
-      // The English wording, not the key: `name` is the readable fallback, and
-      // the validator keeps a template key only while the name still matches
-      // the template in some language.
-      name: canonical("habits", item.key),
-      templateKey: item.key,
-      category: item.category,
-      type: item.kind,
-      weight: item.weight,
-      // §11. The template's suggested defaults come across with it — dropping
-      // the tracking type would turn "stay under an hour" into a checkbox.
-      tracking: item.tracking,
-      minimum: item.minimum,
-      target: item.target,
-      unit: item.unit ?? "",
-      status: "planned",
-      active: false,
-    });
-  };
+  const addFromLibrary = (item: LibraryHabit) =>
+    // §11. One definition of adopting a template (shared with Add Habit), so
+    // the suggested frequency comes across here too — this copy used to
+    // rebuild the habit by hand and silently fall back to daily.
+    actions.saveHabit(habitFromLibrary(item, { status: "planned" }));
 
   const suggest = async () => {
     setSuggesting(true);

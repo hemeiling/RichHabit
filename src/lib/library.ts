@@ -1,4 +1,6 @@
-import type { Category, HabitKind, TrackingType } from "@/lib/types";
+import { blankHabit } from "@/lib/habits";
+import { canonical, canonicalDescription } from "@/lib/templates";
+import type { Category, Habit, HabitKind, TrackingType } from "@/lib/types";
 
 /**
  * The curated habit library (§10–11).
@@ -25,6 +27,22 @@ export interface LibraryHabit {
   target: number | null;
   unit: string | null;
   frequency: "daily" | "days" | "times";
+  /** Suggested weekdays when `frequency` is "days" (0 = Sunday). */
+  days?: number[];
+  /** Suggested count when `frequency` is "times". */
+  timesPerWeek?: number;
+  /**
+   * §10. Which shelf of the catalogue this sits on. The starter set has no
+   * tag; the named collections are browsed and added as a set.
+   */
+  collection?: "franklin" | "history";
+  /**
+   * The citation shown with a historical template — resolved through
+   * `templates.sources`, present on every `collection` item. Each of those
+   * practices is documented in the named primary source; frequencies are
+   * only ever the source's own, never invented here.
+   */
+  source?: boolean;
 }
 
 export const LIBRARY: LibraryHabit[] = [
@@ -52,10 +70,86 @@ export const LIBRARY: LibraryHabit[] = [
   { key: "bedtime_routine", category: "nighttime", kind: "good", lifeDomain: "health", tracking: "boolean", weight: 3, minimum: null, target: null, unit: null, frequency: "daily" },
   { key: "limit_tv", category: "nighttime", kind: "avoid", lifeDomain: "home", tracking: "maximum", weight: 2, minimum: null, target: 1, unit: "hr", frequency: "daily" },
   { key: "limit_internet", category: "nighttime", kind: "avoid", lifeDomain: "home", tracking: "maximum", weight: 2, minimum: null, target: 1, unit: "hr", frequency: "daily" },
-  { key: "review_spending", category: "nighttime", kind: "good", lifeDomain: "money", tracking: "boolean", weight: 1, minimum: null, target: null, unit: null, frequency: "times" },
+  { key: "review_spending", category: "nighttime", kind: "good", lifeDomain: "money", tracking: "boolean", weight: 1, minimum: null, target: null, unit: null, frequency: "times", timesPerWeek: 1 },
   { key: "meaningful_goal_hour", category: "nighttime", kind: "good", lifeDomain: "career", tracking: "duration", weight: 3, minimum: 5, target: 60, unit: "min", frequency: "daily" },
-  { key: "reach_out_to_someone", category: "nighttime", kind: "good", lifeDomain: "relationships", tracking: "boolean", weight: 1, minimum: null, target: null, unit: null, frequency: "times" },
+  { key: "reach_out_to_someone", category: "nighttime", kind: "good", lifeDomain: "relationships", tracking: "boolean", weight: 1, minimum: null, target: null, unit: null, frequency: "times", timesPerWeek: 3 },
+
+  /*
+   * ── Franklin's thirteen virtues ──────────────────────────────────────────
+   * From his Autobiography: a short precept per virtue (the descriptions
+   * quote them), faults marked "every evening" — hence nighttime, daily.
+   * He took the virtues one week at a time; until schedules can rotate,
+   * each is an ordinary daily habit a person activates when its week comes.
+   */
+  ...([
+    "temperance", "silence", "order", "resolution", "frugality", "industry",
+    "sincerity", "justice", "moderation", "cleanliness", "tranquility",
+    "chastity", "humility",
+  ].map((v): LibraryHabit => ({
+    key: `franklin_${v}`, category: "nighttime", kind: "good", lifeDomain: "home",
+    tracking: "boolean", weight: 2, minimum: null, target: null, unit: null,
+    frequency: "daily", collection: "franklin", source: true,
+  }))),
+  { key: "franklin_morning_question", category: "morning", kind: "good", lifeDomain: "home", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "franklin", source: true },
+  { key: "franklin_evening_question", category: "nighttime", kind: "good", lifeDomain: "home", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "franklin", source: true },
+
+  /*
+   * ── Practices from history ───────────────────────────────────────────────
+   * Only practices their own words or an eyewitness documented, each cited
+   * in `templates.sources`. Stated frequencies only: everything here was
+   * described as daily (Gates: "almost every night") by its source; where a
+   * source gave no amount, the template suggests none.
+   */
+  { key: "marcus_morning_prep", category: "morning", kind: "good", lifeDomain: "home", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "history", source: true },
+  { key: "darwin_morning_walk", category: "morning", kind: "good", lifeDomain: "health", tracking: "boolean", weight: 1, minimum: null, target: null, unit: null, frequency: "daily", collection: "history", source: true },
+  { key: "hemingway_morning_writing", category: "morning", kind: "good", lifeDomain: "career", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "history", source: true },
+  { key: "darwin_daily_walk", category: "daytime", kind: "good", lifeDomain: "health", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "history", source: true },
+  { key: "buffett_reading_block", category: "daytime", kind: "good", lifeDomain: "learning", tracking: "duration", weight: 2, minimum: null, target: null, unit: "min", frequency: "daily", collection: "history", source: true },
+  { key: "bezos_hard_before_lunch", category: "daytime", kind: "good", lifeDomain: "career", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "history", source: true },
+  { key: "seneca_evening_review", category: "nighttime", kind: "good", lifeDomain: "home", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "history", source: true },
+  { key: "gates_reading_before_sleep", category: "nighttime", kind: "good", lifeDomain: "learning", tracking: "duration", weight: 2, minimum: 10, target: 60, unit: "min", frequency: "daily", collection: "history", source: true },
+  { key: "bezos_sleep_eight", category: "nighttime", kind: "good", lifeDomain: "health", tracking: "boolean", weight: 2, minimum: null, target: null, unit: null, frequency: "daily", collection: "history", source: true },
 ];
+
+/** The named shelves, in display order. */
+export const COLLECTIONS = ["franklin", "history"] as const;
+export type CollectionKey = (typeof COLLECTIONS)[number];
+
+/**
+ * A library entry as a habit this account owns — the one definition, used by
+ * Add Habit and by Refine. The template's own suggestions all come across:
+ * tracking, bounds, unit, weight, and the frequency *it* names (both callers
+ * once rebuilt this by hand, each dropping or hard-coding the frequency).
+ * `status` is the caller's: "active" from the sheet, "planned" into the
+ * backlog — never anything the user did not ask for.
+ */
+export function habitFromLibrary(
+  item: LibraryHabit,
+  over: { category?: Category; sortOrder?: number; status?: "active" | "planned" } = {},
+): Habit {
+  const status = over.status ?? "active";
+  return {
+    ...blankHabit(),
+    name: canonical("habits", item.key),
+    description: canonicalDescription(item.key),
+    templateKey: item.key,
+    category: over.category ?? item.category,
+    type: item.kind,
+    tracking: item.tracking,
+    minimum: item.minimum,
+    target: item.target,
+    unit: item.unit ?? "",
+    weight: item.weight,
+    frequency: {
+      mode: item.frequency,
+      days: item.days ?? [0, 1, 2, 3, 4, 5, 6],
+      timesPerWeek: item.timesPerWeek ?? 3,
+    },
+    sortOrder: over.sortOrder ?? 0,
+    status,
+    active: status === "active",
+  };
+}
 
 export const libraryByKey = new Map(LIBRARY.map((h) => [h.key, h]));
 

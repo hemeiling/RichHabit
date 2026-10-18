@@ -4,7 +4,7 @@ import { Field, Segmented, Sheet } from "@/components/ui";
 import { todayISO } from "@/lib/dates";
 import { CATEGORIES } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
-import { goalName } from "@/lib/templates";
+import { goalName, habitDescription, habitName } from "@/lib/templates";
 import { isNumericTracking } from "@/lib/types";
 import type { Category, Goal, Habit, HabitStatus, TrackingType } from "@/lib/types";
 
@@ -14,17 +14,23 @@ import type { Category, Goal, Habit, HabitStatus, TrackingType } from "@/lib/typ
  * rules about what a habit may be, and they would drift.
  */
 export default function HabitEditor({
-  habit, goals, onSave, onDelete, onClose,
+  habit, goals, onSave, onDelete, onClose, isNew: isNewProp,
 }: {
   habit: Habit; goals: Goal[];
   onSave: (h: Habit) => void; onDelete: (id: string) => void; onClose: () => void;
+  /**
+   * Whether this is a habit not yet saved. Defaults to "it has no name yet",
+   * which holds for a blank form — but a template previewed before adding
+   * arrives already named, and must still read as new (no Delete, "Add").
+   */
+  isNew?: boolean;
 }) {
   const t = useT();
   const [h, setH] = useState<Habit>(habit);
   const set = <K extends keyof Habit>(k: K, v: Habit[K]) => setH((p) => ({ ...p, [k]: v }));
   const setFreq = <K extends keyof Habit["frequency"]>(k: K, v: Habit["frequency"][K]) =>
     setH((p) => ({ ...p, frequency: { ...p.frequency, [k]: v } }));
-  const isNew = !habit.name;
+  const isNew = isNewProp ?? !habit.name;
   const valid = h.name.trim().length > 0;
 
   return (
@@ -44,12 +50,14 @@ export default function HabitEditor({
         {/* A seeded habit opens showing its translated name. Editing it makes the
             text the user's own: the template key is dropped and it stops
             following the language. */}
-        <input className="input" autoFocus value={h.name}
+        <input className="input" autoFocus value={habitName(h, t)}
           onChange={(e) => setH((p) => ({ ...p, name: e.target.value, templateKey: null }))}
           placeholder={t.habits.habitPlaceholder} />
       </Field>
       <Field label={t.habits.fieldDescription} hint={t.habits.descriptionHint}>
-        <input className="input" value={h.description}
+        {/* Same rule as the name: a template's own description reads in the
+            reader's language until they change it; then it is theirs. */}
+        <input className="input" value={habitDescription(h, t)}
           onChange={(e) => set("description", e.target.value)}
           placeholder={t.habits.descriptionPlaceholder} />
       </Field>
@@ -118,8 +126,11 @@ export default function HabitEditor({
             onChange={(e) => set("target", e.target.value === "" ? null : Number(e.target.value))} placeholder="30" />
         </Field>
         <Field label={t.habits.fieldUnit}>
+          {/* The unit becomes the user's own, but the NAME is untouched, so
+              the key — and with it the name's translation — stays. A custom
+              unit simply isn't in templates.units and shows as typed. */}
           <input className="input" value={h.unit}
-            onChange={(e) => setH((p) => ({ ...p, unit: e.target.value, templateKey: null }))}
+            onChange={(e) => set("unit", e.target.value)}
             placeholder={t.habits.unitPlaceholder} />
         </Field>
       </div>

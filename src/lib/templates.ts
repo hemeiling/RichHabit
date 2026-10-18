@@ -26,7 +26,30 @@ export const goalName = (g: Pick<Goal, "templateKey" | "name">, t: Dict): string
 export const habitUnit = (h: Pick<Habit, "templateKey" | "unit">, t: Dict): string =>
   (h.templateKey && h.unit && t.templates.units[h.unit]) || h.unit;
 
-export const habitDescription = (h: Pick<Habit, "description">): string => h.description;
+/**
+ * Descriptions follow the same one-line rule as names: ours while untouched,
+ * theirs the moment they edit it. A template's description is stored in
+ * English (like the name); while the stored text is still the template's own
+ * wording in some language, the reader sees it in their language.
+ */
+export const habitDescription = (
+  h: Pick<Habit, "templateKey" | "description">, t: Dict,
+): string => {
+  if (!h.templateKey || !h.description) return h.description;
+  const own = t.templates.descriptions[h.templateKey];
+  if (!own) return h.description;
+  const aliases = Object.values(dictionaries)
+    .map((d) => d.templates.descriptions[h.templateKey!]).filter(Boolean);
+  return aliases.includes(h.description.trim()) ? own : h.description;
+};
+
+/** A historical template's citation, or empty for everything else. */
+export const habitSource = (key: string | null, t: Dict): string =>
+  (key && t.templates.sources[key]) || "";
+
+/** The canonical (English) description stored when a template is adopted. */
+export const canonicalDescription = (key: string): string =>
+  dictionaries.en.templates.descriptions[key] ?? "";
 
 /**
  * Every name a template has ever had, in every language.

@@ -4,9 +4,9 @@ import HabitEditor from "@/components/HabitEditor";
 import { Field, Segmented, Sheet } from "@/components/ui";
 import { useT } from "@/lib/i18n/context";
 import { blankHabit } from "@/lib/habits";
-import { LIBRARY } from "@/lib/library";
-import { canonical, habitName } from "@/lib/templates";
-import type { LibraryHabit } from "@/lib/library";
+import { LIBRARY, habitFromLibrary } from "@/lib/library";
+import { habitDescription, habitName, habitSource } from "@/lib/templates";
+import type { CollectionKey, LibraryHabit } from "@/lib/library";
 import type { Category, Goal, Habit } from "@/lib/types";
 import type { Dict } from "@/lib/i18n/en";
 
@@ -29,28 +29,11 @@ function matches(item: LibraryHabit, needle: string, t: Dict): boolean {
   return (t.templates.habits[item.key] ?? item.key).toLowerCase().includes(needle);
 }
 
-/** A library entry, as a habit this account owns. */
-function fromLibrary(item: LibraryHabit, category: Category, sortOrder: number): Habit {
-  return {
-    ...blankHabit(),
-    // Keyed, not copied as text: it follows the reader's language until renamed.
-    name: canonical("habits", item.key),
-    templateKey: item.key,
-    category,
-    type: item.kind,
-    tracking: item.tracking,
-    minimum: item.minimum,
-    target: item.target,
-    unit: item.unit ?? "",
-    weight: item.weight,
-    frequency: {
-      mode: item.frequency,
-      days: [0, 1, 2, 3, 4, 5, 6],
-      timesPerWeek: item.frequency === "times" ? 3 : 3,
-    },
-    sortOrder,
-  };
-}
+/*
+ * Building the habit itself lives in lib/library (`habitFromLibrary`), shared
+ * with Refine — one definition of what adopting a template means, carrying
+ * the template's own frequency rather than a hard-coded one.
+ */
 
 export default function AddHabit({
   section, habits, goals, nextSortOrder, onSave, onClose,
@@ -67,6 +50,7 @@ export default function AddHabit({
   const [tab, setTab] = useState<"library" | "own">("library");
   const [search, setSearch] = useState("");
   const [everywhere, setEverywhere] = useState(false);
+  const [shelf, setShelf] = useState<"all" | CollectionKey>("all");
   const [own, setOwn] = useState<Habit | null>(null);
   const [duplicate, setDuplicate] = useState<{ item: LibraryHabit; name: string } | null>(null);
 
@@ -91,22 +75,48 @@ export default function AddHabit({
     || onSheet.names.has((t.templates.habits[item.key] ?? "").trim().toLowerCase());
 
   const needle = search.trim().toLowerCase();
+  /*
+   * The everyday shelf keeps the section filter — "+ Add habit" under Morning
+   * means a morning habit. A named collection spans the whole day by design
+   * (Franklin's questions bracket it), so choosing one shows all of it.
+   */
   const shown = LIBRARY.filter((item) =>
-    (everywhere || item.category === section) && matches(item, needle, t));
+    (shelf === "all"
+      ? !item.collection && (everywhere || item.category === section)
+      : item.collection === shelf)
+    && matches(item, needle, t));
+
+  /**
+   * §10: picking an item opens the pre-filled form — nothing is added
+   * silently, and everything (time of day, target, schedule) can be adjusted
+   * before it joins the sheet. The everyday shelf lands in the tapped
+   * section; a collection item keeps its own time of day.
+   */
+  const review = (item: LibraryHabit) =>
+    setOwn(habitFromLibrary(item, {
+      category: item.collection ? item.category : section,
+      sortOrder: nextSortOrder,
+    }));
 
   const add = (item: LibraryHabit) => {
     if (has(item)) {
       setDuplicate({ item, name: t.templates.habits[item.key] ?? item.key });
       return;
     }
-    onSave(fromLibrary(item, section, nextSortOrder));
+    review(item);
+  };
+
+  /** The whole shelf into the backlog as Planned — only what is not already theirs. */
+  const addCollection = (items: LibraryHabit[]) => {
+    items.forEach((item, i) =>
+      onSave(habitFromLibrary(item, { status: "planned", sortOrder: nextSortOrder + i })));
     onClose();
   };
 
   if (own) {
     return (
       <HabitEditor
-        habit={own} goals={goals}
+        habit={own} goals={goals} isNew
         onSave={(h) => { onSave(h); onClose(); }}
         onDelete={onClose}
         onClose={() => setOwn(null)}
@@ -139,11 +149,36 @@ export default function AddHabit({
               <input className="input" autoFocus value={search} placeholder={t.customise.searchPlaceholder}
                 onChange={(e) => setSearch(e.target.value)} />
             </Field>
-            <Segmented<boolean> value={everywhere} onChange={setEverywhere} small
-              options={[
-                { value: false, label: t.customise.showSection(t.categories[section].label) },
-                { value: true, label: t.customise.showAll },
-              ]} />
+            {/* The shelves: the everyday set, and the named collections. */}
+            <Segmented<"all" | CollectionKey> value={shelf} onChange={setShelf} small
+              options={(["all", "franklin", "history"] as const).map((s) => ({
+                value: s, label: t.customise.shelves[s],
+              }))} />
+            {shelf === "all" ? (
+              <Segmented<boolean> value={everywhere} onChange={setEverywhere} small
+                options={[
+                  { value: false, label: t.customise.showSection(t.categories[section].label) },
+                  { value: true, label: t.customise.showAll },
+                ]} />
+            ) : (
+              <div className="mt-3">
+                {(() => {
+                  const fresh = shown.filter((i) => !has(i));
+                  return fresh.length ? (
+                    <>
+                      <button className="btn" style={{ fontSize: 13 }} onClick={() => addCollection(fresh)}>
+                        + {t.customise.addCollection(fresh.length)}
+                      </button>
+                      <p className="faint mt-1.5" style={{ fontSize: 12, lineHeight: 1.45 }}>
+                        {t.customise.collectionHint}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="faint" style={{ fontSize: 12.5 }}>{t.customise.collectionAllTaken}</p>
+                  );
+                })()}
+              </div>
+            )}
 
             <div className="divide mt-3">
               {shown.length === 0 && (
@@ -165,9 +200,17 @@ export default function AddHabit({
                         )}
                         {t.templates.habits[item.key] ?? item.key}
                       </span>
+                      {/* A collection item explains itself and names its source. */}
+                      {item.collection && t.templates.descriptions[item.key] && (
+                        <span className="muted block mt-0.5" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
+                          {t.templates.descriptions[item.key]}
+                        </span>
+                      )}
                       <span className="faint block mt-0.5" style={{ fontSize: 12 }}>
                         {t.categories[item.category].label}
                         {taken && ` · ${t.customise.alreadyOnSheet}`}
+                        {item.source && habitSource(item.key, t)
+                          && ` · ${t.customise.sourcePrefix}${habitSource(item.key, t)}`}
                       </span>
                     </span>
                     <span className="faint" style={{ fontSize: 17, flex: "none" }}>
@@ -190,8 +233,9 @@ export default function AddHabit({
             <>
               <button className="btn" onClick={() => setDuplicate(null)}>{t.common.cancel}</button>
               <button className="btn btn-primary" onClick={() => {
-                onSave(fromLibrary(duplicate.item, section, nextSortOrder));
-                onClose();
+                const item = duplicate.item;
+                setDuplicate(null);
+                review(item);           // still through the form, like any other add
               }}>{t.customise.addAnyway}</button>
             </>
           }
