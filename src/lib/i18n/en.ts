@@ -82,7 +82,6 @@ export const en = {
        screen that looks outward, and the sidebar reads inward-to-outward. */
     together: "Together",
     togetherOverview: "Overview",
-    community: "Community",
     more: "More",
     /** The sidebar's own labels: the landmark, the drawer, the account block. */
     mainNavigation: "Main navigation",
@@ -98,7 +97,6 @@ export const en = {
     "/week": "Rich habits checklist",
     "/insights": "Analytics",
     "/together": "Together",
-    "/community": "Community Progress",
     "/more": "More",
     "/more/habits": "My Habit Sheet",
     "/more/refine": "Refine my habits",
@@ -672,16 +670,9 @@ export const en = {
     legendHabits: "Habits",
     legendAccomplishments: "Accomplishments",
     chartLabel: (month: string) => `Habits and accomplishments by day, ${month}. Use the arrow keys to read each day.`,
-    /** The switch at the top of the card. */
-    title: "Progress",
-    mine: "My Progress",
-    community: "Community",
-    switchTo: (view: string) => `Show ${view}`,
-
     /** The headline figure and the chart under it. */
     monthToDate: "This month so far",
     thisMonth: (month: string) => `${month} · day by day`,
-    todayIs: (pct: number) => `Today: ${pct}%`,
     noneYet: "Tick a few habits and your month will start drawing itself here.",
     tooEarly: "One more day and a line appears here.",
     /* Says the span, because this is the whole month — today alone is the
@@ -706,15 +697,12 @@ export const en = {
     /* Two rankings, never combined: habits are consistency, accomplishments are
        what got done. Each has its own list, rank and eligibility, and nothing
        adds them together. Plain words, no medals or "top performer". */
+    /** The two embedded boards' names — Rich Habits' and Priority Compass's. */
+    boardHabitsMonthly: "Monthly Habit Accomplishments",
+    boardPrioritiesMonthly: "Monthly Priority Accomplishments",
     habitRanking: "Habit Ranking",
     accomplishmentRanking: "Accomplishment Ranking",
-    /** Priority Compass's quiet way through to the accomplishments board. */
-    accomplishmentsEntry: "Community Accomplishments",
-    accomplishmentsEntryHint: "Where this month's completed priorities rank.",
     /** The shorter names the 300px rail's switch uses. */
-    boardHabits: "Habits",
-    boardAccomplishments: "Accomplishments",
-    showBoard: (name: string) => `Show ${name}`,
     accomplishmentsThisMonth: "Accomplishments this month",
     thisMonth: "This month",
     accomplishmentsCount: (n: number) => `${n} ${n === 1 ? "accomplishment" : "accomplishments"}`,
@@ -730,7 +718,6 @@ export const en = {
        and starts fresh on the 1st. */
     liveRanking: "Live Ranking",
     /** The rail's way through to the full board. */
-    view: "View Community",
     monthNames: ["January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"],
     /* Says the window in the label itself. Today's dial (Insights) and this
@@ -747,6 +734,9 @@ export const en = {
     youTag: "(You)",
     month: "Month",
     updated: "Last updated",
+    /** Under "Today" on the habit card when nothing is scheduled today. */
+    noneToday: "None scheduled",
+    /** Short enough for a third of a 300px rail card. */
     rankOf: (rank: number, total: number) => `#${rank} of ${total}`,
     basis: "Completed check-ins out of those scheduled so far this month — not today's score",
     /* Said plainly because the number can differ from the weighted one on

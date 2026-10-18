@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { startDragAutoScroll, stopDragAutoScroll } from "@/lib/dragAutoScroll";
 import AddHabit from "@/components/AddHabit";
-import ProgressPanel from "@/components/ProgressPanel";
+import CommunityCard from "@/components/CommunityCard";
 import GratitudeJournal from "@/components/GratitudeJournal";
 import HabitEditor from "@/components/HabitEditor";
 import HabitMenu from "@/components/HabitMenu";
@@ -461,9 +461,10 @@ export default function RichHabits() {
       </div>
 
       {/*
-        * The rail: Community Progress, the existing board — for connection and
-        * motivation beside the day's work. Your own month is in Insights now
-        * (`MonthProgress`), with the rest of your personal statistics.
+        * The rail: Community Progress — Monthly Habit Accomplishments, the
+        * existing board, for connection and motivation beside the day's work.
+        * Your own month is in Insights (`MonthProgress`), with the rest of
+        * your personal statistics.
         *
         * Below 1280px the grid collapses and the rail follows the main content
         * down the page — see `.with-rail` — which puts the board after the
@@ -476,7 +477,7 @@ export default function RichHabits() {
         * deserves attention. It is not rendered anywhere else.
         */}
       <aside className="rail flex flex-col gap-4">
-        <ProgressPanel />
+        <CommunityCard kind="habits" />
       </aside>
     </div>
   );

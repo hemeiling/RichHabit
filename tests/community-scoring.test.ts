@@ -96,10 +96,10 @@ describe("the labels that keep the two numbers apart", () => {
     expect(zh.community.myCompleteness).toContain("本月截至今日");
   });
 
-  it("has a short form for the rail, where the confusion actually happens", () => {
+  it("has a short form for the cards, where the confusion actually happens", () => {
     expect(en.community.monthToDate).toMatch(/month to date/i);
-    expect(zh.community.monthToDate).toContain("本月截至今日");
-    // It sits in a 300px column beside the day's dial.
+    expect(zh.community.monthToDate).toContain("本月至今");
+    // It heads a third of a metric row in a 300px rail card.
     expect(en.community.monthToDate.length).toBeLessThan(20);
   });
 

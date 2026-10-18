@@ -1,9 +1,8 @@
 "use client";
-import Link from "next/link";
+import CommunityCard from "@/components/CommunityCard";
 import ImportantDates from "@/components/ImportantDates";
 import Priorities from "@/components/Priorities";
 import { useToday } from "@/components/useToday";
-import { useT } from "@/lib/i18n/context";
 
 /**
  * Priority Compass — a forward-looking planning workspace.
@@ -32,7 +31,6 @@ import { useT } from "@/lib/i18n/context";
  */
 export default function PriorityCompass() {
   const today = useToday();
-  const t = useT();
 
   return (
     <div className="with-rail">
@@ -40,23 +38,14 @@ export default function PriorityCompass() {
       <aside className="rail flex flex-col gap-4">
         <ImportantDates />
         {/*
-          * One quiet row through to the EXISTING Community Progress board,
-          * opened on its Accomplishments ranking — the one that counts
-          * completed priorities. A link, not another board: the ranking has
-          * one home, and this page's job is managing the priorities
-          * themselves. On a phone the rail sits below the matrix, so the row
-          * never pushes a priority down.
+          * Community Progress — Monthly Priority Accomplishments, the board
+          * that counts completed priorities, below the dates it is earned
+          * around. It replaced the link that used to open the standalone
+          * Community page: the ranking now lives where the priorities are
+          * managed. On a phone the rail sits below the matrix, so it never
+          * pushes a priority down.
           */}
-        <section className="card p-4" aria-label={t.community.accomplishmentsEntry}>
-          <div className="eyebrow" style={{ fontSize: 10 }}>{t.community.title}</div>
-          <p className="muted mt-1" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
-            {t.community.accomplishmentsEntryHint}
-          </p>
-          <Link href="/community?board=accomplishments" className="btn mt-2.5"
-            style={{ padding: "5px 11px", fontSize: 12.5 }}>
-            {t.community.accomplishmentsEntry}
-          </Link>
-        </section>
+        <CommunityCard kind="priorities" />
       </aside>
     </div>
   );

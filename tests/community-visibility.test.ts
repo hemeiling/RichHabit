@@ -72,16 +72,23 @@ describe("where it is enforced", () => {
 });
 
 describe("wording", () => {
-  it("names both views and the control in every language", () => {
+  it("names both boards and the control in every language", () => {
     for (const locale of LOCALES) {
       const t = dict(locale);
-      expect(t.progress.mine).toBeTruthy();
-      expect(t.progress.community).toBeTruthy();
+      expect(t.community.title).toBeTruthy();
+      expect(t.community.boardHabitsMonthly).toBeTruthy();
+      expect(t.community.boardPrioritiesMonthly).toBeTruthy();
+      expect(t.community.monthToDate).toBeTruthy();
       expect(t.progress.showMe).toBeTruthy();
       expect(t.progress.hidden).toBeTruthy();
       expect(t.progress.monthToDate).toBeTruthy();
-      expect(t.progress.todayIs(63)).toContain("63");
     }
+  });
+
+  /* The two boards measure different things; their names must say so. */
+  it("gives the two boards distinct names", () => {
+    expect(en.community.boardHabitsMonthly).not.toBe(en.community.boardPrioritiesMonthly);
+    expect(zh.community.boardHabitsMonthly).not.toBe(zh.community.boardPrioritiesMonthly);
   });
 
   it("says what the hint promises: nothing of their own changes", () => {

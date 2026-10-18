@@ -20,7 +20,6 @@ const SIDEBAR = [
   { href: "/priorities", key: "priorities" },
   { href: "/week", key: "week" },
   { href: "/insights", key: "insights" },
-  { href: "/community", key: "community" },
   { href: "/more", key: "more" },
 ] as const;
 
@@ -51,6 +50,19 @@ describe("the sidebar", () => {
     expect(en.nav.journey).toBe("My Journey");
     expect(zh.nav.journey).toBe("我的旅程");
     expect(en.titles["/journey"]).toBeUndefined();
+  });
+
+  /* The standalone page retired for the two embedded cards; /community is a
+     redirect now, so a sidebar item or a title would point at nothing. */
+  it("has no Community destination — its boards live on Rich Habits and Priority Compass", () => {
+    expect("community" in en.nav).toBe(false);
+    expect(en.titles["/community"]).toBeUndefined();
+    expect(zh.titles["/community"]).toBeUndefined();
+    for (const locale of ["en", "zh"] as const) {
+      const t = dict(locale);
+      expect(t.community.boardHabitsMonthly).toBeTruthy();
+      expect(t.community.boardPrioritiesMonthly).toBeTruthy();
+    }
   });
 
   it("has no Today destination left to compete with them", () => {

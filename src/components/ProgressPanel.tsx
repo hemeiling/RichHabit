@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useHabits } from "@/components/store";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { monthTitleFor, shortDateFor, type Locale } from "@/lib/i18n";
@@ -8,25 +7,18 @@ import { rangeScore } from "@/lib/habits";
 import { monthOf, monthSoFar, todayISO } from "@/lib/dates";
 import { accomplishedBetween } from "@/lib/accomplishments";
 import { barHeight, dailyProgress, dayIndexAt, type DayProgress } from "@/lib/progressSeries";
-import { fetchCommunity } from "@/lib/db";
 import { runsOf } from "@/lib/trend";
-import type { CommunitySnapshot } from "@/lib/community";
 
 /**
- * §20. Progress, at two scopes, in the two places each belongs.
- *
- * - `MonthProgress` — your own month, day by day — is a section of Insights,
- *   where personal statistics are reviewed. It used to be the "My Progress"
- *   tab of the Today rail; Today is for doing the day's habits now.
- * - The default export is the Today rail's Community Progress card: the live
- *   board, for connection and motivation, beside the checklist on a wide
- *   screen and below it on a phone, so it never pushes the habits down.
+ * §20. `MonthProgress` — your own month, day by day — a section of Insights,
+ * where personal statistics are reviewed. It used to be the "My Progress"
+ * tab of the Today rail; Today is for doing the day's habits, and the rails
+ * carry Community Progress now (components/CommunityCard).
  *
  * Every habit number here comes from `dayScore` / `rangeScore`, the same
  * functions Insights' dial and score card use, and every accomplishment number
  * from the shared rule in lib/accomplishments — computed from state the browser
- * already holds. The board reads the same `/api/community` the full Community
- * page reads. There is no second scoring rule anywhere in this file.
+ * already holds. There is no second scoring rule anywhere in this file.
  */
 
 /* ------------------------------- the chart -------------------------------- */
@@ -214,202 +206,6 @@ export function MonthProgress() {
           </p>
         </>
       )}
-    </section>
-  );
-}
-
-/* ------------------------------ the board --------------------------------- */
-
-type Board = "habits" | "accomplishments";
-
-/**
- * The same `/api/community` the full page reads, so the ranks here and there
- * cannot disagree. Nothing about the calculation lives in this file.
- *
- * The rail is 300px wide, so it shows one ranking at a time behind a small
- * switch rather than both lists at once.
- */
-function Community({ visible, onShowMe }: { visible: boolean; onShowMe: (v: boolean) => void }) {
-  const t = useT();
-  const [data, setData] = useState<CommunitySnapshot | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [board, setBoard] = useState<Board>("habits");
-
-  useEffect(() => {
-    let live = true;
-    setData(null);
-    setFailed(false);
-    fetchCommunity()
-      .then((d) => { if (live) setData(d); })
-      // The full page is where a failure is worth reporting properly; here it
-      // must simply not be mistaken for an empty board.
-      .catch(() => { if (live) setFailed(true); });
-    return () => { live = false; };
-  }, [visible]);
-
-  const month = data ? t.community.monthNames[Number(data.month.split("-")[1]) - 1] : "";
-  const habits = board === "habits";
-  const acc = data?.accomplishments;
-  const rows = !data ? []
-    : habits
-      ? data.top.slice(0, 5).map((e) => ({ rank: e.rank, name: e.name, isMe: e.isMe, figure: `${e.pct}%` }))
-      : acc!.top.slice(0, 5).map((e) => ({ rank: e.rank, name: e.name, isMe: e.isMe, figure: String(e.count) }));
-
-  return (
-    <>
-      {data && (
-        <div className="mt-0.5" style={{ fontSize: 12.5, fontWeight: 500 }}>
-          {month} · {t.community.liveRanking}
-        </div>
-      )}
-
-      {failed && (
-        <p className="muted mt-3" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-          {t.community.unavailable}
-        </p>
-      )}
-
-      {visible && data && (
-        <div className="flex gap-1.5 mt-2" role="tablist" aria-label={t.community.title}>
-          {(["habits", "accomplishments"] as const).map((b) => {
-            const name = b === "habits" ? t.community.boardHabits : t.community.boardAccomplishments;
-            return (
-              <button key={b} type="button" role="tab" className="chip" data-on={board === b}
-                aria-selected={board === b} aria-label={t.community.showBoard(name)}
-                style={{ padding: "3px 9px", fontSize: 11.5 }} onClick={() => setBoard(b)}>
-                {name}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {!visible ? (
-        <div className="flat p-3 mt-3">
-          <p style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.progress.hidden}</p>
-          <p className="faint mt-1" style={{ fontSize: 11.5, lineHeight: 1.45 }}>
-            {t.progress.hiddenHint}
-          </p>
-        </div>
-      ) : data && habits ? (
-        data.me ? (
-          <div className="flat p-3 mt-3 flex items-baseline justify-between gap-2">
-            <span>
-              <span className="faint block" style={{ fontSize: 11 }}>{t.community.myRank}</span>
-              <span className="count" style={{ fontSize: 18 }}>
-                {t.community.rankOf(data.me.rank, data.activeUsers)}
-              </span>
-            </span>
-            <span className="text-right">
-              <span className="faint block" style={{ fontSize: 11 }}>{t.community.monthToDate}</span>
-              <span className="count" style={{ fontSize: 18 }}>{data.me.pct}%</span>
-            </span>
-          </div>
-        ) : (
-          <p className="muted mt-3" style={{ fontSize: 12.5, lineHeight: 1.5 }}>{t.community.noneScheduled}</p>
-        )
-      ) : data && acc ? (
-        <>
-          <div className="flat p-3 mt-3 flex items-baseline justify-between gap-2">
-            <span>
-              <span className="faint block" style={{ fontSize: 11 }}>{t.community.myRank}</span>
-              <span className="count" style={{ fontSize: 18 }}>
-                {acc.me ? t.community.rankOf(acc.me.rank, acc.members) : "—"}
-              </span>
-            </span>
-            <span className="text-right">
-              <span className="faint block" style={{ fontSize: 11 }}>{t.community.thisMonth}</span>
-              <span className="count" style={{ fontSize: 18 }}>{acc.mine ?? 0}</span>
-            </span>
-          </div>
-          {!acc.me && (
-            <p className="muted mt-2" style={{ fontSize: 12, lineHeight: 1.45 }}>{t.community.accomplishmentNotRanked}</p>
-          )}
-        </>
-      ) : null}
-
-      {visible && data && (
-        <>
-          <div className="mt-3" role="tabpanel">
-            {rows.map((e) => (
-              <div key={`${e.rank}-${e.name}`}
-                className="flex items-center justify-between gap-2 py-1.5"
-                style={e.isMe ? { fontWeight: 600 } : undefined}>
-                <span className="flex items-center gap-2" style={{ minWidth: 0 }}>
-                  <span className="faint num" style={{ fontSize: 11.5, minWidth: 18 }}>#{e.rank}</span>
-                  {/* The real username, so you can see how you appear to
-                      everyone else, with the tag appended rather than replacing it. */}
-                  <span style={{ fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {e.name}
-                    {e.isMe && <span className="faint" style={{ marginLeft: 5 }}>{t.community.youTag}</span>}
-                  </span>
-                </span>
-                <span className="num" style={{ fontSize: 13.5, flex: "none" }}>{e.figure}</span>
-              </div>
-            ))}
-            {!rows.length && (
-              <p className="faint" style={{ fontSize: 12, lineHeight: 1.45 }}>
-                {habits ? t.community.empty : t.community.accomplishmentEmpty}
-              </p>
-            )}
-          </div>
-          <p className="faint mt-1" style={{ fontSize: 11, lineHeight: 1.4 }}>
-            {habits ? t.community.unweightedNote : t.community.accomplishmentPrivacy}
-          </p>
-        </>
-      )}
-
-      {/* The control belongs here, where the consequence is on screen. It is
-          also in More → Account, for anyone who looks for privacy in settings. */}
-      <div className="flex items-start gap-2.5 mt-3">
-        <button className="tick" data-on={visible} role="switch" aria-checked={visible}
-          aria-label={t.progress.showMe}
-          style={{ width: 22, height: 22, borderRadius: 7, marginTop: 1 }}
-          onClick={() => onShowMe(!visible)}>
-          {visible && (
-            <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M4.5 10.5l3.6 3.6L15.5 6.8" stroke="var(--accent-ink)"
-                strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-        <span style={{ fontSize: 12, lineHeight: 1.4 }} aria-hidden="true">{t.progress.showMe}</span>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 mt-3">
-        <span className="faint" style={{ fontSize: 11.5 }}>
-          {visible && data && habits ? `${data.activeUsers} · ${t.community.activeUsers}` : ""}
-        </span>
-        <Link href="/community" className="btn" style={{ padding: "5px 11px", fontSize: 12.5 }}>
-          {t.community.view}
-        </Link>
-      </div>
-    </>
-  );
-}
-
-/* ------------------------------- the card --------------------------------- */
-
-/**
- * The Today rail's card: Community Progress, the existing board, unchanged —
- * both rankings (habits, accomplishments), the reader's rank, usernames only,
- * the show-me switch and the way through to the full Community page. It used
- * to share the card with a "My Progress" tab; that tab is Insights' month
- * section now (`MonthProgress`), so the board needs no switch to reach.
- */
-export default function ProgressPanel() {
-  const { state, actions } = useHabits();
-  const t = useT();
-
-  return (
-    <section className="card p-4" aria-labelledby="progress-panel-title">
-      <div className="eyebrow" id="progress-panel-title" style={{ fontSize: 10 }}>
-        {t.community.title}
-      </div>
-      <Community
-        visible={state.prefs.communityVisible}
-        onShowMe={(communityVisible) => actions.setPrefs({ communityVisible })}
-      />
     </section>
   );
 }
