@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
@@ -132,6 +132,7 @@ function HabitRow({
   return (
     <div
       className="habit-row flex items-center gap-3 py-3"
+      data-habit-id={habit.id}
       data-dragging={drag.dragging || undefined}
       data-over={drag.over || undefined}
       onDragOver={drag.onDragOver}
@@ -203,6 +204,44 @@ function HabitRow({
       </button>
     </div>
   );
+}
+
+/**
+ * Rows glide to their new places when the order changes — after a drop, or a
+ * menu Move up/down — instead of jumping, so the eye can follow which habit
+ * went where (FLIP: remember where each row was, let React re-render, then
+ * animate each moved row from its old offset to zero).
+ *
+ * Only an ORDER change animates. `signature` is the visible order; ticking a
+ * habit, expanding a row or typing in the journal moves rows too, but leaves
+ * the signature alone and so stays still. Changing day swaps the set of rows
+ * rather than reordering it, and is skipped the same way. Users who ask for
+ * reduced motion get the instant move. Purely visual: nothing is written.
+ */
+function useReorderGlide(signature: string) {
+  const tops = useRef(new Map<string, number>());
+  const previous = useRef(signature);
+  useLayoutEffect(() => {
+    const rows = document.querySelectorAll<HTMLElement>(".habit-row[data-habit-id]");
+    const now = new Map<string, number>();
+    rows.forEach((el) => now.set(el.dataset.habitId!, el.getBoundingClientRect().top + window.scrollY));
+
+    const reordered = signature !== previous.current
+      && previous.current.split(",").sort().join(",") === signature.split(",").sort().join(",");
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reordered && !calm) {
+      rows.forEach((el) => {
+        const before = tops.current.get(el.dataset.habitId!);
+        const after = now.get(el.dataset.habitId!)!;
+        if (before == null || Math.abs(before - after) < 1) return;
+        el.animate?.(
+          [{ transform: `translateY(${before - after}px)` }, { transform: "translateY(0)" }],
+          { duration: 200, easing: "cubic-bezier(.2,.7,.3,1)" });
+      });
+    }
+    tops.current = now;
+    previous.current = signature;
+  });
 }
 
 export default function RichHabits() {
@@ -293,6 +332,7 @@ export default function RichHabits() {
 
   const score = dayScore(state, date);
   const list = scheduledOn(state, date);
+  useReorderGlide(list.map((h) => `${h.category}:${h.id}`).join(","));
 
   return (
     /*
