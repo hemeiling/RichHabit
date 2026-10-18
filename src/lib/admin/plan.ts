@@ -20,9 +20,9 @@ import { effectivePlan, type Plan, type PlanSource } from "@/lib/entitlements";
  */
 
 export interface PlanBadge {
-  /** "Admin", "Free" or "Pro". */
+  /** "Admin", "Free" or "Advanced" (the stored value is still `pro`). */
   label: string;
-  /** Shown after a middot for Pro: "Grandfathered", "Paid", "Trial"… */
+  /** Shown after a middot for Advanced: "Grandfathered", "Paid", "Trial"… */
   source?: string;
   /** For a tooltip, so the column explains itself without a legend. */
   title: string;
@@ -39,12 +39,12 @@ const SOURCE_LABEL: Record<PlanSource, string> = {
 };
 
 const SOURCE_TITLE: Record<PlanSource, string> = {
-  grandfathered: "Permanent Pro, granted to an early account at no charge. It does not expire and needs no payment provider.",
-  purchased: "Pro from a purchase.",
-  gifted: "Pro given at no charge.",
-  promotional: "Pro from a promotion.",
-  trial: "Pro for a trial period.",
-  support: "Pro granted by a support decision.",
+  grandfathered: "Permanent Advanced, granted to an early account at no charge. It does not expire and needs no payment provider.",
+  purchased: "Advanced from a purchase.",
+  gifted: "Advanced given at no charge (complimentary).",
+  promotional: "Advanced from a promotion.",
+  trial: "Advanced for a trial period.",
+  support: "Advanced granted by a support decision.",
 };
 
 const ADMIN: PlanBadge = {
@@ -69,15 +69,15 @@ export function planBadge(account: PlanRow, now: Date = new Date()): PlanBadge {
 
   if (plan === "pro" && source) {
     return {
-      label: "Pro",
+      label: "Advanced",
       source: SOURCE_LABEL[source] ?? source,
-      title: SOURCE_TITLE[source] ?? "Pro.",
+      title: SOURCE_TITLE[source] ?? "Advanced.",
     };
   }
   if (plan === "pro") {
     // The CHECK constraint forbids this in the database; if it ever appears, say
     // so plainly rather than inventing a provenance.
-    return { label: "Pro", title: "Pro, with no recorded source." };
+    return { label: "Advanced", title: "Advanced, with no recorded source." };
   }
 
   /*
@@ -97,12 +97,12 @@ export function planBadge(account: PlanRow, now: Date = new Date()): PlanBadge {
   if (source) {
     return {
       label: "Free",
-      title: `The free plan. A Pro grant from ${SOURCE_LABEL[source] ?? source} has expired or been removed.`,
+      title: `The free plan. An Advanced grant from ${SOURCE_LABEL[source] ?? source} has expired or been removed.`,
     };
   }
   return { label: "Free", title: "The free plan." };
 }
 
-/** How a badge reads as one string: "Free", or "Pro · Grandfathered". */
+/** How a badge reads as one string: "Free", or "Advanced · Grandfathered". */
 export const planText = (badge: PlanBadge): string =>
   badge.source ? `${badge.label} · ${badge.source}` : badge.label;

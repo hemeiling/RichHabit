@@ -236,8 +236,8 @@ describe("the Plan column", () => {
 
   it("renders every Pro source the product defines", async () => {
     const expected: Record<string, string> = {
-      grandfathered: "Pro · Grandfathered", purchased: "Pro · Paid", gifted: "Pro · Gifted",
-      promotional: "Pro · Promotional", trial: "Pro · Trial", support: "Pro · Support",
+      grandfathered: "Advanced · Grandfathered", purchased: "Advanced · Paid", gifted: "Advanced · Gifted",
+      promotional: "Advanced · Promotional", trial: "Advanced · Trial", support: "Advanced · Support",
     };
     for (const [source, text] of Object.entries(expected)) {
       await grant(busy, source);
@@ -264,7 +264,7 @@ describe("the Plan column", () => {
 
   it("treats a future expiry as live Pro", async () => {
     await grant(busy, "gifted", "2099-01-01T00:00:00Z");
-    expect(planText((await plan(busy)).badge)).toBe("Pro · Gifted");
+    expect(planText((await plan(busy)).badge)).toBe("Advanced · Gifted");
     await ungrant(busy);
   });
 

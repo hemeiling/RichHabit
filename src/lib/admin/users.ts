@@ -48,7 +48,9 @@ import type { Locale } from "@/lib/i18n";
 
 export type AdminAction =
   | "user_created" | "admin_account_created" | "user_disabled" | "user_enabled"
-  | "user_role_changed" | "user_deleted" | "password_reset_requested";
+  | "user_role_changed" | "user_deleted" | "password_reset_requested"
+  /* Written by lib/admin/plans, in the same transaction as the change. */
+  | "plan_granted" | "plan_changed" | "plan_revoked";
 
 /** Never called with a password, a hash, or a setup token. */
 async function audit(

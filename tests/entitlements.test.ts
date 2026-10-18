@@ -153,10 +153,13 @@ const walk = (dir: string): string[] => fs.readdirSync(path.join(ROOT, dir), { w
   .filter((f) => /\.(ts|tsx)$/.test(f));
 
 describe("the entitlement boundary is the only way in", () => {
-  it("only the entitlement module and the admin listing read user_plans", () => {
+  it("only the entitlement module, the admin listing and the admin plan writer touch user_plans", () => {
     // Code only: index.ts names the table in a comment forbidding exactly this.
+    // lib/admin/plans is the one sanctioned WRITER (UM-3, admin-only); it
+    // decides nothing for a feature — getActor stays the only resolver.
     const readers = walk("src").filter((f) => /user_plans/.test(code(f)));
     expect(readers.sort()).toEqual([
+      path.join("src", "lib", "admin", "plans.ts"),
       path.join("src", "lib", "analytics", "queries.ts"),
       path.join("src", "lib", "entitlements", "actor.ts"),
     ]);
