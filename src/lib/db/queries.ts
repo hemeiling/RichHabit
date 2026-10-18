@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { sameFrequency } from "@/lib/habits";
 import { isRotation } from "@/lib/rotation";
+import { linkedRotationTemplate } from "@/lib/templates";
 import { DEFAULT_PRIORITY_CATEGORY, normalizePriorityCategory } from "@/lib/types";
 import type { PriorityCategory } from "@/lib/types";
 import { legacyPriorityId, reconcilePriorityIds, uniqueIds } from "@/lib/intention";
@@ -278,7 +279,8 @@ export async function loadState(userId: string): Promise<AppState> {
     return {
       id: h.id,
       name: h.name,
-      templateKey: h.template_key ?? null,
+      // A rotating habit whose link an older build dropped gets it back here.
+      templateKey: h.template_key ?? linkedRotationTemplate(h.rotation, h.name),
       description: h.description ?? "",
       category: h.category,
       type: h.kind,

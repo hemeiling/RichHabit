@@ -30,6 +30,16 @@ export const ROTATIONS = {
 } as const;
 
 export type Rotation = keyof typeof ROTATIONS;
+
+/**
+ * The library template each rotation is added from. A rotating habit's link to
+ * it can be lost — a build that does not know the template drops an unknown
+ * key on save (a rollback) — and is restored from this when the habit loads
+ * (`linkedRotationTemplate`), so the rotation never depends on the link.
+ */
+export const ROTATION_TEMPLATE: Record<Rotation, string> = {
+  franklin_virtues: "franklin_virtue_week",
+};
 export const isRotation = (v: unknown): v is Rotation =>
   typeof v === "string" && Object.prototype.hasOwnProperty.call(ROTATIONS, v);
 

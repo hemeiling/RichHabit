@@ -77,6 +77,33 @@ describe("after step 22", () => {
       frequency: { ...h.frequency, mode: "days" as const, days: [1, 2, 3, 4, 5] } }, "2026-10-25");
     const [row] = await sql(after, "select name, rotation, rotation_start from habits where id = $1", [h.id]);
     expect(row).toEqual({ name: "My virtues", rotation: "franklin_virtues", rotation_start: "2026-10-18" });
+    // Renamed: the name is theirs, so no template link comes back for it.
+    expect((await loadState(me)).habits.find((x) => x.id === h.id)).toMatchObject({ name: "My virtues", templateKey: null });
+  });
+
+  it("gets back a template link an older build dropped, and the next save stores it again", async () => {
+    use(after);
+    const me = await account(after);
+    const h = virtueWeek();
+    await saveHabit(me, h, "2026-10-18");
+    // What the build before HT-2c does when it saves this habit: an unknown key goes.
+    await sql(after, "update habits set template_key = null where id = $1", [h.id]);
+    const loaded = (await loadState(me)).habits.find((x) => x.id === h.id)!;
+    expect(loaded).toMatchObject({ templateKey: "franklin_virtue_week", rotation: "franklin_virtues" });
+    expect(await sql(after, "select template_key from habits where id = $1", [h.id]))
+      .toEqual([{ template_key: null }]);   // reading wrote nothing
+    await saveHabit(me, { ...loaded, weight: 3 }, "2026-10-19");
+    expect(await sql(after, "select template_key, weight from habits where id = $1", [h.id]))
+      .toEqual([{ template_key: "franklin_virtue_week", weight: 3 }]);
+  });
+
+  it("recognises the template's wording in Chinese too", async () => {
+    use(after);
+    const me = await account(after);
+    const h = { ...virtueWeek(), name: "本周美德" };
+    await saveHabit(me, h, "2026-10-18");
+    await sql(after, "update habits set template_key = null where id = $1", [h.id]);
+    expect((await loadState(me)).habits.find((x) => x.id === h.id)?.templateKey).toBe("franklin_virtue_week");
   });
 
   it("is one active habit", async () => {

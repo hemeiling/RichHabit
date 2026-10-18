@@ -1,6 +1,6 @@
 import { dictionaries } from "@/lib/i18n";
 import type { Dict } from "@/lib/i18n";
-import { rotationItemOn } from "@/lib/rotation";
+import { ROTATION_TEMPLATE, isRotation, rotationItemOn } from "@/lib/rotation";
 import type { Frequency, Goal, Habit } from "@/lib/types";
 
 /**
@@ -110,6 +110,23 @@ export function templateAliases(kind: "habits" | "goals", key: string): string[]
 /** True when `name` is still the template's wording in some language. */
 export const isTemplateWording = (kind: "habits" | "goals", key: string, name: string): boolean =>
   templateAliases(kind, key).includes(name.trim());
+
+/**
+ * A rotating habit's template link, when its row has lost it but its name is
+ * still that template's own wording (in any language).
+ *
+ * A build that does not know the template — the one before HT-2c, after a
+ * rollback — drops the key on its next save of the habit. Its rotation
+ * survives (that build never touches those columns), so the link is derived
+ * back from the rotation on load: nothing is written on read, and the next
+ * ordinary save stores it again. A habit the person renamed keeps their name,
+ * by the same rule as every template.
+ */
+export function linkedRotationTemplate(rotation: unknown, name: string): string | null {
+  if (!isRotation(rotation)) return null;
+  const key = ROTATION_TEMPLATE[rotation];
+  return isTemplateWording("habits", key, name) ? key : null;
+}
 
 /**
  * The canonical stored value for a template — English, so a row is readable in
