@@ -477,7 +477,7 @@ export async function reissueSetupLink(
 export interface IdentityView {
   username: string | null;
   email: string | null;
-  /** Registered while verification was required: clearing it pauses password sign-in. */
+  /** Registered while verification was required: clearing it pauses every way in. */
   verificationRequired: boolean;
   hasPassword: boolean;
   hasGoogle: boolean;
@@ -496,8 +496,14 @@ export interface IdentityResult {
   username: string | null;
   email: string | null;
   emailChanged: boolean;
-  /** The person cannot sign in with their password until they confirm the new address. */
-  passwordSignInPaused: boolean;
+  /**
+   * The account was registered while verification was required, so until the
+   * new address is confirmed it cannot be used at all: no password sign-in,
+   * no Google sign-in, and any open session ends (getSessionUser refuses it).
+   */
+  signInPaused: boolean;
+  /** Whether the confirmation link actually went out (mail is best-effort). */
+  confirmationSent: boolean;
 }
 
 /**
@@ -511,8 +517,8 @@ export interface IdentityResult {
  *   · the new address must be plausible and belong to no other account
  *   · it is NOT verified — nobody has shown they read it — so the verified
  *     mark is cleared; for an account registered while verification was
- *     required, that pauses password sign-in until the link is used (the
- *     account page warns before saving)
+ *     required, that pauses every way in — password, Google, open sessions —
+ *     until the link is used (the account page warns before saving)
  *   · every outstanding password-reset and verification link is spent: they
  *     were addressed to the old inbox
  *   · any half-finished "link Google to this account" handshake is dropped:
@@ -524,18 +530,26 @@ export interface IdentityResult {
  * happens to use the new address still meets the password-confirmed link
  * step, never an automatic link.
  *
- * Audit: the username from → to, and the email masked both ways. Sessions are
- * kept — this corrects an address, it is not a password change.
+ * Hardened after the UM-5 security review:
+ *   · an Admin cannot change their OWN email here — a typo or a lost message
+ *     must not lock out the person making the change (another Admin can)
+ *   · the account row is read `for update` inside the transaction and only the
+ *     columns that change are written, so a concurrent rename or a second
+ *     Admin's edit is never silently reverted
+ *   · unused setup links are expired too: they may have been handed to the
+ *     address being replaced
+ *   · the audit row never stores a full address: `target_email` holds the
+ *     username, or the OLD address masked
+ * Together stops treating the new address as proved until it is confirmed
+ * (see `addressedTo`, which reads the `user_email_changed` audit row).
+ *
+ * Sessions are kept for an account that was never required to verify; for one
+ * that was, clearing the verified mark pauses every way in until the new
+ * address is confirmed — the account page says so before saving.
  */
 export async function updateIdentity(
   admin: AdminUser, id: string, input: { username?: string; email?: string },
 ): Promise<IdentityResult> {
-  const current = await query<{ username: string | null; email: string | null; vr: boolean; pw: boolean; locale: string | null }>(
-    `select u.username, u.email, u.verification_required as vr, u.password_hash is not null as pw,
-            (select locale from user_preferences p where p.user_id = u.id) as locale
-       from users u where id = $1`, [id]).then((r) => r[0]);
-  if (!current) throw new ApiError("No such account", 404);
-
   const username = input.username === undefined ? null : normaliseUsername(input.username);
   const email = input.email === undefined ? null : normaliseEmail(input.email);
   if (username !== null) {
@@ -546,23 +560,36 @@ export async function updateIdentity(
     if (!email) throw new ApiError("An email address cannot be empty");
     if (!isPlausibleEmail(email)) throw new ApiError("Enter a valid email address");
   }
-  const usernameChanged = username !== null && username !== (current.username ?? "");
-  const emailChanged = email !== null && email !== (current.email ?? "");
-  if (!usernameChanged && !emailChanged) throw new ApiError("Nothing to change");
 
+  type Current = { username: string | null; email: string | null; vr: boolean; locale: string | null };
+  let current!: Current;
+  let usernameChanged = false;
+  let emailChanged = false;
   try {
     await transaction(async (q) => {
-      await q(
-        `update users set username = $2, email = $3,
-                email_verified_at = case when $4 then null else email_verified_at end
-          where id = $1`,
-        [id, usernameChanged ? username : current.username, emailChanged ? email : current.email, emailChanged]);
+      const rows = await q<Current>(
+        `select u.username, u.email, u.verification_required as vr,
+                (select locale from user_preferences p where p.user_id = u.id) as locale
+           from users u where u.id = $1 for update`, [id]);
+      if (!rows[0]) throw new ApiError("No such account", 404);
+      current = rows[0];
+      usernameChanged = username !== null && username !== (current.username ?? "");
+      emailChanged = email !== null && email !== (current.email ?? "");
+      if (!usernameChanged && !emailChanged) throw new ApiError("Nothing to change");
+      if (emailChanged && id === admin.id) {
+        throw new ApiError("An Admin can't change their own email address here — ask another Admin to do it.", 409);
+      }
+
+      if (usernameChanged) await q(`update users set username = $2 where id = $1`, [id, username]);
       if (emailChanged) {
+        await q(`update users set email = $2, email_verified_at = null where id = $1`, [id, email]);
         await q(`update password_resets set consumed_at = now() where user_id = $1 and consumed_at is null`, [id]);
         await q(`update email_verifications set consumed_at = now() where user_id = $1 and consumed_at is null`, [id]);
         await q(`delete from google_pending where user_id = $1`, [id]);
+        await q(`update user_invites set expires_at = now()
+                  where user_id = $1 and used_at is null and expires_at > now()`, [id]);
       }
-      const who = current.username ?? current.email;
+      const who = current.username ?? (current.email ? maskEmail(current.email) : null);
       const write = (action: AdminAction, details: Record<string, unknown>) => q(
         `insert into admin_audit_log (admin_id, admin_email, target_id, target_email, action, details)
          values ($1, $2, $3, $4, $5, $6)`,
@@ -584,14 +611,16 @@ export async function updateIdentity(
     throw e;
   }
 
+  let confirmationSent = false;
   if (emailChanged) {
     const locale = isLocale(current.locale) ? current.locale : "en";
     /* After the commit, and best-effort: the change stands even if a mail
-       provider hiccups, and the person can ask for a fresh link. Nothing about
-       the addresses or the token reaches a log line. */
-    try { await sendVerification(id, email!, locale); } catch { console.error("[admin/identity] confirmation email failed"); }
+       provider hiccups, and the panel says so; the person can ask for a fresh
+       link. Nothing about the addresses or the token reaches a log line. */
+    try { await sendVerification(id, email!, locale); confirmationSent = true; }
+    catch { console.error("[admin/identity] confirmation email failed"); }
     if (current.email) {
-      try { await sendMail({ to: current.email, ...emailChangedNotice(locale, maskEmail(email!)) }); }
+      try { await sendMail({ to: current.email, ...emailChangedNotice(locale) }); }
       catch { console.error("[admin/identity] change notice failed"); }
     }
   }
@@ -600,7 +629,8 @@ export async function updateIdentity(
     username: usernameChanged ? username : current.username,
     email: emailChanged ? email : current.email,
     emailChanged,
-    passwordSignInPaused: emailChanged && current.vr && current.pw,
+    signInPaused: emailChanged && current.vr,
+    confirmationSent,
   };
 }
 

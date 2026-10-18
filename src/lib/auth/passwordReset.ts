@@ -98,7 +98,23 @@ export async function requestReset(
   const token = randomBytes(TOKEN_BYTES).toString("base64url");
   const expires = new Date(Date.now() + config.ttlMinutes * 60 * 1000);
 
-  await transaction(async (q) => {
+  const to = await transaction(async (q) => {
+    /*
+     * Eligibility again, inside the transaction and with the account row
+     * locked. Between `eligible` and here an Admin may have changed the address
+     * (UM-5), which spends every outstanding link; a link minted from the
+     * earlier read would then be the only live one, mailed to the OLD inbox.
+     * Re-reading `for update` serialises with that change: either it committed
+     * first and the account no longer qualifies, or it waits for this and
+     * spends the link this writes.
+     */
+    const [fresh] = await q<{ email: string }>(
+      `select email from users
+        where id = $1 and email is not null and email_verified_at is not null and disabled_at is null
+          for update`,
+      [account.id],
+    );
+    if (!fresh || fresh.email.toLowerCase() !== account.email.toLowerCase()) return null;
     // The newest link is the only live one.
     await q(
       `update password_resets set consumed_at = now()
@@ -109,13 +125,15 @@ export async function requestReset(
       `insert into password_resets (user_id, token_hash, expires_at) values ($1, $2, $3)`,
       [account.id, hash(token), expires],
     );
+    return fresh.email;
   });
+  if (!to) return "not_eligible";
 
   /* The row is written before the message goes out. The other order can send a
      link that does not work yet; this order can at worst leave an unused row,
      which expires on its own. The address comes from the account, never from
      the request. */
-  await sendMail({ to: account.email, ...resetEmail(locale, resetUrl(token), config.ttlMinutes) });
+  await sendMail({ to, ...resetEmail(locale, resetUrl(token), config.ttlMinutes) });
   return "sent";
 }
 

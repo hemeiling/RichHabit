@@ -166,11 +166,12 @@ export async function redeem(token: string): Promise<VerifyOutcome> {
       id: string; user_id: string; email: string;
       consumed_at: string | null; expired: boolean;
       verification_required: boolean; email_verified_at: string | null;
-      disabled_at: string | null;
+      disabled_at: string | null; same_address: boolean;
     }>(
       `select v.id, v.user_id, v.email, v.consumed_at,
               v.expires_at <= now() as expired,
-              u.verification_required, u.email_verified_at, u.disabled_at
+              u.verification_required, u.email_verified_at, u.disabled_at,
+              lower(coalesce(u.email, '')) = lower(v.email) as same_address
          from email_verifications v join users u on u.id = v.user_id
         where v.token_hash = $1
           for update of v`,
@@ -179,6 +180,10 @@ export async function redeem(token: string): Promise<VerifyOutcome> {
 
     const row = rows[0];
     if (!row) return { status: "invalid" };
+    /* A link proves the address it was SENT to, and only while that is still
+       the account's address. Without this, a link mailed to an old address —
+       issued a moment before an Admin changed it — would verify the new one. */
+    if (!row.same_address) return { status: "invalid" };
 
     // Already done: say so rather than reporting an error at someone who is
     // simply looking at an old message.

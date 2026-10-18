@@ -11,7 +11,9 @@ import type { IdentityView } from "@/lib/admin/users";
  * to the person: a second step spells it out, including when password
  * sign-in will pause until they confirm the new address.
  */
-export default function IdentityPanel({ id, identity }: { id: string; identity: IdentityView }) {
+export default function IdentityPanel({ id, identity, isSelf }: {
+  id: string; identity: IdentityView; isSelf: boolean;
+}) {
   const router = useRouter();
   const [username, setUsername] = useState(identity.username ?? "");
   const [email, setEmail] = useState(identity.email ?? "");
@@ -22,7 +24,8 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
 
   const usernameChanged = username.trim().toLowerCase() !== (identity.username ?? "");
   const emailChanged = email.trim().toLowerCase() !== (identity.email ?? "");
-  const pauses = emailChanged && identity.verificationRequired && identity.hasPassword;
+  // Registered while verification was required: every way in waits for the new address.
+  const pauses = emailChanged && identity.verificationRequired;
 
   const save = async () => {
     setBusy(true);
@@ -41,9 +44,11 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
       setConfirming(false);
-      setDone(data.emailChanged
-        ? "Saved. A confirmation link went to the new address and a notice to the old one."
-        : "Saved.");
+      setDone(!data.emailChanged
+        ? "Saved."
+        : data.confirmationSent
+          ? "Saved. A confirmation link went to the new address and a notice to the old one."
+          : "Saved — but the confirmation email could not be sent just now. The person can ask for a new link when they sign in.");
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -64,12 +69,18 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
         <label className="block">
           <span className="eyebrow block mb-1" style={{ fontSize: 10 }}>Email</span>
           <input className="input" type="email" value={email} onChange={(e) => { setEmail(e.target.value); setConfirming(false); }}
-            autoCapitalize="none" spellCheck={false} aria-label="Email" />
+            autoCapitalize="none" spellCheck={false} aria-label="Email" readOnly={isSelf} />
         </label>
       </div>
+      {isSelf && (
+        <p className="faint mt-2" style={{ fontSize: 12 }}>
+          You can&apos;t change your own email here — another Admin can, so a typo can never lock you out.
+        </p>
+      )}
       {identity.hasGoogle && (
         <p className="faint mt-2" style={{ fontSize: 12 }}>
-          This account signs in with Google too. That link follows Google&apos;s own id, not the email, so it keeps working.
+          This account also signs in with Google. That link follows Google&apos;s own id, not the email, so it stays
+          with this account.
         </p>
       )}
 
@@ -78,7 +89,8 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
           <p style={{ fontSize: 13.5, lineHeight: 1.55 }}>
             Change the email to <b>{email.trim().toLowerCase()}</b>? The new address is unconfirmed until they use the
             link sent to it; old password-reset and confirmation links stop working; the old address gets a notice.
-            {pauses && <> <b>They will not be able to sign in with their password until they confirm the new address.</b></>}
+            {pauses && <> <b>They will not be able to sign in at all — with a password or with Google — until they
+              confirm the new address, and any session they have open now ends.</b></>}
           </p>
           <div className="flex gap-2 mt-3">
             <button className="btn" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button>

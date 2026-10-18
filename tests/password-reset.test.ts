@@ -17,9 +17,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 vi.mock("@/lib/db/pool", () => ({
   query: async (sql: string, params: unknown[] = []) =>
     ((globalThis as any).__resetDb as PGlite).query(sql, params as any[]).then((r) => r.rows),
-  transaction: async (fn: (q: any) => Promise<unknown>) =>
-    ((globalThis as any).__resetDb as PGlite).transaction(async (tx: any) =>
-      fn(async (sql: string, params: unknown[] = []) => (await tx.query(sql, params)).rows)),
+  transaction: async (fn: (q: any) => Promise<unknown>) => {
+    // A test can slip a change in just before the next transaction begins.
+    const before = (globalThis as any).__beforeTx as (() => Promise<void>) | undefined;
+    if (before) { (globalThis as any).__beforeTx = undefined; await before(); }
+    return ((globalThis as any).__resetDb as PGlite).transaction(async (tx: any) =>
+      fn(async (sql: string, params: unknown[] = []) => (await tx.query(sql, params)).rows));
+  },
 }));
 
 vi.mock("@/lib/email/send", () => ({
@@ -115,6 +119,19 @@ describe("who is sent a reset link", () => {
     // The value has an @, so it can only ever match an address.
     expect(await requestReset("crossed@wrong.example", "en")).toBe("not_eligible");
     expect(outbox).toHaveLength(0);
+  });
+
+  it("NOT when an Admin changes the address in the instant before the link is minted (UM-5 race)", async () => {
+    const id = await account("racer", { verified: true });
+    // Between the eligibility read and the transaction, the address changes and
+    // stops being verified — exactly what an Admin email change does.
+    (globalThis as any).__beforeTx = async () => {
+      await sql(`update users set email = 'racer.new@example.com', email_verified_at = null where id = $1`, [id]);
+    };
+    expect(await requestReset("racer@example.com", "en")).toBe("not_eligible");
+    expect(outbox).toHaveLength(0);                                   // nothing mailed to the old inbox
+    expect(await sql(`select count(*)::int n from password_resets where user_id = $1`, [id]))
+      .toEqual([{ n: 0 }]);                                            // and no live link minted
   });
 });
 

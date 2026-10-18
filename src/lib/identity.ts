@@ -60,13 +60,18 @@ export function checkUsername(raw: string): UsernameProblem | null {
   return null;
 }
 
-/** A deliberately loose check — the authority on an address is whether mail arrives. */
+/**
+ * A deliberately loose check — the authority on an address is whether mail
+ * arrives — but never whitespace or a control character anywhere in it: a tab,
+ * a newline or a NUL is never part of a real address, and NUL used to reach
+ * Postgres as a 500.
+ */
 export function isPlausibleEmail(raw: string): boolean {
   const value = normaliseEmail(raw);
   if (value.length > 254) return false;
   const at = value.indexOf("@");
   return at > 0 && at === value.lastIndexOf("@") && at < value.length - 1
-    && !value.includes(" ");
+    && !/[\s\u0000-\u001f\u007f]/.test(value);
 }
 
 /**

@@ -85,13 +85,22 @@ export const PROVED_ADDRESS_CUTOFF = "2026-10-17T00:00:00Z";
  * unproved keeps only the email link, whose token proves control of the inbox
  * itself — and the in-app verify flow upgrades it at any time. Columns of
  * `together_invitations i`.
+ *
+ * An address an Admin has CHANGED (UM-5) is never proved by the account's age
+ * or origin: nobody has yet shown they read the new inbox. The change writes a
+ * `user_email_changed` audit row in the same transaction, which is what takes
+ * the account out of the grandfathered arm; confirming the new address sets
+ * `email_verified_at` and brings it back through the first arm. No column was
+ * needed, so no migration.
  */
 export const addressedTo = (param: string) =>
   `(i.invitee_id = ${param} or (i.email_normalized is not null and exists (
      select 1 from users me where me.id = ${param} and lower(me.email) = i.email_normalized
        and (me.email_verified_at is not null
             or (not me.verification_required
-                and (me.created_at < timestamptz '${PROVED_ADDRESS_CUTOFF}' or me.created_via = 'admin'))))))`;
+                and (me.created_at < timestamptz '${PROVED_ADDRESS_CUTOFF}' or me.created_via = 'admin')
+                and not exists (select 1 from admin_audit_log changed
+                                 where changed.target_id = me.id and changed.action = 'user_email_changed'))))))`;
 
 /**
  * A space invitation whose sender still holds the right to invite to that

@@ -217,11 +217,16 @@ export function connectionInviteEmail(locale: Locale, url: string, inviter: stri
  * change and where it went, masked — so it cannot be used for anything; its
  * job is that a change the person did not expect never happens silently.
  */
-export function emailChangedNotice(locale: Locale, newMasked: string) {
+/**
+ * The notice to the OLD address after an admin changes it. It names neither
+ * the new address nor any part of it — the old inbox may no longer be the
+ * person's — and carries no link or credential of any kind.
+ */
+export function emailChangedNotice(locale: Locale) {
   const en = {
     subject: "Your RichHabit sign-in email was changed",
     heading: "Your sign-in email was changed",
-    lead: `An administrator changed the email address on your RichHabit account to ${newMasked}. `
+    lead: "An administrator changed the email address on your RichHabit account. "
       + "Your habits and everything else in the account are unchanged.",
     note: "If you did not expect this, reply to the person who manages your account. "
       + "Password resets now go to the new address once it is confirmed.",
@@ -229,7 +234,7 @@ export function emailChangedNotice(locale: Locale, newMasked: string) {
   const zh = {
     subject: "你的 RichHabit 登录邮箱已更改",
     heading: "登录邮箱已更改",
-    lead: `管理员已将你的「养成富有的习惯」账户邮箱更改为 ${newMasked}。你的习惯和账户中的其他内容均未改变。`,
+    lead: "管理员已更改你的「养成富有的习惯」账户邮箱。你的习惯和账户中的其他内容均未改变。",
     note: "如果这出乎你的意料，请联系为你管理账户的人。新邮箱确认后，重置密码的邮件将发送到新邮箱。",
   };
   const parts = locale === "zh" ? [zh] : locale === "both" ? [en, zh] : [en];

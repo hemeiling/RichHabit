@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -26,7 +27,14 @@ vi.mock("@/lib/db/pool", () => ({
       fn(async (sql: string, params: unknown[] = []) => (await tx.query(sql, params)).rows)),
 }));
 const sent: { to: string; subject: string; text: string }[] = [];
-vi.mock("@/lib/email/send", () => ({ sendMail: async (m: any) => { sent.push(m); } }));
+/** Set to an address to make the mail provider fail for it once. */
+let failFor: string | null = null;
+vi.mock("@/lib/email/send", () => ({
+  sendMail: async (m: any) => {
+    if (failFor && m.to === failFor) { failFor = null; throw new Error("provider down"); }
+    sent.push(m);
+  },
+}));
 vi.mock("@/lib/analytics/track", () => ({ trackEvent: async () => {} }));
 const jar = new Map<string, string>();
 vi.mock("next/headers", () => ({
@@ -42,9 +50,10 @@ vi.mock("next/headers", () => ({
 process.env.APP_URL = "http://app.test";
 
 const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
-let userRoute: any, signinRoute: any, auth: any, verify: any, google: any;
+let userRoute: any, signinRoute: any, auth: any, verify: any, google: any, together: any;
 
 beforeAll(async () => {
+  together = await import("../src/lib/together/access");
   userRoute = await import("../src/app/api/admin/users/[id]/route");
   signinRoute = await import("../src/app/api/auth/signin/route");
   auth = await import("../src/lib/auth");
@@ -60,6 +69,7 @@ beforeEach(async () => {
   await db.exec(SCHEMA);
   jar.clear();
   sent.length = 0;
+  failFor = null;
   PW ||= await auth.hashPassword("Verdant-Meadow-42");
 });
 
@@ -130,7 +140,7 @@ describe("email changes", () => {
     const res = await edit(target, { email: "Mover.New@Example.com" });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ email: "mover.new@example.com", emailChanged: true, passwordSignInPaused: true });
+    expect(body).toMatchObject({ email: "mover.new@example.com", emailChanged: true, signInPaused: true, confirmationSent: true });
 
     const u = await user(target);
     expect(u.email).toBe("mover.new@example.com");
@@ -145,8 +155,9 @@ describe("email changes", () => {
     expect(sent.map((m) => m.to).sort()).toEqual(["mover.new@example.com", "mover@example.com"]);
     const notice = sent.find((m) => m.to === "mover@example.com")!;
     expect(notice.subject).toMatch(/sign-in email was changed/);
-    expect(notice.text).toContain("mo••••ew@example.com");
-    expect(notice.text).not.toMatch(/token=/);                 // the notice carries no link
+    // The old inbox may no longer be theirs: it learns nothing of the new address, and gets no link.
+    expect(notice.text).not.toMatch(/mover\.new|mo••••ew|@example\.com/);
+    expect(notice.text).not.toMatch(/token=|https?:/);
 
     const a = (await db.query<any>(`select details from admin_audit_log where action = 'user_email_changed'`)).rows[0];
     expect(a.details).toEqual({ from: "m••••@example.com", to: "mo••••ew@example.com", verificationCleared: true });   // "mover" is short: one character shown
@@ -171,7 +182,7 @@ describe("email changes", () => {
     await signInAs(await make("boss", { role: "admin" }));
     const target = await make("legacy", { vr: false });
     const body = await (await edit(target, { email: "legacy.new@example.com" })).json();
-    expect(body.passwordSignInPaused).toBe(false);
+    expect(body.signInPaused).toBe(false);
     expect(await signIn("legacy")).toBe(200);
     expect(sent.some((m) => m.to === "legacy.new@example.com")).toBe(true);
   });
@@ -185,6 +196,96 @@ describe("email changes", () => {
     expect((await edit(target, { email: "stay@example.com" })).status).toBe(400);   // nothing to change
     expect((await user(target)).email).toBe("stay@example.com");
     expect(sent).toEqual([]);
+  });
+});
+
+describe("hardening from the security review", () => {
+  const sha = (t: string) => createHash("sha256").update(t).digest("hex");
+  const bossId = async () => (await db.query<any>(`select id from users where username = 'boss'`)).rows[0].id;
+
+  it("an Admin cannot change their own email here (another Admin can); renaming themselves is fine", async () => {
+    const boss = await make("boss", { role: "admin" });
+    await signInAs(boss);
+    const res = await edit(boss, { email: "boss.typo@example.com" });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/can't change their own email/);
+    expect((await user(boss)).email).toBe("boss@example.com");
+    expect((await edit(boss, { username: "bossy" })).status).toBe(200);
+    const deputy = await make("deputy", { role: "admin" });
+    await signInAs(deputy);
+    expect((await edit(boss, { email: "boss.new@example.com" })).status).toBe(200);
+  });
+
+  it("expires the account's unused setup links with the old address", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("invited");
+    await db.query(`insert into user_invites (user_id, expires_at) values ($1, now() + interval '7 days')`, [target]);
+    await edit(target, { email: "invited.new@example.com" });
+    const [{ live }] = (await db.query<any>(`select count(*)::int as live from user_invites
+      where user_id = $1 and used_at is null and expires_at > now()`, [target])).rows;
+    expect(live).toBe(0);
+  });
+
+  it("never stores a full address in the audit row, even for an account without a username", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const r = await db.query<{ id: string }>(`insert into users (email, password_hash) values ('nameless@example.com', $1) returning id`, [PW]);
+    await db.query(`insert into profiles (id) values ($1)`, [r.rows[0].id]);
+    expect((await edit(r.rows[0].id, { email: "nameless.new@example.com" })).status).toBe(200);
+    const row = (await db.query<any>(`select target_email, details from admin_audit_log where action = 'user_email_changed'`)).rows[0];
+    expect(row.target_email).toBe("na••••ss@example.com");
+    expect(JSON.stringify(row)).not.toContain("nameless@example.com");
+    expect(JSON.stringify(row)).not.toContain("nameless.new@example.com");
+  });
+
+  it("Together does not treat an Admin-set address as proved until the person confirms it", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    // Admin-created and never asked to verify: the grandfathered arm trusts its address.
+    const r = await db.query<{ id: string }>(`insert into users (email, username, password_hash, created_via)
+      values ('vouched@example.com', 'vouched', $1, 'admin') returning id`, [PW]);
+    const id = r.rows[0].id;
+    await db.query(`insert into profiles (id) values ($1)`, [id]);
+    await db.query(`insert into user_preferences (user_id, locale) values ($1, 'en')`, [id]);
+    const addressed = async (to: string) => (await db.query<any>(
+      // `is true`: a WHERE clause treats NULL (no named invitee) as not matching, the same as false.
+      `with i as (select null::uuid as invitee_id, $2::text as email_normalized) select (${together.addressedTo("$1")}) is true as ok from i`,
+      [id, to])).rows[0].ok;
+    expect(await addressed("vouched@example.com")).toBe(true);
+    await edit(id, { email: "victim@example.com" });
+    expect(await addressed("victim@example.com")).toBe(false);   // nobody has shown they read that inbox
+    const mail = sent.find((m) => m.to === "victim@example.com")!;
+    const token = decodeURIComponent(mail.text.match(/#token=([^\s"<]+)/)![1]);
+    expect((await verify.redeem(token)).status).toBe("ok");
+    expect(await addressed("victim@example.com")).toBe(true);     // proved now
+  });
+
+  it("a confirmation link sent to a PREVIOUS address never verifies the new one", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("raced", { vr: false, verified: false });
+    await edit(target, { email: "raced.new@example.com" });
+    // A link minted for the old address a moment after the change (the race the review traced).
+    await db.query(`insert into email_verifications (user_id, token_hash, email, expires_at)
+                    values ($1, $2, 'raced@example.com', now() + interval '1 hour')`, [target, sha("stale-link")]);
+    expect((await verify.redeem("stale-link")).status).toBe("invalid");
+    expect((await user(target)).email_verified_at).toBeNull();
+  });
+
+  it("says so when the confirmation email could not be sent", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("unlucky");
+    failFor = "unlucky.new@example.com";
+    const body = await (await edit(target, { email: "unlucky.new@example.com" })).json();
+    expect(body).toMatchObject({ emailChanged: true, confirmationSent: false });
+    expect((await user(target)).email).toBe("unlucky.new@example.com");   // the change itself stands
+    void bossId;
+  });
+
+  it("refuses addresses with whitespace or control characters (a NUL used to be a 500)", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("clean");
+    for (const bad of ["a\tb@example.com", "a\nb@example.com", "ab@exa\u0000mple.com", "a b@example.com"]) {
+      expect((await edit(target, { email: bad })).status).toBe(400);
+    }
+    expect((await user(target)).email).toBe("clean@example.com");
   });
 });
 
