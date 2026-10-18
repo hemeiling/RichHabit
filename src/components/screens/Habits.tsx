@@ -7,7 +7,7 @@ import { Empty, Segmented } from "@/components/ui";
 import { todayISO } from "@/lib/dates";
 import { CATEGORIES, blankHabit, habitStats } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
-import { goalName, habitName, habitUnit } from "@/lib/templates";
+import { frequencyLabel, goalName, habitName, habitUnit } from "@/lib/templates";
 import { isNumericTracking } from "@/lib/types";
 import type { Category, Goal, Habit, HabitStatus, TrackingType } from "@/lib/types";
 
@@ -57,11 +57,7 @@ export default function Habits() {
               {shown.filter((h) => h.category === c.id).map((h) => {
                 const st = habitStats(state, h, 30);
                 const goal = state.goals.find((g) => g.id === h.goalId);
-                const freq = h.frequency.mode === "daily"
-                  ? t.habits.freqDaily
-                  : h.frequency.mode === "days"
-                    ? h.frequency.days.map((d) => t.days.initial[d]).join(" ")
-                    : t.habits.timesAWeek(h.frequency.timesPerWeek);
+                const freq = frequencyLabel(h.frequency, t);
                 return (
                   <button key={h.id} onClick={() => setEditing({ ...h, name: habitName(h, t), unit: habitUnit(h, t) })} className="w-full text-left py-3.5"
                     style={{ background: "none", border: "none", cursor: "pointer", opacity: h.active ? 1 : 0.5 }}>

@@ -2,11 +2,11 @@
 import { useState } from "react";
 import { Field, Segmented, Sheet } from "@/components/ui";
 import { todayISO } from "@/lib/dates";
-import { CATEGORIES } from "@/lib/habits";
+import { CATEGORIES, frequencyDefaults, scheduleProblem } from "@/lib/habits";
 import { useT } from "@/lib/i18n/context";
 import { goalName, habitDescription, habitName } from "@/lib/templates";
-import { isNumericTracking } from "@/lib/types";
-import type { Category, Goal, Habit, HabitStatus, TrackingType } from "@/lib/types";
+import { MAX_INTERVAL_DAYS, MAX_TIMES_PER_MONTH, isNumericTracking } from "@/lib/types";
+import type { Category, FreqMode, Goal, Habit, HabitStatus, TrackingType } from "@/lib/types";
 
 /**
  * The one habit editor. Today opens it to add or edit in place; My habits opens
@@ -30,8 +30,12 @@ export default function HabitEditor({
   const set = <K extends keyof Habit>(k: K, v: Habit[K]) => setH((p) => ({ ...p, [k]: v }));
   const setFreq = <K extends keyof Habit["frequency"]>(k: K, v: Habit["frequency"][K]) =>
     setH((p) => ({ ...p, frequency: { ...p.frequency, [k]: v } }));
+  // Each mode arrives with sensible settings; what was chosen before is kept.
+  const chooseMode = (mode: FreqMode) =>
+    setH((p) => ({ ...p, frequency: frequencyDefaults(p.frequency, mode, todayISO()) }));
   const isNew = isNewProp ?? !habit.name;
-  const valid = h.name.trim().length > 0;
+  const problem = scheduleProblem(h.frequency);
+  const valid = h.name.trim().length > 0 && !problem;
 
   return (
     <Sheet
@@ -70,16 +74,20 @@ export default function HabitEditor({
           options={[{ value: "good" as const, label: t.habits.kindBuild }, { value: "avoid" as const, label: t.habits.kindDrop }]} />
       </Field>
       <Field label={t.habits.fieldFrequency} group>
-        <Segmented value={h.frequency.mode} onChange={(v) => setFreq("mode", v)}
+        <Segmented<FreqMode> value={h.frequency.mode} onChange={chooseMode}
           options={[
-            { value: "daily" as const, label: t.habits.freqDaily },
-            { value: "days" as const, label: t.habits.freqDays },
-            { value: "times" as const, label: t.habits.freqTimes },
+            { value: "daily", label: t.habits.freqDaily },
+            { value: "days", label: t.habits.freqDays },
+            { value: "times", label: t.habits.freqTimes },
+            { value: "every_n_days", label: t.habits.freqEvery },
+            { value: "month_times", label: t.habits.freqMonthTimes },
+            { value: "month_days", label: t.habits.freqMonthDays },
           ]} />
         {h.frequency.mode === "days" && (
           <div className="flex gap-1.5 mt-2.5">
             {t.days.initial.map((d, i) => (
               <button key={i} type="button" className="chip" data-on={h.frequency.days.includes(i)}
+                aria-pressed={h.frequency.days.includes(i)} aria-label={t.days.short[i]}
                 style={{ width: 38, padding: "7px 0", textAlign: "center" }}
                 onClick={() => setFreq("days", h.frequency.days.includes(i)
                   ? h.frequency.days.filter((x) => x !== i)
@@ -91,10 +99,65 @@ export default function HabitEditor({
         )}
         {h.frequency.mode === "times" && (
           <div className="flex items-center gap-3 mt-2.5">
-            <input type="range" min={1} max={7} value={h.frequency.timesPerWeek}
+            <input type="range" min={1} max={7} value={h.frequency.timesPerWeek} aria-label={t.habits.freqTimes}
               onChange={(e) => setFreq("timesPerWeek", Number(e.target.value))} style={{ flex: 1 }} />
             <span className="num" style={{ fontSize: 14 }}>{t.habits.perWeek(h.frequency.timesPerWeek)}</span>
           </div>
+        )}
+        {h.frequency.mode === "every_n_days" && (
+          <div className="mt-2.5">
+            <div className="flex items-center flex-wrap" style={{ gap: "8px 16px", fontSize: 14 }}>
+              <label className="flex items-center gap-2">
+                <span className="muted">{t.habits.intervalLabel}</span>
+                <input className="input num" type="number" inputMode="numeric" min={2} max={MAX_INTERVAL_DAYS}
+                  aria-label={t.habits.intervalAria}
+                  value={h.frequency.intervalDays ?? ""} style={{ width: 80 }}
+                  onChange={(e) => setFreq("intervalDays", e.target.value === "" ? undefined : Number(e.target.value))} />
+                <span className="muted">{t.habits.intervalUnit}</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="muted">{t.habits.anchorLabel}</span>
+                <input className="input num" type="date" value={h.frequency.anchorDate ?? ""} style={{ width: "auto" }}
+                  onChange={(e) => e.target.value && setFreq("anchorDate", e.target.value)} />
+              </label>
+            </div>
+            <div className="faint mt-1.5" style={{ fontSize: 12 }}>{t.habits.everyHint}</div>
+          </div>
+        )}
+        {h.frequency.mode === "month_times" && (
+          <div className="mt-2.5">
+            <div className="flex items-center gap-3">
+              <input type="range" min={1} max={MAX_TIMES_PER_MONTH} value={h.frequency.timesPerMonth ?? 4}
+                aria-label={t.habits.freqMonthTimes}
+                onChange={(e) => setFreq("timesPerMonth", Number(e.target.value))} style={{ flex: 1 }} />
+              <span className="num" style={{ fontSize: 14 }}>{t.habits.perMonth(h.frequency.timesPerMonth ?? 4)}</span>
+            </div>
+            <div className="faint mt-1.5" style={{ fontSize: 12 }}>{t.habits.monthTimesHint}</div>
+          </div>
+        )}
+        {h.frequency.mode === "month_days" && (
+          <div className="mt-2.5">
+            <div className="grid grid-cols-7 gap-1.5" style={{ maxWidth: 320 }}>
+              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => {
+                const on = (h.frequency.daysOfMonth ?? []).includes(d);
+                return (
+                  <button key={d} type="button" className="chip num" data-on={on} aria-pressed={on}
+                    style={{ padding: "6px 0", textAlign: "center" }}
+                    onClick={() => setFreq("daysOfMonth", on
+                      ? (h.frequency.daysOfMonth ?? []).filter((x) => x !== d)
+                      : [...(h.frequency.daysOfMonth ?? []), d].sort((a, b) => a - b))}>
+                    {d}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="faint mt-1.5" style={{ fontSize: 12 }}>{t.habits.monthDaysHint}</div>
+          </div>
+        )}
+        {problem && (
+          <p role="alert" className="mt-1.5" style={{ color: "var(--warn)", fontSize: 12.5 }}>
+            {t.habits.scheduleProblem[problem]}
+          </p>
         )}
       </Field>
       {/* §12. How it is measured decides what Today shows and what counts. */}

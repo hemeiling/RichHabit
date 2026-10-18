@@ -6,7 +6,7 @@ import {
 import { MAX_REPEAT_INTERVAL, isRepeatUnit } from "@/lib/recurrence";
 import { isTimeZone } from "@/lib/zonedTime";
 import { isTemplateWording } from "@/lib/templates";
-import { SPENDING_CATEGORIES } from "@/lib/types";
+import { MAX_INTERVAL_DAYS, MAX_TIMES_PER_MONTH, SPENDING_CATEGORIES } from "@/lib/types";
 import { QUADRANTS } from "@/lib/priorities";
 import {
   MAX_NOTE, MAX_VISION_TEXT, MAX_WANT, MAX_WHY, MAX_WHY_TEXT,
@@ -28,7 +28,7 @@ import type {
 
 const CATEGORIES = ["morning", "daytime", "nighttime"] as const;
 const KINDS = ["good", "avoid"] as const;
-const MODES = ["daily", "days", "times"] as const;
+const MODES = ["daily", "days", "times", "every_n_days", "month_times", "month_days"] as const;
 const GRADES = ["good", "bad", "neutral"] as const;
 const THEMES = ["light", "dark"] as const;
 const LOCALES = ["en", "zh", "both"] as const;
@@ -53,6 +53,40 @@ function days(v: unknown): number[] {
   return [...new Set(out)].sort();
 }
 
+const wholeIn = (v: unknown, lo: number, hi: number, message: string): number => {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < lo || n > hi) throw new ApiError(message);
+  return n;
+};
+
+/**
+ * The settings of the step-22 modes, each kept only for its own mode — the
+ * same shape `saveHabit` stores and `sameFrequency` compares.
+ */
+function repeatExtras(mode: (typeof MODES)[number], f: any, startDate: string): Partial<Habit["frequency"]> {
+  if (mode === "every_n_days") {
+    return {
+      intervalDays: wholeIn(f?.intervalDays, 2, MAX_INTERVAL_DAYS,
+        `frequency.intervalDays must be a whole number from 2 to ${MAX_INTERVAL_DAYS}`),
+      anchorDate: f?.anchorDate == null || f.anchorDate === ""
+        ? startDate : check.date(f.anchorDate, "frequency.anchorDate"),
+    };
+  }
+  if (mode === "month_times") {
+    return { timesPerMonth: wholeIn(f?.timesPerMonth, 1, MAX_TIMES_PER_MONTH,
+      `frequency.timesPerMonth must be a whole number from 1 to ${MAX_TIMES_PER_MONTH}`) };
+  }
+  if (mode === "month_days") {
+    const chosen = Array.isArray(f?.daysOfMonth)
+      ? [...new Set(f.daysOfMonth.map(Number).filter((n: number) => Number.isInteger(n) && n >= 1 && n <= 31))]
+        .sort((a, b) => (a as number) - (b as number)) as number[]
+      : [];
+    if (chosen.length === 0) throw new ApiError("Pick at least one day of the month");
+    return { daysOfMonth: chosen };
+  }
+  return {};
+}
+
 export function parseHabit(b: any): Habit {
   const mode = check.oneOf(b?.frequency?.mode, MODES, "frequency.mode");
   const weight = Number(b?.weight);
@@ -66,6 +100,7 @@ export function parseHabit(b: any): Habit {
   if (mode === "days" && chosen.length === 0) {
     throw new ApiError("Pick at least one day of the week");
   }
+  const startDate = check.date(b?.startDate, "startDate");
 
   const name = check.text(b?.name, "name", 200).trim() || "Untitled";
   return {
@@ -78,7 +113,7 @@ export function parseHabit(b: any): Habit {
     description: check.text(b?.description, "description"),
     category: check.oneOf(b?.category, CATEGORIES, "category"),
     type: check.oneOf(b?.type, KINDS, "type"),
-    frequency: { mode, days: chosen, timesPerWeek },
+    frequency: { mode, days: chosen, timesPerWeek, ...repeatExtras(mode, b?.frequency, startDate) },
     tracking: check.oneOf(b?.tracking ?? "boolean", TRACKING, "tracking"),
     minimum: check.numberOrNull(b?.minimum, "minimum"),
     target: check.numberOrNull(b?.target, "target"),
@@ -86,7 +121,7 @@ export function parseHabit(b: any): Habit {
     anchor: check.text(b?.anchor, "anchor", 200),
     environment: check.text(b?.environment, "environment", 300),
     friction: check.text(b?.friction, "friction", 300),
-    startDate: check.date(b?.startDate, "startDate"),
+    startDate,
     status: check.oneOf(b?.status ?? (b?.active === false ? "paused" : "active"), STATUSES, "status"),
     active: (b?.status ?? (b?.active === false ? "paused" : "active")) === "active",
     // §10. Ownership of the referenced habit is checked in the query layer;

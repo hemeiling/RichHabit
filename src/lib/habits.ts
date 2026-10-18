@@ -1,5 +1,6 @@
-import { addDays, daysBetween, dow, rangeBack, todayISO, weekStart } from "./dates";
-import type { AppState, Category, Frequency, Habit } from "./types";
+import { addDays, daysBetween, daysInMonth, dow, monthFirst, monthOf, rangeBack, todayISO, weekStart } from "./dates";
+import { MAX_INTERVAL_DAYS, MAX_TIMES_PER_MONTH } from "./types";
+import type { AppState, Category, FreqMode, Frequency, Habit } from "./types";
 
 export const CATEGORIES: { id: Category; label: string; note: string }[] = [
   { id: "morning", label: "Morning", note: "Phase one" },
@@ -78,11 +79,80 @@ export function frequencyOn(habit: Habit, date: string): Frequency {
   return f;
 }
 
-/** Same rule as stored: the weekly count only means something in `times` mode. */
+/**
+ * Same rule as stored: the days of the week are kept for every mode, and each
+ * mode's own settings are kept only for that mode — so only those tell two
+ * versions apart.
+ */
 export function sameFrequency(a: Frequency, b: Frequency): boolean {
-  const days = (f: Frequency) => [...(f.days ?? [])].sort((x, y) => x - y).join();
-  return a.mode === b.mode && days(a) === days(b)
-    && (a.mode !== "times" || a.timesPerWeek === b.timesPerWeek);
+  const list = (v?: number[]) => [...(v ?? [])].sort((x, y) => x - y).join();
+  if (a.mode !== b.mode || list(a.days) !== list(b.days)) return false;
+  switch (a.mode) {
+    case "times": return a.timesPerWeek === b.timesPerWeek;
+    case "every_n_days": return a.intervalDays === b.intervalDays && a.anchorDate === b.anchorDate;
+    case "month_times": return a.timesPerMonth === b.timesPerMonth;
+    case "month_days": return list(a.daysOfMonth) === list(b.daysOfMonth);
+    default: return true;
+  }
+}
+
+/**
+ * A frequency switched to `mode`, with that mode's settings filled in where
+ * they are missing: every 2 days from today, 4 times a month, or today's day of
+ * the month. What was already chosen is kept, so switching back and forth in
+ * the editor loses nothing.
+ */
+export function frequencyDefaults(f: Frequency, mode: FreqMode, today: string): Frequency {
+  const next: Frequency = { ...f, mode };
+  if (mode === "every_n_days") {
+    next.intervalDays = f.intervalDays ?? 2;
+    next.anchorDate = f.anchorDate ?? today;
+  } else if (mode === "month_times") {
+    next.timesPerMonth = f.timesPerMonth ?? 4;
+  } else if (mode === "month_days") {
+    next.daysOfMonth = f.daysOfMonth?.length ? f.daysOfMonth : [Number(today.slice(8, 10))];
+  }
+  return next;
+}
+
+export type ScheduleProblem = "pickWeekday" | "pickMonthDay" | "intervalRange" | "anchorMissing" | "monthTimesRange";
+
+/** Why a frequency cannot be saved, or null — the editor's copy of the server's rules. */
+export function scheduleProblem(f: Frequency): ScheduleProblem | null {
+  const whole = (n: unknown, lo: number, hi: number) =>
+    typeof n === "number" && Number.isInteger(n) && n >= lo && n <= hi;
+  switch (f.mode) {
+    case "days": return f.days?.length ? null : "pickWeekday";
+    case "every_n_days":
+      if (!whole(f.intervalDays, 2, MAX_INTERVAL_DAYS)) return "intervalRange";
+      return f.anchorDate && /^\d{4}-\d{2}-\d{2}$/.test(f.anchorDate) ? null : "anchorMissing";
+    case "month_times": return whole(f.timesPerMonth, 1, MAX_TIMES_PER_MONTH) ? null : "monthTimesRange";
+    case "month_days": return f.daysOfMonth?.length ? null : "pickMonthDay";
+    default: return null;
+  }
+}
+
+/**
+ * Every N days, counted from the anchor: day 0, N, 2N… A missed day moves
+ * nothing, and days before the anchor are not part of the rhythm. A version
+ * without its number (never written by this app) hides nothing.
+ */
+export function onRhythm(f: Frequency, fallbackAnchor: string, date: string): boolean {
+  const n = f.intervalDays ?? 0;
+  if (!(n >= 1)) return true;
+  const gap = daysBetween(f.anchorDate ?? fallbackAnchor, date);
+  return gap >= 0 && gap % n === 0;
+}
+
+/**
+ * The chosen days of `date`'s month. A day the month does not have falls on
+ * its last day — the 31st is April 30th, the 29th–31st are February's last —
+ * the same rule Important Dates uses, and never twice in one day.
+ */
+export function onMonthDays(days: number[] | undefined, date: string): boolean {
+  const d = Number(date.slice(8, 10));
+  const last = daysInMonth(monthOf(date));
+  return (days ?? []).some((x) => Math.min(x, last) === d);
 }
 
 /**
@@ -111,11 +181,20 @@ export function isScheduled(s: AppState, habit: Habit, date: string): boolean {
   if (!habit.active) return false;
   if (daysBetween(habit.startDate, date) < 0) return false;
   const f = frequencyOn(habit, date);
-  if (f.mode === "daily") return true;
-  if (f.mode === "days") return (f.days ?? []).includes(dow(date));
-  // Flexible habits stay on the list until the week's target is met.
-  if (isDone(s, date, habit.id)) return true;
-  return completedCount(s, habit.id, weekStart(date), date) < (f.timesPerWeek || 1);
+  switch (f.mode) {
+    case "daily": return true;
+    case "days": return (f.days ?? []).includes(dow(date));
+    case "every_n_days": return onRhythm(f, habit.startDate, date);
+    case "month_days": return onMonthDays(f.daysOfMonth, date);
+    case "month_times":
+      // The weekly rule over the calendar month: on the list until the count is met.
+      if (isDone(s, date, habit.id)) return true;
+      return completedCount(s, habit.id, monthFirst(monthOf(date)), date) < (f.timesPerMonth || 1);
+    default:
+      // Flexible habits stay on the list until the week's target is met.
+      if (isDone(s, date, habit.id)) return true;
+      return completedCount(s, habit.id, weekStart(date), date) < (f.timesPerWeek || 1);
+  }
 }
 
 export const scheduledOn = (s: AppState, date: string) =>

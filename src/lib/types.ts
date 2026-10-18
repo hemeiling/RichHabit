@@ -1,7 +1,21 @@
 export type Locale = "both" | "en" | "zh";
 export type Category = "morning" | "daytime" | "nighttime";
 export type HabitKind = "good" | "avoid";
-export type FreqMode = "daily" | "days" | "times";
+/**
+ * How a habit repeats. The first three are the originals; the rest arrived with
+ * migration step 22 and need it before they can be saved.
+ *
+ *   daily         every day
+ *   days          chosen days of the week
+ *   times         N times a week — on the list until the week's count is met
+ *   every_n_days  every N days counted from an anchor date, so a missed day
+ *                 never moves the next one
+ *   month_times   N times a month — on the list until the month's count is met
+ *   month_days    chosen days of the month; one the month lacks (31st in April)
+ *                 falls on its last day
+ */
+export type FreqMode = "daily" | "days" | "times" | "every_n_days" | "month_times" | "month_days";
+export const LEGACY_FREQ_MODES: readonly FreqMode[] = ["daily", "days", "times"];
 export type Grade = "good" | "bad" | "neutral";
 /**
  * §12. How a habit is measured.
@@ -27,7 +41,18 @@ export interface Frequency {
   mode: FreqMode;
   days: number[];        // 0 = Sunday
   timesPerWeek: number;
+  /** `every_n_days`: the gap, 2–365… */
+  intervalDays?: number;
+  /** …and the YYYY-MM-DD the rhythm counts from. */
+  anchorDate?: string;
+  /** `month_times`: completions wanted in each calendar month, 1–31. */
+  timesPerMonth?: number;
+  /** `month_days`: 1–31, ascending. */
+  daysOfMonth?: number[];
 }
+
+export const MAX_INTERVAL_DAYS = 365;
+export const MAX_TIMES_PER_MONTH = 31;
 
 /**
  * One version of a habit's schedule, in force from `from` (the person's local

@@ -5,7 +5,7 @@ import { query, transaction } from "@/lib/db/pool";
 import { limitFor } from "@/lib/entitlements";
 import { getActor } from "@/lib/entitlements/actor";
 import { isReleaseId, releaseById, unreadReleases, visibleReleases } from "@/lib/releases";
-import { emptyState, isNumericTracking } from "@/lib/types";
+import { LEGACY_FREQ_MODES, emptyState, isNumericTracking } from "@/lib/types";
 import type {
   AppState, AwarenessEntry, DayMetrics, Frequency, FrequencyVersion, Goal, Habit, ImportantDate,
   Intention, Prefs, Priority, SpendingRecord, Stack, WeeklyReview,
@@ -27,11 +27,30 @@ import { legacyPriorityId, reconcilePriorityIds, uniqueIds } from "@/lib/intenti
 const num = (v: unknown) => (v === "" || v == null ? null : Number(v));
 
 /** A `habit_schedules` row as the engine reads it. No row reads as every day. */
-const frequencyOf = (s: any): Frequency => ({
-  mode: s?.mode ?? "daily",
-  days: s?.days_of_week ?? [0, 1, 2, 3, 4, 5, 6],
-  timesPerWeek: s?.times_per_week ?? 3,
-});
+const frequencyOf = (s: any): Frequency => {
+  const f: Frequency = {
+    mode: s?.mode ?? "daily",
+    days: s?.days_of_week ?? [0, 1, 2, 3, 4, 5, 6],
+    timesPerWeek: s?.times_per_week ?? 3,
+  };
+  /* Step-22 settings, read only for their own mode: before the migration the
+     columns are simply absent from `select *`, and a row of another mode
+     carries none. An anchor-less rhythm counts from the version's own day. */
+  if (f.mode === "every_n_days") {
+    f.intervalDays = s?.interval_days ?? undefined;
+    f.anchorDate = s?.anchor_date ?? s?.effective_from ?? undefined;
+  } else if (f.mode === "month_times") {
+    f.timesPerMonth = s?.times_per_month ?? undefined;
+  } else if (f.mode === "month_days") {
+    f.daysOfMonth = (s?.days_of_month ?? []).map(Number);
+  }
+  return f;
+};
+
+/** True for a schedule row that carries any step-22 setting. */
+const hasStep22Settings = (s: any) =>
+  s?.interval_days != null || s?.anchor_date != null || s?.times_per_month != null
+  || (s?.days_of_month != null && s.days_of_month.length > 0);
 
 type Q = typeof query;
 
@@ -546,22 +565,53 @@ export async function saveHabit(userId: string, h: Habit, today?: string | null)
      *
      * Earlier versions are never touched.
      */
+    /* `select *` so the step-22 columns are seen when they exist and simply
+       absent when they do not. */
     const [latest] = await q<any>(
-      `select effective_from, mode, days_of_week, times_per_week
-         from habit_schedules where habit_id = $1 and user_id = $2
+      `select * from habit_schedules where habit_id = $1 and user_id = $2
         order by effective_from desc limit 1`, [h.id, userId]);
     if (!latest || !sameFrequency(frequencyOf(latest), h.frequency)) {
-      await q(
-        `insert into habit_schedules (habit_id, user_id, mode, days_of_week, times_per_week, effective_from)
-         values ($1,$2,$3::freq_mode,$4,$5, greatest(coalesce($6::date, current_date), $7::date))
-         on conflict (habit_id, effective_from) do update set
-           mode = excluded.mode, days_of_week = excluded.days_of_week,
-           times_per_week = excluded.times_per_week
-         where habit_schedules.user_id = $2`,
-        [h.id, userId, h.frequency.mode, h.frequency.days,
-          h.frequency.mode === "times" ? h.frequency.timesPerWeek : null,
-          today ?? null, latest?.effective_from ?? null],
-      );
+      const f = h.frequency;
+      const from = [today ?? null, latest?.effective_from ?? null];
+      /*
+       * Two statements on purpose. The original three modes are written exactly
+       * as before step 22, naming no new column, so a deploy that lands ahead of
+       * its migration keeps every existing schedule saving. Only a step-22 mode —
+       * or a same-day version replacing one, whose settings must be cleared —
+       * names the new columns, and before the migration that one write is what
+       * fails (see `isRepeatUnavailable`).
+       */
+      if (LEGACY_FREQ_MODES.includes(f.mode) && !hasStep22Settings(latest)) {
+        await q(
+          `insert into habit_schedules (habit_id, user_id, mode, days_of_week, times_per_week, effective_from)
+           values ($1,$2,$3::freq_mode,$4,$5, greatest(coalesce($6::date, current_date), $7::date))
+           on conflict (habit_id, effective_from) do update set
+             mode = excluded.mode, days_of_week = excluded.days_of_week,
+             times_per_week = excluded.times_per_week
+           where habit_schedules.user_id = $2`,
+          [h.id, userId, f.mode, f.days, f.mode === "times" ? f.timesPerWeek : null, ...from],
+        );
+      } else {
+        await q(
+          `insert into habit_schedules (habit_id, user_id, mode, days_of_week, times_per_week,
+                                        interval_days, anchor_date, times_per_month, days_of_month,
+                                        effective_from)
+           values ($1,$2,$3::freq_mode,$4,$5,$6,$7::date,$8,$9::smallint[],
+                   greatest(coalesce($10::date, current_date), $11::date))
+           on conflict (habit_id, effective_from) do update set
+             mode = excluded.mode, days_of_week = excluded.days_of_week,
+             times_per_week = excluded.times_per_week, interval_days = excluded.interval_days,
+             anchor_date = excluded.anchor_date, times_per_month = excluded.times_per_month,
+             days_of_month = excluded.days_of_month
+           where habit_schedules.user_id = $2`,
+          [h.id, userId, f.mode, f.days, f.mode === "times" ? f.timesPerWeek : null,
+            f.mode === "every_n_days" ? f.intervalDays : null,
+            f.mode === "every_n_days" ? f.anchorDate : null,
+            f.mode === "month_times" ? f.timesPerMonth : null,
+            f.mode === "month_days" ? f.daysOfMonth : null,
+            ...from],
+        );
+      }
     }
 
     await q("delete from goal_habits where habit_id = $1 and user_id = $2", [h.id, userId]);

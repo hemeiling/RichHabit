@@ -1,14 +1,28 @@
-import { body, requireId, withUser } from "@/lib/api";
+import { ApiError, body, requireId, withUser } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
 import { markMemberStale, viewerToday } from "@/lib/community";
+import { isRepeatUnavailable } from "@/lib/db/diagnose";
 import { deleteHabit, saveHabit } from "@/lib/db/queries";
+import { getDict } from "@/lib/i18n/server";
+import { LEGACY_FREQ_MODES } from "@/lib/types";
 import { parseHabit } from "@/lib/validate";
 
 export async function POST(request: Request) {
   return withUser(async (userId) => {
     const habit = parseHabit(await body(request));
-    // A schedule change takes effect from the person's today, not the server's.
-    const created = await saveHabit(userId, habit, viewerToday(request.headers.get("x-rh-timezone")));
+    let created: boolean;
+    try {
+      // A schedule change takes effect from the person's today, not the server's.
+      created = await saveHabit(userId, habit, viewerToday(request.headers.get("x-rh-timezone")));
+    } catch (e) {
+      /* A deploy can land before its migration. Then only the newer ways of
+         repeating cannot be saved — said as such, not as a failed save — and
+         every other schedule keeps working. */
+      if (!LEGACY_FREQ_MODES.includes(habit.frequency.mode) && isRepeatUnavailable(e)) {
+        throw new ApiError(getDict().habits.repeatUnavailable, 503);
+      }
+      throw e;
+    }
     // A new, edited or retired habit changes what counts as scheduled, and so
     // changes the denominator of this member's board figure.
     markMemberStale(userId);

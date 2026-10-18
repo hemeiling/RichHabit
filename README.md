@@ -119,14 +119,20 @@ tests/               habits · validate · throttle · coach · important-dates
 
 **Misses are never stored.** A completion row exists only when something was done; absence is a
 miss. Nothing derived — score, streak, consistency, perfect days — is stored either. It's all
-computed from completions on read, and `daily_scores()` in the schema does the same in SQL so a
-future native client gets identical numbers without a second implementation to keep in sync.
+computed from completions on read, by one engine: `src/lib/habits.ts`. (`daily_scores()` in the
+schema was a SQL copy of it; it predates schedule history and the newer ways of repeating, nothing
+calls it, and it is not a second source of truth.)
 
 **Schedules are versioned.** `habit_schedules` rows carry `effective_from` — the person's own
 calendar date — and every day is scored by the version in force on it (`frequencyOn` in
 `src/lib/habits.ts`), so changing a habit from daily to three-times-a-week doesn't silently rewrite
 what last month was supposed to look like. Today, Insights and the Community board all score through
 that one rule. An unchanged schedule writes no new version.
+
+**Ways to repeat.** Every day · certain days of the week · N times a week · every N days (counted
+from an anchor date, so a missed day never moves the next one) · N times a month · certain days of
+the month (a day the month lacks falls on its last day). The last three need migration step 22;
+before it runs they answer "not available yet" and the first three keep saving exactly as before.
 
 ### The account cap, off by default
 

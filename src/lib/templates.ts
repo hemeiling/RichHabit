@@ -1,6 +1,6 @@
 import { dictionaries } from "@/lib/i18n";
 import type { Dict } from "@/lib/i18n";
-import type { Goal, Habit } from "@/lib/types";
+import type { Frequency, Goal, Habit } from "@/lib/types";
 
 /**
  * Resolving what a habit or goal is *called*.
@@ -18,6 +18,18 @@ export const habitName = (h: Pick<Habit, "templateKey" | "name">, t: Dict): stri
 
 export const goalName = (g: Pick<Goal, "templateKey" | "name">, t: Dict): string =>
   (g.templateKey && t.templates.goals[g.templateKey]) || g.name;
+
+/** How a habit repeats, in a few words: "Every day", "M W F", "Every 3 days"… */
+export function frequencyLabel(f: Frequency, t: Dict): string {
+  switch (f.mode) {
+    case "daily": return t.habits.freqDaily;
+    case "days": return f.days.map((d) => t.days.initial[d]).join(" ");
+    case "every_n_days": return t.habits.everyNDays(f.intervalDays ?? 2);
+    case "month_times": return t.habits.timesAMonth(f.timesPerMonth ?? 1);
+    case "month_days": return t.habits.onMonthDays(f.daysOfMonth ?? []);
+    default: return t.habits.timesAWeek(f.timesPerWeek);
+  }
+}
 
 /**
  * Units on a seeded habit are ours too ("min" → 分钟). A unit the user typed is

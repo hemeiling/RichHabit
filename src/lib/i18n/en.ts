@@ -439,6 +439,33 @@ export const en = {
     freqTimes: "X times a week",
     perWeek: (n: number) => `${n} / week`,
     timesAWeek: (n: number) => `${n}× a week`,
+    freqEvery: "Every few days",
+    freqMonthTimes: "X times a month",
+    freqMonthDays: "Days of the month",
+    everyNDays: (n: number) => `Every ${n} days`,
+    intervalLabel: "Repeat every",
+    intervalUnit: "days",
+    intervalAria: "Days between each time",
+    anchorLabel: "Counting from",
+    everyHint: "The rhythm counts from this day, so a missed day never moves the next one.",
+    perMonth: (n: number) => `${n} / month`,
+    timesAMonth: (n: number) => `${n}× a month`,
+    monthTimesHint: "Stays on your list each day until this month's count is reached — like times a week.",
+    onMonthDays: (days: number[]) => `On the ${days.map((d) => {
+      const tens = d % 100, last = d % 10;
+      const suffix = tens >= 11 && tens <= 13 ? "th" : last === 1 ? "st" : last === 2 ? "nd" : last === 3 ? "rd" : "th";
+      return `${d}${suffix}`;
+    }).join(", ")}`,
+    monthDaysHint: "In a shorter month, the 29th, 30th and 31st fall on its last day.",
+    scheduleProblem: {
+      pickWeekday: "Pick at least one day of the week.",
+      pickMonthDay: "Pick at least one day of the month.",
+      intervalRange: "Choose every 2 to 365 days.",
+      anchorMissing: "Choose the day to count from.",
+      monthTimesRange: "Choose 1 to 31 times a month.",
+    },
+    // No full stop: the store appends ". That change wasn't saved."
+    repeatUnavailable: "This way of repeating isn't available yet — please choose another for now",
     fieldTracking: "How is it measured?",
     trackingBoolean: "Did it",
     trackingCount: "A number of times",

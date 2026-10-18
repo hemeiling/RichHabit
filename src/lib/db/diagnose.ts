@@ -55,6 +55,16 @@ export const isSchemaBehind = (e: unknown) => {
 };
 
 /**
+ * True when a step-22 repeat (every N days, times a month, days of the month)
+ * could not be saved because migration step 22 has not run yet: its column is
+ * missing (42703), or `freq_mode` does not know the value (22P02). Only ever
+ * consulted for a habit using one of those modes, where nothing else in the
+ * write could raise either code.
+ */
+export const isRepeatUnavailable = (e: unknown) =>
+  isSchemaBehind(e) || (e as { code?: string } | null)?.code === "22P02";
+
+/**
  * The name of the CHECK constraint a write violated, or null.
  *
  * Postgres 23514 carries the constraint's name, which is the difference between
