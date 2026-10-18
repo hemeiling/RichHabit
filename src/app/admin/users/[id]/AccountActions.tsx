@@ -13,14 +13,19 @@ import { useRouter } from "next/navigation";
  * the ones the server sent back.
  */
 export default function AccountActions({
-  id, email, role, disabled, isSelf,
+  id, email, role, disabled, isSelf, setupPending = false,
 }: {
   id: string; email: string; role: "user" | "admin"; disabled: boolean; isSelf: boolean;
+  /** Created with a setup link that was never used (UM-4): offer a replacement. */
+  setupPending?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState<string | null>(null);
+  /** A reissued setup link, shown once and never again (UM-4). */
+  const [setupLink, setSetupLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmingRole, setConfirmingRole] = useState(false);
   const [typed, setTyped] = useState("");
@@ -29,6 +34,8 @@ export default function AccountActions({
     setBusy(action);
     setError(null);
     setPassword(null);
+    setSetupLink(null);
+    setCopied(false);
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
         method: "PATCH",
@@ -38,6 +45,13 @@ export default function AccountActions({
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
       if (data?.temporaryPassword) setPassword(data.temporaryPassword);
+      if (data?.setupToken) {
+        setSetupLink({
+          // Fragment, never path: no request carries it, so no log can keep it.
+          url: `${window.location.origin}/setup#token=${encodeURIComponent(data.setupToken)}`,
+          expiresAt: data.expiresAt,
+        });
+      }
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -79,6 +93,13 @@ export default function AccountActions({
           <button className="btn" disabled={!!busy} onClick={() => call("reset_password")}>
             {busy === "reset_password" ? "Working…" : "Reset password"}
           </button>
+          {setupPending && (
+            <button className="btn" disabled={!!busy || disabled}
+              title={disabled ? "Re-enable the account before sending a setup link" : undefined}
+              onClick={() => call("reissue_setup")}>
+              {busy === "reissue_setup" ? "Working…" : "Reissue setup link"}
+            </button>
+          )}
           {/* Confirmed rather than immediate. Every other control here is
               either reversible in a click or already asks; a privilege change
               was the one action that granted or removed access to every
@@ -121,6 +142,25 @@ export default function AccountActions({
                   : role === "admin" ? "Yes, remove admin" : "Yes, make admin"}
               </button>
             </div>
+          </div>
+        )}
+
+        {setupLink && (
+          <div className="flat p-3.5 mt-3">
+            <div className="eyebrow" style={{ fontSize: 10 }}>New setup link</div>
+            <div className="num mt-1" style={{ fontSize: 13.5, wordBreak: "break-all" }}>{setupLink.url}</div>
+            <div className="flex items-center gap-2 mt-2">
+              <button className="btn" style={{ fontSize: 12.5, padding: "4px 10px" }}
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(setupLink.url); setCopied(true); } catch { /* copy by hand */ }
+                }}>
+                {copied ? "Copied" : "Copy link"}
+              </button>
+            </div>
+            <p className="faint mt-2" style={{ fontSize: 12.5 }}>
+              Shown once. Works one time, until {setupLink.expiresAt.slice(0, 10)}. Every earlier
+              setup link for this account has stopped working.
+            </p>
           </div>
         )}
 

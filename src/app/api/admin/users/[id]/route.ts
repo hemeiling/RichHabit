@@ -1,5 +1,5 @@
 import { withAdmin } from "@/lib/admin";
-import { deleteAccount, resetPassword, setDisabled, setRole } from "@/lib/admin/users";
+import { deleteAccount, reissueSetupLink, resetPassword, setDisabled, setRole } from "@/lib/admin/users";
 import { parsePlanChange, setMembership } from "@/lib/admin/plans";
 import { check } from "@/lib/http";
 
@@ -19,13 +19,16 @@ export async function PATCH(
     const id = check.uuid(params.id, "id");
     const b = await request.json().catch(() => null);
     const action = check.oneOf(b?.action,
-      ["disable", "enable", "role", "reset_password", "plan"] as const, "action");
+      ["disable", "enable", "role", "reset_password", "plan", "reissue_setup"] as const, "action");
 
     switch (action) {
       // Membership (UM-3): every rule — admins hold no plan, grandfathered rows
       // need the typed username and a reason — lives in the service.
       case "plan":
         return { ok: true, membership: await setMembership(admin, id, parsePlanChange(b)) };
+      // Returned once, to the admin who asked; never written to the log (UM-4).
+      case "reissue_setup":
+        return { ok: true, ...(await reissueSetupLink(admin, id)) };
       case "disable": await setDisabled(admin, id, true); return { ok: true };
       case "enable": await setDisabled(admin, id, false); return { ok: true };
       case "role":

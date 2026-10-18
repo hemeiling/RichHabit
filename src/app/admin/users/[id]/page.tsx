@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin";
-import { auditFor } from "@/lib/admin/users";
+import { auditFor, setupStateFor } from "@/lib/admin/users";
 import { membershipFor } from "@/lib/admin/plans";
 import { userProfile } from "@/lib/analytics/queries";
 import { planBadge, planText } from "@/lib/admin/plan";
@@ -29,6 +29,7 @@ export default async function UserProfile({ params }: { params: { id: string } }
   const audit = await auditFor(u.id);
   // Read on its own, admin-side: the panel needs the note, the listing never does.
   const membership = await membershipFor(u.id);
+  const setup = await setupStateFor(u.id);
 
   const max = Math.max(1, ...u.recent.map((d) => d.events));
 
@@ -91,6 +92,7 @@ export default async function UserProfile({ params }: { params: { id: string } }
         role={u.role === "admin" ? "admin" : "user"}
         disabled={!!u.disabledAt}
         isSelf={admin.id === u.id}
+        setupPending={setup.hasInvite && !setup.completed}
       />
 
       {/* Who did what to this account. Never a password or a token. */}

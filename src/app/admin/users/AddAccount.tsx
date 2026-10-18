@@ -83,8 +83,11 @@ export default function AddAccount() {
       setDone({
         email: data.email,
         password: data.temporaryPassword,
+        // The token rides in the fragment, which no request ever carries, so
+        // no server or proxy log can keep it (UM-4). /setup/<token> links
+        // issued before this still work.
         link: data.setupToken
-          ? `${window.location.origin}/setup/${data.setupToken}`
+          ? `${window.location.origin}/setup#token=${encodeURIComponent(data.setupToken)}`
           : undefined,
       });
       router.refresh();

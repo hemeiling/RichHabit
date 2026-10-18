@@ -50,7 +50,8 @@ export type AdminAction =
   | "user_created" | "admin_account_created" | "user_disabled" | "user_enabled"
   | "user_role_changed" | "user_deleted" | "password_reset_requested"
   /* Written by lib/admin/plans, in the same transaction as the change. */
-  | "plan_granted" | "plan_changed" | "plan_revoked";
+  | "plan_granted" | "plan_changed" | "plan_revoked"
+  | "setup_link_reissued";
 
 /** Never called with a password, a hash, or a setup token. */
 async function audit(
@@ -409,6 +410,59 @@ export async function resetPassword(admin: AdminUser, id: string): Promise<strin
 
   await audit(admin, "password_reset_requested", { id: target.id, email: target.email });
   return password;
+}
+
+/**
+ * Whether an account is still waiting to finish setting up: it was created
+ * with a setup link (UM-4) and no link of its has ever been used. Accounts
+ * created with a password, or that already chose their own, use Reset
+ * password instead — a setup link would be a second way in.
+ */
+export async function setupStateFor(id: string): Promise<{ hasInvite: boolean; completed: boolean }> {
+  const rows = await query<{ total: number; used: number }>(
+    `select count(*)::int as total, count(used_at)::int as used from user_invites where user_id = $1`, [id]);
+  return { hasInvite: rows[0].total > 0, completed: rows[0].used > 0 };
+}
+
+/**
+ * Issues a replacement setup link (UM-4) and returns its token ONCE, to the
+ * admin who asked. In the same transaction every link still outstanding for
+ * the account is expired, so the newest link is the only one that works —
+ * the same rule password resets follow. The audit entry records that a link
+ * was issued and when it lapses, never the token, which also never reaches a
+ * log line: it leaves this function in the return value and nowhere else.
+ */
+export async function reissueSetupLink(
+  admin: AdminUser, id: string,
+): Promise<{ setupToken: string; expiresAt: string }> {
+  const target = await loadTarget(id);
+  if (target.disabled_at) {
+    throw new ApiError("This account is disabled — re-enable it before sending a setup link", 409);
+  }
+  const state = await setupStateFor(id);
+  if (!state.hasInvite) {
+    throw new ApiError("This account was not created with a setup link — use Reset password instead", 409);
+  }
+  if (state.completed) {
+    throw new ApiError("This account has already finished setting up — use Reset password instead", 409);
+  }
+
+  return transaction(async (q) => {
+    const expired = await q<{ token: string }>(
+      `update user_invites set expires_at = now()
+        where user_id = $1 and used_at is null and expires_at > now() returning token`, [id]);
+    const [issued] = await q<{ token: string; expires_at: Date | string }>(
+      `insert into user_invites (user_id, created_by, expires_at)
+       values ($1, $2, now() + ($3 || ' days')::interval) returning token, expires_at`,
+      [id, admin.id, String(INVITE_DAYS)]);
+    const expiresAt = new Date(issued.expires_at).toISOString();
+    await q(
+      `insert into admin_audit_log (admin_id, admin_email, target_id, target_email, action, details)
+       values ($1, $2, $3, $4, 'setup_link_reissued', $5)`,
+      [admin.id, admin.email, target.id, target.email,
+        JSON.stringify({ expiresAt, replaced: expired.length })]);
+    return { setupToken: issued.token, expiresAt };
+  });
 }
 
 export async function deleteAccount(admin: AdminUser, id: string) {
