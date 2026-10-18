@@ -5,7 +5,7 @@ import { togetherInviteEmail } from "@/lib/email/templates";
 import { appUrl } from "@/lib/env";
 import { isUuid } from "@/lib/http";
 import { isLocale, type Locale } from "@/lib/i18n";
-import { isPlausibleEmail, normaliseEmail } from "@/lib/identity";
+import { isPlausibleEmail, maskEmail, normaliseEmail } from "@/lib/identity";
 import {
   AUTHORIZED, DISPLAY_NAME, OPEN, TogetherError, USABLE, WAITING, addressedTo, peopleOf, requireAccess, requireBoard,
   togetherLive,
@@ -427,16 +427,8 @@ export async function respondToInvitation(
  * "he••••90@outlook.com". Short local parts keep only their first character,
  * and one character is hidden entirely. Informational only.
  */
-export function maskEmail(email: string): string {
-  const at = email.lastIndexOf("@");
-  const local = [...(at > 0 ? email.slice(0, at) : email)];
-  const domain = at > 0 ? email.slice(at + 1) : "";
-  const hidden = "••••";
-  const shown = local.length >= 6 ? local.slice(0, 2).join("") + hidden + local.slice(-2).join("")
-    : local.length >= 2 ? local[0] + hidden
-      : hidden;
-  return domain ? `${shown}@${domain}` : shown;
-}
+// maskEmail lives in lib/identity; re-exported for callers that have always imported it from here.
+export { maskEmail };
 
 export type Preview =
   | {

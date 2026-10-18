@@ -210,3 +210,45 @@ export function connectionInviteEmail(locale: Locale, url: string, inviter: stri
   };
   return compose(blocks(locale, en, zh), locale, url, days);
 }
+
+/**
+ * Sent to the OLD address when an administrator changes an account's sign-in
+ * email (UM-5). It carries no link and no credential — only the fact of the
+ * change and where it went, masked — so it cannot be used for anything; its
+ * job is that a change the person did not expect never happens silently.
+ */
+export function emailChangedNotice(locale: Locale, newMasked: string) {
+  const en = {
+    subject: "Your RichHabit sign-in email was changed",
+    heading: "Your sign-in email was changed",
+    lead: `An administrator changed the email address on your RichHabit account to ${newMasked}. `
+      + "Your habits and everything else in the account are unchanged.",
+    note: "If you did not expect this, reply to the person who manages your account. "
+      + "Password resets now go to the new address once it is confirmed.",
+  };
+  const zh = {
+    subject: "你的 RichHabit 登录邮箱已更改",
+    heading: "登录邮箱已更改",
+    lead: `管理员已将你的「养成富有的习惯」账户邮箱更改为 ${newMasked}。你的习惯和账户中的其他内容均未改变。`,
+    note: "如果这出乎你的意料，请联系为你管理账户的人。新邮箱确认后，重置密码的邮件将发送到新邮箱。",
+  };
+  const parts = locale === "zh" ? [zh] : locale === "both" ? [en, zh] : [en];
+  const html = `<!doctype html>
+<html lang="${locale === "zh" ? "zh" : "en"}"><body style="margin:0;padding:24px;background:#faf9f7;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  color:#1c1a17;line-height:1.6">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+      style="max-width:520px;background:#ffffff;border:1px solid #e8e4de;border-radius:14px">
+      <tr><td style="padding:28px">${parts.map((c, i) => `
+        <h1 style="margin:${i === 0 ? "0" : "26px"} 0 12px;font-size:20px;font-weight:600">${escape(c.heading)}</h1>
+        <p style="margin:0 0 14px;font-size:15px;color:#4a453e">${escape(c.lead)}</p>
+        <p style="margin:0;font-size:12.5px;color:#8a837a">${escape(c.note)}</p>`).join("")}
+      </td></tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:12px;color:#a09890">${escape(SIGNOFF)}</p>
+  </td></tr></table>
+</body></html>`;
+  const text = [...parts.flatMap((c) => [c.heading, "", c.lead, "", c.note, ""]), SIGNOFF].join("\n");
+  return { subject: parts.map((c) => c.subject).join(" · "), html, text };
+}

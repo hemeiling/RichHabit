@@ -68,3 +68,21 @@ export function isPlausibleEmail(raw: string): boolean {
   return at > 0 && at === value.lastIndexOf("@") && at < value.length - 1
     && !value.includes(" ");
 }
+
+/**
+ * An address shown without giving it away: the first two and last two
+ * characters before the @, the domain whole — "hemeiling90@outlook.com" →
+ * "he••••90@outlook.com". Short local parts keep only their first character,
+ * and one character is hidden entirely. Used by Together's invitation screens
+ * and by the admin audit of email changes (UM-5).
+ */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  const local = [...(at > 0 ? email.slice(0, at) : email)];
+  const domain = at > 0 ? email.slice(at + 1) : "";
+  const hidden = "••••";
+  const shown = local.length >= 6 ? local.slice(0, 2).join("") + hidden + local.slice(-2).join("")
+    : local.length >= 2 ? local[0] + hidden
+      : hidden;
+  return domain ? `${shown}@${domain}` : shown;
+}

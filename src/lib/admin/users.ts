@@ -2,8 +2,12 @@ import { randomBytes } from "node:crypto";
 import { ApiError } from "@/lib/http";
 import { MAX_LENGTH, MIN_LENGTH, passwordProblems } from "@/lib/password";
 import {
-  MAX_USERNAME, MIN_USERNAME, checkUsername, isPlausibleEmail, normaliseEmail, normaliseUsername,
+  MAX_USERNAME, MIN_USERNAME, checkUsername, isPlausibleEmail, maskEmail, normaliseEmail, normaliseUsername,
 } from "@/lib/identity";
+import { sendMail } from "@/lib/email/send";
+import { emailChangedNotice } from "@/lib/email/templates";
+import { sendVerification } from "@/lib/email/verify";
+import { isLocale } from "@/lib/i18n";
 import { hashPassword } from "@/lib/auth";
 import { isTestInstance } from "@/lib/env";
 import { query, transaction } from "@/lib/db/pool";
@@ -51,7 +55,8 @@ export type AdminAction =
   | "user_role_changed" | "user_deleted" | "password_reset_requested"
   /* Written by lib/admin/plans, in the same transaction as the change. */
   | "plan_granted" | "plan_changed" | "plan_revoked"
-  | "setup_link_reissued";
+  | "setup_link_reissued"
+  | "user_username_changed" | "user_email_changed";
 
 /** Never called with a password, a hash, or a setup token. */
 async function audit(
@@ -112,6 +117,18 @@ export interface CreatedAccount {
 
 const INVITE_DAYS = 7;
 
+/** The one wording of the username rules, for creating and for editing. */
+function assertUsername(username: string) {
+  const problem = checkUsername(username);
+  if (problem) {
+    throw new ApiError(problem.reason === "too_short"
+      ? `A username must be at least ${MIN_USERNAME} characters`
+      : problem.reason === "too_long"
+        ? `A username must be under ${MAX_USERNAME} characters`
+        : "A username may use letters, digits, and dots, hyphens or underscores in between");
+  }
+}
+
 export async function createAccount(admin: AdminUser, input: NewAccount): Promise<CreatedAccount> {
   /*
    * A managed account may be named by a username instead of an address — that
@@ -123,16 +140,7 @@ export async function createAccount(admin: AdminUser, input: NewAccount): Promis
   const username = normaliseUsername(input.username ?? "");
   if (!email && !username) throw new ApiError("Enter an email address or a username");
   if (email && !isPlausibleEmail(email)) throw new ApiError("Enter a valid email address");
-  if (username) {
-    const problem = checkUsername(username);
-    if (problem) {
-      throw new ApiError(problem.reason === "too_short"
-        ? `A username must be at least ${MIN_USERNAME} characters`
-        : problem.reason === "too_long"
-          ? `A username must be under ${MAX_USERNAME} characters`
-          : "A username may use letters, digits, and dots, hyphens or underscores in between");
-    }
-  }
+  if (username) assertUsername(username);
 
   /*
    * Where the first password comes from:
@@ -463,6 +471,137 @@ export async function reissueSetupLink(
         JSON.stringify({ expiresAt, replaced: expired.length })]);
     return { setupToken: issued.token, expiresAt };
   });
+}
+
+/** What the account page's identity card needs to know, and warn about. */
+export interface IdentityView {
+  username: string | null;
+  email: string | null;
+  /** Registered while verification was required: clearing it pauses password sign-in. */
+  verificationRequired: boolean;
+  hasPassword: boolean;
+  hasGoogle: boolean;
+}
+
+export async function identityFor(id: string): Promise<IdentityView | null> {
+  const rows = await query<{ username: string | null; email: string | null; vr: boolean; pw: boolean; google: boolean }>(
+    `select username, email, verification_required as vr, password_hash is not null as pw,
+            exists (select 1 from auth_identities a where a.user_id = u.id) as google
+       from users u where id = $1`, [id]);
+  const r = rows[0];
+  return r ? { username: r.username, email: r.email, verificationRequired: r.vr, hasPassword: r.pw, hasGoogle: r.google } : null;
+}
+
+export interface IdentityResult {
+  username: string | null;
+  email: string | null;
+  emailChanged: boolean;
+  /** The person cannot sign in with their password until they confirm the new address. */
+  passwordSignInPaused: boolean;
+}
+
+/**
+ * An administrator correcting how an account signs in (UM-5): its username,
+ * its email, or both — never anything the person built.
+ *
+ * A username is checked by the same rules as everywhere else and must be
+ * free; it is what Community boards display, so a rename shows there.
+ *
+ * An email change is the security-sensitive one. In one transaction:
+ *   · the new address must be plausible and belong to no other account
+ *   · it is NOT verified — nobody has shown they read it — so the verified
+ *     mark is cleared; for an account registered while verification was
+ *     required, that pauses password sign-in until the link is used (the
+ *     account page warns before saving)
+ *   · every outstanding password-reset and verification link is spent: they
+ *     were addressed to the old inbox
+ *   · any half-finished "link Google to this account" handshake is dropped:
+ *     it was begun because a Google address matched the OLD email
+ * Then a confirmation link goes to the new address and a notice — no link,
+ * no credential — to the old one, so the change is never silent. A linked
+ * Google identity is keyed by Google's own id, not the address, so it keeps
+ * signing in to this same account; and an unlinked Google account that
+ * happens to use the new address still meets the password-confirmed link
+ * step, never an automatic link.
+ *
+ * Audit: the username from → to, and the email masked both ways. Sessions are
+ * kept — this corrects an address, it is not a password change.
+ */
+export async function updateIdentity(
+  admin: AdminUser, id: string, input: { username?: string; email?: string },
+): Promise<IdentityResult> {
+  const current = await query<{ username: string | null; email: string | null; vr: boolean; pw: boolean; locale: string | null }>(
+    `select u.username, u.email, u.verification_required as vr, u.password_hash is not null as pw,
+            (select locale from user_preferences p where p.user_id = u.id) as locale
+       from users u where id = $1`, [id]).then((r) => r[0]);
+  if (!current) throw new ApiError("No such account", 404);
+
+  const username = input.username === undefined ? null : normaliseUsername(input.username);
+  const email = input.email === undefined ? null : normaliseEmail(input.email);
+  if (username !== null) {
+    if (!username) throw new ApiError("A username cannot be empty");
+    assertUsername(username);
+  }
+  if (email !== null) {
+    if (!email) throw new ApiError("An email address cannot be empty");
+    if (!isPlausibleEmail(email)) throw new ApiError("Enter a valid email address");
+  }
+  const usernameChanged = username !== null && username !== (current.username ?? "");
+  const emailChanged = email !== null && email !== (current.email ?? "");
+  if (!usernameChanged && !emailChanged) throw new ApiError("Nothing to change");
+
+  try {
+    await transaction(async (q) => {
+      await q(
+        `update users set username = $2, email = $3,
+                email_verified_at = case when $4 then null else email_verified_at end
+          where id = $1`,
+        [id, usernameChanged ? username : current.username, emailChanged ? email : current.email, emailChanged]);
+      if (emailChanged) {
+        await q(`update password_resets set consumed_at = now() where user_id = $1 and consumed_at is null`, [id]);
+        await q(`update email_verifications set consumed_at = now() where user_id = $1 and consumed_at is null`, [id]);
+        await q(`delete from google_pending where user_id = $1`, [id]);
+      }
+      const who = current.username ?? current.email;
+      const write = (action: AdminAction, details: Record<string, unknown>) => q(
+        `insert into admin_audit_log (admin_id, admin_email, target_id, target_email, action, details)
+         values ($1, $2, $3, $4, $5, $6)`,
+        [admin.id, admin.email, id, who, action, JSON.stringify(details)]);
+      if (usernameChanged) await write("user_username_changed", { from: current.username, to: username });
+      if (emailChanged) {
+        await write("user_email_changed", {
+          from: current.email ? maskEmail(current.email) : null, to: maskEmail(email!), verificationCleared: true,
+        });
+      }
+    });
+  } catch (e) {
+    if (e instanceof Error && /users_email_idx/.test(e.message)) {
+      throw new ApiError("Another account already uses that email address", 409);
+    }
+    if (e instanceof Error && /users_username_idx/.test(e.message)) {
+      throw new ApiError("That username is already taken", 409);
+    }
+    throw e;
+  }
+
+  if (emailChanged) {
+    const locale = isLocale(current.locale) ? current.locale : "en";
+    /* After the commit, and best-effort: the change stands even if a mail
+       provider hiccups, and the person can ask for a fresh link. Nothing about
+       the addresses or the token reaches a log line. */
+    try { await sendVerification(id, email!, locale); } catch { console.error("[admin/identity] confirmation email failed"); }
+    if (current.email) {
+      try { await sendMail({ to: current.email, ...emailChangedNotice(locale, maskEmail(email!)) }); }
+      catch { console.error("[admin/identity] change notice failed"); }
+    }
+  }
+
+  return {
+    username: usernameChanged ? username : current.username,
+    email: emailChanged ? email : current.email,
+    emailChanged,
+    passwordSignInPaused: emailChanged && current.vr && current.pw,
+  };
 }
 
 export async function deleteAccount(admin: AdminUser, id: string) {

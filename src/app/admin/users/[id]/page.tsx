@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { requireAdminPage } from "@/lib/admin";
-import { auditFor, setupStateFor } from "@/lib/admin/users";
+import { auditFor, identityFor, setupStateFor } from "@/lib/admin/users";
 import { membershipFor } from "@/lib/admin/plans";
 import { userProfile } from "@/lib/analytics/queries";
 import { planBadge, planText } from "@/lib/admin/plan";
 import { Card, Stat, Table, date } from "../../ui";
 import AccountActions from "./AccountActions";
+import IdentityPanel from "./IdentityPanel";
 import MembershipPanel from "./MembershipPanel";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function UserProfile({ params }: { params: { id: string } }
   // Read on its own, admin-side: the panel needs the note, the listing never does.
   const membership = await membershipFor(u.id);
   const setup = await setupStateFor(u.id);
+  const identity = await identityFor(u.id);
 
   const max = Math.max(1, ...u.recent.map((d) => d.events));
 
@@ -85,6 +87,7 @@ export default async function UserProfile({ params }: { params: { id: string } }
       <Card title="Features used" hint="Which parts of the product this account touches.">
         <Table head={["Feature", "Events"]} rows={u.features.map((f) => [f.feature, f.events])} />
       </Card>
+      {identity && <IdentityPanel id={u.id} identity={identity} />}
       {membership && <MembershipPanel id={u.id} membership={membership} />}
 
       <AccountActions

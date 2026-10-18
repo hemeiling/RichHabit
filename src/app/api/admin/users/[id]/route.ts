@@ -1,5 +1,7 @@
 import { withAdmin } from "@/lib/admin";
-import { deleteAccount, reissueSetupLink, resetPassword, setDisabled, setRole } from "@/lib/admin/users";
+import {
+  deleteAccount, reissueSetupLink, resetPassword, setDisabled, setRole, updateIdentity,
+} from "@/lib/admin/users";
 import { parsePlanChange, setMembership } from "@/lib/admin/plans";
 import { check } from "@/lib/http";
 
@@ -19,7 +21,7 @@ export async function PATCH(
     const id = check.uuid(params.id, "id");
     const b = await request.json().catch(() => null);
     const action = check.oneOf(b?.action,
-      ["disable", "enable", "role", "reset_password", "plan", "reissue_setup"] as const, "action");
+      ["disable", "enable", "role", "reset_password", "plan", "reissue_setup", "identity"] as const, "action");
 
     switch (action) {
       // Membership (UM-3): every rule — admins hold no plan, grandfathered rows
@@ -29,6 +31,15 @@ export async function PATCH(
       // Returned once, to the admin who asked; never written to the log (UM-4).
       case "reissue_setup":
         return { ok: true, ...(await reissueSetupLink(admin, id)) };
+      // UM-5: username and/or email. Rules, side effects and audit in the service.
+      case "identity":
+        return {
+          ok: true,
+          ...(await updateIdentity(admin, id, {
+            username: b?.username === undefined ? undefined : check.text(b.username, "username", 40),
+            email: b?.email === undefined ? undefined : check.text(b.email, "email", 254),
+          })),
+        };
       case "disable": await setDisabled(admin, id, true); return { ok: true };
       case "enable": await setDisabled(admin, id, false); return { ok: true };
       case "role":
