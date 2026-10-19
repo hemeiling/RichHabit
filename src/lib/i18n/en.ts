@@ -320,6 +320,8 @@ export const en = {
     // A "times a week" habit: progress toward the week's target, and what it needs now.
     weekProgress: (done: number, target: number) => `${done} of ${target} this week`,
     startsNextWeek: "Starts counting next week",
+    monthProgress: (done: number, target: number) => `${done} of ${target} this month`,
+    startsNextMonth: "Starts counting next month",
     statusOnTrack: "On track",
     statusDue: "Due today",
     statusBehind: "Behind",

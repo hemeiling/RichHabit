@@ -261,6 +261,8 @@ export const zh: Dict = {
     daysRunning: (n: number) => `已连续 ${n} 天`,
     weekProgress: (done: number, target: number) => `本周 ${done}/${target}`,
     startsNextWeek: "下周开始计入",
+    monthProgress: (done: number, target: number) => `本月 ${done}/${target}`,
+    startsNextMonth: "下月开始计入",
     statusOnTrack: "进度正常",
     statusDue: "今天要做",
     statusBehind: "进度落后",

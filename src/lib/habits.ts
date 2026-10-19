@@ -202,20 +202,22 @@ export const scheduledOn = (s: AppState, date: string) =>
 
 // ── Targets: one scoring rule for Today, Week, Insights and Community ────────
 /*
- * · A habit on fixed days (daily, or chosen weekdays) owes one session on each
- *   scheduled day. A "times a week" habit owes N sessions per week (the app's
- *   week, `weekStart`). Days with nothing scheduled are never counted.
+ * · A habit on fixed days (daily, chosen weekdays, every N days, chosen days of
+ *   the month) owes one session on each scheduled day. A "times a week" habit
+ *   owes N per week (the app's week, `weekStart`); a "times a month" habit owes
+ *   N per calendar month. Days with nothing scheduled are never counted.
  * · A target counts toward a score once it is MET or once its TIME IS UP,
  *   whichever comes first, and earns at most what it asked for: doing more
  *   never scores over 100%, and a week (or a day) still in progress neither
  *   counts against anyone early nor counts as done before it is — 2 of 3 by
  *   Wednesday is 2 of 3 progress, not 100%.
- * · A week's target is shared out over its days, each carrying N/7 under the
+ * · A week's (or month's) target is shared out over its days, each carrying
+ *   N / (days in the period) — for a week, N/7 — under the
  *   schedule in force on it (HT-2a versions; none before the habit existed),
  *   and rounded: a habit started on a Thursday asks 1 of 3 that week, one
  *   started on the last day of the week starts counting the next.
- * · A week counts in the range its last day falls in; a range ending today
- *   also counts the current week once its target is met.
+ * · A week or month counts in the range its last day falls in; a range ending
+ *   today also counts the current one once its target is met.
  * Nothing here writes or reinterprets stored data: completions and schedule
  * versions are read exactly as recorded.
  */
@@ -230,24 +232,49 @@ export interface Target {
   metOn: string | null;
 }
 
-const isQuota = (f: Frequency) => f.mode === "times";
-const onFixedDay = (f: Frequency, date: string) =>
-  f.mode === "daily" || (f.mode === "days" && (f.days ?? []).includes(dow(date)));
+type Kind = "week" | "month";
+/** A quota habit's period: "times a week" → the week, "times a month" → the calendar month. */
+const quotaKind = (f: Frequency): Kind | null =>
+  f.mode === "times" ? "week" : f.mode === "month_times" ? "month" : null;
+const isQuota = (f: Frequency) => quotaKind(f) !== null;
+const perPeriod = (f: Frequency) => (f.mode === "month_times" ? f.timesPerMonth : f.timesPerWeek) || 1;
 
-/** The days of the week starting `ws` on which `habit` ran as a "times a week" habit. */
-function quotaDays(habit: Habit, ws: string): string[] {
+/** A fixed-day habit's own days: daily, chosen weekdays, every N days, chosen days of the month. */
+function onFixedDay(habit: Habit, f: Frequency, date: string): boolean {
+  switch (f.mode) {
+    case "daily": return true;
+    case "days": return (f.days ?? []).includes(dow(date));
+    case "every_n_days": return onRhythm(f, habit.startDate, date);
+    case "month_days": return onMonthDays(f.daysOfMonth, date);
+    default: return false;
+  }
+}
+
+const periodStartOf = (kind: Kind, date: string) => (kind === "week" ? weekStart(date) : monthFirst(monthOf(date)));
+const periodEndOf = (kind: Kind, ps: string) => (kind === "week" ? addDays(ps, 6)
+  : `${monthOf(ps)}-${String(daysInMonth(monthOf(ps))).padStart(2, "0")}`);
+
+/** The days of the period starting `ps` on which `habit` ran as a quota of that kind. */
+function quotaDays(habit: Habit, kind: Kind, ps: string): string[] {
   const out: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(ws, i);
-    if (d >= habit.startDate && isQuota(frequencyOn(habit, d))) out.push(d);
+  for (let d = ps, end = periodEndOf(kind, ps); d <= end; d = addDays(d, 1)) {
+    if (d >= habit.startDate && quotaKind(frequencyOn(habit, d)) === kind) out.push(d);
   }
   return out;
 }
 
-/** The weekly target of a "times a week" habit for the week starting `ws`. */
-export function weekTarget(s: AppState, habit: Habit, ws: string): Target {
-  const days = quotaDays(habit, ws);
-  const share = days.reduce((n, d) => n + (frequencyOn(habit, d).timesPerWeek || 1) / 7, 0);
+/**
+ * A quota habit's target for the week or month starting `ps`: each of its days
+ * carries N ÷ (days in the period) under the schedule in force on it, and the
+ * rounded sum is the target — so a habit started late in a period asks its
+ * fair share, and one started too late to owe a whole session starts counting
+ * in the next period.
+ */
+export function periodTarget(s: AppState, habit: Habit, kind: Kind, ps: string): Target {
+  const end = periodEndOf(kind, ps);
+  const length = daysBetween(ps, end) + 1;
+  const days = quotaDays(habit, kind, ps);
+  const share = days.reduce((n, d) => n + perPeriod(frequencyOn(habit, d)) / length, 0);
   const target = Math.min(Math.floor(share + 0.5 + 1e-9), days.length);
   let done = 0, metOn: string | null = null;
   for (const d of days) {
@@ -255,33 +282,42 @@ export function weekTarget(s: AppState, habit: Habit, ws: string): Target {
     done++;
     if (done === target) metOn = d;
   }
-  return { start: ws, end: addDays(ws, 6), target, done, metOn: target > 0 ? metOn : null };
+  return { start: ps, end, target, done, metOn: target > 0 ? metOn : null };
 }
 
-/** Sessions done toward the week's target on its days from `ws` up to and including `upTo`. */
-function weekDoneBy(s: AppState, habit: Habit, ws: string, upTo: string): number {
-  return quotaDays(habit, ws).filter((d) => d <= upTo && isDone(s, d, habit.id)).length;
+/** The weekly target of a "times a week" habit for the week starting `ws`. */
+export const weekTarget = (s: AppState, habit: Habit, ws: string) => periodTarget(s, habit, "week", ws);
+/** The monthly target of a "times a month" habit for `month` (YYYY-MM). */
+export const monthTarget = (s: AppState, habit: Habit, month: string) =>
+  periodTarget(s, habit, "month", monthFirst(month));
+
+/** Sessions done toward a period's target on its days from `ps` up to and including `upTo`. */
+function doneBy(s: AppState, habit: Habit, kind: Kind, ps: string, upTo: string): number {
+  return quotaDays(habit, kind, ps).filter((d) => d <= upTo && isDone(s, d, habit.id)).length;
 }
 
 /**
  * Every target of `habit` belonging to [from, to]: its sessions on those days,
- * and its weeks ending in them — plus, when the range ends `today`, the week in
- * progress (counted once met, shown as in progress until then).
+ * and its weeks and months ending in them — plus, when the range ends `today`,
+ * the week or month in progress (counted once met, shown as in progress until
+ * then).
  */
 export function targetsOf(s: AppState, habit: Habit, from: string, to: string, today: string): Target[] {
   if (!habit.active) return [];
   const out: Target[] = [];
   for (let d = from > habit.startDate ? from : habit.startDate; d <= to; d = addDays(d, 1)) {
-    if (!onFixedDay(frequencyOn(habit, d), d)) continue;
+    if (!onFixedDay(habit, frequencyOn(habit, d), d)) continue;
     const done = isDone(s, d, habit.id);
     out.push({ start: d, end: d, target: 1, done: done ? 1 : 0, metOn: done ? d : null });
   }
-  for (let ws = weekStart(from); ws <= to; ws = addDays(ws, 7)) {
-    const t = weekTarget(s, habit, ws);
-    if (t.target === 0) continue;
-    const endsInRange = t.end >= from && t.end <= to;
-    const inProgress = t.end > to && to === today;
-    if (endsInRange || inProgress) out.push(t);
+  for (const kind of ["week", "month"] as const) {
+    for (let ps = periodStartOf(kind, from); ps <= to; ps = addDays(periodEndOf(kind, ps), 1)) {
+      const t = periodTarget(s, habit, kind, ps);
+      if (t.target === 0) continue;
+      const endsInRange = t.end >= from && t.end <= to;
+      const inProgress = t.end > to && to === today;
+      if (endsInRange || inProgress) out.push(t);
+    }
   }
   return out;
 }
@@ -326,51 +362,53 @@ export type HabitStatusKey = "completed" | "due" | "behind" | "on_track";
 
 export interface HabitStatus {
   status: HabitStatusKey;
-  /** Progress toward the current target: a day's session, or the week's quota. */
+  /** Progress toward the current target: a day's session, or the period's quota. */
   done: number;
   target: number;
-  period: "day" | "week";
+  period: "day" | Kind;
 }
 
 /**
  * What a habit needs from the person on `today` — kept apart from how much of
- * its target is done. A weekly habit is Completed when the week's target is
- * met, Due today when every remaining day is needed, Behind when the full
- * target is out of reach (still worth doing), and On track otherwise. A
+ * its target is done. A weekly or monthly habit is Completed when the period's
+ * target is met, Due today when every remaining day is needed, Behind when the
+ * full target is out of reach (still worth doing), and On track otherwise. A
  * fixed-day habit is Due today or Completed on its days, On track on others;
  * a missed day stays in history and never leaves a lingering "Behind".
  */
 export function habitStatus(s: AppState, habit: Habit, today = todayISO()): HabitStatus {
   const f = frequencyOn(habit, today);
   const doneToday = isDone(s, today, habit.id);
-  if (!isQuota(f)) {
-    if (today < habit.startDate || !onFixedDay(f, today)) return { status: "on_track", done: 0, target: 0, period: "day" };
+  const kind = quotaKind(f);
+  if (!kind) {
+    if (today < habit.startDate || !onFixedDay(habit, f, today)) return { status: "on_track", done: 0, target: 0, period: "day" };
     return { status: doneToday ? "completed" : "due", done: doneToday ? 1 : 0, target: 1, period: "day" };
   }
-  const t = weekTarget(s, habit, weekStart(today));
-  const sofar = weekDoneBy(s, habit, t.start, today);
-  if (t.target === 0) return { status: "on_track", done: sofar, target: 0, period: "week" };
+  const t = periodTarget(s, habit, kind, periodStartOf(kind, today));
+  const sofar = doneBy(s, habit, kind, t.start, today);
+  if (t.target === 0) return { status: "on_track", done: sofar, target: 0, period: kind };
   const remaining = t.target - sofar;
   const left = daysBetween(today, t.end) + 1 - (doneToday ? 1 : 0);
   const status: HabitStatusKey = remaining <= 0 ? "completed"
     : remaining > left ? "behind" : remaining === left ? "due" : "on_track";
-  return { status, done: sofar, target: t.target, period: "week" };
+  return { status, done: sofar, target: t.target, period: kind };
 }
 
 /**
  * Whether `habit` owes a session on `date`: "done", "due" (owed, not done) or
- * "none". A weekly habit is owed on a day it is Due or Behind, and counts as
- * done on a day its session went toward the target; on a day it is merely on
- * track, leaving it costs nothing.
+ * "none". A weekly or monthly habit is owed on a day it is Due or Behind, and
+ * counts as done on a day its session went toward the target; on a day it is
+ * merely on track, leaving it costs nothing.
  */
 function owedOn(s: AppState, habit: Habit, date: string): "done" | "due" | "none" {
   if (!habit.active || date < habit.startDate) return "none";
   const f = frequencyOn(habit, date);
   const doneToday = isDone(s, date, habit.id);
-  if (!isQuota(f)) return onFixedDay(f, date) ? (doneToday ? "done" : "due") : "none";
-  const t = weekTarget(s, habit, weekStart(date));
+  const kind = quotaKind(f);
+  if (!kind) return onFixedDay(habit, f, date) ? (doneToday ? "done" : "due") : "none";
+  const t = periodTarget(s, habit, kind, periodStartOf(kind, date));
   if (t.target === 0) return "none";
-  const before = weekDoneBy(s, habit, t.start, addDays(date, -1));
+  const before = doneBy(s, habit, kind, t.start, addDays(date, -1));
   if (doneToday) return before < t.target ? "done" : "none";
   const remaining = t.target - before;
   return remaining > 0 && remaining >= daysBetween(date, t.end) + 1 ? "due" : "none";

@@ -101,15 +101,19 @@ function HabitRow({
   const done = isDone(state, date, habit.id);
   const streak = habitStreak(state, habit);
   const entry = state.completions[date]?.[habit.id];
-  /* A "times a week" habit says how far its week has come and what it needs
-     now — two answers, kept apart (the scoring revision). */
+  /* A weekly or monthly habit says how far its period has come and what it
+     needs now — two answers, kept apart (the scoring revision). */
   const week = (() => {
     const st = habitStatus(state, habit, date);
-    if (st.period !== "week") return null;
-    if (st.target === 0) return { progress: t.today.startsNextWeek, status: null, met: false };
+    if (st.period === "day") return null;
+    const monthly = st.period === "month";
+    if (st.target === 0) {
+      return { progress: monthly ? t.today.startsNextMonth : t.today.startsNextWeek, status: null, met: false };
+    }
     const label = { on_track: t.today.statusOnTrack, due: t.today.statusDue,
       behind: t.today.statusBehind, completed: t.today.statusCompleted }[st.status];
-    return { progress: t.today.weekProgress(st.done, st.target), status: label, met: st.status === "completed" };
+    const progress = monthly ? t.today.monthProgress(st.done, st.target) : t.today.weekProgress(st.done, st.target);
+    return { progress, status: label, met: st.status === "completed" };
   })();
 
   const numeric = isNumericTracking(habit.tracking);
