@@ -443,6 +443,83 @@ describe("hardening from the security review", () => {
   });
 });
 
+describe("from the review of the revised UM-5", () => {
+  it("only the newest request's link lives, the panel shows it, and the audit names what really changed", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("twice");
+    failFor = "first.try@example.com";                            // the link exists even when its mail fails
+    await edit(target, { email: "first.try@example.com" });
+    expect((await admin.identityFor(target)).pendingEmail.email).toBe("first.try@example.com");
+    await edit(target, { email: "second.try@example.com" });
+    const live = (await db.query<any>(`select email from email_verifications
+      where user_id = $1 and consumed_at is null`, [target])).rows;
+    expect(live).toEqual([{ email: "second.try@example.com" }]);
+    expect((await admin.identityFor(target)).pendingEmail.email).toBe("second.try@example.com");
+    expect((await verify.redeem(linkFor("second.try@example.com"))).status).toBe("ok");
+    const changed = (await audit()).find((a: any) => a.action === "user_email_changed");
+    expect(changed.details).toMatchObject({ from: "t••••@example.com", to: "se••••ry@example.com" });
+  });
+
+  it("the old address is told when the change completes — no link, nothing of the new address", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("notified");
+    await edit(target, { email: "notified.new@example.com" });
+    const token = linkFor("notified.new@example.com");
+    sent.length = 0;
+    expect((await verify.redeem(token)).status).toBe("ok");
+    expect(sent.map((m) => m.to)).toEqual(["notified@example.com"]);
+    expect(sent[0].subject).toMatch(/sign-in email was changed/);
+    expect(sent[0].text).not.toMatch(/token=|https?:|notified\.new|no••••ew/);
+  });
+
+  it("a request does not outlive its Admin: demoted or disabled, the link is refused", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const rogue = await make("rogue", { role: "admin" });
+    const [a, b] = [await make("victim1"), await make("victim2")];
+    await signInAs(rogue);
+    await edit(a, { email: "attacker1@example.com" });
+    await edit(b, { email: "attacker2@example.com" });
+    await signInAs(await idOf("boss"));
+    expect((await patch(rogue, { action: "role", role: "user" })).status).toBe(200);
+    expect((await verify.redeem(linkFor("attacker1@example.com"))).status).toBe("invalid");
+    await patch(rogue, { action: "role", role: "admin" });
+    expect((await patch(rogue, { action: "disable" })).status).toBe(200);
+    expect((await verify.redeem(linkFor("attacker2@example.com"))).status).toBe("invalid");
+    expect((await user(a)).email).toBe("victim1@example.com");
+    expect((await user(b)).email).toBe("victim2@example.com");
+  });
+
+  it("verifying the current address leaves a pending change alone, and is not held up by it", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("both", { verified: false });
+    await edit(target, { email: "both.new@example.com" });
+    expect(await verify.requestOwnVerification(target, "en")).toBe("sent");     // not "too_soon"
+    expect((await verify.redeem(linkFor("both@example.com"))).status).toBe("ok");
+    expect((await admin.identityFor(target)).pendingEmail?.email).toBe("both.new@example.com");
+    expect((await verify.redeem(linkFor("both.new@example.com"))).status).toBe("ok");
+    expect((await user(target)).email).toBe("both.new@example.com");
+  });
+
+  it("turning an account off withdraws its pending change — it does not wake up on re-enable", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const target = await make("paused");
+    await edit(target, { email: "paused.new@example.com" });
+    expect((await patch(target, { action: "disable" })).status).toBe(200);
+    expect((await patch(target, { action: "enable" })).status).toBe(200);
+    expect((await verify.redeem(linkFor("paused.new@example.com"))).status).toBe("invalid");
+    expect((await user(target)).email).toBe("paused@example.com");
+  });
+
+  it("re-saving the same address in other letters is no change", async () => {
+    await signInAs(await make("boss", { role: "admin" }));
+    const r = await db.query<{ id: string }>(`insert into users (email, username, password_hash)
+      values ('Mixed.Case@Example.com', 'mixed', $1) returning id`, [PW]);
+    await db.query(`insert into profiles (id) values ($1)`, [r.rows[0].id]);
+    expect((await edit(r.rows[0].id, { email: "mixed.case@example.com" })).status).toBe(400);
+    expect(sent).toEqual([]);
+  });
+});
+
 describe("Google stays safe", () => {
   it("a linked Google identity lands in the same account throughout; an unlinked one is never linked by address", async () => {
     await signInAs(await make("boss", { role: "admin" }));

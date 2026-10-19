@@ -6,7 +6,7 @@ import {
 } from "@/lib/identity";
 import { sendMail } from "@/lib/email/send";
 import { emailChangeRequestedNotice } from "@/lib/email/templates";
-import { pendingEmailChange, sendVerification, withdrawEmailChange } from "@/lib/email/verify";
+import { issueLink, mailChangeLink, pendingEmailChange, withdrawEmailChange } from "@/lib/email/verify";
 import { EMAIL_PROTECTED, EMAIL_PROTECTED_MESSAGE } from "@/lib/admin/protected";
 import { isLocale } from "@/lib/i18n";
 import { hashPassword } from "@/lib/auth";
@@ -335,8 +335,12 @@ export async function setDisabled(admin: AdminUser, id: string, disabled: boolea
     await query("update users set disabled_at = $2 where id = $1", [id, new Date()]);
   }
   // Existing sessions stop resolving because getSessionUser checks the column,
-  // but the rows are cleared too so nothing lingers server-side.
-  if (disabled) await query("delete from sessions where user_id = $1", [id]);
+  // but the rows are cleared too so nothing lingers server-side. A pending
+  // email change is withdrawn as well: it must not wake up on re-enable.
+  if (disabled) {
+    await query("delete from sessions where user_id = $1", [id]);
+    await withdrawEmailChange(query, id);
+  }
 
   await audit(admin, disabled ? "user_disabled" : "user_enabled",
     { id: target.id, email: target.email });
@@ -388,6 +392,13 @@ export async function setRole(admin: AdminUser, id: string, role: "user" | "admi
       if (takesASlot && !(await roomFor(1))) return "full" as const;
     }
     await q("update users set role = $2::user_role where id = $1", [id, role]);
+    /* Audited in the same transaction as the change: a former Admin's email
+       stays protected (lib/admin/protected) because this row exists, so it
+       must not be able to go missing. */
+    await q(
+      `insert into admin_audit_log (admin_id, admin_email, target_id, target_email, action, details)
+       values ($1, $2, $3, $4, 'user_role_changed', $5)`,
+      [admin.id, admin.email, target.id, target.email, JSON.stringify({ from: target.role, to: role })]);
     return null;
   });
 
@@ -400,9 +411,6 @@ export async function setRole(admin: AdminUser, id: string, role: "user" | "admi
       + "places. Disable another account first, or raise EARLY_ACCESS_USER_LIMIT "
       + "(0 removes the cap).", 409);
   }
-
-  await audit(admin, "user_role_changed", { id: target.id, email: target.email },
-    { from: target.role, to: role });
 }
 
 /**
@@ -564,6 +572,7 @@ export async function updateIdentity(
   let current!: Current;
   let usernameChanged = false;
   let emailChanged = false;
+  let token = "";
   try {
     await transaction(async (q) => {
       const rows = await q<Current>(
@@ -573,7 +582,8 @@ export async function updateIdentity(
       if (!rows[0]) throw new ApiError("No such account", 404);
       current = rows[0];
       usernameChanged = username !== null && username !== (current.username ?? "");
-      emailChanged = email !== null && email !== (current.email ?? "");
+      // Addresses compare without case: re-saving one in other letters is no change.
+      emailChanged = email !== null && email !== (current.email ?? "").toLowerCase();
       if (!usernameChanged && !emailChanged) throw new ApiError("Nothing to change");
       if (emailChanged && current.protected) throw new ApiError(EMAIL_PROTECTED_MESSAGE, 409);
       if (emailChanged) {
@@ -588,6 +598,10 @@ export async function updateIdentity(
         await q(`delete from google_pending where user_id = $1`, [id]);
         await q(`update user_invites set expires_at = now()
                   where user_id = $1 and used_at is null and expires_at > now()`, [id]);
+        // Born in the same transaction that spent the older links: two
+        // overlapping requests queue on the account row, and only the later
+        // one's link is left alive.
+        token = await issueLink(q, id, email!, { change: true });
       }
       const who = current.username ?? (current.email ? maskEmail(current.email) : null);
       const write = (action: AdminAction, details: Record<string, unknown>) => q(
@@ -614,7 +628,7 @@ export async function updateIdentity(
     /* After the commit, and best-effort: the panel says whether the link went
        out, and saving the same address again sends a fresh one. Nothing about
        the addresses or the token reaches a log line. */
-    try { await sendVerification(id, email!, locale, { change: true }); confirmationSent = true; }
+    try { await mailChangeLink(email!, token, locale); confirmationSent = true; }
     catch { console.error("[admin/identity] confirmation email failed"); }
     if (current.email) {
       try { await sendMail({ to: current.email, ...emailChangeRequestedNotice(locale) }); }
@@ -848,6 +862,7 @@ export async function bulkSetDisabled(
         const ids = doable.map((d) => d.id);
         await q("update users set disabled_at = now() where id = any($1::uuid[])", [ids]);
         await q("delete from sessions where user_id = any($1::uuid[])", [ids]);
+        await withdrawEmailChange(q, ids);
         for (const row of doable) {
           await q(
             `insert into admin_audit_log (admin_id, admin_email, target_id, target_email,

@@ -4,8 +4,9 @@ import { query } from "@/lib/db/pool";
 import { withCapacityLock } from "@/lib/db/capacity";
 import { EMAIL_PROTECTED } from "@/lib/admin/protected";
 import { sendMail } from "@/lib/email/send";
-import { emailChangeConfirmEmail, verificationEmail } from "@/lib/email/templates";
-import type { Locale } from "@/lib/i18n";
+import { emailChangeConfirmEmail, emailChangedNotice, verificationEmail } from "@/lib/email/templates";
+import { maskEmail } from "@/lib/identity";
+import { isLocale, type Locale } from "@/lib/i18n";
 
 /**
  * Proving that a new account's address belongs to whoever registered it.
@@ -62,33 +63,42 @@ export const verifyUrl = (token: string, change = false) =>
   `${appUrl()}/verify#token=${encodeURIComponent(token)}${change ? "&for=change" : ""}`;
 
 /**
+ * Writes a link row with `q` — the caller's transaction, or a plain query —
+ * and returns the token to mail. `change`: the link confirms an
+ * Administrator's requested change to `email` (UM-5); the request writes it in
+ * the same transaction that spends the older links, so two overlapping
+ * requests can never leave two live ones.
+ */
+export async function issueLink(
+  q: typeof query, userId: string, email: string, opts: { change?: boolean } = {},
+): Promise<string> {
+  const token = randomBytes(TOKEN_BYTES).toString("base64url");
+  const expires = new Date(Date.now() + capacity.verifyTtlHours * 60 * 60 * 1000);
+  await q(
+    `insert into email_verifications (user_id, token_hash, email, expires_at)
+     values ($1, $2, $3, $4)`,
+    [userId, (opts.change ? CHANGE : "") + hash(token), email, expires],
+  );
+  return token;
+}
+
+/** Mails the confirmation for a change link issued by `issueLink(…, { change: true })`. */
+export async function mailChangeLink(email: string, token: string, locale: Locale): Promise<void> {
+  await sendMail({ to: email, ...emailChangeConfirmEmail(locale, verifyUrl(token, true)) });
+}
+
+/**
  * Issues a token for an account and emails it.
  *
  * The row is written before the message goes out. The other order can send a
  * link that does not work yet; this order can at worst leave an unused row,
  * which expires on its own.
- *
- * `change`: the link confirms an Administrator's requested change to `email`
- * (UM-5) — see `CHANGE` and `redeem`.
  */
 export async function sendVerification(
-  userId: string, email: string, locale: Locale, opts: { change?: boolean } = {},
+  userId: string, email: string, locale: Locale,
 ): Promise<void> {
-  const token = randomBytes(TOKEN_BYTES).toString("base64url");
-  const expires = new Date(Date.now() + capacity.verifyTtlHours * 60 * 60 * 1000);
-
-  await query(
-    `insert into email_verifications (user_id, token_hash, email, expires_at)
-     values ($1, $2, $3, $4)`,
-    [userId, (opts.change ? CHANGE : "") + hash(token), email, expires],
-  );
-
-  await sendMail({
-    to: email,
-    ...(opts.change
-      ? emailChangeConfirmEmail(locale, verifyUrl(token, true))
-      : verificationEmail(locale, verifyUrl(token))),
-  });
+  const token = await issueLink(query, userId, email);
+  await sendMail({ to: email, ...verificationEmail(locale, verifyUrl(token)) });
 }
 
 /**
@@ -111,18 +121,19 @@ export async function pendingEmailChange(
 }
 
 /**
- * Spends every live change link of an account (an Admin cancelling the
- * request), inside the caller's transaction, and returns the addresses they
- * were for. A new request already spends older ones, so this is normally one.
+ * Spends every live change link of the given accounts — an Admin cancelling
+ * the request, or turning the account off — inside the caller's transaction,
+ * and returns the addresses they were for. A new request already spends older
+ * ones, so this is normally one per account.
  */
 export async function withdrawEmailChange(
-  q: typeof query, userId: string,
+  q: typeof query, userIds: string | string[],
 ): Promise<string[]> {
   const rows = await q<{ email: string }>(
     `update email_verifications set consumed_at = now()
-      where user_id = $1 and starts_with(token_hash, '${CHANGE}') and consumed_at is null
+      where user_id = any($1::uuid[]) and starts_with(token_hash, '${CHANGE}') and consumed_at is null
       returning email`,
-    [userId],
+    [Array.isArray(userIds) ? userIds : [userIds]],
   );
   return rows.map((r) => r.email);
 }
@@ -132,9 +143,12 @@ export async function withdrawEmailChange(
  * from being turned into a way to post mail at somebody.
  */
 export async function mayResend(userId: string): Promise<boolean> {
+  // An Admin's change link is not this account asking for mail; it does not
+  // make the person's own "verify my email" wait.
   const rows = await query<{ recent: string }>(
     `select count(*) as recent from email_verifications
-      where user_id = $1 and created_at > now() - ($2 || ' seconds')::interval`,
+      where user_id = $1 and created_at > now() - ($2 || ' seconds')::interval
+        and not starts_with(token_hash, '${CHANGE}')`,
     [userId, String(capacity.resendGapSeconds)],
   );
   return Number(rows[0].recent) === 0;
@@ -210,8 +224,11 @@ type Row = {
   consumed_at: string | null; expired: boolean;
   verification_required: boolean; email_verified_at: string | null;
   disabled_at: string | null; same_address: boolean; email_protected: boolean;
+  current_email: string | null; locale: string | null;
 };
 type Q = typeof query;
+/** An outcome, plus the old address to tell once the change has committed. */
+type Inner = VerifyOutcome & { notify?: { to: string; locale: Locale } };
 
 /**
  * Redeems a token.
@@ -226,8 +243,9 @@ export async function redeem(token: string): Promise<VerifyOutcome> {
   if (!token) return { status: "invalid" };
   const hashes = [hash(token), CHANGE + hash(token)];
 
+  let outcome: Inner;
   try {
-    return await withCapacityLock(async (q, roomFor) => {
+    outcome = await withCapacityLock(async (q, roomFor): Promise<Inner> => {
       const found = await q<{ user_id: string }>(
         "select user_id from email_verifications where token_hash = any($1::text[])", [hashes]);
       if (!found[0]) return { status: "invalid" } as const;
@@ -248,7 +266,9 @@ export async function redeem(token: string): Promise<VerifyOutcome> {
                 v.expires_at <= now() as expired,
                 u.verification_required, u.email_verified_at, u.disabled_at,
                 lower(coalesce(u.email, '')) = lower(v.email) as same_address,
-                ${EMAIL_PROTECTED("u")} as email_protected
+                ${EMAIL_PROTECTED("u")} as email_protected,
+                u.email as current_email,
+                (select locale from user_preferences p where p.user_id = u.id) as locale
            from email_verifications v join users u on u.id = v.user_id
           where v.token_hash = any($1::text[])
             for update of v`,
@@ -265,6 +285,16 @@ export async function redeem(token: string): Promise<VerifyOutcome> {
     if (e instanceof Error && /users_email_idx/.test(e.message)) return { status: "taken" };
     throw e;
   }
+
+  const { notify, ...result } = outcome;
+  /* After the commit, best-effort, and link-free: the old address learns that
+     the change went through, so a mistyped address someone else confirmed
+     never goes unnoticed. */
+  if (notify) {
+    try { await sendMail({ to: notify.to, ...emailChangedNotice(notify.locale) }); }
+    catch { console.error("[verify] change notice failed"); }
+  }
+  return result as VerifyOutcome;
 }
 
 /** An ordinary link: proves the address the account already has. */
@@ -301,10 +331,11 @@ async function confirmAddress(
     [row.user_id],
   );
   await q("update email_verifications set consumed_at = now() where id = $1", [row.id]);
-  // Every other outstanding link for this account becomes dead weight.
+  // Every other outstanding link for this address becomes dead weight. A
+  // pending Admin change is a separate matter and stays as it is.
   await q(
     `update email_verifications set consumed_at = now()
-      where user_id = $1 and consumed_at is null`,
+      where user_id = $1 and consumed_at is null and not starts_with(token_hash, '${CHANGE}')`,
     [row.user_id],
   );
   return { status: "ok", email: row.email };
@@ -318,16 +349,31 @@ async function confirmAddress(
  */
 async function confirmChange(
   q: Q, roomFor: (n: number) => Promise<boolean>, row: Row,
-): Promise<VerifyOutcome> {
+): Promise<Inner> {
   // A second click after the change went through.
   if (row.same_address) return row.email_verified_at ? { status: "already" } : { status: "invalid" };
   // Superseded by a newer request, cancelled, or spent.
   if (row.consumed_at) return { status: "invalid" };
   if (row.expired) return { status: "expired" };
   if (row.disabled_at) return { status: "invalid" };
-  if (row.email_protected) {
-    // The account became an Admin's (or is found to have been one) since the
-    // request. Never applied; the link is spent so it cannot wait for a demotion.
+  /* The request this link answers: the newest one, since a request spends the
+     links of every older one in its own transaction. Its Admin must still be
+     an active Admin — a request does not outlive the authority that made it. */
+  const [request] = await q<{
+    admin_id: string | null; admin_email: string; target_email: string | null; active: boolean;
+  }>(
+    `select r.admin_id, r.admin_email, r.target_email,
+            exists (select 1 from users a where a.id = r.admin_id
+                       and a.role = 'admin' and a.disabled_at is null) as active
+       from admin_audit_log r
+      where r.target_id = $1 and r.action = 'user_email_change_requested'
+      order by r.id desc limit 1`,
+    [row.user_id],
+  );
+  if (row.email_protected || !request?.active) {
+    /* The account became an Admin's (or was one), or the requester is no
+       longer an Admin. Never applied; the link is spent so it cannot simply
+       wait for a later demotion or reinstatement. */
     await q("update email_verifications set consumed_at = now() where id = $1", [row.id]);
     return { status: "invalid" };
   }
@@ -357,17 +403,22 @@ async function confirmChange(
   await q("delete from google_pending where user_id = $1", [row.user_id]);
   await q(`update user_invites set expires_at = now()
             where user_id = $1 and used_at is null and expires_at > now()`, [row.user_id]);
-  /* Audited as the requesting Admin's change, masked exactly as the request
-     was. Together reads this row: the new address is proved, so it is
-     trusted through `email_verified_at`, never through the legacy arm. */
+  /* Audited as the requesting Admin's change, both addresses masked and taken
+     from what actually changed. Together reads this row: the new address is
+     proved, so it is trusted through `email_verified_at`, never through the
+     legacy arm. */
   await q(
     `insert into admin_audit_log (admin_id, admin_email, target_id, target_email, action, details)
-     select r.admin_id, r.admin_email, r.target_id, r.target_email, 'user_email_changed',
-            jsonb_build_object('from', r.details->'from', 'to', r.details->'to', 'confirmedByNewAddress', true)
-       from admin_audit_log r
-      where r.target_id = $1 and r.action = 'user_email_change_requested'
-      order by r.id desc limit 1`,
-    [row.user_id],
+     values ($1, $2, $3, $4, 'user_email_changed', $5)`,
+    [request.admin_id, request.admin_email, row.user_id, request.target_email, JSON.stringify({
+      from: row.current_email ? maskEmail(row.current_email) : null, to: maskEmail(row.email),
+      confirmedByNewAddress: true,
+    })],
   );
-  return { status: "ok", email: row.email, changed: true };
+  return {
+    status: "ok", email: row.email, changed: true,
+    ...(row.current_email
+      ? { notify: { to: row.current_email, locale: isLocale(row.locale) ? row.locale : "en" } }
+      : {}),
+  };
 }

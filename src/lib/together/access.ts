@@ -86,12 +86,11 @@ export const PROVED_ADDRESS_CUTOFF = "2026-10-17T00:00:00Z";
  * itself — and the in-app verify flow upgrades it at any time. Columns of
  * `together_invitations i`.
  *
- * An address an Admin has CHANGED (UM-5) is never proved by the account's age
- * or origin: nobody has yet shown they read the new inbox. The change writes a
- * `user_email_changed` audit row in the same transaction, which is what takes
- * the account out of the grandfathered arm; confirming the new address sets
- * `email_verified_at` and brings it back through the first arm. No column was
- * needed, so no migration.
+ * An address an Admin has CHANGED (UM-5) is never trusted by the account's age
+ * or origin. A change takes effect only when the new address is confirmed,
+ * which sets `email_verified_at` (the first arm) in the same transaction that
+ * writes the `user_email_changed` audit row; that row also takes the account
+ * out of the grandfathered arm for good. No column was needed, so no migration.
  */
 export const addressedTo = (param: string) =>
   `(i.invitee_id = ${param} or (i.email_normalized is not null and exists (

@@ -252,7 +252,7 @@ export function connectionInviteEmail(locale: Locale, url: string, inviter: stri
  * link or credential of any kind.
  */
 export function emailChangeRequestedNotice(locale: Locale) {
-  const en = {
+  return notice(locale, {
     subject: "A change to your RichHabit sign-in email was requested",
     heading: "Sign-in email change requested",
     lead: "An administrator asked to change the email address on your RichHabit account. "
@@ -260,13 +260,39 @@ export function emailChangeRequestedNotice(locale: Locale) {
       + "and everything else in the account stay as they are.",
     note: "If you did not expect this, contact the person who manages your account — they can "
       + "cancel it. Password-reset links sent before this request no longer work.",
-  };
-  const zh = {
+  }, {
     subject: "有人请求更改你的 RichHabit 登录邮箱",
     heading: "已请求更改登录邮箱",
     lead: "管理员请求更改你的「养成富有的习惯」账户邮箱。在新邮箱从其收件箱确认之前，什么都不会改变；你的习惯和账户中的其他内容保持不变。",
     note: "如果这出乎你的意料，请联系为你管理账户的人——他们可以取消这项更改。此前发送的重置密码链接已失效。",
-  };
+  });
+}
+
+/**
+ * Sent to the OLD address once a requested change has been confirmed from the
+ * new one (UM-5), so it never completes silently — if the new address was
+ * mistyped and a stranger confirmed it, the person learns at once. Like the
+ * request notice: no link, no credential, nothing of the new address.
+ */
+export function emailChangedNotice(locale: Locale) {
+  return notice(locale, {
+    subject: "Your RichHabit sign-in email was changed",
+    heading: "Your sign-in email was changed",
+    lead: "The change an administrator requested has been confirmed from the new address, which "
+      + "is now the email for your RichHabit account. Your habits and everything else in the "
+      + "account are unchanged.",
+    note: "If you did not expect this, contact the person who manages your account right away.",
+  }, {
+    subject: "你的 RichHabit 登录邮箱已更改",
+    heading: "登录邮箱已更改",
+    lead: "管理员请求的更改已经从新邮箱确认，它现在是你「养成富有的习惯」账户的邮箱。你的习惯和账户中的其他内容均未改变。",
+    note: "如果这出乎你的意料，请立即联系为你管理账户的人。",
+  });
+}
+
+/** A short, link-free notice in the account's language (`both`: one after the other). */
+type NoticeCopy = { subject: string; heading: string; lead: string; note: string };
+function notice(locale: Locale, en: NoticeCopy, zh: NoticeCopy) {
   const parts = locale === "zh" ? [zh] : locale === "both" ? [en, zh] : [en];
   const html = `<!doctype html>
 <html lang="${locale === "zh" ? "zh" : "en"}"><body style="margin:0;padding:24px;background:#faf9f7;

@@ -33,10 +33,24 @@ try {
     process.exitCode = 1;
   } else {
     const role = revoke ? "user" : "admin";
+    /* The change and its audit row in one transaction — the same
+       `user_role_changed` row Admin → Users writes. A former Admin's email
+       stays protected because that row exists (src/lib/admin/protected.ts). */
+    await client.query("begin");
+    const before = await client.query(
+      "select id, email, role::text as role from users where lower(email) = $1 for update", [email]);
     const { rows } = await client.query(
       "update users set role = $1 where lower(email) = $2 returning email, role",
       [role, email],
     );
+    if (before.rows[0] && before.rows[0].role !== role) {
+      await client.query(
+        `insert into admin_audit_log (admin_id, admin_email, target_id, target_email, action, details)
+         values (null, 'npm run admin:grant', $1, $2, 'user_role_changed', $3)`,
+        [before.rows[0].id, before.rows[0].email, JSON.stringify({ from: before.rows[0].role, to: role })],
+      );
+    }
+    await client.query("commit");
     if (!rows[0]) {
       console.error(`No account found for ${email}.`);
       process.exitCode = 1;

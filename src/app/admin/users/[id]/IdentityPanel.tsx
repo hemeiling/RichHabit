@@ -13,6 +13,9 @@ import type { IdentityView } from "@/lib/admin/users";
  * signing in exactly as before. A waiting request is shown, and can be
  * cancelled.
  */
+/** One spelling on the server and in the browser, so hydration never disagrees. */
+const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
+
 export default function IdentityPanel({ id, identity }: { id: string; identity: IdentityView }) {
   const router = useRouter();
   const [username, setUsername] = useState(identity.username ?? "");
@@ -23,7 +26,8 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
   const [done, setDone] = useState<string | null>(null);
 
   const usernameChanged = username.trim().toLowerCase() !== (identity.username ?? "");
-  const emailChanged = !identity.emailProtected && email.trim().toLowerCase() !== (identity.email ?? "");
+  const emailChanged = !identity.emailProtected
+    && email.trim().toLowerCase() !== (identity.email ?? "").toLowerCase();
   const current = identity.email ?? (identity.username ? `the username ${identity.username}` : "their current details");
 
   const send = async (body: Record<string, unknown>) => {
@@ -110,7 +114,7 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
         <div className="flat p-3.5 mt-3" aria-label="Email change waiting for confirmation">
           <p style={{ fontSize: 13.5, lineHeight: 1.55 }}>
             Waiting for confirmation: <b>{identity.pendingEmail.email}</b>. Until the link sent there is used, they keep
-            signing in with {current}. The link expires {new Date(identity.pendingEmail.expiresAt).toLocaleString()}.
+            signing in with {current}. The link expires {utc(identity.pendingEmail.expiresAt)}.
           </p>
           <div className="flex gap-2 mt-3">
             <button className="btn" disabled={busy} onClick={cancel}>{busy ? "Working…" : "Cancel change"}</button>

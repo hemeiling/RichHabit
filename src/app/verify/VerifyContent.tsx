@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import LanguageToggle from "@/components/LanguageToggle";
+import { readVerifyFragment } from "@/lib/email/fragment";
 import { useT } from "@/lib/i18n/context";
 
 /**
@@ -52,10 +53,9 @@ type Status = "ok" | "already" | "invalid" | "expired" | "full" | "taken";
  * sign-in email (UM-5). It only picks the words shown before the button is
  * pressed; what the link does is decided by the server, from the stored row.
  */
-const HASH = typeof window === "undefined" ? { token: "", change: false } : (() => {
-  const found = /^#token=([^&]+)(&for=change)?$/.exec(window.location.hash);
-  return { token: found ? decodeURIComponent(found[1]) : "", change: !!found?.[2] };
-})();
+const HASH = typeof window === "undefined"
+  ? { token: "", change: false }
+  : readVerifyFragment(window.location.hash);
 
 export default function VerifyContent({ queryToken }: { queryToken: string }) {
   const t = useT();
