@@ -13,12 +13,16 @@ import { useRouter } from "next/navigation";
  * the ones the server sent back.
  */
 export default function AccountActions({
-  id, email, role, disabled, isSelf, setupPending = false,
+  id, email, role, disabled, isSelf, setupPending = false, adminProtected = false,
 }: {
   id: string; email: string; role: "user" | "admin"; disabled: boolean; isSelf: boolean;
   /** Created with a setup link that was never used (UM-4): offer a replacement. */
   setupPending?: boolean;
+  /** An Admin's account, current or former: no reset, no reissued setup link (lib/admin/protected). */
+  adminProtected?: boolean;
 }) {
+  const protectedWhy = "Admin accounts recover through their own Change password, Forgot password, "
+    + "or the owner's command-line procedure — not from here.";
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,12 +94,14 @@ export default function AccountActions({
               {busy === "disable" ? "Working…" : "Disable account"}
             </button>
           )}
-          <button className="btn" disabled={!!busy} onClick={() => call("reset_password")}>
+          <button className="btn" disabled={!!busy || adminProtected} onClick={() => call("reset_password")}
+            title={adminProtected ? protectedWhy : undefined}>
             {busy === "reset_password" ? "Working…" : "Reset password"}
           </button>
           {setupPending && (
-            <button className="btn" disabled={!!busy || disabled}
-              title={disabled ? "Re-enable the account before sending a setup link" : undefined}
+            <button className="btn" disabled={!!busy || disabled || adminProtected}
+              title={adminProtected ? protectedWhy
+                : disabled ? "Re-enable the account before sending a setup link" : undefined}
               onClick={() => call("reissue_setup")}>
               {busy === "reissue_setup" ? "Working…" : "Reissue setup link"}
             </button>
@@ -110,6 +116,11 @@ export default function AccountActions({
             {role === "admin" ? "Demote to user" : "Make admin"}
           </button>
         </div>
+        {adminProtected && (
+          <p className="faint mt-2" style={{ fontSize: 12 }}>
+            {protectedWhy}
+          </p>
+        )}
 
         {confirmingRole && (
           <div className="flat p-3.5 mt-3">

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { appUrl, capacity } from "@/lib/env";
 import { query } from "@/lib/db/pool";
 import { withCapacityLock } from "@/lib/db/capacity";
-import { EMAIL_PROTECTED } from "@/lib/admin/protected";
+import { ADMIN_PROTECTED } from "@/lib/admin/protected";
 import { sendMail } from "@/lib/email/send";
 import { emailChangeConfirmEmail, emailChangedNotice, verificationEmail } from "@/lib/email/templates";
 import { maskEmail } from "@/lib/identity";
@@ -266,7 +266,7 @@ export async function redeem(token: string): Promise<VerifyOutcome> {
                 v.expires_at <= now() as expired,
                 u.verification_required, u.email_verified_at, u.disabled_at,
                 lower(coalesce(u.email, '')) = lower(v.email) as same_address,
-                ${EMAIL_PROTECTED("u")} as email_protected,
+                ${ADMIN_PROTECTED("u")} as email_protected,
                 u.email as current_email,
                 (select locale from user_preferences p where p.user_id = u.id) as locale
            from email_verifications v join users u on u.id = v.user_id

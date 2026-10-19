@@ -96,6 +96,7 @@ export default async function UserProfile({ params }: { params: { id: string } }
         disabled={!!u.disabledAt}
         isSelf={admin.id === u.id}
         setupPending={setup.hasInvite && !setup.completed}
+        adminProtected={identity?.adminProtected ?? u.role === "admin"}
       />
 
       {/* Who did what to this account. Never a password or a token. */}

@@ -26,7 +26,7 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
   const [done, setDone] = useState<string | null>(null);
 
   const usernameChanged = username.trim().toLowerCase() !== (identity.username ?? "");
-  const emailChanged = !identity.emailProtected
+  const emailChanged = !identity.adminProtected
     && email.trim().toLowerCase() !== (identity.email ?? "").toLowerCase();
   const current = identity.email ?? (identity.username ? `the username ${identity.username}` : "their current details");
 
@@ -94,10 +94,10 @@ export default function IdentityPanel({ id, identity }: { id: string; identity: 
         <label className="block">
           <span className="eyebrow block mb-1" style={{ fontSize: 10 }}>Email</span>
           <input className="input" type="email" value={email} onChange={(e) => { setEmail(e.target.value); setConfirming(false); }}
-            autoCapitalize="none" spellCheck={false} aria-label="Email" readOnly={identity.emailProtected} />
+            autoCapitalize="none" spellCheck={false} aria-label="Email" readOnly={identity.adminProtected} />
         </label>
       </div>
-      {identity.emailProtected && (
+      {identity.adminProtected && (
         <p className="faint mt-2" style={{ fontSize: 12 }}>
           An Administrator&apos;s email — or a former Administrator&apos;s — can&apos;t be changed here. This protects
           Admin accounts until a second Admin can approve such a change.

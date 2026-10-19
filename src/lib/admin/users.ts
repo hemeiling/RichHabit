@@ -7,7 +7,7 @@ import {
 import { sendMail } from "@/lib/email/send";
 import { emailChangeRequestedNotice } from "@/lib/email/templates";
 import { issueLink, mailChangeLink, pendingEmailChange, withdrawEmailChange } from "@/lib/email/verify";
-import { EMAIL_PROTECTED, EMAIL_PROTECTED_MESSAGE } from "@/lib/admin/protected";
+import { ADMIN_PROTECTED, ADMIN_PROTECTED_MESSAGE } from "@/lib/admin/protected";
 import { isLocale } from "@/lib/i18n";
 import { hashPassword } from "@/lib/auth";
 import { isTestInstance } from "@/lib/env";
@@ -414,9 +414,22 @@ export async function setRole(admin: AdminUser, id: string, role: "user" | "admi
 }
 
 /**
+ * Refuses, inside the caller's transaction and with the account row locked, an
+ * action that would hand the acting Admin a way into an Admin's — or a former
+ * Admin's — account (lib/admin/protected). Locked, so a promotion racing the
+ * action cannot slip between the check and the write.
+ */
+async function refuseIfAdminProtected(q: typeof query, id: string, message: string) {
+  const rows = await q<{ p: boolean }>(
+    `select ${ADMIN_PROTECTED("u")} as p from users u where u.id = $1 for update`, [id]);
+  if (rows[0]?.p) throw new ApiError(message, 409);
+}
+
+/**
  * Issues a fresh temporary password and returns it once. The old one stops
  * working immediately, every existing session is dropped, and the account is
- * marked as owing a password change.
+ * marked as owing a password change. Never for an Admin's account, current or
+ * former — see `refuseIfAdminProtected`.
  */
 export async function resetPassword(admin: AdminUser, id: string): Promise<string> {
   const target = await loadTarget(id);
@@ -424,6 +437,7 @@ export async function resetPassword(admin: AdminUser, id: string): Promise<strin
   const hash = await hashPassword(password);
 
   await transaction(async (q) => {
+    await refuseIfAdminProtected(q, id, ADMIN_PROTECTED_MESSAGE.reset);
     await q("update users set password_hash = $2, must_change_password = true where id = $1",
       [id, hash]);
     await q("delete from sessions where user_id = $1", [id]);
@@ -469,6 +483,7 @@ export async function reissueSetupLink(
   }
 
   return transaction(async (q) => {
+    await refuseIfAdminProtected(q, id, ADMIN_PROTECTED_MESSAGE.setup);
     const expired = await q<{ token: string }>(
       `update user_invites set expires_at = now()
         where user_id = $1 and used_at is null and expires_at > now() returning token`, [id]);
@@ -493,7 +508,7 @@ export interface IdentityView {
   hasPassword: boolean;
   hasGoogle: boolean;
   /** An Admin's — or a former Admin's — email is not changed here (see lib/admin/protected). */
-  emailProtected: boolean;
+  adminProtected: boolean;
   /** A requested change still waiting for its new address to be confirmed. */
   pendingEmail: { email: string; expiresAt: string } | null;
 }
@@ -504,12 +519,12 @@ export async function identityFor(id: string): Promise<IdentityView | null> {
   }>(
     `select username, email, password_hash is not null as pw,
             exists (select 1 from auth_identities a where a.user_id = u.id) as google,
-            ${EMAIL_PROTECTED("u")} as protected
+            ${ADMIN_PROTECTED("u")} as protected
        from users u where id = $1`, [id]);
   const r = rows[0];
   return r ? {
     username: r.username, email: r.email, hasPassword: r.pw, hasGoogle: r.google,
-    emailProtected: r.protected, pendingEmail: await pendingEmailChange(id),
+    adminProtected: r.protected, pendingEmail: await pendingEmailChange(id),
   } : null;
 }
 
@@ -576,7 +591,7 @@ export async function updateIdentity(
   try {
     await transaction(async (q) => {
       const rows = await q<Current>(
-        `select u.username, u.email, ${EMAIL_PROTECTED("u")} as protected,
+        `select u.username, u.email, ${ADMIN_PROTECTED("u")} as protected,
                 (select locale from user_preferences p where p.user_id = u.id) as locale
            from users u where u.id = $1 for update`, [id]);
       if (!rows[0]) throw new ApiError("No such account", 404);
@@ -585,7 +600,7 @@ export async function updateIdentity(
       // Addresses compare without case: re-saving one in other letters is no change.
       emailChanged = email !== null && email !== (current.email ?? "").toLowerCase();
       if (!usernameChanged && !emailChanged) throw new ApiError("Nothing to change");
-      if (emailChanged && current.protected) throw new ApiError(EMAIL_PROTECTED_MESSAGE, 409);
+      if (emailChanged && current.protected) throw new ApiError(ADMIN_PROTECTED_MESSAGE.email, 409);
       if (emailChanged) {
         const taken = await q(`select 1 from users where lower(email) = lower($1) and id <> $2`, [email, id]);
         if (taken.length) throw new ApiError("Another account already uses that email address", 409);

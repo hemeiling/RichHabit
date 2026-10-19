@@ -343,7 +343,7 @@ describe("(B) an Admin's email cannot be redirected", () => {
     expect(sent).toEqual([]);
     expect(await audit()).toEqual([]);
     expect((await db.query<any>(`select count(*)::int as n from email_verifications`)).rows[0].n).toBe(0);
-    expect((await admin.identityFor(boss)).emailProtected).toBe(true);
+    expect((await admin.identityFor(boss)).adminProtected).toBe(true);
   });
 
   it("demoting an Admin first does not step around it", async () => {
@@ -353,8 +353,8 @@ describe("(B) an Admin's email cannot be redirected", () => {
     const res = await edit(deputy, { email: "attacker@example.com" });
     expect(res.status).toBe(409);
     expect((await user(deputy)).email).toBe("deputy@example.com");
-    expect((await admin.identityFor(deputy)).emailProtected).toBe(true);
-    expect((await admin.identityFor(await make("ordinary"))).emailProtected).toBe(false);
+    expect((await admin.identityFor(deputy)).adminProtected).toBe(true);
+    expect((await admin.identityFor(await make("ordinary"))).adminProtected).toBe(false);
   });
 
   it("an account promoted while a change waits is protected too: the link is refused and spent", async () => {

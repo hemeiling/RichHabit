@@ -56,6 +56,7 @@ Next.js 14 (App Router) · TypeScript · Tailwind · Render Postgres via `pg`, b
 | `npm run lint` | ESLint via `next lint` |
 | `npm test` | Vitest — 145 tests: engine, validation, throttle, TLS, i18n, library, analytics, spending, coach |
 | `npm run admin:grant` | `-- <email>` to grant admin, `--revoke`, or `--list` |
+| `npm run admin:password` | `-- <username-or-email>`: emergency recovery — see "Recovering an Admin account" |
 | `npm run db:dev` | Local Postgres (WASM) on :5433, no Docker needed |
 | `npm run db:setup` | Apply `db/schema.sql` to a fresh `DATABASE_URL`. Idempotent |
 | `npm run db:migrate` | Bring an existing database up to date. Idempotent |
@@ -1108,6 +1109,25 @@ DATABASE_URL='postgres://…external…' npm run admin:grant -- you@example.com
 ```
 
 After that, Admin → Users can create further admins.
+
+### Recovering an Admin account
+
+The app never resets an Admin's password, reissues an Admin's setup link or
+changes an Admin's email — not for current Admins, not for former ones — because
+whoever controls an Admin's sign-in acts as that Admin. An Admin who still knows
+their password uses **Change password**; one with a verified email can use
+**Forgot password**. Otherwise, the owner recovers the account from the command
+line, with the database credentials:
+
+```bash
+RH_ALLOW_REMOTE=1 DATABASE_URL='postgresql://…production…' npm run admin:password -- <username-or-email>
+```
+
+It prompts for a temporary password without echoing it (don't pass it as an
+argument: it would land in shell history), sets it, ends every session of that
+account, writes a `password_reset_requested` audit entry, and makes the person
+choose their own password at their next sign-in. Hand the temporary password
+over in person or by a channel you trust, never by the account's email.
 
 ### The deploy, rehearsed
 
