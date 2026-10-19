@@ -13,7 +13,7 @@ import { Empty, Field, Sheet } from "@/components/ui";
 import { isNumericTracking } from "@/lib/types";
 import { addDays, dow, prettyDate, todayISO } from "@/lib/dates";
 import {
-  CATEGORIES, blankHabit, dayScore, encouragement, habitStreak, isDone,
+  CATEGORIES, blankHabit, dayScore, encouragement, habitStatus, habitStreak, isDone,
   moveWithin, scheduledOn,
 } from "@/lib/habits";
 import { useLocale, useT } from "@/lib/i18n/context";
@@ -101,6 +101,16 @@ function HabitRow({
   const done = isDone(state, date, habit.id);
   const streak = habitStreak(state, habit);
   const entry = state.completions[date]?.[habit.id];
+  /* A "times a week" habit says how far its week has come and what it needs
+     now — two answers, kept apart (the scoring revision). */
+  const week = (() => {
+    const st = habitStatus(state, habit, date);
+    if (st.period !== "week") return null;
+    if (st.target === 0) return { progress: t.today.startsNextWeek, status: null, met: false };
+    const label = { on_track: t.today.statusOnTrack, due: t.today.statusDue,
+      behind: t.today.statusBehind, completed: t.today.statusCompleted }[st.status];
+    return { progress: t.today.weekProgress(st.done, st.target), status: label, met: st.status === "completed" };
+  })();
 
   const numeric = isNumericTracking(habit.tracking);
   const unit = habitUnit(habit, t);
@@ -178,6 +188,10 @@ function HabitRow({
               measured: a limit reads differently from a target, and a number
               reads differently from a tick. */}
           {measure && <span className="num">{measure}</span>}
+          {week && <span className="num" data-week-progress="">{week.progress}</span>}
+          {week?.status && (
+            <span data-week-status="" style={week.met ? { color: "var(--accent)" } : undefined}>{week.status}</span>
+          )}
           {reached === "target" && <span style={{ color: "var(--accent)" }}>{t.today.targetMet}</span>}
           {reached === "minimum" && <span>{t.today.minimumMet}</span>}
           {streak > 0 && <span className="num">{t.today.daysRunning(streak)}</span>}

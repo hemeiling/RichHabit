@@ -135,14 +135,15 @@ const TOP_N = 10;
 const CACHE_MS = 60_000;
 
 /** Every date from the 1st of the current month up to today, inclusive. */
-export function monthToDate(today = todayISO()): { month: string; dates: string[] } {
+export function monthToDate(today = todayISO()): { month: string; dates: string[]; asOf: string } {
   const d = new Date(`${today}T00:00:00`);
   const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const dates: string[] = [];
   for (let day = 1; day <= d.getDate(); day++) {
     dates.push(iso(new Date(d.getFullYear(), d.getMonth(), day)));
   }
-  return { month, dates };
+  // Scored as of today: today's targets count once met, never as missed yet.
+  return { month, dates, asOf: today };
 }
 
 /**
@@ -181,12 +182,13 @@ export function viewerToday(timeZone: string | null | undefined, now = new Date(
 }
 
 /** Every date in a whole calendar month — used to close a finished month. */
-export function wholeMonth(month: string): { month: string; dates: string[] } {
+export function wholeMonth(month: string): { month: string; dates: string[]; asOf: string } {
   const [y, m] = month.split("-").map(Number);
   const last = new Date(y, m, 0).getDate();
   const dates: string[] = [];
   for (let day = 1; day <= last; day++) dates.push(iso(new Date(y, m - 1, day)));
-  return { month, dates };
+  // A finished month is scored as of the day after it: every target in it is settled.
+  return { month, dates, asOf: iso(new Date(y, m, 1)) };
 }
 
 /** The 'YYYY-MM' before the given one. */
@@ -320,7 +322,7 @@ const boardFrom = (month: string, members: Member[]): Board => ({
  * an id to a set costs nothing, and someone working down a list of ten habits
  * pays for one recompute on their next look rather than ten.
  */
-interface CacheEntry { at: number; board: Board; dates: string[]; stale: Set<string> }
+interface CacheEntry { at: number; board: Board; dates: string[]; asOf: string; stale: Set<string> }
 const cache = new Map<string, CacheEntry>();
 
 /**
@@ -342,7 +344,7 @@ export function markMemberStale(userId: string) {
  * exactly one of those per marked member.
  */
 async function refreshStale(entry: CacheEntry): Promise<Board> {
-  const { board, dates, stale } = entry;
+  const { board, dates, asOf, stale } = entry;
   if (stale.size === 0) return board;
 
   const ids = [...stale];
@@ -360,7 +362,7 @@ async function refreshStale(entry: CacheEntry): Promise<Board> {
     const row = rows.find((r) => r.id === id);
     // Gone, or no longer eligible: drop them rather than leave a stale row.
     if (!row) { byId.delete(id); continue; }
-    const member = await scoreMember(row, dates);
+    const member = await scoreMember(row, dates, asOf);
     // Null means they have hidden themselves, so they leave both boards.
     if (member) byId.set(id, member); else byId.delete(id);
   }
@@ -369,7 +371,7 @@ async function refreshStale(entry: CacheEntry): Promise<Board> {
 }
 
 async function computeAll(window = monthToDate()): Promise<Board> {
-  const { month, dates } = window;
+  const { month, dates, asOf } = window;
 
   /* Only the id, the public name and the account age are read. `profiles` is
      not joined at all, so a real name cannot reach this code path even by
@@ -382,7 +384,7 @@ async function computeAll(window = monthToDate()): Promise<Board> {
 
   const members: Member[] = [];
   for (const u of users) {
-    const member = await scoreMember(u, dates);
+    const member = await scoreMember(u, dates, asOf);
     // Null only when the member has opted out. Having nothing scheduled or
     // nothing completed is not a reason to skip them here: each board applies
     // its own eligibility when it ranks.
@@ -399,7 +401,7 @@ async function computeAll(window = monthToDate()): Promise<Board> {
  * rather than everybody's — and so there is only one definition of each number,
  * whether it is computed for the whole board or for you alone.
  */
-async function scoreMember(u: Row, dates: string[]): Promise<Member | null> {
+async function scoreMember(u: Row, dates: string[], asOf: string): Promise<Member | null> {
   /*
    * A failure to read a member is deliberately NOT caught here.
    *
@@ -445,7 +447,7 @@ async function scoreMember(u: Row, dates: string[]): Promise<Member | null> {
   // The same scoring the app uses, with weighting forced off so every member
   // is measured the same way.
   const unweighted: AppState = { ...state, prefs: { ...state.prefs, weighted: false } };
-  const score = rangeScore(unweighted, dates);
+  const score = rangeScore(unweighted, dates, asOf);
   /* Counted by the same rule Insights and My Progress use, over the same days.
      Only the number is kept; the priorities themselves go no further. */
   const count = dates.length
@@ -495,7 +497,7 @@ export async function communitySnapshot(meId: string, today = todayISO()): Promi
     /* A full recompute has just scored everybody, so nothing is outstanding —
        a fresh entry starts with an empty stale set, and a mark made mid-compute
        does not cause a pointless second pass over someone already counted. */
-    entry = { at: Date.now(), board, dates: window.dates, stale: new Set() };
+    entry = { at: Date.now(), board, dates: window.dates, asOf: window.asOf, stale: new Set() };
     cache.set(today, entry);
     /* Closing the previous month is best-effort: a history record failing to
        write must never stop today's board from rendering. It stays on the
