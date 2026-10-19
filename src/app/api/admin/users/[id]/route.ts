@@ -1,6 +1,6 @@
 import { withAdmin } from "@/lib/admin";
 import {
-  deleteAccount, reissueSetupLink, resetPassword, setDisabled, setRole, updateIdentity,
+  cancelEmailChange, deleteAccount, reissueSetupLink, resetPassword, setDisabled, setRole, updateIdentity,
 } from "@/lib/admin/users";
 import { parsePlanChange, setMembership } from "@/lib/admin/plans";
 import { check } from "@/lib/http";
@@ -21,7 +21,8 @@ export async function PATCH(
     const id = check.uuid(params.id, "id");
     const b = await request.json().catch(() => null);
     const action = check.oneOf(b?.action,
-      ["disable", "enable", "role", "reset_password", "plan", "reissue_setup", "identity"] as const, "action");
+      ["disable", "enable", "role", "reset_password", "plan", "reissue_setup", "identity",
+        "cancel_email_change"] as const, "action");
 
     switch (action) {
       // Membership (UM-3): every rule — admins hold no plan, grandfathered rows
@@ -40,6 +41,8 @@ export async function PATCH(
             email: b?.email === undefined ? undefined : check.text(b.email, "email", 254),
           })),
         };
+      case "cancel_email_change":
+        return { ok: true, ...(await cancelEmailChange(admin, id)) };
       case "disable": await setDisabled(admin, id, true); return { ok: true };
       case "enable": await setDisabled(admin, id, false); return { ok: true };
       case "role":

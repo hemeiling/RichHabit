@@ -149,6 +149,38 @@ export function resetEmail(locale: Locale, url: string, ttlMinutes: number) {
 }
 
 /**
+ * Confirming the NEW address of an Administrator's requested email change
+ * (UM-5). Sent to that address only. It says plainly that nothing changes
+ * until the link is used, and that ignoring it changes nothing — the reader
+ * may not be the account's owner if the address was mistyped.
+ */
+const CHANGE_EN: Copy = {
+  subject: "Confirm your new sign-in email for RichHabit",
+  heading: "Confirm your new email",
+  lead: "An administrator asked to make this the sign-in email for your RichHabit account. "
+    + "Confirm it to finish the change — until you do, nothing about how you sign in changes.",
+  button: "Confirm this email",
+  fallback: "If the button does not work, copy this link into your browser:",
+  expiry: (h) => `This link works for ${h} hours and can be used once.`,
+  ignore: "If you don't have a RichHabit account, or didn't expect this, you can ignore "
+    + "this email — nothing will change.",
+};
+
+const CHANGE_ZH: Copy = {
+  subject: "确认你的 RichHabit 新登录邮箱",
+  heading: "确认新邮箱",
+  lead: "管理员请求把这个地址设为你「养成富有的习惯」账户的登录邮箱。确认后更改才会生效；在此之前，你的登录方式不会有任何变化。",
+  button: "确认这个邮箱",
+  fallback: "如果按钮无法使用，请把下面的链接复制到浏览器打开：",
+  expiry: (h) => `此链接在 ${h} 小时内有效，且只能使用一次。`,
+  ignore: "如果你没有「养成富有的习惯」账户，或并未预料到这封邮件，可以忽略它——不会有任何改变。",
+};
+
+export function emailChangeConfirmEmail(locale: Locale, url: string) {
+  return compose(blocks(locale, CHANGE_EN, CHANGE_ZH), locale, url, capacity.verifyTtlHours);
+}
+
+/**
  * Together — an invitation to one shared space.
  *
  * Says who is inviting and to which board, and nothing else: no other members,
@@ -212,30 +244,28 @@ export function connectionInviteEmail(locale: Locale, url: string, inviter: stri
 }
 
 /**
- * Sent to the OLD address when an administrator changes an account's sign-in
- * email (UM-5). It carries no link and no credential — only the fact of the
- * change and where it went, masked — so it cannot be used for anything; its
- * job is that a change the person did not expect never happens silently.
+ * Sent to the CURRENT address when an administrator asks to change an
+ * account's sign-in email (UM-5), so a change the person did not expect never
+ * happens silently — and while it can still be stopped, since nothing changes
+ * until the new address is confirmed. It names neither the new address nor any
+ * part of it (the current inbox may no longer be the person's) and carries no
+ * link or credential of any kind.
  */
-/**
- * The notice to the OLD address after an admin changes it. It names neither
- * the new address nor any part of it — the old inbox may no longer be the
- * person's — and carries no link or credential of any kind.
- */
-export function emailChangedNotice(locale: Locale) {
+export function emailChangeRequestedNotice(locale: Locale) {
   const en = {
-    subject: "Your RichHabit sign-in email was changed",
-    heading: "Your sign-in email was changed",
-    lead: "An administrator changed the email address on your RichHabit account. "
-      + "Your habits and everything else in the account are unchanged.",
-    note: "If you did not expect this, reply to the person who manages your account. "
-      + "Password resets now go to the new address once it is confirmed.",
+    subject: "A change to your RichHabit sign-in email was requested",
+    heading: "Sign-in email change requested",
+    lead: "An administrator asked to change the email address on your RichHabit account. "
+      + "Nothing changes until the new address is confirmed from its own inbox, and your habits "
+      + "and everything else in the account stay as they are.",
+    note: "If you did not expect this, contact the person who manages your account — they can "
+      + "cancel it. Password-reset links sent before this request no longer work.",
   };
   const zh = {
-    subject: "你的 RichHabit 登录邮箱已更改",
-    heading: "登录邮箱已更改",
-    lead: "管理员已更改你的「养成富有的习惯」账户邮箱。你的习惯和账户中的其他内容均未改变。",
-    note: "如果这出乎你的意料，请联系为你管理账户的人。新邮箱确认后，重置密码的邮件将发送到新邮箱。",
+    subject: "有人请求更改你的 RichHabit 登录邮箱",
+    heading: "已请求更改登录邮箱",
+    lead: "管理员请求更改你的「养成富有的习惯」账户邮箱。在新邮箱从其收件箱确认之前，什么都不会改变；你的习惯和账户中的其他内容保持不变。",
+    note: "如果这出乎你的意料，请联系为你管理账户的人——他们可以取消这项更改。此前发送的重置密码链接已失效。",
   };
   const parts = locale === "zh" ? [zh] : locale === "both" ? [en, zh] : [en];
   const html = `<!doctype html>

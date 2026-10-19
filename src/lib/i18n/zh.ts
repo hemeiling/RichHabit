@@ -1502,6 +1502,12 @@ export const zh: Dict = {
     signIn: "登录",
     backToSignIn: "返回登录",
     tryAgain: "重试",
+    changeTitle: "确认新邮箱",
+    changeIntro: "点击下面的按钮，把这个地址设为你的登录邮箱。在你确认之前，你的登录方式不会有任何变化。",
+    changeConfirm: "确认这个邮箱",
+    changeDoneTitle: "新邮箱已确认",
+    changeOk: "新的登录邮箱已确认。下次登录时请使用它。",
+    taken: "这个邮箱现在已被另一个「养成富有的习惯」账户使用，因此无法添加到你的账户。请联系为你管理账户的人。",
 
     sentTitle: "请查收邮件",
     sentBody: "我们已向你的邮箱发送验证链接。验证邮箱后即可激活你的 RichHabit 账户。",

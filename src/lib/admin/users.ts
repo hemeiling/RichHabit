@@ -5,8 +5,9 @@ import {
   MAX_USERNAME, MIN_USERNAME, checkUsername, isPlausibleEmail, maskEmail, normaliseEmail, normaliseUsername,
 } from "@/lib/identity";
 import { sendMail } from "@/lib/email/send";
-import { emailChangedNotice } from "@/lib/email/templates";
-import { sendVerification } from "@/lib/email/verify";
+import { emailChangeRequestedNotice } from "@/lib/email/templates";
+import { pendingEmailChange, sendVerification, withdrawEmailChange } from "@/lib/email/verify";
+import { EMAIL_PROTECTED, EMAIL_PROTECTED_MESSAGE } from "@/lib/admin/protected";
 import { isLocale } from "@/lib/i18n";
 import { hashPassword } from "@/lib/auth";
 import { isTestInstance } from "@/lib/env";
@@ -56,7 +57,11 @@ export type AdminAction =
   /* Written by lib/admin/plans, in the same transaction as the change. */
   | "plan_granted" | "plan_changed" | "plan_revoked"
   | "setup_link_reissued"
-  | "user_username_changed" | "user_email_changed";
+  | "user_username_changed"
+  /* UM-5: an email change is requested by an Admin, and takes effect — and is
+     audited as changed, in lib/email/verify — only when the new address is
+     confirmed. */
+  | "user_email_change_requested" | "user_email_change_cancelled" | "user_email_changed";
 
 /** Never called with a password, a hash, or a setup token. */
 async function audit(
@@ -477,31 +482,36 @@ export async function reissueSetupLink(
 export interface IdentityView {
   username: string | null;
   email: string | null;
-  /** Registered while verification was required: clearing it pauses every way in. */
-  verificationRequired: boolean;
   hasPassword: boolean;
   hasGoogle: boolean;
+  /** An Admin's — or a former Admin's — email is not changed here (see lib/admin/protected). */
+  emailProtected: boolean;
+  /** A requested change still waiting for its new address to be confirmed. */
+  pendingEmail: { email: string; expiresAt: string } | null;
 }
 
 export async function identityFor(id: string): Promise<IdentityView | null> {
-  const rows = await query<{ username: string | null; email: string | null; vr: boolean; pw: boolean; google: boolean }>(
-    `select username, email, verification_required as vr, password_hash is not null as pw,
-            exists (select 1 from auth_identities a where a.user_id = u.id) as google
+  const rows = await query<{
+    username: string | null; email: string | null; pw: boolean; google: boolean; protected: boolean;
+  }>(
+    `select username, email, password_hash is not null as pw,
+            exists (select 1 from auth_identities a where a.user_id = u.id) as google,
+            ${EMAIL_PROTECTED("u")} as protected
        from users u where id = $1`, [id]);
   const r = rows[0];
-  return r ? { username: r.username, email: r.email, verificationRequired: r.vr, hasPassword: r.pw, hasGoogle: r.google } : null;
+  return r ? {
+    username: r.username, email: r.email, hasPassword: r.pw, hasGoogle: r.google,
+    emailProtected: r.protected, pendingEmail: await pendingEmailChange(id),
+  } : null;
 }
 
 export interface IdentityResult {
   username: string | null;
+  /** The account's email — unchanged by a request; it changes on confirmation. */
   email: string | null;
-  emailChanged: boolean;
-  /**
-   * The account was registered while verification was required, so until the
-   * new address is confirmed it cannot be used at all: no password sign-in,
-   * no Google sign-in, and any open session ends (getSessionUser refuses it).
-   */
-  signInPaused: boolean;
+  /** An email change was requested: it waits for the new address to be confirmed. */
+  emailChangeRequested: boolean;
+  pendingEmail: string | null;
   /** Whether the confirmation link actually went out (mail is best-effort). */
   confirmationSent: boolean;
 }
@@ -513,39 +523,28 @@ export interface IdentityResult {
  * A username is checked by the same rules as everywhere else and must be
  * free; it is what Community boards display, so a rename shows there.
  *
- * An email change is the security-sensitive one. In one transaction:
+ * An email change is the security-sensitive one, so it is a REQUEST that takes
+ * effect only when the new address is confirmed from its own inbox
+ * (lib/email/verify, `confirmChange`). Until then the account keeps its
+ * current address — and with it its sign-in, its sessions, its Google link and
+ * its place under the account cap. That is what guarantees an email change can
+ * never cost anyone their access: not a typo, not a lost message, and not new
+ * sign-ups filling the cap while the link waits. In one transaction:
  *   · the new address must be plausible and belong to no other account
- *   · it is NOT verified — nobody has shown they read it — so the verified
- *     mark is cleared; for an account registered while verification was
- *     required, that pauses every way in — password, Google, open sessions —
- *     until the link is used (the account page warns before saving)
- *   · every outstanding password-reset and verification link is spent: they
- *     were addressed to the old inbox
- *   · any half-finished "link Google to this account" handshake is dropped:
- *     it was begun because a Google address matched the OLD email
+ *   · it may not be an Admin's account, or a former Admin's
+ *     (lib/admin/protected) — refused for every Admin, the acting one included
+ *   · every outstanding password-reset, verification and setup link is spent,
+ *     and any half-finished "link Google" handshake dropped: they went to, or
+ *     were begun from, the address now in question. An earlier pending change
+ *     is superseded the same way.
+ *   · the request is audited with both addresses masked
  * Then a confirmation link goes to the new address and a notice — no link,
- * no credential — to the old one, so the change is never silent. A linked
- * Google identity is keyed by Google's own id, not the address, so it keeps
- * signing in to this same account; and an unlinked Google account that
- * happens to use the new address still meets the password-confirmed link
- * step, never an automatic link.
+ * no credential — to the current one, so the request is never silent and can
+ * be cancelled (`cancelEmailChange`) before it is used.
  *
- * Hardened after the UM-5 security review:
- *   · an Admin cannot change their OWN email here — a typo or a lost message
- *     must not lock out the person making the change (another Admin can)
- *   · the account row is read `for update` inside the transaction and only the
- *     columns that change are written, so a concurrent rename or a second
- *     Admin's edit is never silently reverted
- *   · unused setup links are expired too: they may have been handed to the
- *     address being replaced
- *   · the audit row never stores a full address: `target_email` holds the
- *     username, or the OLD address masked
- * Together stops treating the new address as proved until it is confirmed
- * (see `addressedTo`, which reads the `user_email_changed` audit row).
- *
- * Sessions are kept for an account that was never required to verify; for one
- * that was, clearing the verified mark pauses every way in until the new
- * address is confirmed — the account page says so before saving.
+ * Also from the UM-5 security review: the account row is read `for update`
+ * and only the columns that change are written, so a concurrent edit is never
+ * silently reverted; and the audit row never stores a full address.
  */
 export async function updateIdentity(
   admin: AdminUser, id: string, input: { username?: string; email?: string },
@@ -561,14 +560,14 @@ export async function updateIdentity(
     if (!isPlausibleEmail(email)) throw new ApiError("Enter a valid email address");
   }
 
-  type Current = { username: string | null; email: string | null; vr: boolean; locale: string | null };
+  type Current = { username: string | null; email: string | null; protected: boolean; locale: string | null };
   let current!: Current;
   let usernameChanged = false;
   let emailChanged = false;
   try {
     await transaction(async (q) => {
       const rows = await q<Current>(
-        `select u.username, u.email, u.verification_required as vr,
+        `select u.username, u.email, ${EMAIL_PROTECTED("u")} as protected,
                 (select locale from user_preferences p where p.user_id = u.id) as locale
            from users u where u.id = $1 for update`, [id]);
       if (!rows[0]) throw new ApiError("No such account", 404);
@@ -576,13 +575,14 @@ export async function updateIdentity(
       usernameChanged = username !== null && username !== (current.username ?? "");
       emailChanged = email !== null && email !== (current.email ?? "");
       if (!usernameChanged && !emailChanged) throw new ApiError("Nothing to change");
-      if (emailChanged && id === admin.id) {
-        throw new ApiError("An Admin can't change their own email address here — ask another Admin to do it.", 409);
+      if (emailChanged && current.protected) throw new ApiError(EMAIL_PROTECTED_MESSAGE, 409);
+      if (emailChanged) {
+        const taken = await q(`select 1 from users where lower(email) = lower($1) and id <> $2`, [email, id]);
+        if (taken.length) throw new ApiError("Another account already uses that email address", 409);
       }
 
       if (usernameChanged) await q(`update users set username = $2 where id = $1`, [id, username]);
       if (emailChanged) {
-        await q(`update users set email = $2, email_verified_at = null where id = $1`, [id, email]);
         await q(`update password_resets set consumed_at = now() where user_id = $1 and consumed_at is null`, [id]);
         await q(`update email_verifications set consumed_at = now() where user_id = $1 and consumed_at is null`, [id]);
         await q(`delete from google_pending where user_id = $1`, [id]);
@@ -596,15 +596,12 @@ export async function updateIdentity(
         [admin.id, admin.email, id, who, action, JSON.stringify(details)]);
       if (usernameChanged) await write("user_username_changed", { from: current.username, to: username });
       if (emailChanged) {
-        await write("user_email_changed", {
-          from: current.email ? maskEmail(current.email) : null, to: maskEmail(email!), verificationCleared: true,
+        await write("user_email_change_requested", {
+          from: current.email ? maskEmail(current.email) : null, to: maskEmail(email!),
         });
       }
     });
   } catch (e) {
-    if (e instanceof Error && /users_email_idx/.test(e.message)) {
-      throw new ApiError("Another account already uses that email address", 409);
-    }
     if (e instanceof Error && /users_username_idx/.test(e.message)) {
       throw new ApiError("That username is already taken", 409);
     }
@@ -614,24 +611,45 @@ export async function updateIdentity(
   let confirmationSent = false;
   if (emailChanged) {
     const locale = isLocale(current.locale) ? current.locale : "en";
-    /* After the commit, and best-effort: the change stands even if a mail
-       provider hiccups, and the panel says so; the person can ask for a fresh
-       link. Nothing about the addresses or the token reaches a log line. */
-    try { await sendVerification(id, email!, locale); confirmationSent = true; }
+    /* After the commit, and best-effort: the panel says whether the link went
+       out, and saving the same address again sends a fresh one. Nothing about
+       the addresses or the token reaches a log line. */
+    try { await sendVerification(id, email!, locale, { change: true }); confirmationSent = true; }
     catch { console.error("[admin/identity] confirmation email failed"); }
     if (current.email) {
-      try { await sendMail({ to: current.email, ...emailChangedNotice(locale) }); }
+      try { await sendMail({ to: current.email, ...emailChangeRequestedNotice(locale) }); }
       catch { console.error("[admin/identity] change notice failed"); }
     }
   }
 
   return {
     username: usernameChanged ? username : current.username,
-    email: emailChanged ? email : current.email,
-    emailChanged,
-    signInPaused: emailChanged && current.vr,
+    email: current.email,
+    emailChangeRequested: emailChanged,
+    pendingEmail: emailChanged ? email : null,
     confirmationSent,
   };
+}
+
+/**
+ * Withdraws a requested email change before its link is used (UM-5): the link
+ * stops working and the account carries on exactly as it was. Audited, masked.
+ */
+export async function cancelEmailChange(admin: AdminUser, id: string): Promise<{ cancelled: true }> {
+  await transaction(async (q) => {
+    const rows = await q<{ username: string | null; email: string | null }>(
+      `select username, email from users where id = $1 for update`, [id]);
+    if (!rows[0]) throw new ApiError("No such account", 404);
+    const withdrawn = await withdrawEmailChange(q, id);
+    if (!withdrawn.length) throw new ApiError("There is no email change waiting for confirmation", 409);
+    const u = rows[0];
+    await q(
+      `insert into admin_audit_log (admin_id, admin_email, target_id, target_email, action, details)
+       values ($1, $2, $3, $4, 'user_email_change_cancelled', $5)`,
+      [admin.id, admin.email, id, u.username ?? (u.email ? maskEmail(u.email) : null),
+        JSON.stringify({ to: maskEmail(withdrawn[0]) })]);
+  });
+  return { cancelled: true };
 }
 
 export async function deleteAccount(admin: AdminUser, id: string) {

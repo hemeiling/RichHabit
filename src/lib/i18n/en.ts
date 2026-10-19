@@ -1750,6 +1750,13 @@ export const en = {
     signIn: "Sign in",
     backToSignIn: "Back to sign in",
     tryAgain: "Try again",
+    // A link confirming an administrator's requested change of sign-in email.
+    changeTitle: "Confirm your new email",
+    changeIntro: "Press the button below to make this your sign-in email. Until you do, nothing about how you sign in changes.",
+    changeConfirm: "Confirm this email",
+    changeDoneTitle: "New email confirmed",
+    changeOk: "Your new sign-in email is confirmed. Use it the next time you sign in.",
+    taken: "This address is now used by another RichHabit account, so it can't be added to yours. Ask the person who manages your account for help.",
 
     // The screen that replaces the sign-up form once an account is pending.
     sentTitle: "Check your email",

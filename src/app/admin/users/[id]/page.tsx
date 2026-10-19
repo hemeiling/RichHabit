@@ -87,7 +87,7 @@ export default async function UserProfile({ params }: { params: { id: string } }
       <Card title="Features used" hint="Which parts of the product this account touches.">
         <Table head={["Feature", "Events"]} rows={u.features.map((f) => [f.feature, f.events])} />
       </Card>
-      {identity && <IdentityPanel id={u.id} identity={identity} isSelf={admin.id === u.id} />}
+      {identity && <IdentityPanel id={u.id} identity={identity} />}
       {membership && <MembershipPanel id={u.id} membership={membership} />}
 
       <AccountActions

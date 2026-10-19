@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   // 200 for "already": nothing failed, the account is verified, and the page
   // should say so warmly rather than showing an error.
   const status = outcome.status === "ok" || outcome.status === "already" ? 200
-    : outcome.status === "full" ? 409
+    : outcome.status === "full" || outcome.status === "taken" ? 409
       : 400;
 
   return NextResponse.json(outcome, { status });

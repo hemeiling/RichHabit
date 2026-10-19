@@ -31,7 +31,7 @@ import { useT } from "@/lib/i18n/context";
  * corner changes this page instantly. The server sends a status, not prose.
  */
 
-type Status = "ok" | "already" | "invalid" | "expired" | "full";
+type Status = "ok" | "already" | "invalid" | "expired" | "full" | "taken";
 
 /**
  * The token, read from the fragment as this module loads — once per page load,
@@ -47,10 +47,14 @@ type Status = "ok" | "already" | "invalid" | "expired" | "full";
  * Module memory, and nothing else: no cookie, no localStorage, no
  * sessionStorage, no analytics, no URL. It lives as long as the tab is on this
  * page.
+ *
+ * `&for=change` marks a link confirming an administrator's requested change of
+ * sign-in email (UM-5). It only picks the words shown before the button is
+ * pressed; what the link does is decided by the server, from the stored row.
  */
-const HASH_TOKEN = typeof window === "undefined" ? "" : (() => {
-  const found = /^#token=(.+)$/.exec(window.location.hash)?.[1];
-  return found ? decodeURIComponent(found) : "";
+const HASH = typeof window === "undefined" ? { token: "", change: false } : (() => {
+  const found = /^#token=([^&]+)(&for=change)?$/.exec(window.location.hash);
+  return { token: found ? decodeURIComponent(found[1]) : "", change: !!found?.[2] };
 })();
 
 export default function VerifyContent({ queryToken }: { queryToken: string }) {
@@ -67,13 +71,17 @@ export default function VerifyContent({ queryToken }: { queryToken: string }) {
    * an ordinary re-render and updates the DOM properly.
    */
   const [token, setToken] = useState("");
+  // Like the token, client-only knowledge: supplied after the first render.
+  const [forChange, setForChange] = useState(false);
+  const [changed, setChanged] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const found = HASH_TOKEN || queryToken;
+    const found = HASH.token || queryToken;
     if (found) setToken(found);
     else setStatus("invalid");
+    setForChange(HASH.change);
     /* Out of the address bar and out of this history entry, so a glance at the
        screen, a shared tab or the back button reveals nothing. The page keeps
        working because the value was read as this module loaded. */
@@ -92,8 +100,10 @@ export default function VerifyContent({ queryToken }: { queryToken: string }) {
         body: JSON.stringify({ token }),
       });
       const data = await res.json().catch(() => null);
-      if (data?.status) setStatus(data.status as Status);
-      else setError(data?.error ?? t.errors.saveFailed);
+      if (data?.status) {
+        setChanged(data.changed === true);
+        setStatus(data.status as Status);
+      } else setError(data?.error ?? t.errors.saveFailed);
     } catch {
       setError(t.errors.saveFailed);
     } finally {
@@ -110,7 +120,8 @@ export default function VerifyContent({ queryToken }: { queryToken: string }) {
         <div>
           <div className="eyebrow">{t.appName}</div>
           <h1 className="display mt-1" style={{ fontSize: 27, lineHeight: 1.15 }}>
-            {done ? v.doneTitle : status ? v.problemTitle : v.title}
+            {done ? (changed ? v.changeDoneTitle : v.doneTitle)
+              : status ? v.problemTitle : forChange ? v.changeTitle : v.title}
           </h1>
         </div>
         <LanguageToggle />
@@ -119,19 +130,26 @@ export default function VerifyContent({ queryToken }: { queryToken: string }) {
       <section className="card p-5 mt-5">
         {status === null && (
           <>
-            <p style={{ fontSize: 14.5, lineHeight: 1.65 }}>{v.intro}</p>
+            <p style={{ fontSize: 14.5, lineHeight: 1.65 }}>{forChange ? v.changeIntro : v.intro}</p>
             {/* Nothing to press during the server render, where there is no
                 fragment to have read. */}
             <button className="btn btn-primary mt-4" onClick={confirm} disabled={busy || !token}>
-              {busy ? v.confirming : v.confirm}
+              {busy ? v.confirming : forChange ? v.changeConfirm : v.confirm}
             </button>
           </>
         )}
 
         {status === "ok" && (
           <>
-            <p style={{ fontSize: 14.5, lineHeight: 1.65 }}>{v.ok}</p>
+            <p style={{ fontSize: 14.5, lineHeight: 1.65 }}>{changed ? v.changeOk : v.ok}</p>
             <Link href="/login" className="btn btn-primary mt-4">{v.signIn}</Link>
+          </>
+        )}
+
+        {status === "taken" && (
+          <>
+            <p style={{ fontSize: 14.5, lineHeight: 1.65 }}>{v.taken}</p>
+            <Link href="/login" className="btn mt-4">{v.backToSignIn}</Link>
           </>
         )}
 
