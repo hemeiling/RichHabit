@@ -1,117 +1,122 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import HabitEditor from "@/components/HabitEditor";
-import { Field, Segmented, Sheet } from "@/components/ui";
+import TemplateLibrary, { startBrowse, type Browse } from "@/components/TemplateLibrary";
+import TemplateReview, { type Pick, type ReviewResult } from "@/components/TemplateReview";
+import { Segmented, Sheet } from "@/components/ui";
 import { useT } from "@/lib/i18n/context";
-import { blankHabit } from "@/lib/habits";
-import { LIBRARY, habitFromLibrary } from "@/lib/library";
-import { habitDescription, habitName, habitSource } from "@/lib/templates";
-import type { CollectionKey, LibraryHabit } from "@/lib/library";
-import type { Category, Goal, Habit } from "@/lib/types";
-import type { Dict } from "@/lib/i18n/en";
+import type { AddOutcome } from "@/lib/addHabits";
+import { blankHabit, scheduleProblem } from "@/lib/habits";
+import { habitFromLibrary } from "@/lib/library";
+import type { LibraryEntry, LibraryHabit } from "@/lib/library";
+import { habitName } from "@/lib/templates";
+import type { Category, Goal, Habit, HabitStatus } from "@/lib/types";
 
 /**
  * Adding a habit from Today (§10/§12).
  *
  * Two ways in, because they are two different situations. Someone who does not
- * know what to track wants suggestions; someone who does wants a blank form and
- * no browsing. Both end at the same `Habit`, saved by the same action.
+ * know what to track wants suggestions — Explore templates; someone who does
+ * wants a blank form and no browsing. Both end at habits saved by the same
+ * server endpoint, with its validation, ownership check and plan limit.
  *
- * The library tab opens filtered to the section that was tapped — the point of
- * "+ Add habit" under Morning is a morning habit — but the filter can be
- * dropped, because a habit's time of day is the user's decision and not the
- * catalogue's.
+ * Templates are chosen with a tick, from as many collections as the person
+ * likes, then reviewed — renamed, rescheduled, re-prioritised — and only then
+ * saved: to Today, or to the backlog. Nothing is added by browsing, and no
+ * collection is ever added whole.
  */
-
-/** Matching is on the displayed name, so searching works in either language. */
-function matches(item: LibraryHabit, needle: string, t: Dict): boolean {
-  if (!needle) return true;
-  return (t.templates.habits[item.key] ?? item.key).toLowerCase().includes(needle);
-}
-
-/*
- * Building the habit itself lives in lib/library (`habitFromLibrary`), shared
- * with Refine — one definition of what adopting a template means, carrying
- * the template's own frequency rather than a hard-coded one.
- */
-
-export default function AddHabit({
-  section, habits, goals, nextSortOrder, onSave, onClose,
-}: {
+export default function AddHabit({ section, habits, goals, onSave, onAddMany, onClose }: {
   section: Category;
-  /** Everything the account has, for the duplicate check. */
+  /** Everything the account has, for the duplicate check and the sort order. */
   habits: Habit[];
   goals: Goal[];
-  nextSortOrder: number;
   onSave: (h: Habit) => void;
+  onAddMany: (list: Habit[]) => Promise<AddOutcome>;
   onClose: () => void;
 }) {
   const t = useT();
   const [tab, setTab] = useState<"library" | "own">("library");
-  const [search, setSearch] = useState("");
-  const [everywhere, setEverywhere] = useState(false);
-  const [shelf, setShelf] = useState<"all" | CollectionKey>("all");
+  const [reviewing, setReviewing] = useState(false);
+  const [browse, setBrowse] = useState<Browse>(startBrowse);
+  const [picks, setPicks] = useState<Pick[]>([]);
+  const [editing, setEditing] = useState<number | null>(null);
   const [own, setOwn] = useState<Habit | null>(null);
-  const [duplicate, setDuplicate] = useState<{ item: LibraryHabit; name: string } | null>(null);
+  const [duplicate, setDuplicate] = useState<LibraryEntry | null>(null);
+  const [result, setResult] = useState<ReviewResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const top = useRef<HTMLDivElement>(null);
+
+  // A new view starts at its top; the sheet is the scroll container.
+  useEffect(() => {
+    top.current?.closest(".sheet")?.scrollTo({ top: 0 });
+  }, [reviewing, browse.open]);
 
   /**
    * What counts as "already have it": the same template, or the same words. A
    * user who typed "Read" themselves and then browses to the library entry
-   * should still be warned.
+   * should still be warned. Retired habits are offered back on purpose.
    */
-  const onSheet = useMemo(() => {
-    const keys = new Set<string>();
-    const names = new Set<string>();
-    habits.forEach((h) => {
-      if (h.status === "retired") return;   // removed on purpose; offering it back is the point
-      if (h.templateKey) keys.add(h.templateKey);
-      names.add(habitName(h, t).trim().toLowerCase());
-    });
-    return { keys, names };
-  }, [habits, t]);
-
-  const has = (item: LibraryHabit) =>
-    onSheet.keys.has(item.key)
-    || onSheet.names.has((t.templates.habits[item.key] ?? "").trim().toLowerCase());
-
-  const needle = search.trim().toLowerCase();
-  /*
-   * The everyday shelf keeps the section filter — "+ Add habit" under Morning
-   * means a morning habit. A named collection spans the whole day by design
-   * (Franklin's questions bracket it), so choosing one shows all of it.
-   */
-  const shown = LIBRARY.filter((item) =>
-    (shelf === "all"
-      ? !item.collection && (everywhere || item.category === section)
-      : item.collection === shelf)
-    && matches(item, needle, t));
-
-  /**
-   * §10: picking an item opens the pre-filled form — nothing is added
-   * silently, and everything (time of day, target, schedule) can be adjusted
-   * before it joins the sheet. The everyday shelf lands in the tapped
-   * section; a collection item keeps its own time of day.
-   */
-  const review = (item: LibraryHabit) =>
-    setOwn(habitFromLibrary(item, {
-      category: item.collection ? item.category : section,
-      sortOrder: nextSortOrder,
-    }));
-
-  const add = (item: LibraryHabit) => {
-    if (has(item)) {
-      setDuplicate({ item, name: t.templates.habits[item.key] ?? item.key });
-      return;
+  const owned = useMemo(() => {
+    const byKey = new Map<string, HabitStatus>();
+    const byName = new Map<string, HabitStatus>();
+    for (const h of habits) {
+      if (h.status === "retired") continue;
+      if (h.templateKey) byKey.set(h.templateKey, h.status);
+      byName.set(habitName(h, t).trim().toLowerCase(), h.status);
     }
-    review(item);
+    return { byKey, byName };
+  }, [habits, t]);
+  const ownedStatus = (item: LibraryHabit): HabitStatus | null =>
+    owned.byKey.get(item.key)
+    ?? owned.byName.get((t.templates.habits[item.key] ?? "").trim().toLowerCase())
+    ?? null;
+
+  const isPicked = (key: string) => picks.some((p) => p.entry.item.key === key);
+
+  /*
+   * The draft — and with it the habit's id — is made once, when it is picked.
+   * Every save and every retry sends that same id, so a retry updates the row
+   * a lost reply already created instead of adding a second one.
+   */
+  const pick = (entries: LibraryEntry[]) => setPicks((ps) => [
+    ...ps,
+    ...entries.filter((e) => !ps.some((p) => p.entry.item.key === e.item.key)).map((e) => ({
+      entry: e,
+      // The everyday shelf lands in the tapped section; a collection habit keeps its own time of day.
+      draft: habitFromLibrary(e.item, { category: e.collection ? e.category : section }),
+    })),
+  ]);
+  const unpick = (keys: string[]) => setPicks((ps) => ps.filter((p) => !keys.includes(p.entry.item.key)));
+
+  const toggle = (e: LibraryEntry) => {
+    if (isPicked(e.item.key)) return unpick([e.item.key]);
+    if (ownedStatus(e.item)) return setDuplicate(e);   // asked first, never silently doubled
+    pick([e]);
   };
 
-  /** The whole shelf into the backlog as Planned — only what is not already theirs. */
-  const addCollection = (items: LibraryHabit[]) => {
-    items.forEach((item, i) =>
-      onSave(habitFromLibrary(item, { status: "planned", sortOrder: nextSortOrder + i })));
-    onClose();
+  /** Saves what is left in the review, in order, to Today ("active") or the backlog ("planned"). */
+  const save = async (status: "active" | "planned") => {
+    if (busy || !picks.length) return;
+    setBusy(true);
+    setResult(null);
+    const next = new Map<Category, number>();
+    const list = picks.map((p) => {
+      const c = p.draft.category;
+      const order = next.get(c)
+        ?? Math.max(0, ...habits.filter((h) => h.category === c).map((h) => h.sortOrder)) + 1;
+      next.set(c, order + 1);
+      return { ...p.draft, status, active: status === "active", sortOrder: order };
+    });
+    const outcome = await onAddMany(list);
+    const saved = new Set(outcome.added.map((h) => h.id));
+    setPicks((ps) => ps.filter((p) => !saved.has(p.draft.id)));
+    setBusy(false);
+    // Everything on Today: the sheet's work is done, and the habits are already showing.
+    if (status === "active" && !outcome.limited.length && !outcome.failed.length) return onClose();
+    setResult({ ...outcome, status });
   };
+
+  const valid = picks.every((p) => p.draft.name.trim() && !scheduleProblem(p.draft.frequency));
 
   if (own) {
     return (
@@ -124,105 +129,89 @@ export default function AddHabit({
     );
   }
 
+  if (editing != null && picks[editing]) {
+    return (
+      <HabitEditor
+        habit={picks[editing].draft} goals={goals} isNew submitLabel={t.customise.doneEditing}
+        onSave={(h) => {
+          setPicks((ps) => ps.map((p, i) => (i === editing ? { ...p, draft: h } : p)));
+          setEditing(null);
+        }}
+        onDelete={() => setEditing(null)}
+        onClose={() => setEditing(null)}
+      />
+    );
+  }
+
+  const footer = reviewing ? (
+    picks.length > 0 ? (
+      <>
+        <button className="btn" disabled={busy || !valid} onClick={() => save("planned")}>
+          {busy ? t.customise.saving : t.customise.saveToBacklog(picks.length)}
+        </button>
+        <button className="btn btn-primary" disabled={busy || !valid} onClick={() => save("active")}>
+          {busy ? t.customise.saving : t.customise.addToToday(picks.length)}
+        </button>
+      </>
+    ) : (
+      <button className="btn btn-primary" onClick={onClose}>{t.customise.doneEditing}</button>
+    )
+  ) : tab === "library" && picks.length > 0 ? (
+    <>
+      <span className="faint mr-auto self-center" style={{ fontSize: 13 }} aria-live="polite">
+        {t.customise.selectedCount(picks.length)}
+      </span>
+      <button className="btn" onClick={() => setPicks([])}>{t.customise.clearSelected}</button>
+      <button className="btn btn-primary" onClick={() => { setResult(null); setReviewing(true); }}>
+        {t.customise.reviewSelected(picks.length)}
+      </button>
+    </>
+  ) : undefined;
+
   return (
     <>
-      <Sheet open onClose={onClose} title={t.customise.addTo(t.categories[section].label)}>
-        <Segmented<"library" | "own"> value={tab} onChange={setTab}
-          options={[
-            { value: "library", label: t.customise.fromLibrary },
-            { value: "own", label: t.customise.createOwn },
-          ]} />
-
-        {tab === "own" ? (
-          <div className="mt-4">
-            <p className="muted" style={{ fontSize: 14, lineHeight: 1.5 }}>
-              {t.habits.descriptionHint}
-            </p>
-            <button className="btn btn-primary mt-3"
-              onClick={() => setOwn({ ...blankHabit(), category: section, sortOrder: nextSortOrder })}>
-              {t.customise.createOwn}
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4">
-            <Field label={t.customise.searchPlaceholder}>
-              <input className="input" autoFocus value={search} placeholder={t.customise.searchPlaceholder}
-                onChange={(e) => setSearch(e.target.value)} />
-            </Field>
-            {/* The shelves: the everyday set, and the named collections. */}
-            <Segmented<"all" | CollectionKey> value={shelf} onChange={setShelf} small
-              options={(["all", "franklin", "history"] as const).map((s) => ({
-                value: s, label: t.customise.shelves[s],
-              }))} />
-            {shelf === "all" ? (
-              <Segmented<boolean> value={everywhere} onChange={setEverywhere} small
+      <Sheet open onClose={onClose} footer={footer}
+        title={reviewing && picks.length ? t.customise.reviewTitle(picks.length) : t.customise.addTo(t.categories[section].label)}>
+        <div ref={top}>
+          {reviewing ? (
+            <TemplateReview
+              picks={picks} result={result}
+              onChange={(i, d) => setPicks((ps) => ps.map((p, j) => (j === i ? { ...p, draft: d } : p)))}
+              onRemove={(i) => setPicks((ps) => ps.filter((_, j) => j !== i))}
+              onAllOptions={setEditing}
+              onBack={() => { setResult(null); setReviewing(false); }}
+              onSaveRest={save}
+            />
+          ) : (
+            <>
+              <Segmented<"library" | "own"> value={tab} onChange={setTab}
                 options={[
-                  { value: false, label: t.customise.showSection(t.categories[section].label) },
-                  { value: true, label: t.customise.showAll },
+                  { value: "library", label: t.customise.fromLibrary },
+                  { value: "own", label: t.customise.createOwn },
                 ]} />
-            ) : (
-              <div className="mt-3">
-                {(() => {
-                  // A rotating habit is added on its own: the shelf already has each of its items.
-                  const fresh = shown.filter((i) => !has(i) && !i.rotation);
-                  return fresh.length ? (
-                    <>
-                      <button className="btn" style={{ fontSize: 13 }} onClick={() => addCollection(fresh)}>
-                        + {t.customise.addCollection(fresh.length)}
-                      </button>
-                      <p className="faint mt-1.5" style={{ fontSize: 12, lineHeight: 1.45 }}>
-                        {t.customise.collectionHint}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="faint" style={{ fontSize: 12.5 }}>{t.customise.collectionAllTaken}</p>
-                  );
-                })()}
-              </div>
-            )}
-
-            <div className="divide mt-3">
-              {shown.length === 0 && (
-                <p className="muted py-4" style={{ fontSize: 14 }}>{t.customise.noMatches}</p>
-              )}
-              {shown.map((item) => {
-                const taken = has(item);
-                return (
-                  <button key={item.key} className="w-full text-left py-3 flex items-center gap-3"
-                    style={{ background: "none", border: "none", cursor: "pointer" }}
-                    onClick={() => add(item)}>
-                    <span style={{ minWidth: 0, flex: 1 }}>
-                      <span className="block" style={{ fontSize: 15 }}>
-                        {/* §10. The catalogue carries habits to drop as well as
-                            habits to build; hiding those would leave half the
-                            work with no entry point. */}
-                        {item.kind === "avoid" && (
-                          <span className="faint">{t.customise.avoid} · </span>
-                        )}
-                        {t.templates.habits[item.key] ?? item.key}
-                      </span>
-                      {/* A collection item explains itself and names its source. */}
-                      {item.collection && t.templates.descriptions[item.key] && (
-                        <span className="muted block mt-0.5" style={{ fontSize: 12.5, lineHeight: 1.45 }}>
-                          {t.templates.descriptions[item.key]}
-                        </span>
-                      )}
-                      <span className="faint block mt-0.5" style={{ fontSize: 12 }}>
-                        {t.categories[item.category].label}
-                        {taken && ` · ${t.customise.alreadyOnSheet}`}
-                        {item.source && habitSource(item.key, t)
-                          && ` · ${t.customise.sourcePrefix}${habitSource(item.key, t)}`}
-                      </span>
-                    </span>
-                    <span className="faint" style={{ fontSize: 17, flex: "none" }}>
-                      {taken ? "✓" : "+"}
-                    </span>
+              {tab === "own" ? (
+                <div className="mt-4">
+                  <p className="muted" style={{ fontSize: 14, lineHeight: 1.5 }}>
+                    {t.habits.descriptionHint}
+                  </p>
+                  <button className="btn btn-primary mt-3"
+                    onClick={() => setOwn({
+                      ...blankHabit(), category: section,
+                      sortOrder: Math.max(0, ...habits.filter((h) => h.category === section).map((h) => h.sortOrder)) + 1,
+                    })}>
+                    {t.customise.createOwn}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                </div>
+              ) : (
+                <TemplateLibrary
+                  section={section} browse={browse} setBrowse={setBrowse}
+                  ownedStatus={ownedStatus} isPicked={isPicked}
+                  onToggle={toggle} onPickMany={pick} onUnpickMany={unpick}
+                />
+              )}
+            </>
+          )}
+        </div>
       </Sheet>
 
       {/* Warned, not blocked: two rows for the same thing is usually a mistake,
@@ -234,15 +223,15 @@ export default function AddHabit({
             <>
               <button className="btn" onClick={() => setDuplicate(null)}>{t.common.cancel}</button>
               <button className="btn btn-primary" onClick={() => {
-                const item = duplicate.item;
+                const e = duplicate;
                 setDuplicate(null);
-                review(item);           // still through the form, like any other add
+                pick([e]);           // still through the review, like any other choice
               }}>{t.customise.addAnyway}</button>
             </>
           }
         >
           <p className="muted" style={{ fontSize: 14, lineHeight: 1.55 }}>
-            {t.customise.duplicateBody(duplicate.name)}
+            {t.customise.duplicateBody(t.templates.habits[duplicate.item.key] ?? duplicate.item.key)}
           </p>
         </Sheet>
       )}

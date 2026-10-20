@@ -1,8 +1,10 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { Sheet } from "@/components/ui";
 import { useT } from "@/lib/i18n/context";
 import { CATEGORIES } from "@/lib/habits";
+import { libraryByKey } from "@/lib/library";
 import { habitName } from "@/lib/templates";
 import type { Category, Habit } from "@/lib/types";
 
@@ -45,6 +47,12 @@ export default function HabitMenu({
   const [confirm, setConfirm] = useState<"remove" | "delete" | null>(null);
   const name = habitName(habit, t);
   const erasable = daysRecorded === 0;
+  /*
+   * A money habit works with the Spending page and a weekly-progress habit with
+   * Weekly review: a way there, rather than a second place to record the same
+   * thing. The tick stays the habit; the records stay where they already live.
+   */
+  const opens = habit.templateKey ? libraryByKey.get(habit.templateKey)?.opens : undefined;
 
   const Item = ({ label, hint, onClick, danger }: {
     label: string; hint?: string; onClick: () => void; danger?: boolean;
@@ -105,6 +113,12 @@ export default function HabitMenu({
       <div className="divide">
         <Item label={t.customise.logEntry} onClick={onLog} />
         <Item label={t.customise.edit} onClick={onEdit} />
+        {opens && (
+          <Link href={opens === "spending" ? "/more/spending" : "/more/review"} onClick={onClose}
+            className="block w-full text-left py-3" style={{ fontSize: 15 }}>
+            {opens === "spending" ? t.customise.openSpending : t.customise.openReview} →
+          </Link>
+        )}
 
         <div className="py-3">
           <div className="eyebrow mb-2">{t.customise.moveTo}</div>

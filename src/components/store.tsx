@@ -1,5 +1,6 @@
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { addInOrder, type AddOutcome } from "@/lib/addHabits";
 import * as db from "@/lib/db";
 import { todayISO } from "@/lib/dates";
 import { isDone, uid, withScheduleVersion } from "@/lib/habits";
@@ -18,6 +19,12 @@ interface Actions {
   /** Logs how much / how it went. A row exists only when done, so this marks it done. */
   logCompletion: (date: string, habitId: string, value: number | null, note: string) => void;
   saveHabit: (h: Habit) => void;
+  /**
+   * Several new habits, saved one after another (lib/addHabits). Never sets the
+   * shared error banner: the caller shows what was added, what the plan limit
+   * held back, and what can be retried.
+   */
+  addHabits: (list: Habit[]) => Promise<AddOutcome>;
   deleteHabit: (id: string) => void;
   /** The user's arrangement of one section, as the ids in their new order. */
   reorderHabits: (ids: string[]) => void;
@@ -258,6 +265,30 @@ export function HabitsProvider({ userId, children }: { userId: string; children:
       },
       () => db.saveHabit(h),
     ),
+
+    /*
+     * One at a time, so a refusal can only ever undo its own habit: each one
+     * appears at once and is taken back alone if the server refuses it — not by
+     * restoring a snapshot that would also drop the others saved meanwhile.
+     */
+    addHabits: (list) => addInOrder(list, async (h) => {
+      const next = withScheduleVersion(h, todayISO());
+      setState((s) => ({
+        ...s,
+        habits: s.habits.some((x) => x.id === h.id)
+          ? s.habits.map((x) => (x.id === h.id ? next : x))
+          : [...s.habits, next],
+      }));
+      setPending((n) => n + 1);
+      try {
+        await db.saveHabit(h);
+      } catch (e) {
+        setState((s) => ({ ...s, habits: s.habits.filter((x) => x.id !== h.id) }));
+        throw e;
+      } finally {
+        setPending((n) => n - 1);
+      }
+    }, (e) => (db.isPlanLimit(e) ? (e as db.PlanLimitFailure).limit ?? null : null)),
 
     deleteHabit: (id) => run(
       (s) => {

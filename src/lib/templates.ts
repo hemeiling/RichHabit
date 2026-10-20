@@ -59,6 +59,42 @@ export function frequencyLabel(f: Frequency, t: Dict): string {
 }
 
 /**
+ * Wording a template used to have. A copy adopted under the old wording is
+ * still the template's own — it keeps its key and keeps following the reader's
+ * language — so correcting a template's text never strands anyone's copy in
+ * the language it was added in. Add the old text here whenever a template's
+ * name or description changes.
+ */
+const RETIRED_WORDING: { habits: Record<string, string[]>; descriptions: Record<string, string[]> } = {
+  habits: {
+    // Chinese virtue names before the Template Library (2026-10).
+    franklin_silence: ["慎言"], franklin_resolution: ["决断"], franklin_industry: ["勤勉"],
+    franklin_justice: ["正直"], franklin_cleanliness: ["清洁"], franklin_chastity: ["自律"],
+  },
+  descriptions: {
+    // "Opened each day at five" overstated his plan as a daily habit.
+    franklin_morning_question: [
+      "Franklin opened each day with this question at five in the morning, then planned the day's business.",
+      "富兰克林每天清晨五点以这个问题开始一天，然后规划当日事务。",
+    ],
+    // Paraphrased away Franklin's meaning; the precept itself is quoted now.
+    franklin_chastity: [
+      "Self-discipline and respect in intimate life — kept private, like the rest of this sheet.",
+      "亲密关系中的自律与尊重——与这份清单的其他内容一样，完全私密。",
+    ],
+    // Punctuation of the Pine edition; the text now follows the cited Harvard Classics one.
+    franklin_sincerity: [
+      "“Use no hurtful deceit; think innocently and justly; and, if you speak, speak accordingly.” — Franklin's precept",
+    ],
+    // His words begin "And for me" — the quote now shows where it starts.
+    bezos_sleep_eight: [
+      "“For me, I need eight hours of sleep” — planned for, not left to chance.",
+      "“对我来说，我需要八小时睡眠”——提前安排，而不是碰运气。",
+    ],
+  },
+};
+
+/**
  * Units on a seeded habit are ours too ("min" → 分钟). A unit the user typed is
  * left alone, which is why this only translates when a template key is present.
  */
@@ -77,8 +113,10 @@ export const habitDescription = (
   if (!h.templateKey || !h.description) return h.description;
   const own = t.templates.descriptions[h.templateKey];
   if (!own) return h.description;
-  const aliases = Object.values(dictionaries)
-    .map((d) => d.templates.descriptions[h.templateKey!]).filter(Boolean);
+  const aliases = [
+    ...Object.values(dictionaries).map((d) => d.templates.descriptions[h.templateKey!]).filter(Boolean),
+    ...(RETIRED_WORDING.descriptions[h.templateKey] ?? []),
+  ];
   return aliases.includes(h.description.trim()) ? own : h.description;
 };
 
@@ -104,6 +142,7 @@ export function templateAliases(kind: "habits" | "goals", key: string): string[]
     const value = dict.templates[kind][key];
     if (value) out.add(value);
   }
+  if (kind === "habits") for (const old of RETIRED_WORDING.habits[key] ?? []) out.add(old);
   return [...out];
 }
 

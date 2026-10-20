@@ -36,6 +36,12 @@ describe("the product name and tagline", () => {
       en.nav.habits,                    // the sidebar destination
       en.titles["/habits"],             // the same screen's page title
       en.intention.action.addHabit,     // "Add to Rich Habits"
+      // Thomas C. Corley's book, *Rich Habits* (2010) — a third-party title,
+      // cited as one in his Template Library collection, and his own words.
+      en.templates.collections.corley.title,
+      en.templates.collections.corley.bio!,
+      en.templates.collections.corley.links![0],
+      en.templates.why.corley_checkin,
     ];
     let text = JSON.stringify(en);
     for (const value of sanctioned) {

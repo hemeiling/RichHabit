@@ -492,11 +492,8 @@ export default function RichHabits() {
           section={adding}
           habits={state.habits}
           goals={state.goals}
-          nextSortOrder={
-            Math.max(0, ...state.habits.filter((h) => h.category === adding)
-              .map((h) => h.sortOrder)) + 1
-          }
           onSave={actions.saveHabit}
+          onAddMany={actions.addHabits}
           onClose={() => setAdding(null)}
         />
       )}

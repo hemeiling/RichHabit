@@ -166,7 +166,8 @@ export default function Refine() {
   const taken = new Map(state.habits.filter((h) => h.templateKey)
     .map((h) => [h.templateKey!, h.status]));
 
-  const shownLibrary = LIBRARY.filter((h) => h.category === libraryFilter);
+  // The everyday shelf only: the collections are browsed in Add habit → Explore templates.
+  const shownLibrary = LIBRARY.filter((h) => !h.collection && h.category === libraryFilter);
   const unit = (u: string | null) => (u ? t.templates.units[u] ?? u : "");
 
   return (
