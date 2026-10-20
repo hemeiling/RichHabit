@@ -604,9 +604,10 @@ export const en = {
     daysRunning: (n: number) => (n === 1 ? "1 day running" : `${n} days running`),
     // A "times a week" habit: progress toward the week's target, and what it needs now.
     weekProgress: (done: number, target: number) => `${done} of ${target} this week`,
-    startsNextWeek: "Starts counting next week",
+    // A share of the period that rounds to nothing (a late start) — say why, and that it is not a miss.
+    startsNextWeek: "Counts from next week · started late this week",
     monthProgress: (done: number, target: number) => `${done} of ${target} this month`,
-    startsNextMonth: "Starts counting next month",
+    startsNextMonth: "Counts from next month · started late this month",
     statusOnTrack: "On track",
     statusDue: "Due today",
     statusBehind: "Behind",
@@ -699,6 +700,11 @@ export const en = {
     addToToday: (n: number) => (n === 1 ? "Add to Today" : `Add ${n} to Today`),
     saveToBacklog: (n: number) => (n === 1 ? "Save to backlog" : `Save ${n} to backlog`),
     destinationHint: "Today puts them on your checklist now. Your backlog keeps them as Planned until you're ready.",
+    /** Under a weekly or monthly choice in the review: the late-start rule, before it surprises anyone. */
+    periodHint: {
+      week: "Counted by calendar week. Start late in a week and it counts from the next one — you can tick it any time.",
+      month: "Counted by calendar month. Start late in a month and it counts from the next one — you can tick it any time.",
+    },
     saving: "Saving…",
     resultAdded: (n: number) => (n === 1 ? "1 habit added to Today." : `${n} habits added to Today.`),
     resultSaved: (n: number) =>
@@ -784,7 +790,7 @@ export const en = {
     everyHint: "The rhythm counts from this day, so a missed day never moves the next one.",
     perMonth: (n: number) => `${n} / month`,
     timesAMonth: (n: number) => `${n}× a month`,
-    monthTimesHint: "Stays on your list each day until this month's count is reached — like times a week.",
+    monthTimesHint: "Stays on your list each day until this month's count is reached — like times a week. Started late in a month, it counts from the next one.",
     onMonthDays: (days: number[]) => `On the ${days.map((d) => {
       const tens = d % 100, last = d % 10;
       const suffix = tens >= 11 && tens <= 13 ? "th" : last === 1 ? "st" : last === 2 ? "nd" : last === 3 ? "rd" : "th";

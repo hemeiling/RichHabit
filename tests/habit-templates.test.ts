@@ -187,6 +187,22 @@ describe("schedules", () => {
     expect(weekly.frequency).toMatchObject({ mode: "times", timesPerWeek: 1 });
   });
 
+  it("explains the late-start rule wherever a weekly or monthly count appears, in both languages", () => {
+    // Today: a share of the period that rounds to nothing says why — it is not a miss.
+    expect(en.today.startsNextMonth).toMatch(/next month.*started late/);
+    expect(en.today.startsNextWeek).toMatch(/next week.*started late/);
+    expect(zh.today.startsNextMonth).toMatch(/下月.*开始得较晚/);
+    expect(zh.today.startsNextWeek).toMatch(/下周.*开始得较晚/);
+    // The review, before saving, and the picker, when choosing monthly.
+    for (const d of [en, zh]) {
+      expect(d.customise.periodHint.week).toBeTruthy();
+      expect(d.customise.periodHint.month).toBeTruthy();
+    }
+    expect(en.customise.periodHint.month).toMatch(/calendar month.*next one.*any time/);
+    expect(en.habits.monthTimesHint).toMatch(/Started late in a month, it counts from the next one/);
+    expect(zh.habits.monthTimesHint).toMatch(/下个月起计入/);
+  });
+
   it("keeps documented practices on their sources' own rhythm: daily, nothing invented", () => {
     for (const e of COLLECTIONS.flatMap(collectionEntries).filter((x) => x.attribution === "documented")) {
       expect(e.item.frequency, e.ref).toBe("daily");

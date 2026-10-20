@@ -131,6 +131,13 @@ function ReviewCard({ pick, onChange, onRemove, onAllOptions }: {
           onClick={() => setScheduling(!scheduling)}>
           {t.customise.howOften} · {frequencyLabel(h.frequency, t)} {scheduling ? "▴" : "▾"}
         </button>
+        {/* A count per week or month starts with the share of the period that
+            is left — said here, before "counts from next month" can surprise. */}
+        {(h.frequency.mode === "times" || h.frequency.mode === "month_times") && (
+          <p className="faint mt-1.5" style={{ fontSize: 12, lineHeight: 1.45 }}>
+            {t.customise.periodHint[h.frequency.mode === "times" ? "week" : "month"]}
+          </p>
+        )}
         {scheduling && (
           <div className="mt-2.5">
             <FrequencyField frequency={h.frequency} onChange={(f) => onChange({ ...h, frequency: f })} />
