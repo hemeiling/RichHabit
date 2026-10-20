@@ -10,8 +10,8 @@ import { Avatar, type Person } from "@/components/together/shared";
  *
  * The title is the card. Beneath it, a quiet line carries only what helps decide
  * what to do next: what it is about on the left — the group, the due date (warm
- * when it is today or past, never red) — and on the right its effort, as a small
- * number, and who has it. In a narrow card the right side wraps under the left
+ * when it is today or past, never red) — and on the right its story points, as a
+ * small number (only when estimated), and who has it. In a narrow card the right side wraps under the left
  * rather than cutting anything off. Nothing is
  * shown when there is nothing to say — except on work that is under way or
  * waiting, where a faint dashed circle asks who has it.
@@ -68,9 +68,10 @@ export function Assignees({ ids, members, size = 22, max = 2 }: { ids: string[];
   );
 }
 
-export function Effort({ value }: { value: number }) {
+/** A task's story points, when someone estimated them. Without an estimate a card shows nothing (it counts as 1 in every sum). */
+export function Points({ value }: { value: number }) {
   const t = useT().together.work;
-  return <span className="tg-effort" role="img" aria-label={t.effortValue(value)}>{value}</span>;
+  return <span className="tg-effort" role="img" aria-label={t.pointsValue(value)}>{value}</span>;
 }
 
 export default function TaskCard({ task, today, members, groups, readOnly, onOpen, onMove, drag }: {
@@ -89,7 +90,8 @@ export default function TaskCard({ task, today, members, groups, readOnly, onOpe
   const group = task.groupId ? groups.get(task.groupId) : undefined;
   const assigned = task.assignees.some((id) => members.has(id));
   const askWho = !assigned && (task.stage === "doing" || task.stage === "waiting");
-  const hasMeta = group || task.dueOn || assigned || askWho || task.effort || task.hasDescription;
+  const estimated = task.effort !== null;
+  const hasMeta = group || task.dueOn || assigned || askWho || estimated || task.hasDescription;
   return (
     <article className="tg-card" data-done={done || undefined} data-movable={!readOnly || undefined} data-task-id={task.id}
       draggable={drag?.enabled || undefined} data-dragging={drag?.dragging || undefined}
@@ -114,9 +116,9 @@ export default function TaskCard({ task, today, members, groups, readOnly, onOpe
                 strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9" /></svg>
             )}
           </span>
-          {(task.effort || assigned || askWho) && (
+          {(estimated || assigned || askWho) && (
             <span className="tg-card-side">
-              {task.effort && <Effort value={task.effort} />}
+              {estimated && <Points value={task.effort as number} />}
               {assigned
                 ? <Assignees ids={task.assignees} members={members} />
                 : askWho && <span className="tg-nobody" role="img" aria-label={t.nobodyYet} />}

@@ -14,5 +14,10 @@ export type BoardStage = (typeof BOARD_STAGES)[number];
 
 export const isStage = (v: unknown): v is Stage => typeof v === "string" && (STAGES as readonly string[]).includes(v);
 
-/** The effort choices offered. The database holds 1–99, so these can change without a migration. */
+/**
+ * The story-point choices offered (the column is still called `effort`). The
+ * database holds whole numbers 1–99, so whole choices can change without a
+ * migration; 0.5 cannot be stored until the column's type changes. With no
+ * choice made, a task counts as 1 point everywhere (progress.ts DEFAULT_POINTS).
+ */
 export const EFFORT_CHOICES = [1, 2, 3, 5, 8] as const;

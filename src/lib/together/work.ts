@@ -1,9 +1,12 @@
 import { query } from "@/lib/db/pool";
+import { monthOf } from "@/lib/dates";
 import { isUuid } from "@/lib/http";
 import { mayInvite, DISPLAY_NAME, TogetherError, requireBoard, type BoardRole, type PersonView } from "@/lib/together/access";
 import { isDueDate } from "@/lib/together/due";
+import { effectivePoints, filterParam, type GroupFilter } from "@/lib/together/progress";
 import { EFFORT_CHOICES, isStage, type Stage } from "@/lib/together/stages";
 import { togetherTransaction as transaction } from "@/lib/together/tx";
+import { canonicalZone, instantToZoned } from "@/lib/zonedTime";
 
 /**
  * Together — a space's shared work: the Board ("we will"), the Backlog ("we
@@ -123,6 +126,24 @@ export interface TaskDetail extends TaskSummary {
 
 export interface GroupView { id: string; name: string }
 
+/** How much History holds for one group (null: the tasks without one) — its tasks and story points. */
+export interface HistoryGroupCount { groupId: string | null; tasks: number; points: number }
+
+/** One month of History in the reader's calendar, YYYY-MM, with its tasks and story points. */
+export interface HistoryMonth { month: string; tasks: number; points: number }
+
+/** A page of History, newest finished first. The first page also says how much the whole filter holds. */
+export interface HistoryPage {
+  tasks: TaskSummary[];
+  more: boolean;
+  /** First page only: every History task the filter selects, its story points, and those by month. */
+  total?: number;
+  points?: number;
+  months?: HistoryMonth[];
+  /** The group asked for is not this space's (deleted since, or never was): the page is all groups'. */
+  dropped?: boolean;
+}
+
 export interface WorkView {
   space: { id: string; name: string; role: BoardRole; archived: boolean;
     /** Whether this reader may invite members (what the header's + Add members shows for). */
@@ -132,8 +153,12 @@ export interface WorkView {
   groups: GroupView[];
   /** The Board (Done only for its 24 hours) and the Backlog, each list in its order. */
   tasks: TaskSummary[];
-  /** History's first page, newest finished first, and how many History holds. */
-  history: { tasks: TaskSummary[]; more: boolean; total: number };
+  /**
+   * History's first page, newest finished first, and how much History holds:
+   * tasks and story points in all, and per group, so a group filter can say
+   * what History holds for it without another read.
+   */
+  history: { tasks: TaskSummary[]; more: boolean; total: number; points: number; groups: HistoryGroupCount[] };
   /** The database's clock when this was read — what Done's 24 hours are measured against. */
   serverNow: string;
 }
@@ -208,8 +233,8 @@ const LIST_ORDER = "t.rank asc nulls first, t.moved_at desc, t.id desc";
 const HISTORY_ORDER = "t.moved_at desc, t.id desc";
 /** A Done task still on the Board (`t`): it entered Done less than DONE_HOURS ago, by the database's clock. */
 const FRESH = `t.moved_at > now() - make_interval(hours => ${DONE_HOURS})`;
-/** A task in History. */
-const IN_HISTORY = `t.stage = 'done' and not (${FRESH})`;
+/** A task (`t`) in History. Progress reads it too, so "in History" means one thing everywhere. */
+export const IN_HISTORY = `t.stage = 'done' and not (${FRESH})`;
 
 /* --------------------------------- reads ----------------------------------- */
 
@@ -232,27 +257,80 @@ async function readWork(query: Q, userId: string, boardId: unknown): Promise<Wor
     `select ${SUMMARY} from together_tasks t
       where t.board_id = $1 and t.deleted_at is null and not (${IN_HISTORY})
       order by t.stage, ${LIST_ORDER}`, [id]);
-  const [{ total, now }] = await query<{ total: number; now: string }>(
-    `select count(*)::int as total, to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now
-       from together_tasks t where t.board_id = $1 and t.deleted_at is null and ${IN_HISTORY}`, [id]);
-  const first = await historyRows(query, id, null);
+  const [{ now }] = await query<{ now: string }>(
+    `select to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`);
+  // What History holds, per group and estimate; the story-point default is applied here, in one place.
+  const held = await query<{ groupId: string | null; effort: number | null; n: number }>(
+    `select t.group_id::text as "groupId", t.effort::float8 as effort, count(*)::int as n
+       from together_tasks t where t.board_id = $1 and t.deleted_at is null and ${IN_HISTORY}
+      group by t.group_id, t.effort`, [id]);
+  const byGroup = new Map<string | null, HistoryGroupCount>();
+  for (const row of held) {
+    const g = byGroup.get(row.groupId) ?? { groupId: row.groupId, tasks: 0, points: 0 };
+    g.tasks += row.n;
+    g.points += row.n * effectivePoints(row.effort);
+    byGroup.set(row.groupId, g);
+  }
+  const counts = [...byGroup.values()];
+  const first = await historyRows(query, id, null, NO_FILTER);
   return {
     space: { id, name: space.name, role: access.role, archived: access.archived,
       canInvite: mayInvite(userId, access.role, access.archived) },
     members, groups, tasks,
-    history: { ...first, total },
+    history: { ...first, total: counts.reduce((n, g) => n + g.tasks, 0), points: counts.reduce((n, g) => n + g.points, 0), groups: counts },
     serverNow: now,
   };
 }
 
-async function historyRows(q: Q, boardId: string, cursor: { at: string; id: string } | null) {
+/** Which of History to read: a group (or the ungrouped tasks), and words the title must contain. */
+interface HistoryFilter { group: GroupFilter; search: string }
+const NO_FILTER: HistoryFilter = { group: "all", search: "" };
+export const MAX_HISTORY_SEARCH = 100;
+
+/** The filter's SQL, appended after `$1` (the space) and the parameters already in `params`. */
+function historyWhere(filter: HistoryFilter, params: unknown[]): string {
+  let where = "";
+  if (filter.group === "none") where += " and t.group_id is null";
+  else if (filter.group !== "all") { params.push(filter.group); where += ` and t.group_id = $${params.length}::uuid`; }
+  // strpos, not LIKE: what someone types is matched as written, with no wildcards to escape.
+  if (filter.search) { params.push(filter.search.toLowerCase()); where += ` and strpos(lower(t.title), $${params.length}) > 0`; }
+  return where;
+}
+
+async function historyRows(q: Q, boardId: string, cursor: { at: string; id: string } | null, filter: HistoryFilter) {
+  const params: unknown[] = [boardId, HISTORY_PAGE + 1];
+  if (cursor) params.push(cursor.at, cursor.id);
+  const where = historyWhere(filter, params);
   const rows = await q<TaskSummary>(
     `select ${SUMMARY} from together_tasks t
       where t.board_id = $1 and t.deleted_at is null and ${IN_HISTORY}
-        ${cursor ? "and (t.moved_at, t.id) < ($3::timestamptz, $4::uuid)" : ""}
-      order by ${HISTORY_ORDER} limit $2`,
-    cursor ? [boardId, HISTORY_PAGE + 1, cursor.at, cursor.id] : [boardId, HISTORY_PAGE + 1]);
+        ${cursor ? "and (t.moved_at, t.id) < ($3::timestamptz, $4::uuid)" : ""}${where}
+      order by ${HISTORY_ORDER} limit $2`, params);
   return { tasks: rows.slice(0, HISTORY_PAGE), more: rows.length > HISTORY_PAGE };
+}
+
+/**
+ * Everything a History filter selects, counted: tasks, story points, and both
+ * by the month each was finished in the reader's zone (newest first). Reads two
+ * small columns per task, not its words; the months are worked out here with
+ * Intl rather than in SQL, exactly as Progress works out its days.
+ */
+async function historySummary(q: Q, boardId: string, filter: HistoryFilter, timeZone: string) {
+  const params: unknown[] = [boardId];
+  const where = historyWhere(filter, params);
+  const rows = await q<{ ms: number; effort: number | null }>(
+    `select (extract(epoch from t.moved_at) * 1000)::float8 as ms, t.effort::float8 as effort
+       from together_tasks t where t.board_id = $1 and t.deleted_at is null and ${IN_HISTORY}${where}`, params);
+  const months = new Map<string, HistoryMonth>();
+  let points = 0;
+  for (const row of rows) {
+    const month = monthOf(instantToZoned(row.ms, timeZone).date);
+    const m = months.get(month) ?? { month, tasks: 0, points: 0 };
+    const p = effectivePoints(row.effort);
+    m.tasks += 1; m.points += p; points += p;
+    months.set(month, m);
+  }
+  return { total: rows.length, points, months: [...months.values()].sort((a, b) => (a.month < b.month ? 1 : -1)) };
 }
 
 const parseCursor = (raw: unknown): { at: string; id: string } | null => {
@@ -265,12 +343,29 @@ export const cursorOf = (t: Pick<TaskSummary, "movedAt" | "id">) => `${t.movedAt
 
 /**
  * History after `cursor` (the last task already on screen), newest finished
- * first. Without a cursor, from the top. Nothing in History is ever removed for
- * its age.
+ * first. Without a cursor, from the top — and then with what the whole filter
+ * holds (`total`, `points`, `months`). Optionally one group's (or the ungrouped
+ * tasks', "none") and only titles containing `search`; groups are labels, not
+ * boundaries, so any member may read any of them. Nothing in History is ever
+ * removed for its age.
  */
-export async function historyPage(userId: string, boardId: unknown, rawCursor: unknown): Promise<{ tasks: TaskSummary[]; more: boolean }> {
+export async function historyPage(userId: string, boardId: unknown, rawCursor: unknown,
+  raw: { group?: unknown; search?: unknown; tz?: unknown } = {}): Promise<HistoryPage> {
   const access = await requireBoard(query, userId, boardId);
-  return historyRows(query, access.boardId, parseCursor(rawCursor));
+  const search = typeof raw.search === "string" ? raw.search.replace(/\s+/g, " ").trim().slice(0, MAX_HISTORY_SEARCH) : "";
+  const filter: HistoryFilter = { group: filterParam(raw.group), search };
+  const cursor = parseCursor(rawCursor);
+  return transaction(async (q) => {
+    // A group that is not this space's widens to all groups — never an empty list that looks like "nothing done".
+    let dropped = false;
+    if (filter.group !== "all" && filter.group !== "none") {
+      const [g] = await q(`select 1 from together_groups where id = $1 and board_id = $2`, [filter.group, access.boardId]);
+      if (!g) { filter.group = "all"; dropped = true; }
+    }
+    const page = await historyRows(q, access.boardId, cursor, filter);
+    if (cursor) return dropped ? { ...page, dropped } : page;
+    return { ...page, ...await historySummary(q, access.boardId, filter, canonicalZone(raw.tz) ?? "UTC"), ...(dropped ? { dropped } : {}) };
+  });
 }
 
 export async function loadTask(userId: string, boardId: unknown, taskId: unknown): Promise<TaskDetail> {
@@ -423,19 +518,31 @@ async function placeRank(q: Q, boardId: string, stage: Stage, taskId: string | u
   throw new Error("together: no room after renumbering");   // unreachable: a renumber leaves 1024 between neighbours
 }
 
-/** Quick capture: a title, in a stage (Backlog or a board stage; To do by default). Lands at the top. */
-export async function createTask(userId: string, boardId: unknown, raw: { title?: unknown; stage?: unknown }): Promise<TaskSummary> {
+/**
+ * Quick capture: a title, in a stage (Backlog or a board stage; To do by
+ * default), optionally in a group — what the screen's group filter is showing,
+ * so a task added there stays in view. Lands at the top.
+ */
+export async function createTask(userId: string, boardId: unknown,
+  raw: { title?: unknown; stage?: unknown; groupId?: unknown }): Promise<TaskSummary> {
   const title = cleanTitle(raw.title);
   const stage = raw.stage === undefined ? "todo" : raw.stage;
   if (!isStage(stage)) throw new TogetherError("stageInvalid");
+  const groupId = raw.groupId === undefined || raw.groupId === null ? null : raw.groupId;
+  if (groupId !== null && !isUuid(groupId)) throw new TogetherError("groupMissing", 409);
   return transaction(async (q) => {
     const { boardId: id } = await gate(q, userId, boardId);
     if (stage !== "done") await guardOpenCount(q, id);
     await lockLists(q, id, [stage]);
+    // After the list, as in updateTask: the group is checked (and held against deletion) last.
+    if (groupId !== null) {
+      const [g] = await q(`select 1 from together_groups where id = $1 and board_id = $2 for key share`, [groupId, id]);
+      if (!g) throw new TogetherError("groupMissing", 409);
+    }
     const rank = await placeRank(q, id, stage, undefined, { place: "top" });
     const [row] = await q<{ id: string }>(
-      `insert into together_tasks (board_id, title, stage, rank, created_by, updated_by)
-       values ($1, $2, $3, $4, $5, $5) returning id::text as id`, [id, title, stage, rank.toString(), userId]);
+      `insert into together_tasks (board_id, title, stage, rank, group_id, created_by, updated_by)
+       values ($1, $2, $3, $4, $5, $6, $6) returning id::text as id`, [id, title, stage, rank.toString(), groupId, userId]);
     return summary(q, id, row.id);
   });
 }

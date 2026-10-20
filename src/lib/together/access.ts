@@ -46,7 +46,9 @@ export type TogetherErrorCode =
   // V1B — shared work
   | "titleRequired" | "titleTooLong" | "descriptionTooLong" | "stageInvalid" | "effortInvalid"
   | "dueInvalid" | "notAMember" | "tooManyAssignees" | "tooManyTasks" | "taskDeleted" | "textConflict"
-  | "taskMissing" | "groupNameRequired" | "groupNameTooLong" | "groupExists" | "groupMissing" | "tooManyGroups";
+  | "taskMissing" | "groupNameRequired" | "groupNameTooLong" | "groupExists" | "groupMissing" | "tooManyGroups"
+  // Progress
+  | "periodInvalid";
 
 export class TogetherError extends ApiError {
   constructor(readonly code: TogetherErrorCode, status = 400) {

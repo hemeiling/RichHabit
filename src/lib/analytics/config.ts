@@ -125,6 +125,8 @@ export const FEATURES = {
       "together_task_created", "together_task_moved", "together_task_assignees_set",
       "together_task_deleted", "together_task_restored", "together_group_created", "together_group_deleted",
       "together_task_reordered", "together_task_reopened",
+      // Progress: which period and whether anything was filtered; an export's scope and how many rows.
+      "together_progress_viewed", "together_progress_exported",
     ],
   },
 } as const;

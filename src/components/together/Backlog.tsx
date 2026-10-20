@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import type { TaskSummary } from "@/lib/together/work";
 import { useT } from "@/lib/i18n/context";
-import { Assignees, DueText, Effort } from "@/components/together/TaskCard";
+import { Assignees, DueText, Points } from "@/components/together/TaskCard";
 import type { Person } from "@/components/together/shared";
 import type { useListDrag } from "@/components/together/useListDrag";
 
@@ -70,7 +70,7 @@ export default function Backlog({ tasks, today, members, groups, readOnly, onCap
         <ul className="tg-blist">
           {tasks.map((task) => {
             const group = task.groupId ? groups.get(task.groupId) : undefined;
-            const meta = group || task.dueOn || task.effort || task.assignees.some((id) => members.has(id));
+            const meta = group || task.dueOn || task.effort !== null || task.assignees.some((id) => members.has(id));
             const drag = dnd.card(task, "backlog", tasks);
             return (
               <li key={task.id} className="tg-brow" data-meta={meta || undefined} data-task-id={task.id}
@@ -89,7 +89,7 @@ export default function Backlog({ tasks, today, members, groups, readOnly, onCap
                   <span className="tg-brow-meta">
                     {group && <span className="tg-group">{group}</span>}
                     {task.dueOn && <DueText dueOn={task.dueOn} today={today} />}
-                    {task.effort && <Effort value={task.effort} />}
+                    {task.effort !== null && <Points value={task.effort} />}
                     <Assignees ids={task.assignees} members={members} size={20} />
                   </span>
                 )}

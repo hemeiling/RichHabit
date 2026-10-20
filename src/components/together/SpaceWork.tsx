@@ -1,16 +1,19 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { GroupView, TaskSummary, WorkView } from "@/lib/together/work";
+import type { GroupView, HistoryPage, TaskSummary, WorkView } from "@/lib/together/work";
 import { BOARD_STAGES, type BoardStage, type Stage } from "@/lib/together/stages";
+import { filterParam, matchesGroup, type GroupFilter as GroupChoice } from "@/lib/together/progress";
 import { todayISO } from "@/lib/dates";
+import { deviceTimeZone } from "@/lib/zonedTime";
 import { useT } from "@/lib/i18n/context";
 import { TrashIcon, afterSpaceGone, call, type Person } from "@/components/together/shared";
 import { Menu, Toast, type MenuItem, type ToastState } from "@/components/together/overlay";
 import SpaceHeader, { spaceStyle } from "@/components/together/SpaceHeader";
 import WorkBoard from "@/components/together/WorkBoard";
 import Backlog from "@/components/together/Backlog";
-import History from "@/components/together/History";
+import History, { type HistoryRows } from "@/components/together/History";
+import { GroupFilter, sumPoints } from "@/components/together/Filters";
 import TaskSheet from "@/components/together/TaskSheet";
 import { DeleteSpaceDialog, DeletedSheet, GroupsSheet } from "@/components/together/SpaceSheets";
 import AddMembers from "@/components/together/AddMembers";
@@ -27,6 +30,11 @@ import { useFinePointer, useListDrag, type DropIntent } from "@/components/toget
  *
  * Order: each list in `rank`, the server's order. Moves state intent — a stage
  * and a neighbour, or top/up/down/bottom — and the server decides the rank.
+ *
+ * The group filter (`?group=`, kept in the address like `?stage=`, and carried
+ * to Progress) narrows the Board, the Backlog and History alike. Groups are
+ * labels, not walls: every member sees every group. A filter naming a group
+ * that has since been deleted is dropped, and the person is told.
  */
 
 const cache = new Map<string, WorkView>();
@@ -50,7 +58,6 @@ const ms = (iso: string) => Date.parse(iso.replace(/(\.\d{3})\d*Z$/, "$1Z"));
 const nowMicro = () => new Date().toISOString().replace("Z", "000Z");
 
 type MenuState = { task: TaskSummary; anchor: HTMLElement; kind: "move" | "reopen" } | null;
-type HistoryState = { tasks: TaskSummary[]; more: boolean; total: number };
 
 export default function SpaceWork({ boardId, viewerId }: { boardId: string; viewerId: string }) {
   const tt = useT();
@@ -59,7 +66,10 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   const pathname = usePathname();
   const params = useSearchParams();
   const [work, setWork] = useState<WorkView | null>(() => cache.get(boardId) ?? null);
-  const [history, setHistory] = useState<HistoryState | null>(() => cache.get(boardId)?.history ?? null);
+  /** History's rows — read only while it is open. */
+  const [history, setHistory] = useState<HistoryRows | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
   const [gone, setGone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -73,16 +83,76 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   const offset = useRef(0);
   const serverNow = () => Date.now() - offset.current;
 
+  /** Changes some of the address's filters, keeping the rest. */
+  const setParams = useCallback((changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params.toString());
+    for (const [k, v] of Object.entries(changes)) {
+      if (v === null) next.delete(k); else next.set(k, v);
+    }
+    const qs = next.toString();
+    router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [router, pathname, params]);
+
   const stageParam = params.get("stage");
   const stage: BoardStage = (BOARD_STAGES as readonly string[]).includes(stageParam ?? "") ? (stageParam as BoardStage) : "todo";
-  const setStage = useCallback((s: BoardStage) => {
-    router.replace(`${pathname}${s === "todo" ? "" : `?stage=${s}`}`, { scroll: false });
-  }, [router, pathname]);
+  const setStage = useCallback((s: BoardStage) => setParams({ stage: s === "todo" ? null : s }), [setParams]);
+
+  // The group filter: one of the space's groups, "none" (ungrouped), or all. Judged only against this
+  // visit's own reading of the space — a cached one may predate a group made since (on Progress, say).
+  const [fresh, setFresh] = useState(false);
+  const groupParam = filterParam(params.get("group"));
+  const groupKnown = groupParam === "all" || groupParam === "none" || !work || !fresh || work.groups.some((g) => g.id === groupParam);
+  const group: GroupChoice = groupKnown ? groupParam : "all";
+
+  // History: collapsed unless this person opened it in this space before (this device remembers).
+  const historyKey = `rh:tg-history:${viewerId}:${boardId}`;
+  useEffect(() => {
+    try { setHistoryOpen(localStorage.getItem(historyKey) === "open"); } catch { /* no storage: collapsed */ }
+  }, [historyKey]);
+  const tz = useMemo(() => deviceTimeZone() ?? "UTC", []);
+  /** What History is showing, for reads that start later than the render that asked for them. */
+  const historyView = useRef({ open: false, group: "all" as GroupChoice, search: "" });
+  historyView.current = { open: historyOpen, group, search: historySearch.trim() };
+  const historyUrl = useCallback((cursor?: string) => {
+    const v = historyView.current;
+    const q = new URLSearchParams({ tz });
+    if (cursor) q.set("cursor", cursor);
+    if (v.group !== "all") q.set("group", v.group);
+    if (v.search) q.set("q", v.search);
+    return `/api/together/boards/${boardId}/tasks/history?${q}`;
+  }, [boardId, tz]);
 
   // Several re-reads can be in flight; only the latest one asked for may land.
   const reads = useRef(0);
+  const historyReads = useRef(0);
   /** How many History rows are open, so a re-read brings the same number back. */
   const shownHistory = useRef(0);
+  /** Whether History's rows have been asked for since it was opened — until then, opening it reads them. */
+  const historyLoaded = useRef(false);
+  /** The space's re-read, for History to call when its group turns out to be gone. */
+  const reload = useRef<() => void>(() => {});
+  /**
+   * History for the filters in use, from the top — and, if older pages were
+   * open, those again from the server (not kept from before: another member may
+   * have deleted or reopened something in them).
+   */
+  const fillHistory = useCallback(async (shown: number) => {
+    const mine = ++historyReads.current;
+    const first = await call<HistoryPage>(historyUrl());
+    let tasks = first.tasks, more = first.more;
+    while (more && tasks.length < shown && mine === historyReads.current) {
+      const last = tasks[tasks.length - 1];
+      const page = await call<HistoryPage>(historyUrl(`${last.movedAt}|${last.id}`));
+      tasks = [...tasks, ...page.tasks];
+      more = page.more;
+    }
+    if (mine !== historyReads.current || !historyView.current.open) return;
+    setHistory({ tasks, more, total: first.total ?? tasks.length, points: first.points ?? 0, months: first.months ?? [] });
+    historyLoaded.current = true;
+    // The server widened a group that no longer exists: re-read the space, which drops the filter and says so.
+    if (first.dropped) reload.current();
+  }, [historyUrl]);
+
   const load = useCallback(async () => {
     const mine = ++reads.current;
     try {
@@ -91,27 +161,16 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       offset.current = Date.now() - ms(w.serverNow);
       cache.set(boardId, w);
       setWork(w);
-      // History: the fresh first page — and, if older pages were open, those again
-      // from the server (not kept from before: another member may have deleted
-      // or reopened something in them).
-      const shown = shownHistory.current;
-      let tasks = w.history.tasks, more = w.history.more;
-      while (more && tasks.length < shown && mine === reads.current) {
-        const last = tasks[tasks.length - 1];
-        const page = await call<{ tasks: TaskSummary[]; more: boolean }>(
-          `/api/together/boards/${boardId}/tasks/history?cursor=${encodeURIComponent(`${last.movedAt}|${last.id}`)}`);
-        tasks = [...tasks, ...page.tasks];
-        more = page.more;
-      }
-      if (mine !== reads.current) return;
-      setHistory({ tasks, more, total: w.history.total });
+      setFresh(true);
       setGone(null);
+      if (historyView.current.open && historyLoaded.current) await fillHistory(shownHistory.current);
     } catch (e) {
       if (mine !== reads.current) return;
       const err = e as Error & { status?: number };
       if (err.status === 404) { cache.delete(boardId); setGone(err.message); } else setError(err.message);
     }
-  }, [boardId]);
+  }, [boardId, fillHistory]);
+  useEffect(() => { reload.current = () => { void load(); }; }, [load]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -159,29 +218,70 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
     load();   // whatever went wrong, show the server's truth
   }, [load]);
 
-  /** The Board's and the Backlog's lists, in order. Done holds only its 24 hours. */
+  // A filter naming a group that no longer exists (deleted, perhaps by someone else) is dropped, and said so.
+  useEffect(() => {
+    if (groupKnown) return;
+    setParams({ group: null });
+    say(tt.together.progress.groupGone);
+  }, [groupKnown, setParams, say, tt]);
+
+  // History's rows: read when it opens and whenever its filters change (typing waits a moment). Another
+  // group's rows are not left on screen under this one's name meanwhile. A failed read is retried by the
+  // space's next re-read (on returning to the tab, Refresh, or any change).
+  const historyGroup = useRef(group);
+  useEffect(() => {
+    if (!historyOpen) { setHistory(null); historyLoaded.current = false; return; }
+    if (historyGroup.current !== group) { historyGroup.current = group; setHistory(null); }
+    const timer = window.setTimeout(() => {
+      fillHistory(0).catch((e: unknown) => { historyLoaded.current = true; setError((e as Error).message); });
+    }, historySearch.trim() ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [historyOpen, group, historySearch, fillHistory]);
+
+  const toggleHistory = useCallback((open: boolean) => {
+    setHistoryOpen(open);
+    if (!open) setHistorySearch("");
+    try {
+      if (open) localStorage.setItem(historyKey, "open"); else localStorage.removeItem(historyKey);
+    } catch { /* no storage: remembered for this visit only */ }
+  }, [historyKey]);
+
+  /** The Board's and the Backlog's lists, in order, for the group filter. Done holds only its 24 hours. */
   const lists = useMemo(() => {
     const by = new Map<Stage, TaskSummary[]>();
     for (const s of ["backlog", ...BOARD_STAGES] as Stage[]) by.set(s, []);
     for (const x of work?.tasks ?? []) {
       if (x.stage === "done" && ms(x.movedAt) + DAY <= Date.now() - offset.current) continue;
+      if (!matchesGroup(x, group)) continue;
       by.get(x.stage)?.push(x);
     }
     for (const list of by.values()) list.sort(compareInList);
     return by;
-  }, [work]);
+  }, [work, group]);
+
+  /** What History holds for the filters in use — known while collapsed, from the space's own read. */
+  const historyHeld = useMemo(() => {
+    if (historySearch.trim() && history) return { total: history.total, points: history.points };
+    const all = work?.history;
+    if (!all) return { total: 0, points: 0 };
+    if (group === "all") return { total: all.total, points: all.points };
+    const g = all.groups.find((x) => (group === "none" ? x.groupId === null : x.groupId === group));
+    return { total: g?.tasks ?? 0, points: g?.points ?? 0 };
+  }, [work, history, group, historySearch]);
 
   const create = useCallback(async (title: string, s: Stage) => {
     setError(null);
     try {
+      // Filtered to a group, a new task joins it — so it stays in view where it was added.
+      const into = group !== "all" && group !== "none" ? { groupId: group } : {};
       const { task } = await call<{ task: TaskSummary }>(`/api/together/boards/${boardId}/tasks`, {
-        method: "POST", body: JSON.stringify({ title, stage: s }) });
+        method: "POST", body: JSON.stringify({ title, stage: s, ...into }) });
       put(task);
       setAnnounce(`${t.added}: ${task.title}`);
       load();
       return true;
     } catch (e) { fail(e); return false; }
-  }, [boardId, put, load, fail, t]);
+  }, [boardId, group, put, load, fail, t]);
 
   /** A rank for showing a move before the server answers — display only; the reply replaces it. */
   const optimisticRank = (list: TaskSummary[], intent: DropIntent | { place: "bottom" }): string => {
@@ -247,15 +347,17 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   const showOlderHistory = useCallback(async () => {
     const last = history?.tasks.at(-1);
     if (!last) return;
+    const mine = historyReads.current;
     try {
-      const page = await call<{ tasks: TaskSummary[]; more: boolean }>(
-        `/api/together/boards/${boardId}/tasks/history?cursor=${encodeURIComponent(`${last.movedAt}|${last.id}`)}`);
+      const page = await call<HistoryPage>(historyUrl(`${last.movedAt}|${last.id}`));
+      if (mine !== historyReads.current) return;   // the filters changed meanwhile: this page belongs to another list
       setHistory((h) => {
-        const seen = new Set((h?.tasks ?? []).map((x) => x.id));
-        return { tasks: [...(h?.tasks ?? []), ...page.tasks.filter((x) => !seen.has(x.id))], more: page.more, total: h?.total ?? 0 };
+        if (!h) return h;
+        const seen = new Set(h.tasks.map((x) => x.id));
+        return { ...h, tasks: [...h.tasks, ...page.tasks.filter((x) => !seen.has(x.id))], more: page.more };
       });
     } catch (e) { fail(e); }
-  }, [history, boardId, fail]);
+  }, [history, historyUrl, fail]);
 
   const members = useMemo(() => new Map<string, Person>((work?.members ?? []).map((m) => [m.id, m])), [work]);
   const groups = useMemo(() => new Map<string, string>((work?.groups ?? []).map((g) => [g.id, g.name])), [work]);
@@ -316,7 +418,8 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       { key: "down", label: t.down, disabled: last, onSelect: () => move(task, task.stage, { place: "down" }, "menu") },
       { key: "bottom", label: t.toBottom, disabled: last, onSelect: () => move(task, task.stage, { place: "bottom" }, "menu") },
     ];
-    return [...board, backlog, ...(list.length > 1 ? position : [])];
+    // Up and down are places in the whole list; with a group filter on, its neighbours may be out of sight.
+    return [...board, backlog, ...(list.length > 1 && group === "all" ? position : [])];
   };
 
   /** A member leaves (the server refuses the owner), then lands on Overview, which says so. */
@@ -343,10 +446,11 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       : { key: "leave", label: tt.together.leave, divided: true, onSelect: () => { void leaveSpace(); } },
   ];
   const open = openId ? findTask(openId) : undefined;
+  const backlogTasks = lists.get("backlog") ?? [];
 
   return (
     <div className="tg-space" style={spaceStyle(work.space.id)}>
-      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work" onMore={setMore}
+      <SpaceHeader id={work.space.id} name={work.space.name} members={work.members} view="work" group={group} onMore={setMore}
         onAddMembers={readOnly ? undefined : () => setPanel("add")} />
 
       {readOnly && <p className="tg-archived mt-4" role="status">{t.readOnly}</p>}
@@ -358,6 +462,13 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       )}
       {dnd.dragging === null && fine && !readOnly && <p className="sr-only">{t.dragHint}</p>}
 
+      {/* One group filter for the Board, the Backlog and History — shown once the space has groups. */}
+      {(work.groups.length > 0 || group !== "all") && (
+        <div className="tg-filterbar">
+          <GroupFilter groups={work.groups} value={group} onChange={(g) => setParams({ group: g === "all" ? null : g })} />
+        </div>
+      )}
+
       <section className="tg-section" aria-labelledby="tg-h-board">
         <h2 className="tg-section-title" id="tg-h-board">{t.board}</h2>
         <WorkBoard lists={lists} today={today} members={members} groups={groups} readOnly={readOnly}
@@ -368,14 +479,21 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       {/* Below the board: the Backlog, and History beside it on a wide screen — both quieter than the board. */}
       <div className="tg-lower-wrap"><div className="tg-lower">
       <section className="tg-section tg-section-quiet tg-lower-backlog" id="backlog" aria-labelledby="tg-h-backlog">
-        <h2 className="tg-section-title" id="tg-h-backlog">{t.backlog}</h2>
-        <Backlog tasks={lists.get("backlog") ?? []} today={today} members={members} groups={groups} readOnly={readOnly}
+        <div className="tg-section-row">
+          <h2 className="tg-section-title" id="tg-h-backlog">{t.backlog}</h2>
+          {backlogTasks.length > 0 && (
+            <span className="tg-history-count">{t.backlogCount(backlogTasks.length, sumPoints(backlogTasks).points)}</span>
+          )}
+        </div>
+        <Backlog tasks={backlogTasks} today={today} members={members} groups={groups} readOnly={readOnly}
           onCapture={(title) => create(title, "backlog")} onOpen={(task) => setOpenId(task.id)}
           onCommit={(task) => move(task, "todo", { place: "top" }, "menu")} onCommitTo={openMove} dnd={dnd} />
       </section>
 
       <section className="tg-section tg-section-quiet tg-lower-history" id="history" aria-labelledby="tg-h-history">
-        <History heading="tg-h-history" history={history} today={today} members={members} groups={groups} readOnly={readOnly}
+        <History heading="tg-h-history" open={historyOpen} onToggle={toggleHistory} summary={historyHeld} rows={history}
+          search={historySearch} onSearch={setHistorySearch} filtered={group !== "all"}
+          members={members} groups={groups} readOnly={readOnly}
           onOpen={(task) => setOpenId(task.id)} onReopen={openReopen} onShowOlder={showOlderHistory} />
       </section>
       </div></div>

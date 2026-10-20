@@ -50,10 +50,13 @@ describe("terminology", () => {
   it("uses the approved words, and keeps 看板 for the board and 空间 for the space", () => {
     const en = dict("en").together.work;
     const zh = dict("zh").together.work;
-    expect([en.board, en.backlog, en.stages.todo, en.stages.doing, en.stages.waiting, en.stages.done, en.group, en.effort, en.dueDate, en.moveTo, en.formerMember])
-      .toEqual(["Board", "Backlog", "To do", "In progress", "Waiting", "Done", "Group", "Effort", "Due date", "Move to…", "Former member"]);
-    expect([zh.board, zh.backlog, zh.stages.todo, zh.stages.doing, zh.stages.waiting, zh.stages.done, zh.group, zh.effort, zh.dueDate, zh.moveTo, zh.formerMember])
-      .toEqual(["看板", "想法池", "待办", "进行中", "等待中", "已完成", "分组", "工作量", "截止日期", "移到…", "前成员"]);
+    expect([en.board, en.backlog, en.stages.todo, en.stages.doing, en.stages.waiting, en.stages.done, en.group, en.points, en.dueDate, en.moveTo, en.formerMember])
+      .toEqual(["Board", "Backlog", "To do", "In progress", "Waiting", "Done", "Group", "Story points", "Due date", "Move to…", "Former member"]);
+    expect([zh.board, zh.backlog, zh.stages.todo, zh.stages.doing, zh.stages.waiting, zh.stages.done, zh.group, zh.points, zh.dueDate, zh.moveTo, zh.formerMember])
+      .toEqual(["看板", "想法池", "待办", "进行中", "等待中", "已完成", "分组", "故事点", "截止日期", "移到…", "前成员"]);
+    // Progress keeps the same words: the switch says Board · 看板 and Progress · 进展.
+    expect([dict("en").together.progress.board, dict("zh").together.progress.board]).toEqual(["Board", "看板"]);
+    expect([dict("en").together.progress.progress, dict("zh").together.progress.progress]).toEqual(["Progress", "进展"]);
   });
 
   it("names a stage once per language in bilingual sentences — never a bilingual label inside a bilingual sentence", () => {
@@ -75,13 +78,16 @@ describe("terminology", () => {
       else if (typeof v === "function") strings.push(`${at}: ${String((v as Function)("X", 2, true, false))}`);
       else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, `${at}.${k}`);
     };
-    const { work, errors, ...rest } = dict("en").together;
+    const { work, errors, progress, ...rest } = dict("en").together;
     const { stageInvalid, ...otherErrors } = errors;
     walk(rest, "together");
     walk(otherErrors, "together.errors");
     expect(strings.filter((s) => /\bboards?\b/i.test(s.split(": ")[1]))).toEqual([]);
-    // Inside the work strings, "board" is the work board itself.
+    // Inside the work strings, "board" is the work board itself — and in Progress, which
+    // switches between that Board and itself, and counts what is on it.
     expect(work.backlogIntro).toMatch(/commit it to the board/);
     expect(stageInvalid).toMatch(/board/);
+    expect(progress.board).toBe("Board");
+    expect(progress.noWork).toMatch(/^No work in this space yet\. Add tasks to the Board/);
   });
 });

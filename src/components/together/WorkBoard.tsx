@@ -5,6 +5,7 @@ import { BOARD_STAGES, type BoardStage, type Stage } from "@/lib/together/stages
 import { useLocale, useT } from "@/lib/i18n/context";
 import { dict } from "@/lib/i18n";
 import TaskCard from "@/components/together/TaskCard";
+import { PointsSum } from "@/components/together/Filters";
 import type { Person } from "@/components/together/shared";
 import type { useListDrag } from "@/components/together/useListDrag";
 
@@ -145,6 +146,7 @@ export default function WorkBoard(p: BoardProps) {
                 <h3 className="tg-col-head" id={`tg-col-head-${s}`}>
                   <span className="tg-col-name">{t.stages[s]}</span>
                   <span className="tg-col-n">{items.length}</span>
+                  {items.length > 0 && <PointsSum tasks={items} />}
                 </h3>
                 {!p.readOnly && (
                   <button type="button" className="tg-col-add" aria-label={t.addTo(s)} aria-expanded={adding === s}
@@ -154,6 +156,8 @@ export default function WorkBoard(p: BoardProps) {
                   </button>
                 )}
               </div>
+              {/* One stage at a time (narrow), the column heading is hidden: its points sit here instead. */}
+              {items.length > 0 && <p className="tg-col-sum"><PointsSum tasks={items} /></p>}
               {!p.readOnly && (
                 <QuickAdd label={t.addTo(s)} placeholder={t.addPlaceholder} hint={t.addHint}
                   onAdd={(title) => p.onAdd(s, title)} open={adding === s}

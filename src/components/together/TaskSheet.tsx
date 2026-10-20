@@ -11,7 +11,7 @@ import { StageName } from "@/components/together/WorkBoard";
 /**
  * A task's sheet: everything about it, revealed only when someone opens it.
  *
- * Small fields — people, group, effort, due date — save the moment they change,
+ * Small fields — people, group, story points, due date — save the moment they change,
  * each on its own, so two people changing different things both win. The title
  * and description save when you leave them, and carry the version they were
  * edited from: if someone else changed the words meanwhile, the server refuses,
@@ -367,11 +367,12 @@ export default function TaskSheet({
         </div>
 
         <div className="tg-field">
-          <dt className="tg-field-label" id="tg-f-effort">{t.effort}</dt>
+          <dt className="tg-field-label" id="tg-f-effort">{t.points}</dt>
           <dd className="tg-field-value">
-            <div className="tg-choices" role="group" aria-labelledby="tg-f-effort">
+            <div className="tg-choices" role="group" aria-labelledby="tg-f-effort" aria-describedby="tg-f-effort-hint">
               {EFFORT_CHOICES.map((n) => (
                 <button key={n} type="button" className="tg-choice num" aria-pressed={detail.effort === n} data-on={detail.effort === n}
+                  aria-label={t.pointsChoice(n)} title={t.pointsMeaning(n)}
                   disabled={readOnly} onClick={() => saveField({ effort: detail.effort === n ? null : n }, { effort: detail.effort === n ? null : n })}>
                   {n}
                 </button>
@@ -380,6 +381,10 @@ export default function TaskSheet({
                 <button type="button" className="tg-clear" onClick={() => saveField({ effort: null }, { effort: null })}>{t.clear}</button>
               )}
             </div>
+            {/* What the choice means — and, with none, the default every total counts it at. */}
+            <p className="tg-points-hint" id="tg-f-effort-hint" data-default={detail.effort === null || undefined}>
+              {detail.effort === null ? t.pointsDefault : t.pointsMeaning(detail.effort)}
+            </p>
           </dd>
         </div>
 

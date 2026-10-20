@@ -28,6 +28,8 @@ export async function withUser(
 
   try {
     const data = await fn(user.id);
+    // A download (a spreadsheet, say) answers with its own response; everything else is JSON.
+    if (data instanceof NextResponse) return data;
     return NextResponse.json(data ?? { ok: true });
   } catch (e) {
     /*

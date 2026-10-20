@@ -21,17 +21,25 @@
 const MINUTE = 60_000;
 const DAY = 86_400_000;
 
+/**
+ * One formatter per zone, kept under the zone's own name. Intl accepts any
+ * capitalisation ("america/chicago"), and zones arrive from requests, so a cache
+ * keyed by what callers send could be grown without end; keyed by the canonical
+ * name it holds at most one entry per real zone.
+ */
 const formatters = new Map<string, Intl.DateTimeFormat>();
 function formatterFor(timeZone: string): Intl.DateTimeFormat {
-  let f = formatters.get(timeZone);
-  if (!f) {
-    f = new Intl.DateTimeFormat("en-US", {
-      timeZone, hourCycle: "h23",
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", second: "2-digit",
-    });
-    formatters.set(timeZone, f);
-  }
+  const cached = formatters.get(timeZone);
+  if (cached) return cached;
+  const f = new Intl.DateTimeFormat("en-US", {
+    timeZone, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const name = f.resolvedOptions().timeZone;
+  const known = formatters.get(name);
+  if (known) return known;
+  formatters.set(name, f);
   return f;
 }
 
@@ -45,6 +53,11 @@ export function isTimeZone(v: unknown): v is string {
   } catch {
     return false;
   }
+}
+
+/** A zone as its canonical IANA name ("america/chicago" → "America/Chicago"), or null when it is not one. */
+export function canonicalZone(v: unknown): string | null {
+  return isTimeZone(v) ? formatterFor(v).resolvedOptions().timeZone : null;
 }
 
 /** The device's IANA zone, or null when it cannot say. */
