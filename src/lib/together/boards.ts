@@ -293,6 +293,45 @@ export async function removeMember(userId: string, boardId: unknown, targetId: u
   });
 }
 
+/** What a deleted space held — counts only, for the audit event; never a name or any text. */
+export interface DeletedBoard { members: number; tasks: number; groups: number; invitations: number }
+
+/**
+ * The owner deletes a space for good — the one board action that cannot be
+ * undone, so the space's name, typed, is checked here as well as on screen: a
+ * stray or replayed request without it deletes nothing.
+ *
+ * What goes is decided by the schema, not by this function: memberships,
+ * invitations, groups and tasks all reference the board `on delete cascade`,
+ * and assignments cascade from the tasks and memberships. Nothing outside the
+ * space refers to a board — no account, no personal RichHabit table, no other
+ * space, no collaborator link (those are between people) — so deleting the one
+ * row can take nothing else with it.
+ *
+ * The owner's membership row is locked first (as every owner action does), then
+ * the board. A second request racing this one waits on that lock and then finds
+ * no membership: "not found", never a second deletion and never a 500.
+ */
+export async function deleteBoard(userId: string, boardId: unknown, confirmName: unknown): Promise<DeletedBoard> {
+  return transaction(async (q) => {
+    const access = await requireBoard(q, userId, boardId, { owner: true, lock: true });
+    await lockBoard(q, access.boardId);
+    const [board] = await q<{ name: string }>(`select name from together_boards where id = $1`, [access.boardId]);
+    const same = (s: string) => s.trim().normalize("NFC");
+    if (typeof confirmName !== "string" || same(confirmName) !== same(board.name)) {
+      throw new TogetherError("confirmMismatch");
+    }
+    const [held] = await q<DeletedBoard>(
+      `select (select count(*)::int from together_members where board_id = $1) as members,
+              (select count(*)::int from together_tasks where board_id = $1) as tasks,
+              (select count(*)::int from together_groups where board_id = $1) as groups,
+              (select count(*)::int from together_invitations where board_id = $1) as invitations`,
+      [access.boardId]);
+    await q(`delete from together_boards where id = $1`, [access.boardId]);
+    return held;
+  });
+}
+
 /** A member leaves. The owner cannot (V1 has no ownership transfer); they archive instead. */
 export async function leaveBoard(userId: string, boardId: unknown): Promise<void> {
   await transaction(async (q) => {

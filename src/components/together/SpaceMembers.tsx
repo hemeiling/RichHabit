@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/context";
-import { Avatar, call, type Person } from "@/components/together/shared";
+import { Avatar, afterSpaceGone, call, type Person } from "@/components/together/shared";
 import SpaceHeader, { spaceStyle } from "@/components/together/SpaceHeader";
 import AddMembers from "@/components/together/AddMembers";
 import { cachedWork } from "@/components/together/SpaceWork";
@@ -195,8 +195,10 @@ export default function SpaceMembers({ boardId, viewerId }: { boardId: string; v
         </>) : (
           <button className="btn" onClick={() => {
             if (window.confirm(t.together.confirmLeave)) {
-              act(() => call(`/api/together/boards/${boardId}/leave`, { method: "POST" }), undefined, { reload: false })
-                .then((ok) => { if (ok) { router.push("/together"); router.refresh(); } });
+              let together: boolean | undefined;
+              act(async () => { together = (await call<{ together?: boolean }>(`/api/together/boards/${boardId}/leave`, { method: "POST" })).together; },
+                undefined, { reload: false })
+                .then((ok) => { if (ok) afterSpaceGone(router, together, t.together.left(board.name)); });
             }
           }}>{t.together.leave}</button>
         )}

@@ -117,7 +117,7 @@ export const FEATURES = {
   together: {
     label: "Together",
     events: [
-      "together_board_created", "together_board_archived",
+      "together_board_created", "together_board_archived", "together_board_deleted",
       "together_member_removed", "together_board_left", "together_invitation_sent",
       "together_invitation_accepted", "together_invitation_declined",
       "together_connection_requested", "together_connection_accepted", "together_connection_declined",

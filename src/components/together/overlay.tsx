@@ -99,6 +99,10 @@ export interface MenuItem {
   disabled?: boolean;
   /** Starts a new section with a hairline above. */
   divided?: boolean;
+  /** A small mark in the leading column (a trash can for Delete). */
+  icon?: ReactNode;
+  /** Destructive: shown in the danger colour. */
+  danger?: boolean;
   onSelect: () => void;
 }
 
@@ -169,8 +173,9 @@ export function Menu({ anchor, title, items, onClose, currentLabel }: {
             {item.divided && <div className="tg-menu-sep" role="separator" />}
             <button type="button" role={item.current === undefined ? "menuitem" : "menuitemradio"}
               aria-checked={item.current === undefined ? undefined : item.current} disabled={item.current || item.disabled}
-              className="tg-menu-item" onClick={() => { onClose(); item.onSelect(); }}>
-              <span className="tg-menu-check" aria-hidden="true">{item.current ? "✓" : ""}</span>
+              className="tg-menu-item" data-danger={item.danger || undefined}
+              onClick={() => { onClose(); item.onSelect(); }}>
+              <span className="tg-menu-check" aria-hidden="true">{item.current ? "✓" : item.icon ?? ""}</span>
               <span className="tg-menu-label">{item.label}</span>
               {item.current && <span className="tg-menu-current">{currentLabel}</span>}
             </button>

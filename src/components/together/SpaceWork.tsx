@@ -5,14 +5,14 @@ import type { GroupView, TaskSummary, WorkView } from "@/lib/together/work";
 import { BOARD_STAGES, type BoardStage, type Stage } from "@/lib/together/stages";
 import { todayISO } from "@/lib/dates";
 import { useT } from "@/lib/i18n/context";
-import { call, type Person } from "@/components/together/shared";
+import { TrashIcon, afterSpaceGone, call, type Person } from "@/components/together/shared";
 import { Menu, Toast, type MenuItem, type ToastState } from "@/components/together/overlay";
 import SpaceHeader, { spaceStyle } from "@/components/together/SpaceHeader";
 import WorkBoard from "@/components/together/WorkBoard";
 import Backlog from "@/components/together/Backlog";
 import History from "@/components/together/History";
 import TaskSheet from "@/components/together/TaskSheet";
-import { DeletedSheet, GroupsSheet } from "@/components/together/SpaceSheets";
+import { DeleteSpaceDialog, DeletedSheet, GroupsSheet } from "@/components/together/SpaceSheets";
 import AddMembers from "@/components/together/AddMembers";
 import { useFinePointer, useListDrag, type DropIntent } from "@/components/together/useListDrag";
 
@@ -65,7 +65,7 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   const [openId, setOpenId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
   const [more, setMore] = useState<HTMLElement | null>(null);
-  const [panel, setPanel] = useState<null | "groups" | "deleted" | "add">(null);
+  const [panel, setPanel] = useState<null | "groups" | "deleted" | "add" | "delete">(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [announce, setAnnounce] = useState("");
   const [today, setToday] = useState(todayISO);
@@ -319,12 +319,28 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
     return [...board, backlog, ...(list.length > 1 ? position : [])];
   };
 
+  /** A member leaves (the server refuses the owner), then lands on Overview, which says so. */
+  const leaveSpace = async () => {
+    if (!window.confirm(tt.together.confirmLeave)) return;
+    try {
+      const r = await call<{ together?: boolean }>(`/api/together/boards/${boardId}/leave`, { method: "POST" });
+      afterSpaceGone(router, r.together, tt.together.left(work.space.name));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const moreItems: MenuItem[] = [
     // Also reachable by the avatars; named here so nobody has to guess that.
     { key: "members", label: tt.together.members, onSelect: () => router.push(`/together/b/${boardId}/members`) },
     { key: "groups", label: t.groups, divided: true, onSelect: () => setPanel("groups") },
     { key: "deleted", label: t.recentlyDeleted, onSelect: () => setPanel("deleted") },
     { key: "refresh", label: t.refresh, divided: true, onSelect: () => { setToday(todayISO()); load(); } },
+    // Last and apart: the owner deletes the space; everyone else may leave it.
+    work.space.role === "owner"
+      ? { key: "delete", label: tt.together.deleteSpace, icon: <TrashIcon />, danger: true, divided: true,
+        onSelect: () => setPanel("delete") }
+      : { key: "leave", label: tt.together.leave, divided: true, onSelect: () => { void leaveSpace(); } },
   ];
   const open = openId ? findTask(openId) : undefined;
 
@@ -392,6 +408,9 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       {panel === "deleted" && (
         <DeletedSheet boardId={boardId} readOnly={readOnly} onClose={() => setPanel(null)}
           onRestored={(task) => { put(task); say(t.restoredToast); load(); }} />
+      )}
+      {panel === "delete" && (
+        <DeleteSpaceDialog boardId={boardId} name={work.space.name} onClose={() => setPanel(null)} />
       )}
 
       <Toast toast={toast} onDone={clearToast} />

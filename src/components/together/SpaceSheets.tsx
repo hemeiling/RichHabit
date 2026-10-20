@@ -1,14 +1,79 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DeletedTask, GroupView, TaskSummary } from "@/lib/together/work";
 import { useT } from "@/lib/i18n/context";
-import { call } from "@/components/together/shared";
+import { afterSpaceGone, call } from "@/components/together/shared";
 import { Dialog } from "@/components/together/overlay";
 
 /**
- * The space's two small housekeeping sheets, from ⋯: Groups and Recently
- * deleted. Both are read-only in an archived space.
+ * The space's housekeeping sheets, from ⋯: Groups and Recently deleted (both
+ * read-only in an archived space), and Delete space (the owner's).
  */
+
+/**
+ * Deleting a space, for good. Offered only to the owner — and the server decides
+ * that again, along with the typed name, so nothing here is a security check.
+ * Typing the name exactly is the confirmation. On success the space no longer
+ * exists, so the page moves to Together Overview, which says so; on failure the
+ * space is untouched and the reason is shown here.
+ */
+export function DeleteSpaceDialog({ boardId, name, onClose }: {
+  boardId: string; name: string; onClose: () => void;
+}) {
+  const tt = useT();
+  const t = tt.together;
+  const router = useRouter();
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const same = (s: string) => s.trim().normalize("NFC");
+  const matches = same(typed) === same(name);
+  const close = () => { if (!busy) onClose(); };     // not mid-request: the answer must be seen
+
+  const remove = async () => {
+    if (!matches || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await call<{ together?: boolean }>(`/api/together/boards/${boardId}`,
+        { method: "DELETE", body: JSON.stringify({ confirmName: typed }) });
+      afterSpaceGone(router, r.together, t.deleted(name));
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog label={t.deleteTitle} onClose={close} footer={
+      <>
+        <button className="btn" type="button" disabled={busy} onClick={close}>{tt.common.cancel}</button>
+        <button className="btn tg-danger" type="button" disabled={!matches || busy} onClick={remove}>
+          {busy ? t.deleting : t.deleteConfirm}
+        </button>
+      </>
+    }>
+      <div className="tg-sheet-top">
+        <h2 className="display" style={{ fontSize: 24 }}>{t.deleteTitle}</h2>
+        <button type="button" className="btn btn-quiet tg-sheet-close" disabled={busy} onClick={close}>{tt.common.close}</button>
+      </div>
+      <p style={{ fontSize: 14, lineHeight: 1.55, overflowWrap: "anywhere" }}>{t.deleteBody(name)}</p>
+      <p className="muted mt-2" style={{ fontSize: 13.5, lineHeight: 1.5 }}>{t.deleteKeeps}</p>
+      <p className="mt-2" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--warn)" }}>{t.deleteIrreversible}</p>
+      <label className="block mt-4">
+        <span className="block mb-1.5" style={{ fontSize: 13.5 }}>
+          {t.deleteTypePrompt} <strong style={{ overflowWrap: "anywhere" }}>{name}</strong>
+        </span>
+        <input className="input" data-autofocus value={typed} autoComplete="off" spellCheck={false}
+          aria-invalid={typed.length > 0 && !matches ? true : undefined}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void remove(); } }} />
+      </label>
+      {error && <p className="tg-sheet-error" role="alert">{error}</p>}
+    </Dialog>
+  );
+}
 
 export function GroupsSheet({ boardId, groups, readOnly, onClose, onChanged }: {
   boardId: string; groups: GroupView[]; readOnly: boolean; onClose: () => void; onChanged: () => void;

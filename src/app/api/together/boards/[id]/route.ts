@@ -1,6 +1,7 @@
 import { body } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics/track";
-import { loadBoard, renameBoard, setArchived } from "@/lib/together/boards";
+import { togetherAccess } from "@/lib/together/access";
+import { deleteBoard, loadBoard, renameBoard, setArchived } from "@/lib/together/boards";
 import { togetherRoute } from "@/lib/together/route";
 
 /** One board, as this member may see it. */
@@ -22,5 +23,25 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       await renameBoard(userId, params.id, b.name);
     }
     return { ok: true };
+  });
+}
+
+/**
+ * Delete the space for good — the owner only, confirming with its name. The
+ * audit record is the analytics event: who, which space id and when, with what
+ * it held as counts — never its name, a task or a member's name.
+ */
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  return togetherRoute(async (userId) => {
+    // Read leniently: access is decided before anything about the request is
+    // refused, so a malformed body tells a non-member nothing (deleteBoard
+    // checks membership and ownership first, the name only for the owner).
+    const b = (await request.json().catch(() => null)) as { confirmName?: unknown } | null;
+    const held = await deleteBoard(userId, params.id, b?.confirmName);
+    await trackEvent({ userId, event: "together_board_deleted", page: "/together",
+      entityType: "together_board", entityId: params.id, properties: { ...held } });
+    // Whether Together still exists for them (an owner who inherited the space
+    // may have had no other): where the screen should go next.
+    return { ok: true, together: (await togetherAccess(userId)) !== null };
   });
 }

@@ -25,6 +25,52 @@ export async function call<T>(path: string, init: RequestInit = {}): Promise<T> 
   return data as T;
 }
 
+/*
+ * A sentence for Together Overview to show once, after an action that leaves
+ * the page it happened on (deleting or leaving a space). Kept in this tab's
+ * session only — never in the address, where a space's name would end up in
+ * history — and read once. Storage can be unavailable (private mode); then
+ * the message is simply skipped and nothing else changes.
+ */
+const NOTICE_KEY = "rh:together:notice";
+export function leaveNotice(text: string) {
+  try { sessionStorage.setItem(NOTICE_KEY, text); } catch { /* no storage: no message */ }
+}
+export function takeNotice(): string | null {
+  try {
+    const text = sessionStorage.getItem(NOTICE_KEY);
+    sessionStorage.removeItem(NOTICE_KEY);
+    return text;
+  } catch { return null; }
+}
+
+/**
+ * Where to go once a space is no longer yours to open (deleted, or left), with
+ * the sentence to show there. Overview when Together still exists for this
+ * account; otherwise — someone outside the preview who had only that space —
+ * Today, since Together has nothing left to show them.
+ */
+export function afterSpaceGone(router: { push: (href: string) => void; refresh: () => void },
+  together: boolean | undefined, message: string) {
+  if (together === false) {
+    router.push("/habits");
+  } else {
+    leaveNotice(message);
+    router.push("/together");
+  }
+  router.refresh();   // the sidebar's list of spaces comes from the server
+}
+
+/** A trash can, for the one destructive item in a menu. */
+export function TrashIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+    </svg>
+  );
+}
+
 /** Up to two letters, from the display name. */
 export const initials = (name: string) =>
   (name.trim().split(/\s+/).map((w) => [...w][0] ?? "").slice(0, 2).join("") || "·").toUpperCase();

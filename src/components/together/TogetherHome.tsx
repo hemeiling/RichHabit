@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Field, Sheet } from "@/components/ui";
 import { useT } from "@/lib/i18n/context";
-import { AvatarRow, Avatar, BoardMark, call, type Person } from "@/components/together/shared";
+import { AvatarRow, Avatar, BoardMark, call, takeNotice, type Person } from "@/components/together/shared";
 import { boardColor } from "@/lib/together/identity";
 
 /**
@@ -39,6 +39,9 @@ export default function TogetherHome() {
   const [showArchived, setShowArchived] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  /** What happened on the page you came from — a space deleted or left — said once. */
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => { setNotice(takeNotice()); }, []);
 
   const load = useCallback(() => {
     setFailed(false);
@@ -96,6 +99,11 @@ export default function TogetherHome() {
   return (
     <div className="tg-home">
       <p className="muted tg-tagline">{t.together.tagline}</p>
+      {notice && (
+        <p className="mt-3" role="status" style={{ fontSize: 13.5, color: "var(--accent)", overflowWrap: "anywhere" }}>
+          {notice}
+        </p>
+      )}
 
       {home.invitations.length > 0 && (
         <section className="mt-6" aria-labelledby="tg-invitations">

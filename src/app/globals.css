@@ -1161,6 +1161,10 @@ body {
 .tg-menu-item:hover:not(:disabled), .tg-menu-item:focus-visible { background: var(--raise); outline: none; }
 .tg-menu-item:disabled { cursor: default; color: var(--muted); }
 .tg-menu-check { width: 16px; flex: none; color: var(--accent); font-weight: 600; text-align: center; }
+.tg-menu-check svg { display: block; margin: 0 auto; }
+.tg-menu-item[data-danger] { color: #B3453B; }
+.tg-menu-item[data-danger] .tg-menu-check { color: inherit; }
+[data-theme="dark"] .tg-menu-item[data-danger] { color: #E08A7F; }
 .tg-menu-label { flex: 1; }
 .tg-menu-current { font-size: 12px; color: var(--faint); }
 .tg-menu-sep { height: 1px; margin: 5px 8px; background: var(--line-soft); }

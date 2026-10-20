@@ -40,7 +40,7 @@ import { ApiError, isUuid } from "@/lib/http";
 export type TogetherErrorCode =
   | "notFound" | "ownerOnly" | "archived" | "nameRequired" | "nameTooLong"
   | "emailInvalid" | "tooManyInvites" | "tooManyOpenInvites" | "sendFailed"
-  | "invitationInvalid" | "wrongAccount" | "ownerCannotLeave" | "cannotRemoveSelf"
+  | "invitationInvalid" | "wrongAccount" | "ownerCannotLeave" | "cannotRemoveSelf" | "confirmMismatch"
   | "notInPeople" | "tooManyPeople" | "tooManyBoards" | "previewOnly" | "conflict" | "usernameUnknown"
   | "tooManyConnections"
   // V1B — shared work
