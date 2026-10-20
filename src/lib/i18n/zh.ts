@@ -1476,6 +1476,8 @@ export const zh: Dict = {
     deleteBody: (name: string) =>
       `“${name}”及其中的一切将被永久删除：看板、任务、想法池、历史、分组、待接受的邀请和成员关系。所有成员都将失去访问权限。`,
     deleteKeeps: "不会影响任何人的个人习惯、日记或其他空间。",
+    deleteArchiveHint: "想保留它？归档后空间会变为只读，随时都可以恢复。",
+    deleteArchiveLink: "前往“成员”页面归档",
     deleteIrreversible: "此操作无法撤销。",
     deleteTypePrompt: "请准确输入空间名称以确认：",
     deleteConfirm: "删除空间",

@@ -410,7 +410,7 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
           onRestored={(task) => { put(task); say(t.restoredToast); load(); }} />
       )}
       {panel === "delete" && (
-        <DeleteSpaceDialog boardId={boardId} name={work.space.name} onClose={() => setPanel(null)} />
+        <DeleteSpaceDialog boardId={boardId} name={work.space.name} archived={readOnly} onClose={() => setPanel(null)} />
       )}
 
       <Toast toast={toast} onDone={clearToast} />

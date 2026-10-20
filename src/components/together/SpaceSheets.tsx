@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { DeletedTask, GroupView, TaskSummary } from "@/lib/together/work";
 import { useT } from "@/lib/i18n/context";
@@ -18,8 +19,11 @@ import { Dialog } from "@/components/together/overlay";
  * exists, so the page moves to Together Overview, which says so; on failure the
  * space is untouched and the reason is shown here.
  */
-export function DeleteSpaceDialog({ boardId, name, onClose }: {
-  boardId: string; name: string; onClose: () => void;
+export function DeleteSpaceDialog({ boardId, name, archived, onClose }: {
+  boardId: string; name: string;
+  /** Already archived: the reversible choice was made, so it is not offered again. */
+  archived: boolean;
+  onClose: () => void;
 }) {
   const tt = useT();
   const t = tt.together;
@@ -60,6 +64,13 @@ export function DeleteSpaceDialog({ boardId, name, onClose }: {
       </div>
       <p style={{ fontSize: 14, lineHeight: 1.55, overflowWrap: "anywhere" }}>{t.deleteBody(name)}</p>
       <p className="muted mt-2" style={{ fontSize: 13.5, lineHeight: 1.5 }}>{t.deleteKeeps}</p>
+      {/* The reversible alternative that already exists: Archive, on the Members page. */}
+      {!archived && (
+        <p className="mt-2" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+          {t.deleteArchiveHint}{" "}
+          <Link href={`/together/b/${boardId}/members`} className="tg-archive-link">{t.deleteArchiveLink}</Link>
+        </p>
+      )}
       <p className="mt-2" style={{ fontSize: 13.5, fontWeight: 500, color: "var(--warn)" }}>{t.deleteIrreversible}</p>
       <label className="block mt-4">
         <span className="block mb-1.5" style={{ fontSize: 13.5 }}>

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Field, Sheet } from "@/components/ui";
 import { useT } from "@/lib/i18n/context";
-import { AvatarRow, Avatar, BoardMark, call, takeNotice, type Person } from "@/components/together/shared";
+import { AvatarRow, Avatar, BoardMark, call, type Person } from "@/components/together/shared";
+import { takeFlash } from "@/lib/flash";
 import { boardColor } from "@/lib/together/identity";
 
 /**
@@ -41,7 +42,7 @@ export default function TogetherHome() {
   const [problem, setProblem] = useState<string | null>(null);
   /** What happened on the page you came from — a space deleted or left — said once. */
   const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => { setNotice(takeNotice()); }, []);
+  useEffect(() => { setNotice(takeFlash()); }, []);
 
   const load = useCallback(() => {
     setFailed(false);

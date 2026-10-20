@@ -1,5 +1,6 @@
 "use client";
 import type { CSSProperties } from "react";
+import { setFlash } from "@/lib/flash";
 import { boardColor, boardInitial, markColors } from "@/lib/together/identity";
 
 /**
@@ -25,39 +26,16 @@ export async function call<T>(path: string, init: RequestInit = {}): Promise<T> 
   return data as T;
 }
 
-/*
- * A sentence for Together Overview to show once, after an action that leaves
- * the page it happened on (deleting or leaving a space). Kept in this tab's
- * session only — never in the address, where a space's name would end up in
- * history — and read once. Storage can be unavailable (private mode); then
- * the message is simply skipped and nothing else changes.
- */
-const NOTICE_KEY = "rh:together:notice";
-export function leaveNotice(text: string) {
-  try { sessionStorage.setItem(NOTICE_KEY, text); } catch { /* no storage: no message */ }
-}
-export function takeNotice(): string | null {
-  try {
-    const text = sessionStorage.getItem(NOTICE_KEY);
-    sessionStorage.removeItem(NOTICE_KEY);
-    return text;
-  } catch { return null; }
-}
-
 /**
- * Where to go once a space is no longer yours to open (deleted, or left), with
- * the sentence to show there. Overview when Together still exists for this
- * account; otherwise — someone outside the preview who had only that space —
- * Today, since Together has nothing left to show them.
+ * Where to go once a space is no longer yours to open (deleted, or left), and
+ * the sentence to show there once (lib/flash). Overview when Together still
+ * exists for this account; otherwise — someone outside the preview who had
+ * only that space — Today, since Together has nothing left to show them.
  */
 export function afterSpaceGone(router: { push: (href: string) => void; refresh: () => void },
   together: boolean | undefined, message: string) {
-  if (together === false) {
-    router.push("/habits");
-  } else {
-    leaveNotice(message);
-    router.push("/together");
-  }
+  setFlash(message);
+  router.push(together === false ? "/habits" : "/together");
   router.refresh();   // the sidebar's list of spaces comes from the server
 }
 

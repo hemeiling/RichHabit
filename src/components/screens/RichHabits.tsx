@@ -1,9 +1,10 @@
 "use client";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { startDragAutoScroll, stopDragAutoScroll } from "@/lib/dragAutoScroll";
+import { takeFlash } from "@/lib/flash";
 import AddHabit from "@/components/AddHabit";
 import CommunityCard from "@/components/CommunityCard";
 import GratitudeJournal from "@/components/GratitudeJournal";
@@ -280,6 +281,9 @@ export default function RichHabits() {
   const [adding, setAdding] = useState<Category | null>(null);
   const [dragged, setDragged] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  /** What happened on the page you came from (leaving your last Together space), said once. */
+  const [flash, setFlashText] = useState<string | null>(null);
+  useEffect(() => { setFlashText(takeFlash()); }, []);
   const isToday = date === todayISO();
 
   /** Distinct days with a completion — what decides whether erasing is offered. */
@@ -367,6 +371,9 @@ export default function RichHabits() {
      */
     <div className="with-rail">
       <div className="flex flex-col gap-4">
+      {flash && (
+        <p role="status" style={{ fontSize: 13.5, color: "var(--accent)", overflowWrap: "anywhere" }}>{flash}</p>
+      )}
       {/*
         * The day, and nothing between it and the day's habits. The score dial,
         * the per-section counts and the streak that used to fill this card are

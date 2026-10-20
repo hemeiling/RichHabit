@@ -1704,6 +1704,9 @@ export const en = {
     deleteBody: (name: string) =>
       `“${name}” and everything in it will be permanently deleted: its board, tasks, backlog, history, groups, pending invitations and memberships. Everyone in it loses access.`,
     deleteKeeps: "Nobody's personal habits, journals or other spaces are affected.",
+    /** Offered only while the space is not archived yet: the reversible choice. */
+    deleteArchiveHint: "Want to keep it instead? Archiving makes the space read-only, and you can restore it any time.",
+    deleteArchiveLink: "Archive it from Members",
     deleteIrreversible: "This can't be undone.",
     deleteTypePrompt: "To confirm, type the space's name exactly:",
     deleteConfirm: "Delete space",
