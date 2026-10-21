@@ -1,14 +1,15 @@
 import { query } from "@/lib/db/pool";
+import { ApiError } from "@/lib/http";
 import { isSchemaBehind } from "@/lib/db/diagnose";
 import { importantDatesOf } from "@/lib/db/queries";
 import { upcomingItems } from "@/lib/calendar";
 import { viewerToday } from "@/lib/community";
 import { DISPLAY_NAME, togetherAccess } from "@/lib/together/access";
-import { pendingConnectionCount, pendingConnectionsFor } from "@/lib/together/connections";
-import { pendingCount, pendingFor } from "@/lib/together/invitations";
+import { pendingConnectionsFor } from "@/lib/together/connections";
+import { pendingFor } from "@/lib/together/invitations";
 import { canonicalZone } from "@/lib/zonedTime";
 import {
-  DEFAULT_PREFS, compareUpcoming, lastUpcomingDay,
+  DEFAULT_PREFS, LEADS, compareUpcoming, isClock, lastUpcomingDay,
   type ActivityItem, type Lead, type NotificationCenter, type NotificationPrefs, type UpcomingItem, type WaitingInvitation,
 } from "@/lib/notifications/model";
 
@@ -167,8 +168,10 @@ async function invitationsOf(userId: string): Promise<WaitingInvitation[]> {
 /** Extra Upcoming sources and reminder marks (Stage 2 plugs in here). */
 export interface CenterExtras {
   upcoming?: UpcomingItem[];
-  /** Upcoming item key → the unread reminder notice for it. */
+  /** Upcoming row key (see `rowKey`) → the unread reminder notice for it. */
   reminders?: Map<string, string>;
+  /** How a row is matched to its reminders (defaults to its key). */
+  rowKey?: (i: UpcomingItem) => string;
 }
 
 export async function centerFor(userId: string, rawZone: unknown,
@@ -181,12 +184,12 @@ export async function centerFor(userId: string, rawZone: unknown,
     upcomingDates(userId, today, zone),
     upcomingPriorities(userId, today),
     together ? upcomingTasks(userId, today) : Promise.resolve([]),
-    together ? activityOf(userId) : Promise.resolve([]),
+    together && prefs.togetherAssigned ? activityOf(userId) : Promise.resolve([]),
     together ? invitationsOf(userId) : Promise.resolve([]),
     extras ? extras(prefs, today, zone) : Promise.resolve({} as CenterExtras),
   ]);
   const upcoming = [...dates, ...priorities, ...tasks, ...(more.upcoming ?? [])]
-    .map((i) => ({ ...i, notificationId: more.reminders?.get(i.key) ?? null }))
+    .map((i) => ({ ...i, notificationId: more.reminders?.get((more.rowKey ?? ((x: UpcomingItem) => x.key))(i)) ?? null }))
     .sort(compareUpcoming);
   const unread = activity.filter((a) => a.unread).length + invitations.length
     + upcoming.filter((i) => i.notificationId !== null).length;
@@ -194,20 +197,20 @@ export async function centerFor(userId: string, rawZone: unknown,
 }
 
 /**
- * The badge, cheaply: unread assignment notices you can still act on, waiting
- * invitations, and (from Stage 2) unread reminders that are still relevant.
+ * The badge: exactly the center's own count — unread activity you can still
+ * act on, waiting invitations, unread reminders whose row is still there — so
+ * the number and the list can never disagree.
  */
-export async function unreadCount(userId: string, reminders: (userId: string) => Promise<number> = async () => 0): Promise<number> {
-  const together = (await togetherAccess(userId).catch(() => null)) !== null;
-  const activity = together
-    ? await tolerant(0, async () => (await query<{ n: number }>(
-      `select count(*)::int n from notifications n where ${LIVE_ASSIGNMENT} and n.read_at is null`, [userId]))[0].n)
-    : 0;
-  const waiting = together ? (await pendingCount(userId).catch(() => 0)) + (await pendingConnectionCount(userId).catch(() => 0)) : 0;
-  return activity + waiting + await reminders(userId);
+export async function unreadCount(userId: string, rawZone: unknown,
+  extras?: (prefs: NotificationPrefs, today: string, zone: string) => Promise<CenterExtras>): Promise<number> {
+  return (await centerFor(userId, rawZone, extras)).unread;
 }
 
-/** Marks some of your notices read — or all of them. Only ever your own. */
+/**
+ * Marks some of your notices read — or all of them. Only ever your own. A
+ * reminder takes its row's other reminders with it (an on-the-day and an
+ * overdue one for the same thing), so one tap always clears the dot.
+ */
 export async function markRead(userId: string, ids: unknown): Promise<number> {
   return tolerant(0, async () => {
     if (ids === "all") {
@@ -216,8 +219,12 @@ export async function markRead(userId: string, ids: unknown): Promise<number> {
     const list = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 200) : [];
     if (!list.length) return 0;
     return (await query(
-      `update notifications set read_at = now() where user_id = $1 and id = any($2::uuid[]) and read_at is null returning id`,
-      [userId, list])).length;
+      `update notifications n set read_at = now()
+         from notifications o
+        where o.user_id = $1 and o.id = any($2::uuid[]) and n.user_id = $1 and n.read_at is null
+          and (n.id = o.id or (o.category = 'reminder' and n.category = 'reminder' and n.source_type = o.source_type
+               and n.source_id = o.source_id and n.occurs_on is not distinct from o.occurs_on))
+       returning n.id`, [userId, list])).length;
   });
 }
 
@@ -239,6 +246,7 @@ export async function recordAssignments(q: Q, actorId: string, boardId: string, 
       `insert into notifications (user_id, category, kind, source_type, source_id, board_id, actor_id, dedupe_key, notify_at)
        select u, 'activity', 'task_assigned', 'together_task', $1, $2, $3, $5, now()
          from unnest($4::uuid[]) as u
+        where not exists (select 1 from notification_preferences p where p.user_id = u and not p.together_assigned)
        on conflict (user_id, dedupe_key) do update
          set read_at = null, notify_at = now(), actor_id = excluded.actor_id`,
       [taskId, boardId, actorId, people, `assign:${taskId}`]);
@@ -247,4 +255,82 @@ export async function recordAssignments(q: Q, actorId: string, boardId: string, 
     await q(`rollback to savepoint notify_assigned`);
     if (!isSchemaBehind(e)) throw e;
   }
+}
+
+/* -------------------------------- settings: writes -------------------------- */
+
+export interface SettingsView {
+  prefs: NotificationPrefs;
+  /** Whether Together applies to this account (its two switches are shown only then). */
+  together: boolean;
+  /** Habit id → its own reminder time, or null for its category's time. Only habits switched on. */
+  habitReminders: Record<string, string | null>;
+}
+
+export async function settingsOf(userId: string): Promise<SettingsView> {
+  const [prefs, together, rows] = await Promise.all([
+    prefsOf(userId),
+    togetherAccess(userId).then((a) => a !== null).catch(() => false),
+    tolerant([] as { habitId: string; at: string | null }[], () => query<{ habitId: string; at: string | null }>(
+      `select habit_id::text as "habitId", to_char(remind_at, 'HH24:MI') as at from habit_reminders where user_id = $1`, [userId])),
+  ]);
+  return { prefs, together, habitReminders: Object.fromEntries(rows.map((r) => [r.habitId, r.at])) };
+}
+
+const isBool = (v: unknown): v is boolean => typeof v === "boolean";
+
+/**
+ * Saves the fields given — each checked — over what is stored (or the
+ * defaults). Anything malformed is refused, never half-applied.
+ */
+export async function savePrefs(userId: string, raw: Record<string, unknown>): Promise<NotificationPrefs> {
+  const cur = await prefsOf(userId);
+  const next: NotificationPrefs = { ...cur };
+  for (const k of ["togetherAssigned", "togetherDue", "importantDates", "priorities", "habits"] as const) {
+    if (k in raw) { if (!isBool(raw[k])) throw new ApiError("Invalid setting", 400); next[k] = raw[k] as boolean; }
+  }
+  if ("importantDateLead" in raw) {
+    if (!(LEADS as readonly unknown[]).includes(raw.importantDateLead)) throw new ApiError("Invalid setting", 400);
+    next.importantDateLead = raw.importantDateLead as Lead;
+  }
+  for (const k of ["morningTime", "daytimeTime", "nighttimeTime"] as const) {
+    if (k in raw) { if (!isClock(raw[k])) throw new ApiError("Invalid setting", 400); next[k] = raw[k] as string; }
+  }
+  if ("timeZone" in raw) {
+    const zone = canonicalZone(raw.timeZone);
+    if (!zone) throw new ApiError("Invalid setting", 400);
+    next.timeZone = zone;
+  }
+  await query(
+    `insert into notification_preferences (user_id, together_assigned, together_due, important_dates, important_date_lead,
+       priorities, habits, morning_time, daytime_time, nighttime_time, time_zone, updated_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8::time, $9::time, $10::time, $11, now())
+     on conflict (user_id) do update set together_assigned = excluded.together_assigned, together_due = excluded.together_due,
+       important_dates = excluded.important_dates, important_date_lead = excluded.important_date_lead,
+       priorities = excluded.priorities, habits = excluded.habits, morning_time = excluded.morning_time,
+       daytime_time = excluded.daytime_time, nighttime_time = excluded.nighttime_time, time_zone = excluded.time_zone,
+       updated_at = now()`,
+    [userId, next.togetherAssigned, next.togetherDue, next.importantDates, next.importantDateLead, next.priorities, next.habits,
+      next.morningTime, next.daytimeTime, next.nighttimeTime, next.timeZone]);
+  return next;
+}
+
+/**
+ * Switches one habit's reminder on (optionally at its own time) or off. Only
+ * the habit's owner: anyone else's habit id is answered as not found.
+ */
+export async function setHabitReminder(userId: string, habitId: unknown, on: unknown, time: unknown): Promise<{ on: boolean; time: string | null }> {
+  if (typeof habitId !== "string" || !/^[0-9a-f-]{36}$/i.test(habitId) || !isBool(on)) throw new ApiError("Invalid setting", 400);
+  if (time !== undefined && time !== null && !isClock(time)) throw new ApiError("Invalid setting", 400);
+  const [owned] = await query(`select 1 from habits where id = $1 and user_id = $2`, [habitId, userId]);
+  if (!owned) throw new ApiError("Not found", 404);
+  if (!on) {
+    await query(`delete from habit_reminders where habit_id = $1 and user_id = $2`, [habitId, userId]);
+    return { on: false, time: null };
+  }
+  const at = (time as string | null | undefined) ?? null;
+  await query(
+    `insert into habit_reminders (habit_id, user_id, remind_at) values ($1, $2, $3::time)
+     on conflict (habit_id) do update set remind_at = excluded.remind_at`, [habitId, userId, at]);
+  return { on: true, time: at };
 }

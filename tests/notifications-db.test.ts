@@ -113,10 +113,11 @@ describe("assignment notices (Activity)", () => {
   it("hides — and stops counting — a notice whose task was deleted, whose space was archived, or whose member left", async () => {
     await assign(hippo, board, t1, [ann, bo]);
     await assign(hippo, board, t2, [ann]);
-    expect(await badge(ann)).toBe(2);
+    // Two assignments, plus t2's one overdue reminder (due two days ago; Stage 2).
+    expect(await badge(ann)).toBe(3);
     await sql(`update together_tasks set deleted_at = now() where id = $1`, [t1]);
     expect((await view(ann)).activity.map((x: any) => x.title)).toEqual(["Call the printer"]);
-    expect(await badge(ann)).toBe(1);
+    expect(await badge(ann)).toBe(2);
     await sql(`update together_boards set archived_at = now() where id = $1`, [board]);
     expect((await view(ann)).activity).toEqual([]);
     expect(await badge(ann)).toBe(0);

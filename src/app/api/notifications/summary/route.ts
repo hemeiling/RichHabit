@@ -1,6 +1,6 @@
 import { withUser } from "@/lib/api";
 import { adoptZone, unreadCount } from "@/lib/notifications/server";
-import { materializeReminders, unreadReminders } from "@/lib/notifications/reminders";
+import { materializeReminders, reminderExtras } from "@/lib/notifications/reminders";
 
 /**
  * The badge, asked for when the app opens and when a tab comes back. This is
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const tz = new URL(request.url).searchParams.get("tz");
     await adoptZone(userId, tz);
     await materializeReminders(userId, tz);
-    return { unread: await unreadCount(userId, unreadReminders) };
+    return { unread: await unreadCount(userId, tz, reminderExtras(userId)) };
   }, (d) => d.errors.loadFailedTitle);
 }
 

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import FrequencyField from "@/components/FrequencyField";
+import HabitReminderField from "@/components/HabitReminderField";
 import { Field, Segmented, Sheet } from "@/components/ui";
 import { todayISO } from "@/lib/dates";
 import { CATEGORIES, scheduleProblem } from "@/lib/habits";
@@ -99,6 +100,7 @@ export default function HabitEditor({
           options={[{ value: "good" as const, label: t.habits.kindBuild }, { value: "avoid" as const, label: t.habits.kindDrop }]} />
       </Field>
       <FrequencyField frequency={h.frequency} onChange={(f) => set("frequency", f)} />
+      <HabitReminderField habitId={h.id} category={h.category} isNew={isNew} />
       {/* §12. How it is measured decides what Today shows and what counts. */}
       <Field label={t.habits.fieldTracking} group>
         <Segmented<TrackingType> value={h.tracking} onChange={(v) => set("tracking", v)} small

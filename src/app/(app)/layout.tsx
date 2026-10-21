@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { unreadCount } from "@/lib/notifications/server";
-import { unreadReminders } from "@/lib/notifications/reminders";
+import { reminderExtras } from "@/lib/notifications/reminders";
 import AppShell from "@/components/AppShell";
 import { currentAdmin } from "@/lib/admin";
 import { getSessionUser } from "@/lib/auth";
@@ -57,7 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
    * The bell's first count — unread notices that still matter, plus waiting
    * invitations. The bell refreshes it itself afterwards; a failure shows none.
    */
-  const notificationCount = await unreadCount(user.id, unreadReminders).catch(() => 0);
+  const notificationCount = await unreadCount(user.id, null, reminderExtras(user.id)).catch(() => 0);
 
   // Resolved server-side so the first paint is already in the right language.
   return (

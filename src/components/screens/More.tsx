@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useHabits } from "@/components/store";
 import LanguageToggle from "@/components/LanguageToggle";
+import NotificationSettings from "@/components/NotificationSettings";
 import { Segmented, Sheet } from "@/components/ui";
 import { useSignOut } from "@/components/useSignOut";
 import { useLocale, useT } from "@/lib/i18n/context";
@@ -314,6 +315,8 @@ export default function More({ account, googleEnabled = false, googleNote = null
             options={[{ value: true, label: t.more.on }, { value: false, label: t.more.off }]} />
         </div>
       </section>
+
+      <NotificationSettings />
 
       <section className="card p-5">
         <div className="eyebrow mb-2">{t.more.yourData}</div>

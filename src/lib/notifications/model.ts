@@ -1,4 +1,5 @@
 import { addDays, daysBetween } from "@/lib/dates";
+import type { Habit } from "@/lib/types";
 
 /**
  * Unified Notifications — the shape of the Notification Center, shared by the
@@ -49,6 +50,8 @@ export interface UpcomingItem {
   href: string;
   /** An unread reminder for this item, if one came due — what the badge counts. */
   notificationId: string | null;
+  /** For a habit: what its name is made of, so the bell names it in the reader's language (template habits are translated). */
+  habit?: Pick<Habit, "templateKey" | "name" | "rotation" | "rotationStart">;
 }
 
 export interface ActivityItem {

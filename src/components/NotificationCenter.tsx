@@ -11,6 +11,7 @@ import {
 import { clockTimeFor, shortDateFor } from "@/lib/i18n";
 import { deviceTimeZone } from "@/lib/zonedTime";
 import { iso } from "@/lib/dates";
+import { habitNameOn } from "@/lib/templates";
 
 /**
  * The Notification Center's body — what the bell opens. Two sections and
@@ -148,7 +149,8 @@ export function NotificationPanel({ onNavigate, onCount }: { onNavigate: () => v
                         <span className="nc-row-main">
                           <span className="nc-row-title">
                             {i.notificationId && <span className="sr-only">{n.unread}: </span>}
-                            {i.category === "habits" && i.count > 1 ? n.habitsCount(i.count) : i.title}
+                            {i.category === "habits" && i.count > 1 ? n.habitsCount(i.count)
+                              : i.habit ? habitNameOn(i.habit, t, i.date) : i.title}
                           </span>
                           <span className="nc-row-meta">
                             <span className="nc-cat" data-cat={i.category}>{n.filters[i.category]}</span>

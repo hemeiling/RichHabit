@@ -2453,3 +2453,15 @@ input[type="range"] { accent-color: var(--accent); }
 .nc-when[data-overdue] { color: var(--warn); font-weight: 600; }
 .nc-invite { padding: 10px 0; }
 .nc-foot { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+
+/* Notification Settings (Account page) */
+.ns-select { width: auto; max-width: 100%; min-width: 0; padding-top: 6px; padding-bottom: 6px; font-size: 14px; }
+.ns-sub { margin-top: 14px; margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ns-times { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ns-time { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
+.ns-time .input { padding-top: 6px; padding-bottom: 6px; font-size: 14px; min-width: 0; }
+.ns-zone { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ns-zone .ns-select { max-width: min(100%, 260px); }
+@media (max-width: 380px) { .ns-times { grid-template-columns: 1fr; } }
+.he-remind { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.he-remind .input { width: auto; padding-top: 6px; padding-bottom: 6px; font-size: 14px; }

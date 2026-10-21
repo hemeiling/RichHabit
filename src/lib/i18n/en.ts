@@ -2142,9 +2142,9 @@ export const en = {
   },
 
   /**
-   * The header's notification bell: Together invitations waiting for this
-   * account, with Accept and Decline right there. Together-only today; if the
-   * app ever notifies about anything else, it belongs here too.
+   * The header's bell (the Notification Center: Upcoming and Activity) and
+   * Notification settings on the Account page. In-app only: nothing here is
+   * sent while the app is closed, and the wording says so.
    */
   notifications: {
     label: "Notifications",
@@ -2168,6 +2168,28 @@ export const en = {
     habitsCount: (n: number) => (n === 1 ? "1 habit" : `${n} habits`),
     inAppOnly: "In-app reminders: they show here when RichHabit is open.",
     settings: "Notification settings",
+    settingsTitle: "Notifications",
+    settingsNote: "In-app reminders: they appear in RichHabit when you open it — not as phone or email alerts.",
+    togetherAssigned: "Together: tasks assigned to me",
+    togetherDue: "Together: due dates of my tasks",
+    importantDates: "Important Dates",
+    leadLabel: "Remind me",
+    leads: { 0: "On the day", 1: "1 day before", 3: "3 days before", 7: "1 week before" },
+    prioritiesPlanned: "Planned priorities",
+    habitReminders: "Habit reminders",
+    habitRemindersHint: "Only for habits you switch on, in each habit's settings.",
+    reminderTimes: "Reminder times",
+    timeMorning: "Morning",
+    timeDaytime: "Daytime",
+    timeNighttime: "Nighttime",
+    timeZone: "Time zone",
+    useDevice: (zone: string) => `Use this device's: ${zone}`,
+    saved: "Saved",
+    remindMe: "Remind me",
+    remindAt: "Time",
+    remindDefault: (time: string) => `Leave empty for this time of day's default (${time}).`,
+    remindOff: "Habit reminders are off in Notification settings.",
+    remindAfterSave: "Save the habit first, then switch on its reminder.",
   },
 
   /**
