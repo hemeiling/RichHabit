@@ -33,6 +33,14 @@ export default function NotificationSettings() {
   useEffect(() => {
     call<Settings>("/api/notifications/preferences").then(setS).catch((e: Error) => setProblem(e.message));
   }, []);
+  // The bell's "Notification settings" link lands here; the browser's own jump
+  // to #notifications happened before this card had its height, so do it now.
+  const loaded = s !== null;
+  useEffect(() => {
+    if (loaded && window.location.hash === "#notifications") {
+      document.getElementById("notifications")?.scrollIntoView({ block: "start" });
+    }
+  }, [loaded]);
 
   const save = async (patch: Partial<NotificationPrefs>) => {
     if (!s) return;
@@ -58,7 +66,7 @@ export default function NotificationSettings() {
         <div style={{ fontSize: 15 }}>{label}</div>
         {hint && <div className="faint" style={{ fontSize: 12.5 }}>{hint}</div>}
       </div>
-      {control}
+      <div className="shrink-0">{control}</div>
     </div>
   );
 
