@@ -40,6 +40,7 @@ const exporter = await import("../src/app/api/together/boards/[id]/progress/expo
 const history = await import("../src/app/api/together/boards/[id]/tasks/history/route");
 const work = await import("../src/app/api/together/boards/[id]/work/route");
 const tasksRoute = await import("../src/app/api/together/boards/[id]/tasks/route");
+const drillRoute = await import("../src/app/api/together/boards/[id]/progress/tasks/route");
 const { safeName } = await import("../src/lib/together/progressWorkbook");
 
 const SCHEMA = fs.readFileSync(path.resolve(__dirname, "..", "db", "schema.sql"), "utf8");
@@ -151,6 +152,7 @@ describe("who may read a space's progress", () => {
       ["progress", (b: string) => progress.GET(get("?tz=UTC"), P(b))],
       ["export", (b: string) => exporter.GET(get("?tz=UTC&scope=all"), P(b))],
       ["history", (b: string) => history.GET(get("?q=x"), P(b))],
+      ["drill-down", (b: string) => drillRoute.GET(get(`?who=none&tz=UTC`), P(b))],
     ] as const) {
       as(stranger);
       const theirs = await json(await call(A));
@@ -255,6 +257,56 @@ describe("the dashboard", () => {
     await read(ann, A, "&first=1&period=year");
     await read(ann, A, "&group=none");
     expect(tracked).toEqual([expect.objectContaining({ event: "together_progress_viewed", properties: { period: "year", filtered: false } })]);
+  });
+});
+
+describe("drilling into a row of contributions", () => {
+  const drill = async (who: string, board: string, qs: string, as_ = ann) => {
+    as(as_);
+    return json(await drillRoute.GET(get(`?who=${who}&tz=UTC${qs}`), P(board)));
+  };
+
+  it("lists a member's committed tasks for the dashboard's filters — open first, shared marked, Backlog and deleted left out", async () => {
+    const r = await drill(ann, A, "");
+    expect(r.status).toBe(200);
+    expect(r.body.dropped).toBe(false);
+    expect(r.body.tasks.map((t: any) => t.id)).toEqual([ids.d, ids.b, ids.a]);   // open first, then newest finished
+    const byId = Object.fromEntries(r.body.tasks.map((t: any) => [t.id, t]));
+    expect(byId[ids.a]).toMatchObject({ title: "设计稿 · 第二版", groupId: design, stage: "done", inHistory: true, effort: 3,
+      completedOn: "2024-03-10", standing: "completed", shared: true });
+    expect(byId[ids.d]).toMatchObject({ standing: "open", shared: false, dueOn: expect.any(String), effort: 5 });
+    expect(byId[ids.b].effort).toBeNull();            // shown at its default 1 on screen; never written
+    // The same rows the contributions row counts.
+    const row = (await read(ann, A)).body.report.contributions.find((c: any) => c.memberId === ann);
+    expect(r.body.tasks).toHaveLength(row.assigned.tasks);
+    expect(r.body.tasks.filter((t: any) => t.standing === "completed")).toHaveLength(row.completed.tasks);
+  });
+
+  it("follows the group and period filters, and lists the unassigned work for \"none\"", async () => {
+    expect((await drill(ann, A, `&group=${design}`)).body.tasks.map((t: any) => t.id)).toEqual([ids.d, ids.a]);
+    expect((await drill(ann, A, "&period=custom&from=2025-01-01&to=2025-12-31")).body.tasks.map((t: any) => t.id)).toEqual([ids.b]);
+    const none = (await drill("none", A, "")).body;
+    expect(none.tasks.map((t: any) => t.id).sort()).toEqual([ids.e, ids.h].sort());
+    expect(none.tasks.every((t: any) => !t.shared)).toBe(true);
+  });
+
+  it("answers nothing for someone who is not a current member of this space — another space's owner included", async () => {
+    for (const who of [stranger, randomUUID(), "all", "garbage"]) {
+      const r = await drill(who, A, "");
+      expect(r.status, who).toBe(200);
+      expect(r.body, who).toEqual({ tasks: [], dropped: true });
+    }
+    // A member of A asking about space B gets B's 404 — never its tasks.
+    const other = await drill(stranger, B, "");
+    expect(other.status).toBe(404);
+    expect(JSON.stringify(other.body)).not.toMatch(/secret/i);
+  });
+
+  it("carries the long-run context on the dashboard: start, last completion, this month", async () => {
+    const { body } = await read(ann, A);
+    expect(body.context.start).toBe("2024-03-01");
+    expect(body.context.lastCompleted).toBe(new Date().toISOString().slice(0, 10));   // c was just finished
+    expect(body.context.completedThisMonth).toBe(1);
   });
 });
 

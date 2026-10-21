@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { ProgressView } from "@/lib/together/progressRead";
-import { PERIOD_KINDS, filterParam, isPeriodKind, type ContributionRow, type TrendBucket } from "@/lib/together/progress";
+import type { DrillTask, ProgressView } from "@/lib/together/progressRead";
+import { PERIOD_KINDS, effectivePoints, filterParam, isPeriodKind, type ContributionRow, type TrendBucket } from "@/lib/together/progress";
 import { monthFirst, monthOf, todayISO } from "@/lib/dates";
 import { monthTitleFor } from "@/lib/i18n";
 import { deviceTimeZone } from "@/lib/zonedTime";
@@ -13,18 +14,20 @@ import SpaceHeader, { spaceStyle } from "@/components/together/SpaceHeader";
 import { FilterMenu, GroupFilter } from "@/components/together/Filters";
 
 /**
- * Project Progress & Contributions — 项目进展与贡献: a space's long-run picture,
- * from the same numbers the Excel export is built from (lib/together/progress).
+ * Project Progress & Contributions — 项目进展与贡献: summary first, details on
+ * demand. The default view answers three questions at a glance — how much of
+ * the project is done, how each group is doing, what each person is working on
+ * — and everything else (work by stage, due dates, the Backlog, defaulted
+ * points, trends, how the numbers work) waits behind More details. Every number
+ * comes from the same calculations as the Excel export (lib/together/progress).
  *
- * Top to bottom, in the order people asked for: the group filter, the period
- * (All Time by default) and member, then the key figures, story points, each
- * member's completed assigned work, the trend, and the export. Every filter
- * lives in the address, so a view can be shared or reloaded as it is.
+ * Rows explore rather than decorate: a group narrows the whole dashboard to it
+ * (the existing group filter); a member — or the unassigned work — opens the
+ * tasks behind that row, each one a link to its sheet on the Board. Filters live
+ * in the address; the open/closed state of More details and More filters is
+ * remembered per person per space in this browser.
  *
- * Calm on purpose. No ranks, no leaderboard, no red: members are listed in the
- * order they joined, and an unfinished period is only that. On a phone nothing
- * is a wide table — figures stack, and the trend's exact numbers are a table
- * behind "Show as a table".
+ * Calm on purpose: no ranks and no red. Members are in the order they joined.
  */
 
 let toastSeq = 0;
@@ -37,7 +40,20 @@ function fileNameOf(header: string | null): string | null {
   return /filename="([^"]+)"/i.exec(header)?.[1] ?? null;
 }
 
-export default function SpaceProgress({ boardId }: { boardId: string }) {
+/** A remembered yes/no for this person in this space; storage may be unavailable (private mode). */
+function useRemembered(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
+  const [value, setValue] = useState(fallback);
+  useEffect(() => {
+    try { const v = localStorage.getItem(key); if (v !== null) setValue(v === "1"); } catch { /* not remembered */ }
+  }, [key]);
+  const set = useCallback((v: boolean) => {
+    setValue(v);
+    try { localStorage.setItem(key, v ? "1" : "0"); } catch { /* remembered for this visit only */ }
+  }, [key]);
+  return [value, set];
+}
+
+export default function SpaceProgress({ boardId, viewerId }: { boardId: string; viewerId: string }) {
   const tt = useT();
   const p = tt.together.progress;
   const w = tt.together.work;
@@ -55,8 +71,13 @@ export default function SpaceProgress({ boardId }: { boardId: string }) {
   const [exportMenu, setExportMenu] = useState<HTMLElement | null>(null);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  /** Which contributions row has its tasks open: a member's id, "none" (unassigned), or none. */
+  const [drill, setDrill] = useState<string | null>(null);
   const say = useCallback((message: string) => setToast({ id: ++toastSeq, message }), []);
   const clearToast = useCallback(() => setToast(null), []);
+  const prefix = `rh:tg-progress:${viewerId}:${boardId}`;
+  const [detailsOpen, setDetailsOpen] = useRemembered(`${prefix}:details`, false);
+  const [filtersOpen, setFiltersOpen] = useRemembered(`${prefix}:filters`, false);
 
   // The filters, from the address.
   const rawPeriod = params.get("period");
@@ -74,14 +95,19 @@ export default function SpaceProgress({ boardId }: { boardId: string }) {
     router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
   }, [router, pathname, params]);
 
-  const query = useMemo(() => {
+  /** The dashboard's filters except the member — the drill-down picks its own person. */
+  const baseQuery = useMemo(() => {
     const q = new URLSearchParams({ tz });
     if (period !== "all") q.set("period", period);
     if (period === "custom") { q.set("from", from); q.set("to", to); }
     if (group !== "all") q.set("group", group);
+    return q;
+  }, [tz, period, from, to, group]);
+  const query = useMemo(() => {
+    const q = new URLSearchParams(baseQuery);
     if (member !== "all") q.set("member", member);
     return q.toString();
-  }, [tz, period, from, to, group, member]);
+  }, [baseQuery, member]);
 
   // Read for every change of filters, and again when the tab comes back. Only the latest read may land.
   const reads = useRef(0);
@@ -104,6 +130,8 @@ export default function SpaceProgress({ boardId }: { boardId: string }) {
     document.addEventListener("visibilitychange", onFocus);
     return () => document.removeEventListener("visibilitychange", onFocus);
   }, []);
+  // A changed filter closes an open drill-down: its list belonged to the old one.
+  useEffect(() => { setDrill(null); }, [query]);
 
   // A filter naming a group or person no longer in the space was dropped by the server: say so, and tidy the
   // address — once per reading (tidying the address re-runs this before the next reading arrives).
@@ -168,17 +196,19 @@ export default function SpaceProgress({ boardId }: { boardId: string }) {
       : <div className="eyebrow py-10 text-center">{tt.common.loading}</div>;
   }
 
-  const { report, filters } = view;
+  const { report, filters, context } = view;
   const { totals, now } = report;
   const nameOf = new Map(view.members.map((m) => [m.id, m.name]));
   const groupName = (id: string | null) => (id === null ? w.ungrouped : view.groups.find((g) => g.id === id)?.name ?? w.ungrouped);
   const periodLine = filters.period.from && filters.period.to
     ? p.rangeLabel(filters.period.from, filters.period.to)
     : report.firstDay ? p.allTimeSince(report.firstDay) : p.periods.all;
-  // "No work yet" only for a space with no work at all: filters that select nothing still show their zeros —
-  // and Right now, which describes today whatever the period.
+  // "No work yet" only for a space with no work at all: filters that select nothing still show their zeros.
   const empty = view.spaceTasks === 0;
-  const contributions = report.contributions.filter((r) => r.memberId !== null || r.assigned.tasks > 0 || filters.member === "none");
+  const people = report.contributions.filter((r) => r.memberId !== null);
+  const unassigned = report.contributions.find((r) => r.memberId === null);
+  const groupRows = report.groups.filter((r) => r.committed.tasks > 0);
+  const moreFiltersShown = filtersOpen || filters.member !== "all";
 
   return (
     <div className="tg-space tg-progress" style={spaceStyle(view.space.id)} aria-busy={busy || undefined}>
@@ -192,22 +222,40 @@ export default function SpaceProgress({ boardId }: { boardId: string }) {
       )}
 
       <section className="tg-section" aria-labelledby="tg-h-progress">
-        <h2 className="tg-section-title" id="tg-h-progress">{p.title}</h2>
+        <div className="tg-progress-head">
+          <h2 className="tg-section-title" id="tg-h-progress">{p.title}</h2>
+          <button type="button" className="btn btn-quiet tg-small tg-export-btn" aria-haspopup="menu" disabled={exporting}
+            onClick={(e) => setExportMenu(e.currentTarget)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
+            {exporting ? p.exporting : p.exportExcel}
+          </button>
+        </div>
 
-        {/* 1 · group, 2 · period (and member) */}
+        {/* The two filters people use most stay in sight; the member filter waits under More filters. */}
         <div className="tg-filterbar">
           {view.groups.length > 0 && (
             <GroupFilter groups={view.groups} value={filters.group} onChange={(g) => setParams({ group: g === "all" ? null : g })} />
           )}
           <FilterMenu label={p.period} value={filters.period.kind} onChange={choosePeriod}
             options={PERIOD_KINDS.map((k, i) => ({ key: k, label: k === "custom" ? p.customRange : p.periods[k], divided: i === PERIOD_KINDS.length - 1 }))} />
-          <FilterMenu label={p.member} value={filters.member} onChange={(m) => setParams({ member: m === "all" ? null : m })}
-            options={[
-              { key: "all", label: p.everyone },
-              ...view.members.map((m, i) => ({ key: m.id, label: m.name, divided: i === 0 })),
-              { key: "none", label: p.unassigned, divided: true },
-            ]} />
+          <button type="button" className="tg-more-filters" aria-expanded={moreFiltersShown} aria-controls="tg-more-filters"
+            onClick={() => setFiltersOpen(!moreFiltersShown)}>
+            {p.moreFilters}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+          </button>
         </div>
+        {moreFiltersShown && (
+          <div className="tg-filterbar tg-filterbar-more" id="tg-more-filters">
+            <FilterMenu label={p.member} value={filters.member} onChange={(m) => setParams({ member: m === "all" ? null : m })}
+              options={[
+                { key: "all", label: p.everyone },
+                ...view.members.map((m, i) => ({ key: m.id, label: m.name, divided: i === 0 })),
+                { key: "none", label: p.unassigned, divided: true },
+              ]} />
+          </div>
+        )}
         {filters.period.kind === "custom" && (
           <form className="tg-range" onSubmit={(e) => {
             e.preventDefault();
@@ -229,100 +277,124 @@ export default function SpaceProgress({ boardId }: { boardId: string }) {
           <p className="tg-progress-empty">{p.noWork}</p>
         ) : (
           <>
-            {/* 3 · key figures */}
-            <div className="tg-stats">
-              <div className="tg-stat">
-                <span className="tg-stat-label">{p.committed}</span>
-                <span className="tg-stat-n">{totals.committed.tasks}</span>
-                <span className="tg-stat-note">{p.committedNote}</span>
+            {/* 1 · How much is done */}
+            <div className="tg-summary">
+              <div className="tg-summary-top">
+                <span className="tg-summary-pct">{pct(totals.rate)}</span>
+                <span className="tg-summary-label">{p.complete}</span>
               </div>
-              <div className="tg-stat">
-                <span className="tg-stat-label">{p.completed}</span>
-                <span className="tg-stat-n">{totals.completed.tasks}</span>
-                <span className="tg-stat-note">{p.completedNote}</span>
-              </div>
-              <div className="tg-stat">
-                <span className="tg-stat-label">{p.rate}</span>
-                <span className="tg-stat-n">{pct(totals.rate)}</span>
-                <span className="tg-stat-note">{p.rateNote(totals.completed.tasks, totals.committed.tasks)}</span>
-              </div>
-            </div>
-            <p className="tg-backlog-line"><strong>{p.backlog}</strong> · {p.backlogNote(totals.backlog.tasks, totals.backlog.points)}</p>
-
-            <div className="tg-now">
-              <h3 className="tg-sub-title">{p.rightNow}</h3>
-              <ul className="tg-now-list">
-                {(["todo", "doing", "waiting"] as const).map((s) => (
-                  <li key={s}><span className="tg-now-n">{now[s].tasks}</span> {w.stages[s]}</li>
-                ))}
-                <li><span className="tg-now-n">{now.dueSoon}</span> {p.dueSoon}</li>
-                <li data-warm={now.overdue > 0 || undefined}><span className="tg-now-n">{now.overdue}</span> {p.overdue}</li>
-              </ul>
-            </div>
-
-            {/* 4 · story points */}
-            <section className="tg-psection" aria-labelledby="tg-h-points">
-              <h3 className="tg-sub-title" id="tg-h-points">{p.points}</h3>
-              <Meter done={totals.completed.points} of={totals.committed.points} />
-              <p className="tg-meter-line">{p.pointsDone(totals.completed.points, totals.committed.points)}</p>
-              {totals.defaulted > 0 && <p className="tg-note">{p.defaulted(totals.defaulted)}</p>}
-              {filters.group === "all" && view.groups.length > 0 && (
-                <>
-                  <h4 className="tg-sub-sub">{p.byGroup}</h4>
-                  <ul className="tg-group-bars">
-                    {report.groups.filter((r) => r.committed.tasks > 0 || r.backlog.tasks > 0).map((r) => (
-                      <li key={r.groupId ?? "none"} className="tg-group-bar">
-                        <span className="tg-group-bar-name">{groupName(r.groupId)}</span>
-                        <Meter done={r.completed.points} of={r.committed.points} small />
-                        <span className="tg-group-bar-figs">
-                          {p.ofPoints(r.completed.points, r.committed.points)} · {p.tasksDone(r.completed.tasks, r.committed.tasks)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+              <Meter done={totals.completed.tasks} of={totals.committed.tasks} big />
+              {totals.committed.tasks > 0 ? (
+                <p className="tg-summary-line">
+                  <span>{p.tasksOf(totals.completed.tasks, totals.committed.tasks)}</span>
+                  <span className="tg-summary-dot" aria-hidden="true">·</span>
+                  <span>{p.remaining(totals.open.tasks)}</span>
+                </p>
+              ) : <p className="tg-summary-line">{p.noCommitted}</p>}
+              <p className="tg-summary-sub">{p.pointsSummary(totals.completed.points, totals.committed.points)}</p>
+              {filters.group !== "all" && (
+                <p className="tg-summary-filter">
+                  {p.filteredTo(groupName(filters.group === "none" ? null : filters.group))}
+                  <button type="button" className="tg-link-btn" onClick={() => setParams({ group: null })}>{p.showAllGroups}</button>
+                </p>
               )}
-            </section>
+            </div>
 
-            {/* 5 · individual contributions */}
+            {/* 2 · How each group is doing — a group narrows the whole dashboard to it */}
+            {filters.group === "all" && view.groups.length > 0 && groupRows.length > 0 && (
+              <section className="tg-psection" aria-labelledby="tg-h-groups">
+                <h3 className="tg-sub-title" id="tg-h-groups">{p.groupsTitle}</h3>
+                <ul className="tg-prows">
+                  {groupRows.map((r) => {
+                    const name = groupName(r.groupId);
+                    return (
+                      <li key={r.groupId ?? "none"}>
+                        <button type="button" className="tg-prow" aria-label={`${p.showGroup(name)} — ${p.tasksDone(r.completed.tasks, r.committed.tasks)}, ${pct(r.rate)}`}
+                          onClick={() => setParams({ group: r.groupId ?? "none" })}>
+                          <span className="tg-prow-name">{name}</span>
+                          <span className="tg-prow-figs">{r.completed.tasks}/{r.committed.tasks} · {pct(r.rate)}</span>
+                          <Meter done={r.completed.tasks} of={r.committed.tasks} />
+                          <span className="tg-prow-pts">{p.ofPoints(r.completed.points, r.committed.points)}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+
+            {/* 3 · What each person is working on — a row opens the tasks behind it */}
             <section className="tg-psection" aria-labelledby="tg-h-contrib">
               <h3 className="tg-sub-title" id="tg-h-contrib">{p.contributions}</h3>
-              <p className="tg-note">{p.attribution}</p>
-              {contributions.every((r) => r.assigned.tasks === 0) ? (
-                <p className="tg-note">{p.noContributions}</p>
-              ) : (
-                <ul className="tg-contrib">
-                  {contributions.map((r) => (
-                    <Contribution key={r.memberId ?? "none"} row={r} name={r.memberId === null ? p.notAssigned : nameOf.get(r.memberId) ?? p.notAssigned} />
-                  ))}
+              <p className="tg-note">{p.shortNote}</p>
+              {people.length > 0 && (
+                <ul className="tg-prows">
+                  {people.map((r) => {
+                    const name = nameOf.get(r.memberId as string) ?? p.unassigned;
+                    return (
+                      <ContributionItem key={r.memberId} row={r} name={name} avatar open={drill === r.memberId}
+                        onToggle={() => setDrill(drill === r.memberId ? null : r.memberId)}
+                        boardId={boardId} baseQuery={baseQuery} groupName={groupName}
+                        onOnly={() => setParams({ member: r.memberId })} onlyLabel={p.onlyMember} />
+                    );
+                  })}
                 </ul>
+              )}
+              {unassigned && (unassigned.assigned.tasks > 0 || filters.member === "none") && (
+                <div className="tg-unassigned" aria-labelledby="tg-h-unassigned" role="group">
+                  <h4 className="tg-sub-sub" id="tg-h-unassigned">{p.unassignedTitle}</h4>
+                  <ul className="tg-prows">
+                    <ContributionItem row={unassigned} name={p.unassignedRow} open={drill === "none"}
+                      onToggle={() => setDrill(drill === "none" ? null : "none")}
+                      boardId={boardId} baseQuery={baseQuery} groupName={groupName}
+                      onOnly={() => setParams({ member: "none" })} onlyLabel={p.onlyUnassigned} />
+                  </ul>
+                </div>
               )}
             </section>
 
-            {/* 6 · trends */}
-            <section className="tg-psection" aria-labelledby="tg-h-trends">
-              <h3 className="tg-sub-title" id="tg-h-trends">{p.trends}</h3>
-              <Trend buckets={report.trend.buckets} granularity={report.trend.granularity} locale={locale} />
-            </section>
+            {/* Everything else, one tap away — and remembered open or closed. */}
+            <details className="tg-details" open={detailsOpen}
+              onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; if (o !== detailsOpen) setDetailsOpen(o); }}>
+              <summary className="tg-details-summary">{p.moreDetails}</summary>
+              <div className="tg-details-body">
+                <section aria-labelledby="tg-h-now">
+                  <h3 className="tg-sub-title" id="tg-h-now">{p.rightNow}</h3>
+                  <ul className="tg-now-list">
+                    {(["todo", "doing", "waiting"] as const).map((s) => (
+                      <li key={s}><span className="tg-now-n">{now[s].tasks}</span> {w.stages[s]}</li>
+                    ))}
+                    <li><span className="tg-now-n">{now.dueSoon}</span> {p.dueSoon}</li>
+                    <li data-warm={now.overdue > 0 || undefined}><span className="tg-now-n">{now.overdue}</span> {p.overdue}</li>
+                  </ul>
+                </section>
+
+                <section aria-labelledby="tg-h-points">
+                  <h3 className="tg-sub-title" id="tg-h-points">{p.points}</h3>
+                  <p className="tg-meter-line">{p.pointsDone(totals.completed.points, totals.committed.points)}</p>
+                  {totals.defaulted > 0 && <p className="tg-note">{p.defaulted(totals.defaulted)}</p>}
+                  <p className="tg-backlog-line"><strong>{p.backlog}</strong> · {p.backlogNote(totals.backlog.tasks, totals.backlog.points)}</p>
+                </section>
+
+                <section aria-labelledby="tg-h-trends">
+                  <h3 className="tg-sub-title" id="tg-h-trends">{p.trends}</h3>
+                  <ul className="tg-context">
+                    {context.start && <li>{p.projectStarted(context.start)}</li>}
+                    {context.lastCompleted && <li>{p.lastCompleted(context.lastCompleted)}</li>}
+                    <li>{p.completedThisMonth(context.completedThisMonth)}</li>
+                  </ul>
+                  <Trend buckets={report.trend.buckets} granularity={report.trend.granularity} locale={locale} />
+                </section>
+
+                <section aria-labelledby="tg-h-how">
+                  <h3 className="tg-sub-title" id="tg-h-how">{p.howTitle}</h3>
+                  <ul className="tg-how-list">{p.how.map((line) => <li key={line}>{line}</li>)}</ul>
+                  <p className="tg-note">{p.exportAbout}</p>
+                </section>
+              </div>
+            </details>
           </>
         )}
-
-        {/* 7 · export */}
-        <section className="tg-psection tg-export" aria-labelledby="tg-h-export">
-          <h3 className="sr-only" id="tg-h-export">{p.exportExcel}</h3>
-          <button type="button" className="btn tg-export-btn" aria-haspopup="menu" disabled={exporting}
-            onClick={(e) => setExportMenu(e.currentTarget)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
-              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
-            {exporting ? p.exporting : p.exportExcel}
-          </button>
-          <p className="tg-note">{p.exportAbout}</p>
-        </section>
-
-        <details className="tg-how">
-          <summary>{p.howTitle}</summary>
-          <ul>{p.how.map((line) => <li key={line}>{line}</li>)}</ul>
-        </details>
       </section>
 
       {exportMenu && (
@@ -337,29 +409,92 @@ export default function SpaceProgress({ boardId }: { boardId: string }) {
 }
 
 /** A quiet bar: how much of something is done. Decorative — the words beside it say the same. */
-function Meter({ done, of, small }: { done: number; of: number; small?: boolean }) {
+function Meter({ done, of, big }: { done: number; of: number; big?: boolean }) {
   const share = of > 0 ? Math.min(1, done / of) : 0;
   return (
-    <span className="tg-meter" data-small={small || undefined} aria-hidden="true">
+    <span className="tg-meter" data-big={big || undefined} aria-hidden="true">
       <span className="tg-meter-fill" style={{ width: `${share * 100}%` }} />
     </span>
   );
 }
 
-function Contribution({ row, name }: { row: ContributionRow; name: string }) {
-  const p = useT().together.progress;
+/**
+ * One row of contributions — a member, or the unassigned work — and, opened,
+ * the committed tasks behind it for the dashboard's filters (fetched then, never
+ * before). Each task links to its sheet on the Board.
+ */
+function ContributionItem({ row, name, avatar, open, onToggle, boardId, baseQuery, groupName, onOnly, onlyLabel }: {
+  row: ContributionRow; name: string; avatar?: boolean; open: boolean; onToggle: () => void;
+  boardId: string; baseQuery: URLSearchParams; groupName: (id: string | null) => string;
+  onOnly: () => void; onlyLabel: string;
+}) {
+  const tt = useT();
+  const p = tt.together.progress;
+  const w = tt.together.work;
+  const who = row.memberId ?? "none";
+  const panel = `tg-drill-${who}`;
+  const [tasks, setTasks] = useState<DrillTask[] | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) { setTasks(null); setFailed(null); return; }
+    let live = true;
+    const q = new URLSearchParams(baseQuery);
+    q.set("who", who);
+    call<{ tasks: DrillTask[] }>(`/api/together/boards/${boardId}/progress/tasks?${q}`)
+      .then((r) => { if (live) setTasks(r.tasks); })
+      .catch((e: Error) => { if (live) setFailed(e.message); });
+    return () => { live = false; };
+  }, [open, who, boardId, baseQuery]);
+
   return (
-    <li className="tg-contrib-row" data-nobody={row.memberId === null || undefined}>
-      <span className="tg-contrib-who">
-        {row.memberId !== null && <Avatar name={name} size={26} />}
-        <span className="tg-contrib-name">{name}</span>
-      </span>
-      <dl className="tg-contrib-figs">
-        <div><dt>{p.assigned}</dt><dd>{row.assigned.tasks}</dd></div>
-        <div><dt>{p.completedAssigned}</dt><dd>{row.completed.tasks} <span className="tg-faint">· {pct(row.rate)}</span></dd></div>
-        <div><dt>{p.points}</dt><dd>{p.ofPoints(row.completed.points, row.assigned.points)}</dd></div>
-        <div><dt>{p.sharedTasks}</dt><dd>{row.shared}</dd></div>
-      </dl>
+    <li className="tg-prow-item" data-open={open || undefined} data-nobody={row.memberId === null || undefined}>
+      <button type="button" className="tg-prow" aria-expanded={open} aria-controls={panel}
+        aria-label={`${p.showTasksOf(name)} — ${p.tasksDone(row.completed.tasks, row.assigned.tasks)}, ${pct(row.rate)}`}
+        onClick={onToggle}>
+        <span className="tg-prow-name">
+          {avatar && <Avatar name={name} size={24} />}
+          <span className="tg-prow-label">{name}</span>
+          {row.shared > 0 && <span className="tg-badge">{p.sharedBadge(row.shared)}</span>}
+        </span>
+        <span className="tg-prow-figs">{row.completed.tasks}/{row.assigned.tasks} · {pct(row.rate)}</span>
+        <Meter done={row.completed.tasks} of={row.assigned.tasks} />
+        <span className="tg-prow-pts">{p.ofPoints(row.completed.points, row.assigned.points)}</span>
+        <svg className="tg-prow-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div className="tg-drill" id={panel}>
+          {failed ? <p className="tg-note" role="alert">{failed}</p>
+            : tasks === null ? <p className="tg-note">{tt.common.loading}</p>
+            : tasks.length === 0 ? <p className="tg-note">{p.drillEmpty}</p>
+            : (
+              <ul className="tg-drill-list">
+                {tasks.map((t) => (
+                  <li key={t.id} className="tg-drill-row">
+                    <Link className="tg-drill-title" href={`/together/b/${boardId}?task=${t.id}${t.inHistory ? "&history=1" : ""}`}
+                      aria-label={w.openTask(t.title)}>
+                      {t.standing === "completed" && (
+                        <svg className="tg-card-tick" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                      )}
+                      <span>{t.title}</span>
+                    </Link>
+                    <span className="tg-drill-meta">
+                      <span className="tg-group">{groupName(t.groupId)}</span>
+                      <span>{t.inHistory ? p.inHistoryShort : w.stages[t.stage]}</span>
+                      {t.dueOn && t.standing === "open" && <span>{w.dueDate}: {w.due.later(t.dueOn)}</span>}
+                      {t.completedOn && t.standing === "completed" && <span>{w.completedOn(t.completedOn)}</span>}
+                      {t.shared && <span className="tg-badge">{p.sharedTag}</span>}
+                      <span className="tg-effort" data-default={t.effort === null || undefined} role="img"
+                        aria-label={t.effort === null ? w.pointsDefault : w.pointsValue(t.effort)}>{effectivePoints(t.effort)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          <button type="button" className="tg-link-btn tg-drill-only" onClick={onOnly}>{onlyLabel}</button>
+        </div>
+      )}
     </li>
   );
 }

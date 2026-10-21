@@ -14,5 +14,5 @@ export default async function SpaceProgressPage({ params }: { params: { id: stri
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (!isUuid(params.id) || !(await togetherAccess(user.id))) notFound();
-  return <Suspense><SpaceProgress boardId={params.id} /></Suspense>;
+  return <Suspense><SpaceProgress boardId={params.id} viewerId={user.id} /></Suspense>;
 }

@@ -2,8 +2,8 @@ import type { query } from "@/lib/db/pool";
 import type { Locale } from "@/lib/i18n";
 import { DISPLAY_NAME, TogetherError, requireBoard, type BoardRole, type PersonView } from "@/lib/together/access";
 import {
-  buildReport, filterParam, isPeriodKind, resolvePeriod,
-  type GroupFilter, type MemberFilter, type ProgressReport, type ProgressTask, type ReportFilters,
+  buildReport, contextOf, filterParam, isPeriodKind, matchesGroup, matchesMember, resolvePeriod, standing,
+  type GroupFilter, type MemberFilter, type ProjectContext, type ProgressReport, type ProgressTask, type ReportFilters,
 } from "@/lib/together/progress";
 import { progressWorkbook } from "@/lib/together/progressWorkbook";
 import type { Stage } from "@/lib/together/stages";
@@ -121,6 +121,8 @@ export interface ProgressView {
   timeZone: string;
   /** Live tasks in the whole space, whatever the filters — so "no work yet" is told apart from "none here". */
   spaceTasks: number;
+  /** When the space's work began, the selection's last completion, and completions this month. */
+  context: ProjectContext;
   report: ProgressReport;
 }
 
@@ -129,8 +131,59 @@ export async function loadProgress(userId: string, boardId: unknown, raw: Progre
     const snap = await readSpace(q, userId, boardId, raw.tz, false);
     const { filters, dropped } = filtersFor(snap, raw);
     const report = buildReport(snap.tasks, filters, snap.today, snap.members.map((m) => m.id), snap.groups.map((g) => g.id));
+    const selected = snap.tasks.filter((x) => matchesGroup(x, filters.group) && matchesMember(x, filters.member));
     return { space: snap.space, members: snap.members, groups: snap.groups, filters, dropped,
-      today: snap.today, timeZone: snap.timeZone, spaceTasks: snap.tasks.length, report };
+      today: snap.today, timeZone: snap.timeZone, spaceTasks: snap.tasks.length,
+      context: contextOf(snap.tasks, selected, snap.today), report };
+  });
+}
+
+/** One task in a drill-down: what a member (or nobody) is assigned, as the dashboard counts it. */
+export interface DrillTask {
+  id: string;
+  title: string;
+  groupId: string | null;
+  stage: Stage;
+  inHistory: boolean;
+  effort: number | null;
+  dueOn: string | null;
+  completedOn: string | null;
+  /** How the task counts in the period: completed, or still open at its end. */
+  standing: "completed" | "open";
+  /** Others are assigned too. */
+  shared: boolean;
+}
+
+/**
+ * The committed tasks behind one row of Individual contributions — a member's
+ * (`who` = their id) or the unassigned work (`who` = "none") — for exactly the
+ * dashboard's other filters, open work first, then the most recently finished.
+ * Members only; a `who` that is not a current member of this space is answered
+ * with nothing (never another space's data). Titles leave here because the
+ * member asked to see the tasks, as they could on the Board.
+ */
+export async function loadProgressTasks(userId: string, boardId: unknown,
+  raw: ProgressParams & { who?: unknown }): Promise<{ tasks: DrillTask[]; dropped: boolean }> {
+  return transaction(async (q) => {
+    const snap = await readSpace(q, userId, boardId, raw.tz, true);
+    const { filters } = filtersFor(snap, { ...raw, member: undefined });
+    const who = filterParam(raw.who);
+    if (who === "all" || (who !== "none" && !snap.members.some((m) => m.id === who))) return { tasks: [], dropped: true };
+    const known = new Set(snap.members.map((m) => m.id));
+    const tasks: DrillTask[] = [];
+    for (const t of snap.tasks) {
+      if (!matchesGroup(t, filters.group)) continue;
+      const people = t.assignees.filter((id) => known.has(id));
+      if (who === "none" ? people.length > 0 : !people.includes(who)) continue;
+      const s = standing(t, filters.period);
+      if (s !== "completed" && s !== "open") continue;
+      tasks.push({ id: t.id, title: t.title, groupId: t.groupId, stage: t.stage, inHistory: t.inHistory, effort: t.effort,
+        dueOn: t.dueOn, completedOn: t.completedOn, standing: s, shared: people.length > 1 });
+    }
+    tasks.sort((a, b) => (a.standing === b.standing
+      ? (a.standing === "completed" ? (b.completedOn ?? "").localeCompare(a.completedOn ?? "") : 0)
+      : a.standing === "open" ? -1 : 1));
+    return { tasks, dropped: false };
   });
 }
 

@@ -380,3 +380,31 @@ export function buildReport(all: ProgressTask[], filters: ReportFilters, today: 
     firstDay,
   };
 }
+
+/* ------------------------------ long-run context --------------------------- */
+
+export interface ProjectContext {
+  /** The day the space's oldest live task was created — when its recorded work began. */
+  start: string | null;
+  /** The most recent completion among the selected tasks (only tasks in Done have one). */
+  lastCompleted: string | null;
+  /** Selected tasks completed in the reader's current calendar month. */
+  completedThisMonth: number;
+}
+
+/**
+ * Three facts the data can state exactly: when the space's work began, when the
+ * selection last had something finished, and how much was finished this month.
+ * Nothing is inferred — a reopened task has no completion date, so it adds none.
+ */
+export function contextOf(all: ProgressTask[], selected: ProgressTask[], today: string): ProjectContext {
+  const month = monthOf(today);
+  let start: string | null = null, lastCompleted: string | null = null, completedThisMonth = 0;
+  for (const t of all) if (start === null || t.createdOn < start) start = t.createdOn;
+  for (const t of selected) {
+    if (!t.completedOn) continue;
+    if (lastCompleted === null || t.completedOn > lastCompleted) lastCompleted = t.completedOn;
+    if (monthOf(t.completedOn) === month) completedThisMonth += 1;
+  }
+  return { start, lastCompleted, completedThisMonth };
+}

@@ -73,6 +73,8 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
   const [gone, setGone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  /** A task opened from elsewhere (Progress) that this page may not hold: whether it is in History. */
+  const [openedHistory, setOpenedHistory] = useState(false);
   const [menu, setMenu] = useState<MenuState>(null);
   const [more, setMore] = useState<HTMLElement | null>(null);
   const [panel, setPanel] = useState<null | "groups" | "deleted" | "add" | "delete">(null);
@@ -217,6 +219,16 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
     setError((e as Error).message);
     load();   // whatever went wrong, show the server's truth
   }, [load]);
+
+  // `?task=<id>` (from Progress's drill-down) opens that task's sheet once the space is read, then leaves the address.
+  const taskParam = params.get("task");
+  const historyParam = params.get("history") === "1";
+  useEffect(() => {
+    if (!work || !taskParam) return;
+    const id = filterParam(taskParam);
+    if (id !== "all" && id !== "none") { setOpenId(id); setOpenedHistory(historyParam); }
+    setParams({ task: null, history: null });
+  }, [work, taskParam, historyParam, setParams]);
 
   // A filter naming a group that no longer exists (deleted, perhaps by someone else) is dropped, and said so.
   useEffect(() => {
@@ -503,8 +515,8 @@ export default function SpaceWork({ boardId, viewerId }: { boardId: string; view
       {openId && (
         <TaskSheet key={openId} boardId={boardId} taskId={openId} live={open} spaceName={work.space.name}
           members={work.members} groups={work.groups} viewerId={viewerId} today={today} archived={readOnly}
-          inHistory={!!open && inHistory(open)}
-          onClose={() => setOpenId(null)} onChanged={(task) => put(task)} onMove={openMove} onReopen={openReopen} onDelete={remove}
+          inHistory={open ? inHistory(open) : openedHistory}
+          onClose={() => { setOpenId(null); setOpenedHistory(false); }} onChanged={(task) => put(task)} onMove={openMove} onReopen={openReopen} onDelete={remove}
           onRestored={(task) => { put(task); load(); }}
           onGroupCreated={(g: GroupView) => setWork((w) => (w && !w.groups.some((x) => x.id === g.id)
             ? { ...w, groups: [...w.groups, g].sort((a, b) => a.name.localeCompare(b.name)) } : w))} />

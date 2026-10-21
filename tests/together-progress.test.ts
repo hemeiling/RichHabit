@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_POINTS, buildReport, byGroup, contributionsOf, effectivePoints, filterParam, granularityFor, openNow,
+  DEFAULT_POINTS, buildReport, byGroup, contextOf, contributionsOf, effectivePoints, filterParam, granularityFor, openNow,
   resolvePeriod, standing, totalsOf, trendOf, trendSpan, type Period, type ProgressTask,
 } from "../src/lib/together/progress";
 
@@ -229,5 +229,16 @@ describe("trends", () => {
     expect(trendSpan(ALL, "2026-10-20", null)).toBeNull();
     expect(trendSpan({ kind: "custom", from: "2027-01-01", to: "2027-02-01" }, "2026-10-20", "2026-01-01")).toBeNull();
     expect(buildReport([], { period: ALL, group: "all", member: "all" }, "2026-10-20", [], []).trend.buckets).toEqual([]);
+  });
+});
+
+describe("long-run context", () => {
+  it("states when the space's work began, the selection's last completion and this month's completions — nothing inferred", () => {
+    const all = [task({ createdOn: "2024-01-05" }), done("2026-10-03", { createdOn: "2026-09-01" }), done("2026-09-28"),
+      task({ stage: "doing", createdOn: "2025-02-01", completedOn: null })];   // reopened: no completion date to count
+    expect(contextOf(all, all, "2026-10-20")).toEqual({ start: "2024-01-05", lastCompleted: "2026-10-03", completedThisMonth: 1 });
+    // The start is the space's; the rest follow the selection.
+    expect(contextOf(all, [all[2]], "2026-10-20")).toEqual({ start: "2024-01-05", lastCompleted: "2026-09-28", completedThisMonth: 0 });
+    expect(contextOf([], [], "2026-10-20")).toEqual({ start: null, lastCompleted: null, completedThisMonth: 0 });
   });
 });

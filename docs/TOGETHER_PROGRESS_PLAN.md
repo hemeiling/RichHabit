@@ -30,6 +30,21 @@ The Product Owner approved the scope on 2026-10-20. This document records what w
   9. "How these numbers work".
 - **Excel export**: a real `.xlsx`, either the current view or the entire project.
 
+## Layout: summary first, details on demand (UX revision, branch `feature/together-progress-ux`)
+
+The default view answers three questions; everything else waits one tap away. No calculation changed.
+
+1. **How much is done:** one summary with the completion %, a bar, done of committed tasks, what remains, and a one-line story-point total. When a group is chosen it says so, with "Show all groups".
+2. **How each group is doing:** a compact row per group, Ungrouped included, showing done/total, %, points and a bar. A row applies the existing group filter to the whole dashboard.
+3. **What each person is working on:**
+   - a short note ("Contributions reflect currently assigned work. Shared tasks may appear under multiple members.")
+   - a row per member, in join order, with done/assigned, %, points, a bar and a shared-tasks badge
+   - **Unassigned work** in its own subsection
+   - A row opens the committed tasks behind it (title, group, status, story points, due date or completion date), loaded on demand from `GET …/progress/tasks?who=<member id>|none` with the dashboard's own filters; members only; any other `who` gets nothing back. Each task links to `/together/b/[id]?task=<id>`, which opens its sheet on the Board. "Show only this member's work" applies the member filter.
+4. **More details / 更多详情:** work by stage, due soon and overdue; story-point detail with the default explained and the Backlog; Trends, with three facts the data states exactly (project start, last completion, completions this month); and the full **How these numbers work / 统计说明**, historical limits included. Its open/closed state is remembered per person per space in this browser.
+
+Group and Period filters stay in sight; the member filter sits under **More filters**, which opens by itself while a member is chosen. Export Excel sits beside the title.
+
 ## Definitions (one module: `src/lib/together/progress.ts`)
 
 The dashboard and the export both call these functions, so a filtered export always matches its dashboard.
