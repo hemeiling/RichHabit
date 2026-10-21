@@ -1,6 +1,7 @@
 "use client";
 import { useToday } from "@/components/useToday";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useHabits } from "@/components/store";
 import { Field, GrowingTextarea, Sheet } from "@/components/ui";
 import { uid } from "@/lib/habits";
@@ -717,6 +718,25 @@ export default function ImportantDates() {
   const addFrom = monthOf(today) === month ? today : monthFirst(month);
 
   const close = () => { setEditing(null); setDay(null); };
+
+  /*
+   * `?event=<id>&on=<occurrence>` — from the Notification Center — opens that
+   * event once this account's dates have loaded, then leaves the address.
+   */
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const wanted = params.get("event");
+  const wantedOn = params.get("on");
+  useEffect(() => {
+    if (!wanted) return;
+    const event = events.find((e) => e.id === wanted);
+    if (!event) return;
+    setEditing({ event, isNew: false, occurrence: wantedOn && /^\d{4}-\d{2}-\d{2}$/.test(wantedOn) ? wantedOn : null });
+    const next = new URLSearchParams(params.toString());
+    next.delete("event"); next.delete("on");
+    router.replace(`${pathname}${next.toString() ? `?${next}` : ""}`, { scroll: false });
+  }, [wanted, wantedOn, events, params, router, pathname]);
 
   return (
     <section className="card p-4" aria-labelledby="important-dates-title">

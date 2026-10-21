@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useHabits } from "@/components/store";
 import { call } from "@/components/together/shared";
+import { NotificationPanel } from "@/components/NotificationCenter";
+import { deviceTimeZone } from "@/lib/zonedTime";
 import { Sheet } from "@/components/ui";
 import * as db from "@/lib/db";
 import { dict, type Locale } from "@/lib/i18n";
@@ -377,31 +379,38 @@ function WhatsNewPanel({
 
 /* ------------------------------ Notifications ------------------------------ */
 
-type WaitingInvitation =
-  | { kind: "space"; id: string; board: string; inviter: string; expiresAt: string }
-  | { kind: "connection"; id: string; inviter: string; expiresAt: string };
-
 /**
- * The notification bell: Together invitations waiting for this account, with
- * Accept and Decline right there. The count comes from the server with the
- * page (the same number the sidebar's indicator uses); the list is read when
- * the bell opens, so the chrome costs nothing until it is used. Rendered only
- * for accounts with Together access — for everyone else there is nothing it
- * could ever show.
+ * The notification bell — the one Notification Center for everyone signed in
+ * (it used to hold only Together invitations, for Together accounts). The count
+ * comes with the page, then from `/api/notifications/summary` whenever the app
+ * is opened or a tab comes back — which is also when in-app reminders that came
+ * due are written. It counts only what genuinely asks for attention: unread
+ * activity, unread reminders still relevant, waiting invitations. The center
+ * itself (NotificationCenter) is read when the bell opens, so the chrome costs
+ * nothing until it is used.
  */
-export function NotificationBell({ count }: { count: number }) {
+export function NotificationBell({ count: initial }: { count: number }) {
   const t = useT();
   const locale = useLocale();
-  const router = useRouter();
   const phone = usePhone();
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<WaitingInvitation[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [answering, setAnswering] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [count, setCount] = useState(initial);
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+
+  useEffect(() => { setCount(initial); }, [initial]);
+  useEffect(() => {
+    const tz = deviceTimeZone() ?? "UTC";
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      call<{ unread: number }>(`/api/notifications/summary?tz=${encodeURIComponent(tz)}`)
+        .then((r) => setCount(r.unread)).catch(() => {});
+    };
+    refresh();
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, []);
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
@@ -417,86 +426,7 @@ export function NotificationBell({ count }: { count: number }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, phone, close]);
 
-  const load = useCallback(() => {
-    setFailed(false);
-    call<{ invitations: WaitingInvitation[] }>("/api/together/invitations")
-      .then((r) => setItems(r.invitations))
-      .catch(() => { setItems(null); setFailed(true); });
-  }, []);
-
-  const toggle = () => {
-    if (open) { close(true); return; }
-    setItems(null);
-    setProblem(null);
-    setOpen(true);
-    load();
-  };
-
-  const answer = async (w: WaitingInvitation, accept: boolean) => {
-    if (answering) return;
-    setAnswering(w.id);
-    setProblem(null);
-    try {
-      const r = await call<{ boardId?: string }>(
-        w.kind === "connection" ? "/api/together/connections/respond" : "/api/together/invitations/respond",
-        { method: "POST", body: JSON.stringify({ id: w.id, accept }) },
-      );
-      setItems((v) => (v ? v.filter((i) => i.id !== w.id) : v));
-      if (w.kind === "space" && accept && r.boardId) {
-        setAnswering(null);
-        close(false);
-        router.push(`/together/b/${r.boardId}`);
-        // After the navigation, so the layout the new page renders with is the
-        // one that gets refreshed — this is what clears the badge.
-        router.refresh();
-        return;
-      }
-      router.refresh();   // the badge, and the sidebar's indicator
-    } catch (e) {
-      // It may have been answered elsewhere or withdrawn meanwhile: say why,
-      // and re-read so the list tells the truth.
-      setProblem(e instanceof Error ? e.message : String(e));
-      load();
-      router.refresh();
-    }
-    setAnswering(null);
-  };
-
-  const body = (
-    <div className="bell-list">
-      {failed ? (
-        <p className="bell-note" role="alert">{t.together.loadFailed}</p>
-      ) : items === null ? (
-        <p className="bell-note">{t.common.loading}</p>
-      ) : items.length === 0 ? (
-        <p className="bell-note">{t.notifications.empty}</p>
-      ) : (
-        <ul className="bell-items">
-          {items.map((i) => (
-            <li key={i.id} className="bell-item">
-              <p className="bell-text">
-                {i.kind === "connection"
-                  ? t.together.collabRequestCard(i.inviter)
-                  : t.together.invitePage.invitedYou(i.inviter, i.board)}
-              </p>
-              <div className="bell-actions">
-                <button className="btn" disabled={answering !== null} onClick={() => answer(i, false)}>
-                  {t.together.decline}
-                </button>
-                <button className="btn btn-primary" disabled={answering !== null} onClick={() => answer(i, true)}>
-                  {t.together.accept}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {problem && <p className="bell-note" role="alert" style={{ color: "var(--warn)" }}>{problem}</p>}
-      <p className="bell-foot">
-        <Link href="/together" onClick={() => close(false)}>{t.notifications.openTogether} →</Link>
-      </p>
-    </div>
-  );
+  const body = <NotificationPanel onNavigate={() => close(false)} onCount={setCount} />;
 
   return (
     <div
@@ -514,7 +444,7 @@ export function NotificationBell({ count }: { count: number }) {
         aria-expanded={open}
         aria-label={count > 0 ? t.notifications.openWithCount(count) : t.notifications.open}
         title={t.notifications.open}
-        onClick={toggle}
+        onClick={() => (open ? close(true) : setOpen(true))}
       >
         <span className="hdr-icon">
           <Icon name="bell" />

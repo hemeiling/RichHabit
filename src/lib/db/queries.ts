@@ -1611,3 +1611,12 @@ export async function saveFeedback(userId: string, f: {
       f.page || null, f.appVersion || null, f.locale || null],
   );
 }
+
+/**
+ * One account's Important Dates, as the calendar reads them — for the
+ * Notification Center's Upcoming, which reuses the calendar's own recurrence.
+ */
+export async function importantDatesOf(userId: string): Promise<ImportantDate[]> {
+  const { rows } = await readImportantDates(userId);
+  return rows.map(importantDateFrom);
+}

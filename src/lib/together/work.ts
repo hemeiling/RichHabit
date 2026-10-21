@@ -3,6 +3,7 @@ import { monthOf } from "@/lib/dates";
 import { isUuid } from "@/lib/http";
 import { mayInvite, DISPLAY_NAME, TogetherError, requireBoard, type BoardRole, type PersonView } from "@/lib/together/access";
 import { isDueDate } from "@/lib/together/due";
+import { recordAssignments } from "@/lib/notifications/server";
 import { effectivePoints, filterParam, type GroupFilter } from "@/lib/together/progress";
 import { EFFORT_CHOICES, isStage, type Stage } from "@/lib/together/stages";
 import { togetherTransaction as transaction } from "@/lib/together/tx";
@@ -645,6 +646,8 @@ export async function updateTask(userId: string, boardId: unknown, taskId: unkno
          select $1, $2, u from unnest($3::uuid[]) as u
          on conflict (task_id, user_id) do nothing returning user_id`, [taskId, id, assignees]);
       assigneesChanged = removed.length > 0 || added.length > 0;
+      // Those just added hear about it (Activity); nobody is told about their own assignment.
+      await recordAssignments(q, userId, id, taskId as string, added.map((r) => String((r as { user_id: unknown }).user_id)));
     }
 
     if (sets.length || assigneesChanged) {

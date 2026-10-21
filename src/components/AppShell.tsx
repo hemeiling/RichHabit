@@ -241,8 +241,8 @@ function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-function Chrome({ email, localDb, together, togetherPending, togetherBoards, children }:
-  { email: string; localDb: boolean; together: boolean; togetherPending: number;
+function Chrome({ email, localDb, together, togetherPending, notificationCount, togetherBoards, children }:
+  { email: string; localDb: boolean; together: boolean; togetherPending: number; notificationCount: number;
     togetherBoards: TogetherShortcuts; children: React.ReactNode }) {
   const { state, actions, loading, saving, error, loadFailed, reload, dismissError } = useHabits();
 
@@ -355,8 +355,8 @@ function Chrome({ email, localDb, together, togetherPending, togetherBoards, chi
             <span className="eyebrow hdr-saving" style={{ opacity: saving ? 1 : 0, transition: "opacity .2s" }}
               aria-hidden={!saving}>{t.common.saving}</span>
             {/* The bell leads: it is the only control whose number can demand
-                attention, and only accounts with Together access see it. */}
-            {together && <NotificationBell count={togetherPending} />}
+                attention. Everyone signed in has one Notification Center. */}
+            <NotificationBell count={notificationCount} />
             <WhatsNew />
             <LanguageMenu />
             <button type="button" className="hdr-ctl hdr-theme" aria-label={t.common.toggleDarkMode}
@@ -404,7 +404,7 @@ function Chrome({ email, localDb, together, togetherPending, togetherBoards, chi
 }
 
 export default function AppShell({
-  userId, email, locale, localDb, aiWorkspace = false, together = false, togetherPending = 0,
+  userId, email, locale, localDb, aiWorkspace = false, together = false, togetherPending = 0, notificationCount = 0,
   togetherBoards = NO_SHORTCUTS, children,
 }: {
   userId: string; email: string; locale: Locale; localDb: boolean;
@@ -414,6 +414,8 @@ export default function AppShell({
   together?: boolean;
   /** In-platform Together invitations waiting for this account. */
   togetherPending?: number;
+  /** The bell's first count: unread notices still relevant, plus waiting invitations. */
+  notificationCount?: number;
   /** This account's active boards for the sidebar (first few) and how many there are. */
   togetherBoards?: TogetherShortcuts;
   children: React.ReactNode;
@@ -421,7 +423,7 @@ export default function AppShell({
   return (
     <LocaleProvider initial={locale}>
       <HabitsProvider userId={userId}>
-        <Chrome email={email} localDb={localDb} together={together} togetherPending={togetherPending}
+        <Chrome email={email} localDb={localDb} together={together} togetherPending={togetherPending} notificationCount={notificationCount}
           togetherBoards={togetherBoards}>{children}</Chrome>
         {aiWorkspace && <AiLauncher />}
       </HabitsProvider>

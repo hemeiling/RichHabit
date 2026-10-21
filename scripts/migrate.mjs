@@ -33,6 +33,7 @@ import { migrateTogetherConnections } from "./migrations/together-connections.mj
 import { migratePriorityDetails } from "./migrations/priority-details.mjs";
 import { migrateGoogleSignin } from "./migrations/google-signin.mjs";
 import { migrateFlexibleRepetition } from "./migrations/flexible-repetition.mjs";
+import { migrateNotifications } from "./migrations/notifications.mjs";
 
 /**
  * Every wording a template has ever shipped with, across languages and across
@@ -1005,6 +1006,16 @@ try {
    * scripts/migrations/flexible-repetition.mjs.
    */
   changed += await migrateFlexibleRepetition(client, console.log);
+
+  /*
+   * ---- 23. Unified Notifications -------------------------------------------
+   *
+   * Three new tables (notifications, notification_preferences,
+   * habit_reminders) and one index on together_task_assignees (user_id).
+   * Nothing existing is altered; no existing row is read or rewritten. See
+   * scripts/migrations/notifications.mjs.
+   */
+  changed += await migrateNotifications(client, console.log);
 
   await client.query("commit");
   console.log(changed ? `\nDone — ${changed} change(s).` : "\nNothing to do; already up to date.");

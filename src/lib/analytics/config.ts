@@ -129,6 +129,14 @@ export const FEATURES = {
       "together_progress_viewed", "together_progress_exported",
     ],
   },
+  /*
+   * Notifications. Counts only — how much the center held, how many were
+   * marked read, which settings changed — never a title, a date or a name.
+   */
+  notifications: {
+    label: "Notifications",
+    events: ["notification_center_opened", "notifications_marked_read", "notification_settings_saved", "habit_reminder_set"],
+  },
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

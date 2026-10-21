@@ -27,7 +27,7 @@ const without = (schema: string, start: string, end: string) =>
 const SCHEMA = without(
   without(
     without(
-      without(FULL_SCHEMA, "-- ---- Together: task ordering (rank) ----", "-- ---- end Together task ordering ----"),
+      without(without(FULL_SCHEMA, "-- ---- Unified notifications (step 23) ----", "-- ---- end unified notifications ----"), "-- ---- Together: task ordering (rank) ----", "-- ---- end Together task ordering ----"),
       "-- ---- Together V1B: groups, tasks, assignees ----", "-- ---- end Together V1B ----"),
     "-- ---- Together: email invitations by address (step 18) ----", "-- ---- end Together email invitations by address ----"),
   "-- ---- Together: global collaborators (step 19) ----", "-- ---- end Together global collaborators ----");

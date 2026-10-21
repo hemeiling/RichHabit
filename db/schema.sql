@@ -1375,6 +1375,53 @@ create index if not exists together_tasks_rank
   on together_tasks (board_id, stage, rank, id) where deleted_at is null;
 -- ---- end Together task ordering ------------------------------------------------
 
+-- ---- Unified notifications (step 23) ----
+-- Notices (assignments and reminders that came due), per-person settings and
+-- opt-in habit reminders. Titles are never stored: they are read live from the
+-- source. See scripts/migrations/notifications.mjs.
+create table if not exists notifications (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users on delete cascade,
+  category    text not null check (category in ('reminder','activity')),
+  kind        text not null check (kind in ('task_assigned','task_due','task_overdue',
+                                            'date_upcoming','date_start','priority_planned','priority_overdue','habit_due')),
+  source_type text not null check (source_type in ('together_task','important_date','priority','habit')),
+  source_id   uuid not null,
+  board_id    uuid references together_boards on delete cascade,
+  occurs_on   date,
+  actor_id    uuid references users on delete set null,
+  dedupe_key  text not null check (length(dedupe_key) <= 200),
+  notify_at   timestamptz not null,
+  read_at     timestamptz,
+  created_at  timestamptz not null default now(),
+  unique (user_id, dedupe_key)
+);
+create index if not exists notifications_feed on notifications (user_id, notify_at desc, id desc);
+create index if not exists notifications_unread on notifications (user_id) where read_at is null;
+create table if not exists notification_preferences (
+  user_id             uuid primary key references users on delete cascade,
+  together_assigned   boolean not null default true,
+  together_due        boolean not null default true,
+  important_dates     boolean not null default true,
+  important_date_lead smallint not null default 1 check (important_date_lead in (0, 1, 3, 7)),
+  priorities          boolean not null default true,
+  habits              boolean not null default true,
+  morning_time        time not null default '08:00',
+  daytime_time        time not null default '13:00',
+  nighttime_time      time not null default '20:00',
+  time_zone           text check (time_zone is null or length(time_zone) between 1 and 64),
+  materialized_at     timestamptz,
+  updated_at          timestamptz not null default now()
+);
+create table if not exists habit_reminders (
+  habit_id   uuid primary key references habits on delete cascade,
+  user_id    uuid not null references users on delete cascade,
+  remind_at  time,
+  created_at timestamptz not null default now()
+);
+create index if not exists together_task_assignees_user on together_task_assignees (user_id);
+-- ---- end unified notifications ----
+
 -- ---- AI workspace, admin only -------------------------------------------
 -- Seven tables for the admin-only AI Workspace. Kept identical to
 -- scripts/migrations/ai-workspace.mjs, which creates them on existing databases;

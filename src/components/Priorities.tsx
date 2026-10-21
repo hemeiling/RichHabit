@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import PriorityDetails from "@/components/PriorityDetails";
 import { useHabits } from "@/components/store";
 import { Sheet } from "@/components/ui";
@@ -497,6 +498,19 @@ export default function Priorities({ date }: { date: string }) {
   /* Which line's details panel is open. The panel reads the live row from the
      store, so edits made in it are on the card the moment they are typed. */
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  /* `?priority=<id>` — from the Notification Center — opens that priority's
+     details once it has loaded, then leaves the address. */
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const wantedPriority = params.get("priority");
+  useEffect(() => {
+    if (!wantedPriority || !state.priorities.some((p) => p.id === wantedPriority)) return;
+    setDetailsFor(wantedPriority);
+    const next = new URLSearchParams(params.toString());
+    next.delete("priority");
+    router.replace(`${pathname}${next.toString() ? `?${next}` : ""}`, { scroll: false });
+  }, [wantedPriority, state.priorities, params, router, pathname]);
   const settleTimer = useRef<ReturnType<typeof setTimeout>>();
   const composerRef = useRef<HTMLInputElement>(null);
   const pickRef = useRef<HTMLDivElement>(null);
