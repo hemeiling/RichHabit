@@ -117,7 +117,7 @@ describe("Important Dates", () => {
     expect(await openAt(ann, utc("2027-03-14", "11:59"))).toBe(0);
     expect(await openAt(ann, utc("2027-03-14", "12:00"))).toBe(1);
     const spring = (await reminders(ann)).at(-1);
-    expect(spring).toMatchObject({ kind: "date_upcoming", dedupe_key: expect.stringMatching(/:2027-03-15:lead1$/) });
+    expect(spring).toMatchObject({ kind: "date_upcoming", dedupe_key: expect.stringMatching(/:2027-03-15:ahead$/) });
     expect(new Date(spring.notify_at).toISOString()).toBe("2027-03-14T12:00:00.000Z");
   });
 
@@ -127,9 +127,79 @@ describe("Important Dates", () => {
                values ($1, 'Class', '2026-06-01', '2026-06-01', 'week', 1, '{2026-06-08}')`, [ann]);
     expect(await openAt(ann, utc("2026-06-05", "08:01"))).toBe(0);           // the 8th is excluded
     expect(await openAt(ann, utc("2026-06-12", "08:01"))).toBe(1);           // three days before the 15th
-    expect((await reminders(ann))[0].dedupe_key).toMatch(/:2026-06-15:lead3$/);
+    expect((await reminders(ann))[0].dedupe_key).toMatch(/:2026-06-15:ahead$/);
     await savePrefs(ann, { importantDates: false });
     expect(await openAt(ann, utc("2026-06-19", "08:01"))).toBe(0);
+  });
+});
+
+describe("Important Dates: one reminder per occurrence, whatever is changed", () => {
+  const forEvent = (id: string) => sql(`select kind, dedupe_key, occurs_on::text as on, read_at from notifications
+    where user_id = $1 and source_id = $2 order by notify_at, dedupe_key`, [ann, id]);
+
+  it("a lead-time change never writes a second reminder — nor repeats one already read — across zones and tabs", async () => {
+    const [{ id }] = await sql(`insert into important_dates (user_id, title, starts_on, ends_on) values ($1, 'Dentist', '2027-05-10', '2027-05-10') returning id`, [ann]);
+    expect(await openAt(ann, utc("2027-05-09", "08:30"))).toBe(1);          // 1 day before (the default lead)
+    await savePrefs(ann, { importantDateLead: 3 });
+    expect(await openAt(ann, utc("2027-05-09", "09:00"))).toBe(0);          // was 1 → 3: no second one
+    await savePrefs(ann, { importantDateLead: 0 });
+    expect(await openAt(ann, utc("2027-05-10", "08:30"))).toBe(0);          // → on the day: still none
+    const [r] = await forEvent(id);
+    as(ann); await read.POST(send("POST", { ids: [(await sql(`select id from notifications where source_id = $1`, [id]))[0].id] }));
+    // Read "now" on the simulated clock (the route stamps the real one, which the sweep would see as long past).
+    await sql(`update notifications set read_at = '2027-05-10T00:00:00Z' where read_at is not null`);
+    await savePrefs(ann, { importantDateLead: 7, timeZone: "Asia/Tokyo" });
+    expect(await openAt(ann, utc("2027-05-09", "23:30"), "Asia/Tokyo")).toBe(0);   // read, a new lead, a new zone: not re-alerted
+    await sql(`update notification_preferences set materialized_at = null where user_id = $1`, [ann]);
+    const tabs = await Promise.all([1, 2, 3].map(() => materializeReminders(ann, "UTC", utc("2027-05-09", "23:40"))));
+    expect(tabs.reduce((a, b) => a + b, 0)).toBe(0);                          // three tabs at once
+    const rows = await forEvent(id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: r.kind, dedupe_key: `date:${id}:2027-05-10:ahead` });
+    expect(rows[0].read_at).not.toBeNull();
+  });
+
+  it("lengthening the lead past a time already gone still gives one reminder while the event is ahead", async () => {
+    const [{ id }] = await sql(`insert into important_dates (user_id, title, starts_on, ends_on) values ($1, 'Trip', '2027-07-10', '2027-07-10') returning id`, [ann]);
+    expect(await openAt(ann, utc("2027-07-08", "09:00"))).toBe(0);          // 1 day before is tomorrow
+    await savePrefs(ann, { importantDateLead: 7 });                           // 7 days before was the 3rd — five days ago
+    expect(await openAt(ann, utc("2027-07-08", "09:05"))).toBe(1);
+    expect(await openAt(ann, utc("2027-07-09", "09:00"))).toBe(0);          // and never again
+    expect(await forEvent(id)).toHaveLength(1);
+  });
+
+  it("a moved event is reminded once for its new date (the old one stops counting); a changed time does not repeat the start", async () => {
+    const [{ id }] = await sql(`insert into important_dates (user_id, title, starts_on, ends_on) values ($1, 'Dentist', $2, $2) returning id`, [ann, day(1)]);
+    await openAt(ann, utc(day(0), "08:30"));
+    expect((await view(ann)).unread).toBe(1);
+    await sql(`update important_dates set starts_on = $2, ends_on = $2 where id = $1`, [id, day(5)]);
+    let v = await view(ann);
+    expect(v.upcoming.find((i: any) => i.title === "Dentist").notificationId).toBeNull();   // the old date's reminder no longer counts
+    expect(v.unread).toBe(0);
+    await openAt(ann, utc(day(4), "08:30"));
+    expect((await forEvent(id)).map((r: any) => r.on)).toEqual([day(1), day(5)]);
+
+    const [{ id: call }] = await sql(`insert into important_dates (user_id, title, starts_on, ends_on, start_time, end_time, time_zone)
+      values ($1, 'Call', '2027-06-01', '2027-06-01', '09:00', '09:30', 'UTC') returning id`, [ann]);
+    expect(await openAt(ann, utc("2027-06-01", "09:01"))).toBe(2);           // the day before (catch-up) and the start
+    await sql(`update important_dates set start_time = '11:00', end_time = '11:30' where id = $1`, [call]);
+    expect(await openAt(ann, utc("2027-06-01", "11:01"))).toBe(0);
+    expect((await forEvent(call)).map((r: any) => r.kind)).toEqual(["date_upcoming", "date_start"]);
+  });
+
+  it("opening a record clears every notice about it — an assignment and its due reminder go together", async () => {
+    process.env.TOGETHER_PREVIEW_USER_IDS = bo;
+    const [{ id: board }] = await sql(`insert into together_boards (name, created_by) values ('Headband', $1) returning id`, [bo]);
+    await sql(`insert into together_members (board_id, user_id, role, added_by) values ($1, $2, 'owner', $2), ($1, $3, 'member', $2)`, [board, bo, ann]);
+    const [{ id: task }] = await sql(`insert into together_tasks (board_id, title, stage, due_on, created_by) values ($1, 'Pack', 'todo', $2, $3) returning id`, [board, day(0), bo]);
+    as(bo); await taskRoute.PATCH(send("PATCH", { assignees: [ann] }), { params: { id: board, taskId: task } });
+    await openAt(ann, utc(day(0), "08:30"));
+    const v = await view(ann);
+    expect(v.unread).toBe(2);                                                 // the assignment, and the due-day reminder
+    as(ann); await read.POST(send("POST", { ids: [v.activity[0].id] }));
+    expect((await view(ann)).unread).toBe(0);
+    as(bo); await read.POST(send("POST", { ids: [v.activity[0].id] }));      // someone else's id changes nothing
+    expect((await sql(`select count(*)::int n from notifications where user_id = $1 and read_at is null`, [ann]))[0].n).toBe(0);
   });
 });
 

@@ -39,7 +39,11 @@ const LOOKBACK_MS = 3 * 86_400_000;
 /** Written at most this often per person. */
 const THROTTLE_MS = 5 * 60_000;
 
-interface Due { kind: string; sourceType: string; sourceId: string; boardId: string | null; occursOn: string; key: string; at: number }
+interface Due {
+  kind: string; sourceType: string; sourceId: string; boardId: string | null; occursOn: string; key: string; at: number;
+  /** Still worth saying however long ago its time passed (an event not yet started). */
+  stillAhead?: boolean;
+}
 
 /* ------------------------------ habits in Upcoming --------------------------- */
 
@@ -91,8 +95,14 @@ async function dueReminders(userId: string, prefs: NotificationPrefs, zone: stri
     const lead = prefs.importantDateLead;
     for (const i of importantDateItems(await importantDatesOf(userId), from, addDays(today, lead + 1), zone)) {
       if (i.endDate < today) continue;   // over: nothing left to remind about
+      // One "coming up" reminder per occurrence, whatever the lead: the key has
+      // no lead in it, so changing the lead never writes a second one, and one
+      // already seen is never repeated. Lengthening the lead past a reminder
+      // time that slipped out of the lookback still gives the reminder (now)
+      // while the event is ahead — rather than none at all.
       out.push({ kind: "date_upcoming", sourceType: "important_date", sourceId: i.sourceId, boardId: null, occursOn: i.occurrenceDate,
-        key: `date:${i.sourceId}:${i.occurrenceDate}:lead${lead}`, at: at(addDays(i.startDate, -lead), prefs.morningTime) });
+        key: `date:${i.sourceId}:${i.occurrenceDate}:ahead`, at: at(addDays(i.startDate, -lead), prefs.morningTime),
+        stillAhead: i.startDate >= today });
       if (!i.allDay && i.startTime) {
         out.push({ kind: "date_start", sourceType: "important_date", sourceId: i.sourceId, boardId: null, occursOn: i.occurrenceDate,
           key: `date:${i.sourceId}:${i.occurrenceDate}:start`, at: at(i.startDate, i.startTime) });
@@ -130,7 +140,7 @@ async function dueReminders(userId: string, prefs: NotificationPrefs, zone: stri
     out.push({ kind: "habit_due", sourceType: "habit", sourceId: habitId, boardId: null, occursOn: today,
       key: `habit:${habitId}:${today}`, at: at(today, h.time) });
   }
-  return out.filter((d) => d.at <= now && d.at > now - LOOKBACK_MS);
+  return out.filter((d) => d.at <= now && (d.stillAhead || d.at > now - LOOKBACK_MS));
 }
 
 /**

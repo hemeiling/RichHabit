@@ -207,9 +207,10 @@ export async function unreadCount(userId: string, rawZone: unknown,
 }
 
 /**
- * Marks some of your notices read — or all of them. Only ever your own. A
- * reminder takes its row's other reminders with it (an on-the-day and an
- * overdue one for the same thing), so one tap always clears the dot.
+ * Marks some of your notices read — or all of them. Only ever your own.
+ * Opening a record clears every notice about it (each is written only once due) — its
+ * assignment, its on-the-day and overdue reminders — so one tap never leaves
+ * a second dot for something just looked at.
  */
 export async function markRead(userId: string, ids: unknown): Promise<number> {
   return tolerant(0, async () => {
@@ -222,8 +223,7 @@ export async function markRead(userId: string, ids: unknown): Promise<number> {
       `update notifications n set read_at = now()
          from notifications o
         where o.user_id = $1 and o.id = any($2::uuid[]) and n.user_id = $1 and n.read_at is null
-          and (n.id = o.id or (o.category = 'reminder' and n.category = 'reminder' and n.source_type = o.source_type
-               and n.source_id = o.source_id and n.occurs_on is not distinct from o.occurs_on))
+          and (n.id = o.id or (n.source_type = o.source_type and n.source_id = o.source_id))
        returning n.id`, [userId, list])).length;
   });
 }
