@@ -1,6 +1,6 @@
 # Unified Notifications & Upcoming Items / 统一通知中心与即将到来的事项
 
-**Status:** technical assessment and proposed architecture, on local branch `feature/unified-notifications` from production `784d97d`. Nothing is built, pushed or migrated. Implementation starts only after the Product Owner approves the migration and the scheduling approach below.
+**Status (2026-10-22):** Stages 1 and 2 **built and tested locally**, with the PO's follow-ups (one Important Dates reminder per occurrence whatever the lead; accessible toggles). **Not pushed, not deployed; step 23 not applied to production.** Local full-runner rehearsal and the read-only production preflight passed; the Neon rehearsal scripts are dry-run and wait for the PO's fresh branch. See "As built" at the end for what differs from the proposal below.
 
 **PO decisions of 2026-10-21:**
 - **Default habit reminder times:** 8:00 AM Morning, 1:00 PM Daytime, 8:00 PM Nighttime, in the user's own time zone. These are editable suggestions; each habit's reminder stays opt-in.
@@ -66,8 +66,8 @@ create table if not exists notifications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references users on delete cascade,
   category    text not null check (category in ('reminder','activity')),
-  kind        text not null check (kind in ('task_assigned','task_due','task_overdue',
-                                            'date_upcoming','priority_planned','priority_overdue','habit_due')),
+  kind        text not null check (kind in ('task_assigned','task_due','task_overdue', 'date_upcoming',
+                                            'date_start','priority_planned','priority_overdue','habit_due')),
   source_type text not null check (source_type in ('together_task','important_date','priority','habit')),
   source_id   uuid not null,                       -- no FK: sources differ; checked live on read
   board_id    uuid references together_boards on delete cascade,
@@ -154,14 +154,24 @@ create index if not exists together_task_assignees_user on together_task_assigne
 - **Product checks:** EN/中文, and desktop, 390 and 360 px.
 - **Regression:** existing Today scoring, Community and Together suites unchanged.
 
-## Decisions requested
+## Decisions (all six approved by the PO, 2026-10-21)
 
-1. **Approve migration step 23** as written (three new tables plus one index; additive).
-2. **Approve "no recurring job" for Phase 1:** reminders are written when the app is opened, at $0 extra hosting.
-3. **Approve the default timings:**
-   - Important Dates: 1 day before at your Morning time (plus at the start for timed events)
-   - Priorities: on the planned day
-   - Together: due day, plus one overdue notice
-4. **Bell visible to every account**, not only Together accounts.
-5. **Habits appear in Upcoming only when their reminder is switched on.**
-6. **Quiet hours and the daily digest move to Phase 2**, with email and push.
+1. Migration step 23 approved **for local development and rehearsal only**; production needs a separate approval.
+2. No recurring job in Phase 1; the UI says plainly that these are in-app reminders, not alerts while the app is closed.
+3. Default timings as in the table above (Priorities: planned day plus one overdue the next day).
+4. The bell is shown to every signed-in account.
+5. Habits appear in Upcoming only when their reminder is switched on.
+6. Quiet hours, daily digest, email and push are Phase 2.
+
+## As built (Stages 1 + 2)
+
+- **Code:** `src/lib/notifications/` — `model.ts` (shared shapes, buckets, defaults), `server.ts` (Upcoming sources, Activity, the center, read state, assignment notices, settings), `reminders.ts` (habit rows, due reminders, writing them, matching them to rows). Routes under `/api/notifications` (center, `summary`, `read`, `preferences`, `habits/[habitId]`). UI: `NotificationCenter.tsx` (the bell's panel), `NotificationSettings.tsx` (Account page, `#notifications`), `HabitReminderField.tsx` (habit editor).
+- **One extra kind, `date_start`,** for a timed event's reminder at its start (the step-23 check lists it).
+- **The time zone is taken from the browser once** (first visit), then changes only in settings — not on every visit — so travelling or a second device never moves reminders.
+- **Writing reminders:** when the badge is fetched (app open, tab regains focus), at most every 5 minutes per person, for reminders that came due in the last 3 days. Keys are source + occurrence + kind — never the lead time, the zone or the instant — so a lead or zone change, two tabs or a retry never write a second reminder, and one already read is never repeated. Lengthening an event's lead past a time that slipped out of the 3-day catch-up still reminds once while the event is ahead. A moved event, priority or task is reminded once for its new date; a changed event time does not repeat its start reminder.
+- **A reminder counts only while it is still true:** it shows as a dot on its Upcoming row only while that row exists on the same day (priority/task keys include the planned/due day, so re-planning or moving a due date retires the old reminder). One dot per row; opening a record clears every notice about it (its assignment and its reminders together). Switching a kind off stops its reminders counting at once; "Together: tasks assigned to me" off writes no assignment notice.
+- **Badge = the panel's own count** (unread activity still actionable + waiting invitations + reminder dots); future events never count.
+- **Habits:** opt-in per habit; today's row only while `habitStatus` is due or behind; tomorrow's row only for fixed-day schedules — a flexible "N times a week/month" habit is never shown ahead of a day it is due.
+- **Sweep:** read rows after 90 days, any after 180, on the same clock as the reminders.
+- **Known limits:** reminders appear only when the app is opened (by design); data created in the last 5 minutes may wait for the next window; a reminder whose time passed before a change is not re-sent at the new time (e.g. a start reminder after the event's time moves later).
+- **Accessibility:** `Segmented` (every On/Off and option row) now announces its chosen option with `aria-pressed`; settings rows name their toggles. A full `role="switch"`/radio-group pattern with arrow keys across the app's 28 uses is left as a separate task.
