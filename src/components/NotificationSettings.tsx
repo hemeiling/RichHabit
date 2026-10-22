@@ -60,13 +60,14 @@ export default function NotificationSettings() {
     <Segmented<boolean> value={value} onChange={(v) => save({ [key]: v } as Partial<NotificationPrefs>)} small
       options={[{ value: true, label: t.more.on }, { value: false, label: t.more.off }]} />
   );
-  const row = (label: string, control: React.ReactNode, hint?: string) => (
-    <div className="flex items-center justify-between py-2 gap-3">
+  // Each row's On/Off is a group named by its row, so "On, pressed" is heard with what it switches.
+  const row = (label: string, control: React.ReactNode, hint?: string, child = false) => (
+    <div className={`flex items-center justify-between py-2 gap-3${child ? " ns-child" : ""}`}>
       <div>
-        <div style={{ fontSize: 15 }}>{label}</div>
+        <div style={{ fontSize: child ? 14 : 15 }} className={child ? "muted" : undefined}>{label}</div>
         {hint && <div className="faint" style={{ fontSize: 12.5 }}>{hint}</div>}
       </div>
-      <div className="shrink-0">{control}</div>
+      <div className="shrink-0" role="group" aria-label={label}>{control}</div>
     </div>
   );
 
@@ -88,7 +89,7 @@ export default function NotificationSettings() {
               onChange={(e) => save({ importantDateLead: Number(e.target.value) as Lead })}>
               {LEADS.map((l) => <option key={l} value={l}>{n.leads[l]}</option>)}
             </select>
-          ))}
+          ), undefined, true)}
           {row(n.prioritiesPlanned, onOff(s.prefs.priorities, "priorities"))}
           {s.together && row(n.togetherAssigned, onOff(s.prefs.togetherAssigned, "togetherAssigned"))}
           {s.together && row(n.togetherDue, onOff(s.prefs.togetherDue, "togetherDue"))}

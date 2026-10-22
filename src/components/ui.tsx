@@ -143,6 +143,8 @@ export function Segmented<T extends string | number | boolean>({
       {options.map((o) => (
         <button
           key={String(o.value)} type="button" className="chip" data-on={value === o.value}
+          // The chosen option is announced ("On, toggle button, pressed"), not only coloured.
+          aria-pressed={value === o.value}
           style={small ? { padding: "5px 11px", fontSize: 12.5 } : undefined}
           onClick={() => onChange(o.value)}
         >

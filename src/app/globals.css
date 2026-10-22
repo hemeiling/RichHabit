@@ -2456,6 +2456,7 @@ input[type="range"] { accent-color: var(--accent); }
 
 /* Notification Settings (Account page) — clear of the sticky header when the bell's link jumps here */
 #notifications { scroll-margin-top: 72px; }
+.ns-child { margin-left: 4px; padding-left: 14px; border-left: 2px solid var(--line); padding-top: 4px; padding-bottom: 6px; }
 .ns-select { width: auto; max-width: 100%; min-width: 0; padding-top: 6px; padding-bottom: 6px; font-size: 14px; }
 .ns-sub { margin-top: 14px; margin-bottom: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .ns-times { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
